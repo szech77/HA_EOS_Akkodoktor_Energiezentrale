@@ -24,7 +24,7 @@ const modes = {
   PEAK_SHAVING:['mode.peak','solar'], CHARGING:['mode.charging','car'], DISCONNECTED:['mode.disconnected','edge']
 };
 const modeLabel = mode => Object.hasOwn(modes, mode) ? t(modes[mode][0]) : mode ?? '—';
-const pages = new Set(['solar','grid','battery','house','car','heat']);
+const pages = new Set(['solar','grid','battery','house','car','heat','energy']);
 const day = 86_400_000;
 let snapshot = {live:{}, settings:{}, errors:{}, plan:{}, forecast:[], zone:'Europe/Berlin'};
 let history = {local:[], influx:[]};
@@ -161,34 +161,116 @@ function overview() {
   }).join('');
 }
 
-function chart(title, key, divisor, unit, color, now) {
-  const actual = actualPoints(key).filter(row => Date.parse(row.time) >= now - day);
-  const future = snapshot.forecast.filter(row => valid(row[key]) && Date.parse(row.time) >= now - 60000 && Date.parse(row.time) <= now + day);
-  const numbers = [...actual, ...future].map(row => row[key] / divisor);
+const chartModels = new Map();
+let activeProbe = null;
+
+function chart(title, key, divisor, unit, color, now, additional = []) {
+  const descriptors = [{key,label:key === 'solar' && additional.length ? t('chart.solar') : title,divisor,color},...additional];
+  const series = descriptors.map(item => ({...item,
+    actual:item.actual === false ? [] : EosChartData.points(actualPoints(item.key),item.key,now-day,now),
+    future:item.future === false ? [] : EosChartData.points(snapshot.forecast,item.key,now-day,now+day).filter(row=>row.end>now)
+  }));
+  const numbers = series.flatMap(item => [...item.actual,...item.future].map(row=>row.value/item.divisor));
   if (!numbers.length) return `<section><h2>${html(title)} · ${html(unit)}</h2><p class="footnote">${th('chart.no_data')}</p></section>`;
-  let min = key === 'price' ? Math.floor(Math.min(...numbers) - 1) : Math.min(0, ...numbers);
-  const max = key.endsWith('_soc') ? 100 : Math.max(min + 1, Math.ceil(Math.max(...numbers) + (key === 'price' ? 1 : 0)));
-  const path = (rows, gap) => {
+  const min = key === 'price' ? Math.floor(Math.min(...numbers)-1) : Math.min(0,...numbers);
+  const max = key.endsWith('_soc') ? 100 : Math.max(min+1,Math.ceil(Math.max(...numbers)+(key === 'price' ? 1 : 0)));
+  chartModels.set(key,{series,now,unit});
+  const curve = (rows,item,gap,forecast) => {
     let previous;
-    return rows.map(row => {
-      const stamp = Date.parse(row.time);
-      const x = Math.max(0, Math.min(100, 50 + (stamp - now) * 50 / day));
-      const y = (max - row[key] / divisor) * 100 / (max - min);
-      const command = previous && stamp - previous <= gap ? 'L' : 'M';
-      previous = stamp;
+    const path = rows.map(row => {
+      const x = Math.max(0,Math.min(100,50+(row.stamp-now)*50/day));
+      const y = (max-row.value/item.divisor)*100/(max-min);
+      const command = previous !== undefined && row.stamp-previous <= gap ? 'L' : 'M';
+      previous = row.stamp;
       return `${command}${x.toFixed(3)},${y.toFixed(3)}`;
     }).join(' ');
+    return `<path class="curve${forecast ? ' forecast' : ''}" style="--series:var(--${item.color})" d="${path}"/>`;
   };
   const axis = ['−24','−12',null,'+12','+24'].map(value =>
     `<span>${value ? `${value} ${th('chart.hour')}` : th('chart.now')}</span>`).join('');
-  return `<section><h2>${html(title)} · ${html(unit)}</h2><div class="chart" style="--series:var(--${color})">
-    <div class="axis-y" aria-hidden="true"><span>${decimal(max)}</span><span>${decimal((max + min) / 2)}</span><span>${decimal(min)}</span></div>
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${th('chart.history_aria',{title})}">
-      <path class="guide" d="M0 1 H100 M0 50 H100 M0 99 H100"/><line class="now" x1="50" x2="50" y1="0" y2="100"/>
-      <path class="curve" d="${path(actual, 360000)}"/><path class="curve forecast" d="${path(future, 3600000)}"/>
-    </svg><div class="axis-x">${axis}</div></div></section>`;
+  return `<section><h2>${html(title)} · ${html(unit)}</h2>
+    <div class="series-legend">${series.map(item=>`<span><i style="--series:var(--${item.color})"></i>${html(item.label)}</span>`).join('')}</div>
+    <div class="chart" data-chart="${html(key)}">
+      <div class="axis-y" aria-hidden="true"><span>${decimal(max)}</span><span>${decimal((max+min)/2)}</span><span>${decimal(min)}</span></div>
+      <div class="interactive-plot">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" tabindex="0" role="img" aria-label="${th('chart.interactive_aria',{title})}">
+          <path class="guide" d="M0 1 H100 M0 50 H100 M0 99 H100"/><line class="now" x1="50" x2="50" y1="0" y2="100"/>
+          ${series.map(item=>curve(item.actual,item,360000,false)+curve(item.future,item,3600000,true)).join('')}
+        </svg>
+        <div class="chart-crosshair" hidden></div><div class="chart-tooltip" role="status" hidden></div>
+      </div><div class="axis-x">${axis}</div>
+    </div></section>`;
 }
 
+function hideProbe() {
+  activeProbe = null;
+  document.querySelectorAll('.chart-crosshair,.chart-tooltip').forEach(element=>{element.hidden=true;});
+}
+
+function showProbe(id, ratio) {
+  const model = chartModels.get(id);
+  const plot = [...byId('charts').querySelectorAll('[data-chart]')].find(element=>element.dataset.chart===id)?.querySelector('.interactive-plot');
+  if (!model || !plot) return;
+  activeProbe = {id,ratio:Math.max(0,Math.min(1,ratio))};
+  const stamp = model.now+(activeProbe.ratio-.5)*2*day;
+  const tooltip = plot.querySelector('.chart-tooltip');
+  tooltip.innerHTML = `<b>${html(time(stamp))}</b><small>${th(stamp > model.now ? 'chart.forecast_values' : 'chart.measured_values')}</small>`
+    + model.series.map(item=>{
+      const sample = EosChartData.at(item,stamp,model.now);
+      const value = sample ? `${decimal(sample.point.value/item.divisor,2)} ${model.unit}` : '—';
+      return `<div class="tooltip-series"><i style="--series:var(--${item.color})"></i><span>${html(item.label)}${sample ? `<small>${html(time(sample.point.stamp))}</small>` : ''}</span><strong>${html(value)}</strong></div>`;
+    }).join('');
+  tooltip.hidden=false;
+  const crosshair = plot.querySelector('.chart-crosshair');
+  crosshair.hidden=false;
+  crosshair.style.left=`${activeProbe.ratio*100}%`;
+  tooltip.style.left=`${Math.max(4,Math.min(plot.clientWidth-tooltip.offsetWidth-4,activeProbe.ratio*plot.clientWidth+12))}px`;
+}
+
+function energyDetail(now) {
+  byId('detail-title').textContent=t('device.energy');
+  const names = {solar:t('node.solar'),grid:t('node.grid'),battery:t('node.battery'),house:t('node.house'),car:t('node.car'),heat:t('device.heat')};
+  byId('detail-kpis').innerHTML=cards(Object.entries(names).map(([key,label])=>{
+    const retained=snapshot.display?.[key];
+    const estimated=!valid(snapshot.live[key]) && valid(retained?.value);
+    return [label,(estimated ? '≈ ' : '')+power(estimated ? retained.value : snapshot.live[key]),
+      estimated ? t('metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : t('metric.measured')];
+  }));
+  byId('timeline').innerHTML='';
+  const additional = ['grid','battery','house','car','heat'].map(key=>({key,label:names[key],divisor:1000,color:key,future:key!=='house'}));
+  additional.push({key:'house_total',label:t('chart.house_forecast'),divisor:1000,color:'house',actual:false});
+  byId('charts').innerHTML=chart(t('chart.energy'),'solar',1000,t('unit.kw'),'solar',now,additional)
+    + `<p class="footnote">${th('chart.energy_signs')}</p>`
+    + chart(t('chart.price'),'price',1,t('unit.price'),'heat',now);
+  byId('plan').hidden=false;
+  byId('plan').innerHTML=`<h2>${th('plan.forecast')}</h2><p>${th('chart.energy_forecast_note')}</p>`;
+}
+
+const chartsRoot = byId('charts');
+function pointerProbe(event) {
+  const svg=event.target.closest('.interactive-plot svg');
+  if (!svg) {hideProbe();return;}
+  const box=svg.getBoundingClientRect();
+  showProbe(svg.closest('[data-chart]').dataset.chart,(event.clientX-box.left)/box.width);
+}
+chartsRoot.addEventListener('pointermove',pointerProbe);
+chartsRoot.addEventListener('pointerdown',pointerProbe);
+chartsRoot.addEventListener('pointerleave',hideProbe);
+chartsRoot.addEventListener('pointercancel',hideProbe);
+chartsRoot.addEventListener('focusin',event=>{
+  const chart=event.target.closest('[data-chart]');
+  if (chart) showProbe(chart.dataset.chart,.5);
+});
+chartsRoot.addEventListener('focusout',hideProbe);
+chartsRoot.addEventListener('keydown',event=>{
+  const chart=event.target.closest('[data-chart]');
+  if (!chart) return;
+  if (event.key==='Escape') {hideProbe();return;}
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const current=activeProbe?.id===chart.dataset.chart ? activeProbe.ratio : .5;
+  showProbe(chart.dataset.chart,event.key==='Home' ? 0 : event.key==='End' ? 1 : current+(event.key==='ArrowRight' ? 1 : -1)/576);
+});
 function intervals(rows, start, end, gapLimit) {
   const ordered = rows.filter(row => row.stamp < end).sort((a,b) => a.stamp - b.stamp);
   const result = [];
@@ -237,6 +319,12 @@ function timeline(key, now) {
 
 function detail(key) {
   const now = windowNow();
+  chartModels.clear();
+  if (key === 'energy') {
+    energyDetail(now);
+    if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
+    return;
+  }
   const live = snapshot.live;
   const [name,title] = [t(`device.${key}`),t(`chart.${key}`)];
   byId('detail-title').textContent = name;
@@ -251,10 +339,11 @@ function detail(key) {
   byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),power(live[key]),key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured')],...metadata[key]]);
   const withPlan = key === 'battery' || key === 'car';
   byId('timeline').innerHTML = withPlan ? timeline(key,now) : '';
-  byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now)
+  byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now,withPlan ? [{key:'solar',label:t('chart.solar'),divisor:1000,color:'solar'}] : [])
     + (key === 'house' ? chart(t('chart.house_total'),'house_total',1000,t('unit.kw'),'house',now) : '')
     + (withPlan ? chart(t('chart.soc'),key+'_soc',1,'%',key,now) : '')
     + (['battery','car','grid','heat'].includes(key) ? chart(t('chart.price'),'price',1,t('unit.price'),'heat',now) : '');
+  if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
   const upcoming = (snapshot.plan[key] ?? []).filter(item => Date.parse(item.time) > now).slice(0,5);
   byId('plan').hidden = !withPlan && key !== 'heat' && key !== 'house';
   byId('plan').innerHTML = withPlan
@@ -299,6 +388,7 @@ function settings() {
 }
 function render() {
   const requested = location.hash.slice(1);
+  if (requested !== route) hideProbe();
   route = pages.has(requested) || requested === 'settings' ? requested : 'overview';
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';

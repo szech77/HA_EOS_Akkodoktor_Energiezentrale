@@ -110,3 +110,19 @@
 
   #eos-energy-design .orb svg { width:30px; height:30px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   #eos-energy-design .node > span:nth-child(2) { max-width:100%; overflow-wrap:anywhere; text-align:center; }
+
+/* Interactive charts: values remain available with pointer, touch and keyboard. */
+#eos-energy-design .hub {text-decoration:none;cursor:pointer;}
+#eos-energy-design .hub:hover {border-color:var(--accent);}
+#eos-energy-design .hub:focus-visible,#eos-energy-design .interactive-plot svg:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
+#eos-energy-design .interactive-plot {position:relative;min-width:0;grid-column:2;}
+#eos-energy-design .interactive-plot svg {height:210px;touch-action:pan-y;}
+#eos-energy-design .series-legend {display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin:10px 0;}
+#eos-energy-design .series-legend span {display:flex;align-items:center;gap:6px;}
+#eos-energy-design .series-legend i,#eos-energy-design .tooltip-series i {background:var(--series);width:12px;height:3px;display:inline-block;flex-shrink:0;}
+#eos-energy-design .chart-crosshair {position:absolute;top:0;bottom:0;border-left:1px dashed var(--dim);pointer-events:none;}
+#eos-energy-design .chart-tooltip {position:absolute;z-index:4;top:8px;width:260px;max-width:calc(100% - 8px);padding:10px;box-sizing:border-box;background:var(--surface2);border:1px solid var(--edge);border-radius:8px;box-shadow:0 4px 16px #0008;pointer-events:none;font-size:12px;}
+#eos-energy-design .chart-tooltip small {display:block;color:var(--dim);font-size:10px;}
+#eos-energy-design .tooltip-series {display:flex;gap:6px;align-items:center;margin-top:7px;}
+#eos-energy-design .tooltip-series strong {margin-left:auto;white-space:nowrap;}
+@media(max-width:600px) {#eos-energy-design .interactive-plot svg {height:230px;}}

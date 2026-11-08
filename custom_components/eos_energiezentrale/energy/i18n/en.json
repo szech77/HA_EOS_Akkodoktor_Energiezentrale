@@ -165,6 +165,15 @@
     "settings.battery_limits_unmanaged": "Not sent to EOS yet. Save to enable synchronization of these battery limits.",
     "notice.battery_limits": "EOS battery limits",
     "control.waiting": "Enabled · waiting for readings and plan",
-    "notice.control_persistence": "Control permission was not saved"
+    "notice.control_persistence": "Control permission was not saved",
+    "device.energy": "All energy flows",
+    "chart.energy": "Energy flows",
+    "flow.open_energy": "Open all energy flows",
+    "chart.interactive_aria": "{title}. Hover or tap for values; use arrow keys to select a time.",
+    "chart.measured_values": "Measured values · nearest sample (up to 6 minutes)",
+    "chart.forecast_values": "Forecast · active interval",
+    "chart.house_forecast": "House total · forecast",
+    "chart.energy_signs": "Grid: positive import, negative export. Battery: positive charging, negative discharging. Solid: measured; dashed: forecast.",
+    "chart.energy_forecast_note": "The house forecast includes all consumers. Separate house and heat pump forecasts are only shown when available; missing values remain empty."
   }
 }

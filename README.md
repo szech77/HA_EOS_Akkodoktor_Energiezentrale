@@ -503,3 +503,7 @@ Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).
 
 [Apache License 2.0](LICENSE). Private und kommerzielle Nutzung unter den
 Lizenzbedingungen; Urheberhinweise siehe [NOTICE](NOTICE).
+
+### Interaktive Energie-Diagramme
+
+Ein Klick auf **Energie** in der Mitte des Stromflussbilds öffnet alle verfügbaren Energieflüsse. Speicher- und Fahrzeugdiagramme enthalten zusätzlich die PV-Messwerte und PV-Prognose. Mausbewegung oder Tippen zeigt Werte und Messzeitpunkte; per Tab und Pfeiltasten ist dieselbe Auswahl möglich. Historie ist durchgezogen, Prognose gestrichelt. Fehlende Daten bleiben Lücken. Die Hausgesamtprognose enthält Auto und Wärmepumpe und wird entsprechend beschriftet.

@@ -38,7 +38,7 @@ jobs:
         run: |
           node --check custom_components/eos_energiezentrale/energy/web/app.js
           node --check custom_components/eos_energiezentrale/energy/web/panel.js
-          node --test tests/panel.test.cjs
+          node --test tests/*.test.cjs
 
   security:
     name: Source security

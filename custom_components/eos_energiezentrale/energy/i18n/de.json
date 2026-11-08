@@ -165,6 +165,15 @@
     "settings.battery_limits_unmanaged": "Noch nicht an EOS übergeben. Speichern aktiviert die Übergabe dieser Speichergrenzen.",
     "notice.battery_limits": "EOS-Speichergrenzen",
     "control.waiting": "Aktiv · warte auf Messwerte und Plan",
-    "notice.control_persistence": "Steuerfreigabe nicht gespeichert"
+    "notice.control_persistence": "Steuerfreigabe nicht gespeichert",
+    "device.energy": "Alle Energieflüsse",
+    "chart.energy": "Energieflüsse",
+    "flow.open_energy": "Alle Energieflüsse öffnen",
+    "chart.interactive_aria": "{title}. Maus oder Tippen für Werte; Pfeiltasten wählen den Zeitpunkt.",
+    "chart.measured_values": "Messwerte · nächste Meldung (bis 6 Minuten)",
+    "chart.forecast_values": "Prognose · gültiges Zeitintervall",
+    "chart.house_forecast": "Haus gesamt · Prognose",
+    "chart.energy_signs": "Netz: Bezug positiv, Einspeisung negativ. Speicher: Laden positiv, Entladen negativ. Durchgezogen: Messung; gestrichelt: Prognose.",
+    "chart.energy_forecast_note": "Die Hausprognose enthält alle Verbraucher. Separate Prognosen für Haus und Wärmepumpe erscheinen nur bei verfügbaren Daten; fehlende Werte bleiben leer."
   }
 }
