@@ -26,6 +26,7 @@ Die Release-Pipeline verwendet die Add-on-Version und den zugehörigen Eintrag i
 ### Security
 
 - Bandit, pip-audit und Trivy prüfen Quellcode, Abhängigkeiten, Geheimnisse und Container in der CI.
+- Nicht benötigtes pip einschließlich seiner gebündelten Abhängigkeiten aus dem Laufzeit-Image entfernt; die CI prüft weiterhin den vollständigen Container und dessen Laufzeitimporte.
 
 ## 0.1.2
 

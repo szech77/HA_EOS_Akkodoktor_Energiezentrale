@@ -90,12 +90,12 @@ jobs:
           cache: true
       - name: Scan image for fixable high and critical vulnerabilities
         run: trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 eos-ci:local
-      - name: Check image imports and installed timezone data
+      - name: Check runtime imports, timezone data and absence of pip
         env:
           ARCH: ${{ matrix.arch }}
         run: >-
           docker run --rm --platform "linux/$ARCH" eos-ci:local
-          python -c "import energy.server; from zoneinfo import ZoneInfo; print(ZoneInfo('Europe/Berlin'))"
+          python -c "import energy.server; from importlib.util import find_spec; assert find_spec('pip') is None, 'pip must not be installed in the runtime image'; from zoneinfo import ZoneInfo; print(ZoneInfo('Europe/Berlin'))"
 
   release_metadata:
     name: Release metadata
