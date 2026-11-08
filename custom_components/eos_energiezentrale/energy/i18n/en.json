@@ -152,6 +152,8 @@
     "error.invalid_json": "Invalid JSON",
     "error.invalid_settings": "Invalid settings. Check the ranges, departure date and selected weekdays.",
     "error.control_rejected": "Control request rejected",
-    "error.change_unconfirmed": "The change could not be confirmed"
+    "error.change_unconfirmed": "The change could not be confirmed",
+    "metric.last_report_age": "Reported {minutes} min ago",
+    "metric.estimated_heat_age": "Estimated · heat pump {minutes} min ago"
   }
 }

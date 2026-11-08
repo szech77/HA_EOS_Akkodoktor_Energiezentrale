@@ -152,6 +152,8 @@
     "error.invalid_json": "Ungültiges JSON",
     "error.invalid_settings": "Ungültige Einstellungen. Prüfe Wertebereiche, Abfahrtstermin und Wochentage.",
     "error.control_rejected": "Steuerfreigabe abgelehnt",
-    "error.change_unconfirmed": "Änderung konnte nicht bestätigt werden"
+    "error.change_unconfirmed": "Änderung konnte nicht bestätigt werden",
+    "metric.last_report_age": "Stand vor {minutes} min",
+    "metric.estimated_heat_age": "Geschätzt · WP vor {minutes} min"
   }
 }

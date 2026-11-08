@@ -105,3 +105,5 @@
   #eos-energy-design #notice:not(:empty) { color:var(--heat); margin-bottom:12px; }
   #eos-energy-design #control { background:var(--surface2); border:1px solid var(--edge); border-radius:8px; padding:8px 12px; margin:8px 8px 0 0; }
   #eos-energy-design #daily { margin-top:12px; }
+
+  #eos-energy-design .reading-age { display:block; max-width:160px; font-size:10px; line-height:1.2; color:var(--dim); text-align:center; }

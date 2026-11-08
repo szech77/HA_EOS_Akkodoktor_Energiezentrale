@@ -122,14 +122,26 @@ function overview() {
   Object.keys(names).forEach(key => {
     const node = document.querySelector(`[data-node="${key}"]`);
     const flow = document.querySelector(`[data-flow="${key}"]`);
-    const value = live[key];
+    const retained = snapshot.display?.[key];
+    const stale = !valid(live[key]) && valid(retained?.value);
+    const value = stale ? retained.value : live[key];
     const soc = live[key + '_soc'];
     const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
       : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
-    node.querySelector('strong').textContent = power(value);
+    node.querySelector('strong').textContent = (stale && retained.estimated ? '≈ ' : '') + power(value);
+    let ageNote = node.querySelector('.reading-age');
+    if (!ageNote) {
+      ageNote = document.createElement('small');
+      ageNote.className = 'reading-age';
+      node.append(ageNote);
+    }
+    ageNote.hidden = !stale;
+    ageNote.textContent = stale ? t(retained.estimated ? 'metric.estimated_heat_age' : 'metric.last_report_age',
+      {minutes:Math.ceil(retained.age_s / 60)}) : '';
+    node.title = ageNote.textContent;
     node.querySelector('span:nth-child(2)').textContent = valid(soc) ? `${names[key]} · ${percent(soc)}` : names[key];
     node.setAttribute('aria-label', [names[key],power(value),value ? direction : ''].filter(Boolean).join(' · '));
-    flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
+    flow.classList.toggle('inactive', stale || !valid(value) || Math.abs(value) < 10);
     flow.classList.toggle('reverse', value < 0);
     flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
     // One shared power scale keeps sources and consumers visually comparable.

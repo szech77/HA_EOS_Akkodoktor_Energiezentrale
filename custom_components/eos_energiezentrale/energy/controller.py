@@ -19,6 +19,7 @@ class Controller:
         self.armed = False
         self.owned = False
         self.live = {}
+        self.display = {}
         self.plan = None
         self.forecast = []
         self.errors = {}
@@ -141,6 +142,19 @@ class Controller:
                     car_status=box.status, phases=box.phases, amps=box.amps,
                     battery_charge=battery.charge, battery_discharge=battery.discharge)
         live["house"] = house_only(live["house_total"], live["car"], live["heat"])
+        # Presentation only: slow/report-on-change heat meters may retain a
+        # valid last value. Never promote it into fresh control or history data.
+        self.display = {}
+        if live["heat"] is None:
+            row = states.get(opts["heat_entity"], {})
+            stamp = instant(row.get("last_reported") or row.get("last_updated"))
+            retained_heat = reading(states, opts["heat_entity"], now, "power")
+            if stamp and stamp <= now and retained_heat is not None and retained_heat >= 0:
+                age = (now - stamp).total_seconds()
+                self.display["heat"] = {"value": retained_heat, "age_s": age}
+                estimate = house_only(live["house_total"], live["car"], retained_heat)
+                if estimate is not None:
+                    self.display["house"] = {"value": estimate, "age_s": age, "estimated": True}
         live["battery"] = (battery.charge - battery.discharge
                            if battery.charge is not None and battery.discharge is not None else None)
         battery_order = current_instruction(self.plan, opts["battery_resource"], now)
@@ -267,7 +281,7 @@ class Controller:
             current = bool(generated and 0 <= (now - generated).total_seconds() < 3600)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
-            return {"live": dict(self.live), "settings": dict(self.config.daily),
+            return {"live": dict(self.live), "display": dict(self.display), "settings": dict(self.config.daily),
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "errors": dict(self.errors), "zone": opts["timezone"],
                     "influx_configured": bool(self.config.influx.url),

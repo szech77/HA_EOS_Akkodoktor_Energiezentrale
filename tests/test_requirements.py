@@ -254,6 +254,37 @@ class ControllerRequirements(unittest.TestCase):
         self.box.pause.assert_not_called()
 
 
+    def test_slow_heat_meter_keeps_marked_overview_estimate_without_fresh_history(self):
+        states = self.states(grid=0)
+        states["sensor.house"] = state(574.1381)
+        states["sensor.heat"] = state(29.8753452301025, when=NOW-timedelta(seconds=390))
+        self.ha.states.return_value = states
+        self.box.read.return_value = wallbox(watts=1.072)
+        self.app.tick(NOW, 0)
+        result = self.app.snapshot(NOW)
+        self.assertIsNone(result["live"]["heat"])
+        self.assertIsNone(result["live"]["house"])
+        self.assertEqual(result["display"]["heat"], {"value":29.8753452301025, "age_s":390})
+        estimate = result["display"]["house"]
+        self.assertAlmostEqual(estimate["value"], 543.1907547698975)
+        self.assertTrue(estimate["estimated"])
+        history = self.app.history.read(NOW)[0]
+        self.assertIsNone(history["heat"])
+        self.assertIsNone(history["house"])
+        self.ha.states.return_value = {**states, "sensor.heat":state(30, when=NOW+timedelta(seconds=5))}
+        self.app.tick(NOW+timedelta(seconds=5), 5)
+        self.assertEqual(self.app.snapshot(NOW+timedelta(seconds=5))["display"], {})
+
+    def test_unavailable_heat_meter_does_not_become_zero_or_estimated_house(self):
+        states = self.states()
+        states["sensor.heat"] = state("unavailable")
+        self.ha.states.return_value = states
+        self.app.tick(NOW, 0)
+        result = self.app.snapshot(NOW)
+        self.assertIsNone(result["live"]["house"])
+        self.assertEqual(result["display"], {})
+
+
 class DataAndConfigurationRequirements(unittest.TestCase):
     def test_nrgkick_cannot_enable_with_unconfirmed_current(self):
         ha = Mock()
