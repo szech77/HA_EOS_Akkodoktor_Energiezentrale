@@ -29,7 +29,8 @@
           "battery_type": "Speichertreiber",
           "battery_parameters": "Speicher-Entitäten (JSON)",
           "wallbox_type": "Wallbox-Treiber",
-          "wallbox_parameters": "Wallbox-Entitäten (JSON)"
+          "wallbox_parameters": "Wallbox-Entitäten (JSON)",
+          "vehicle_name": "Fahrzeugname"
         }
       },
       "limits": {
@@ -93,7 +94,8 @@
           "battery_type": "Speichertreiber",
           "battery_parameters": "Speicher-Entitäten (JSON)",
           "wallbox_type": "Wallbox-Treiber",
-          "wallbox_parameters": "Wallbox-Entitäten (JSON)"
+          "wallbox_parameters": "Wallbox-Entitäten (JSON)",
+          "vehicle_name": "Fahrzeugname"
         }
       },
       "limits": {
@@ -150,7 +152,7 @@
         "name": "Netzbezug / Einspeisung"
       },
       "car": {
-        "name": "Auto-Ladeleistung"
+        "name": "{vehicle} Ladeleistung"
       },
       "battery": {
         "name": "Speicher Laden / Entladen"
@@ -165,10 +167,10 @@
         "name": "Speicher-SoC"
       },
       "car_soc": {
-        "name": "Auto-SoC"
+        "name": "{vehicle} SoC"
       },
       "car_soc_factor": {
-        "name": "Auto-SoC-Faktor"
+        "name": "{vehicle} SoC-Faktor"
       },
       "price": {
         "name": "Bezugspreis"
@@ -177,10 +179,10 @@
         "name": "EOS-Speichermodus"
       },
       "car_mode": {
-        "name": "EOS-Automodus"
+        "name": "EOS-Modus {vehicle}"
       },
       "car_status": {
-        "name": "Wallbox-Status"
+        "name": "{vehicle} Ladestatus"
       }
     },
     "switch": {

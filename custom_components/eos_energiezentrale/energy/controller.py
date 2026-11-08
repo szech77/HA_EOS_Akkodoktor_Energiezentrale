@@ -366,6 +366,7 @@ class Controller:
                     "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "errors": dict(self.errors), "zone": opts["timezone"],
+                    "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "influx_configured": bool(self.config.influx.url),
                     "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}

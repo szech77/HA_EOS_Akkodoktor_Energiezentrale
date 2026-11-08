@@ -9,6 +9,10 @@ from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 
 
 def validate_options(options):
+    name = options.get("vehicle_name", "E-Auto")
+    if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 60
+            or any(ord(char) < 32 or ord(char) == 127 for char in name)):
+        raise ValueError("Vehicle name must contain 1 to 60 printable characters")
     ZoneInfo(options["timezone"])
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])

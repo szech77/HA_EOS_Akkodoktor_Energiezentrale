@@ -482,3 +482,36 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(polling,stopping)
         self.assertFalse(app.armed)
         self.assertTrue(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)
+
+
+    async def test_vehicle_name_can_be_changed_without_changing_eos_or_source_identity(self):
+        flow = OptionsFlow()
+        flow.hass = self.hass
+        flow.handler = self.entry.entry_id
+        flow.context = {"entry_id":self.entry.entry_id}
+        result = await flow.async_step_hardware({"vehicle_name":"Familienauto"})
+        self.assertEqual(result["data"]["vehicle_name"],"Familienauto")
+        config = Configuration(result["data"],Mock(),self.directory)
+        app = Controller(Mock(),config)
+        self.assertEqual(app.snapshot(datetime.now(timezone.utc))["vehicle_name"],"Familienauto")
+        self.assertEqual(config.options["vehicle_resource"],"ev1")
+        self.assertEqual(config.options["car_soc_entity"],DEFAULTS["car_soc_entity"])
+
+    async def test_vehicle_name_validation_and_existing_entry_default(self):
+        for name in ("", "   ", "x"*61, "car\nname", 123):
+            with self.subTest(name=name):
+                self.assertEqual(await check(self.hass,{**DEFAULTS,"vehicle_name":name}),{"base":"invalid_config"})
+        old_options = dict(DEFAULTS)
+        old_options.pop("vehicle_name")
+        self.assertEqual(await check(self.hass,old_options),{})
+        config = Configuration(old_options,Mock(),self.directory)
+        self.assertEqual(Controller(Mock(),config).snapshot(datetime.now(timezone.utc))["vehicle_name"],"E-Auto")
+
+    async def test_native_vehicle_sensor_names_use_configured_name_with_stable_identity(self):
+        coordinator,app = self.controller()
+        before = EnergySensor(coordinator,"car")
+        self.assertEqual(before.translation_placeholders["vehicle"],"E-Auto")
+        app.config.options["vehicle_name"] = "Familienauto"
+        renamed = EnergySensor(coordinator,"car")
+        self.assertEqual(renamed.translation_placeholders["vehicle"],"Familienauto")
+        self.assertEqual(before.unique_id,renamed.unique_id)

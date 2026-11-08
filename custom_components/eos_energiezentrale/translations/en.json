@@ -29,7 +29,8 @@
           "battery_type": "Battery driver",
           "battery_parameters": "Battery entity overrides (JSON)",
           "wallbox_type": "Wallbox driver",
-          "wallbox_parameters": "Wallbox entity overrides (JSON)"
+          "wallbox_parameters": "Wallbox entity overrides (JSON)",
+          "vehicle_name": "Vehicle name"
         }
       },
       "limits": {
@@ -93,7 +94,8 @@
           "battery_type": "Battery driver",
           "battery_parameters": "Battery entity overrides (JSON)",
           "wallbox_type": "Wallbox driver",
-          "wallbox_parameters": "Wallbox entity overrides (JSON)"
+          "wallbox_parameters": "Wallbox entity overrides (JSON)",
+          "vehicle_name": "Vehicle name"
         }
       },
       "limits": {
@@ -150,7 +152,7 @@
         "name": "Grid import / export"
       },
       "car": {
-        "name": "Car charging power"
+        "name": "{vehicle} charging power"
       },
       "battery": {
         "name": "Battery charge / discharge"
@@ -165,10 +167,10 @@
         "name": "Battery SoC"
       },
       "car_soc": {
-        "name": "Car SoC"
+        "name": "{vehicle} SoC"
       },
       "car_soc_factor": {
-        "name": "Car SoC factor"
+        "name": "{vehicle} SoC factor"
       },
       "price": {
         "name": "Import price"
@@ -177,10 +179,10 @@
         "name": "EOS battery mode"
       },
       "car_mode": {
-        "name": "EOS car mode"
+        "name": "EOS mode {vehicle}"
       },
       "car_status": {
-        "name": "Wallbox status"
+        "name": "{vehicle} charger status"
       }
     },
     "switch": {

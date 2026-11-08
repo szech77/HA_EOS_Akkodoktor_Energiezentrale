@@ -84,6 +84,13 @@ eingetragen. **kW** bezeichnet Leistung, **kWh** eine Energiemenge.
 
 ### Hardware: Fronius-Speicher und NRGkick
 
+Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug
+benennen, beispielsweise `Mein ID.4`. Der Standard ist **E-Auto**. Der Name erscheint
+im Stromfluss, auf der Fahrzeug-Detailseite, in der Modus-Zeitlinie und in den
+zugehörigen Sensorbezeichnungen. Zulässig sind 1–60 sichtbare Zeichen; vorhandene
+Installationen ohne diese Option verwenden automatisch E-Auto. Die Bezeichnung
+ändert weder die EOS-Ressourcen-ID `ev1` noch die konfigurierten Quellsensoren.
+
 Wähle als Speichertreiber **`fronius`** und als Wallbox-Treiber **`nrgkick`**.
 Die zugehörigen HA-Integrationen müssen die Sensoren und Stellgrößen bereits
 bereitstellen. Aktuell stehen diese beiden Typen im Einrichtungsdialog zur Auswahl.

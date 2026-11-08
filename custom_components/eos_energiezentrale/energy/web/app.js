@@ -4,8 +4,11 @@ const byId = id => document.getElementById(id);
 const html = value => String(value ?? '').replace(/[&<>"']/g, char =>
   ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 let language = {locale:'en-GB', messages:{}};
-const t = (key, values = {}) => (language.messages[key] ?? key)
-  .replace(/\{(\w+)\}/g, (token, name) => Object.hasOwn(values, name) ? String(values[name]) : token);
+const t = (key, values = {}) => {
+  const context = {vehicle:snapshot.vehicle_name ?? 'E-Auto', ...values};
+  return (language.messages[key] ?? key)
+    .replace(/\{(\w+)\}/g, (token, name) => Object.hasOwn(context, name) ? String(context[name]) : token);
+};
 const th = (key, values) => html(t(key, values));
 const stateLabel = (prefix, value) => value ? language.messages[`${prefix}.${value}`] ?? value : '';
 const valid = Number.isFinite;

@@ -20,6 +20,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class EnergySensor(EnergyEntity, SensorEntity):
     def __init__(self, coordinator, key):
         super().__init__(coordinator, key)
+        if key in {"car", "car_soc", "car_soc_factor", "car_mode", "car_status"}:
+            self._attr_translation_placeholders = {
+                "vehicle": coordinator.app.config.options.get("vehicle_name", "E-Auto").strip()}
         unit, device_class = SENSORS[key]
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
