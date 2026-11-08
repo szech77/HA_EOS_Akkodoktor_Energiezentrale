@@ -70,6 +70,25 @@ class EOS:
     def solution(self):
         return request(self.url + "/v1/energy-management/optimization/solution/GENETIC")
 
+    def set_battery_limits(self, resource, minimum, maximum):
+        if (type(minimum) is not int or type(maximum) is not int
+                or not 0 <= minimum < maximum <= 100):
+            raise ValueError("Invalid stationary battery SoC limits")
+        configuration = request(self.url + "/v1/config")
+        batteries = configuration.get("devices", {}).get("batteries")
+        if (not isinstance(batteries, dict) or resource not in batteries
+                or not isinstance(batteries[resource], dict)):
+            raise ValueError("Configured stationary battery is missing in EOS")
+        desired = {"min_soc_percentage": minimum, "max_soc_percentage": maximum}
+        if all(batteries[resource].get(key) == value for key, value in desired.items()):
+            return
+        updated = {**batteries, resource: {**batteries[resource], **desired}}
+        # Updating the collection avoids EOS versions rejecting a raw leaf dict.
+        request(self.url + "/v1/config/devices/batteries", method="PUT", payload=updated)
+        confirmed = request(self.url + "/v1/config").get("devices", {}).get("batteries", {}).get(resource)
+        if not isinstance(confirmed, dict) or any(confirmed.get(key) != value for key, value in desired.items()):
+            raise ValueError("EOS did not confirm stationary battery limits")
+
     def set_vehicle_goal(self, resource, target, departure):
         configuration = request(self.url + "/v1/config")
         vehicles = configuration["devices"]["electric_vehicles"]

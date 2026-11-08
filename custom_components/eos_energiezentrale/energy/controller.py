@@ -25,6 +25,9 @@ class Controller:
         self.errors = {}
         self.goal = None
         self.goal_at = None
+        self.battery_limits_confirmed = None
+        self.battery_limits_confirmed_at = None
+        self.last_battery_limits_attempt = -1000
         self.soc = self.soc_report = self.soc_time = None
         self.soc_w = 0
         self.last_soc_publish = None
@@ -76,6 +79,25 @@ class Controller:
                     self.armed = False
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
+    def sync_battery_limits(self, now, clock, *, force=False):
+        if not getattr(self.config, "battery_limits_managed", False):
+            return
+        desired = (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"])
+        interval = 60 if self.battery_limits_confirmed == desired else 30
+        if not force and clock - self.last_battery_limits_attempt < interval:
+            return
+        self.last_battery_limits_attempt = clock
+        try:
+            self.config.eos.set_battery_limits(self.config.options["battery_resource"], *desired)
+        except Exception as error:
+            self.battery_limits_confirmed = None
+            self.battery_limits_confirmed_at = None
+            self.errors["battery_limits"] = type(error).__name__
+        else:
+            self.battery_limits_confirmed = desired
+            self.battery_limits_confirmed_at = now
+            self.errors.pop("battery_limits", None)
+
     def update_eos(self, now, clock):
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
@@ -126,6 +148,7 @@ class Controller:
         return goal is not None and goal == self.goal and self.goal_at is not None
 
     def tick(self, now, clock):
+        self.sync_battery_limits(now, clock)
         self.update_eos(now, clock)
         states = self.ha.states()
         self.errors.pop("ha", None)
@@ -197,7 +220,9 @@ class Controller:
         if not (pv and planned == 0):
             self.pv_session = False
         self.regulate_car(box, live, planned, pv, now, clock, states)
-        command = battery_command(battery_order, battery.soc, opts,
+        command = battery_command(battery_order, battery.soc,
+                                  {**opts, "battery_min_soc": daily["battery_min_soc"],
+                                   "battery_max_soc": daily["battery_max_soc"]},
                                   daily["battery_pv_support"] and box.charging and self.pv_session,
                                   live["grid"], battery.discharge, battery.charge)
         if command is None:
@@ -282,6 +307,12 @@ class Controller:
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
             return {"live": dict(self.live), "display": dict(self.display), "settings": dict(self.config.daily),
+                    "battery_limits": {
+                        "managed": getattr(self.config, "battery_limits_managed", False),
+                        "confirmed": self.battery_limits_confirmed ==
+                            (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"]),
+                        "confirmed_at": self.battery_limits_confirmed_at.isoformat()
+                            if self.battery_limits_confirmed_at else None},
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "errors": dict(self.errors), "zone": opts["timezone"],
                     "influx_configured": bool(self.config.influx.url),

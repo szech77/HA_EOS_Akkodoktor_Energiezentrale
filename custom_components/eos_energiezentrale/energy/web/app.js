@@ -286,6 +286,11 @@ function settings() {
   byId('ownership').textContent = snapshot.armed ? t('control.active') : t('control.read_only');
   byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
   byId('control').disabled = !formReady;
+  const limits = snapshot.battery_limits;
+  byId('battery-limits-status').textContent = snapshot.errors.battery_limits ? t('settings.battery_limits_failed')
+    : limits?.confirmed ? t('settings.battery_limits_confirmed', {
+      minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc})
+    : limits?.managed ? t('settings.battery_limits_pending') : t('settings.battery_limits_unmanaged');
   byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${snapshot.errors.eos ? th('status.fetch_failed') : snapshot.plan.battery?.length || snapshot.plan.car?.length ? th('status.plan_available') : th('status.no_plan')}</dd>
     <dt>InfluxDB</dt><dd>${!snapshot.influx_configured ? th('status.local_history') : history.influx_error ? th('status.fetch_failed') : history.influx.length ? th('status.history_available') : th('status.no_samples')}</dd>`;
 }
@@ -297,7 +302,7 @@ function render() {
   byId('detail').hidden = !pages.has(route);
   const errors = Object.keys(snapshot.errors);
   const errorAreas = {goal:'notice.goal',runtime:'control.title',forecast:'notice.forecast',
-    release:'notice.release',connection:'notice.connection'};
+    release:'notice.release',battery_limits:'notice.battery_limits',connection:'notice.connection'};
   byId('notice').textContent = errors.length ? `${t('notice.check')} · ${errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()).join(', ')}` : '';
   if (route === 'overview') overview();
   else if (route === 'settings') settings();
@@ -321,7 +326,11 @@ form.elements.schedule.addEventListener('change',scheduleFields);
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const values = {};
-  for (const name of ['target_soc','pv_target_soc','reserve_w','regulation_interval_s']) values[name] = Number(form.elements[name].value);
+  for (const name of ['target_soc','pv_target_soc','reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc']) values[name] = Number(form.elements[name].value);
+  if (values.battery_min_soc >= values.battery_max_soc) {
+    byId('saved').textContent = t('settings.battery_limits_invalid');
+    return;
+  }
   for (const name of ['pv','fast','battery_pv_support','phase_auto']) values[name] = form.elements[name].checked;
   for (const name of ['schedule','departure_time']) values[name] = form.elements[name].value;
   values.departure = form.elements.departure.value ? new Date(form.elements.departure.value).toISOString() : '';

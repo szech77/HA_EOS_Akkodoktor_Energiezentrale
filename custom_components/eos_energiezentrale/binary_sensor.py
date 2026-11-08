@@ -6,7 +6,7 @@ from .entity import EnergyEntity
 
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(EnergyBinarySensor(entry.runtime_data, key)
-                       for key in ("plan_current", "problem", "release_pending"))
+                       for key in ("plan_current", "problem", "release_pending", "battery_limits_confirmed"))
 
 
 class EnergyBinarySensor(EnergyEntity, BinarySensorEntity):
@@ -18,6 +18,8 @@ class EnergyBinarySensor(EnergyEntity, BinarySensorEntity):
     @property
     def is_on(self):
         data = self.coordinator.data or {}
+        if self.key == "battery_limits_confirmed":
+            return bool(data.get("battery_limits", {}).get("confirmed"))
         if self.key == "problem":
             return bool(data.get("errors"))
         if self.key == "plan_current":

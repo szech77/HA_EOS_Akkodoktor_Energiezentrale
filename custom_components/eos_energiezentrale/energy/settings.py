@@ -11,7 +11,8 @@ from .drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "weekdays": [0, 1, 2, 3, 4], "target_soc": 80, "pv_target_soc": 80,
          "reserve_w": 0, "pv": False, "fast": False, "battery_pv_support": True,
-         "phase_auto": True, "regulation_interval_s": None}
+         "phase_auto": True, "regulation_interval_s": None,
+         "battery_min_soc": 20, "battery_max_soc": 100}
 
 
 def daily_settings(raw, interval):
@@ -22,9 +23,12 @@ def daily_settings(raw, interval):
         if type(values[key]) is not bool:
             raise ValueError(f"Ungültige Einstellung: {key}")
     for key, low, high in (("target_soc", 1, 100), ("pv_target_soc", 1, 100),
-                           ("reserve_w", 0, 500), ("regulation_interval_s", 5, 120)):
+                           ("reserve_w", 0, 500), ("regulation_interval_s", 5, 120),
+                           ("battery_min_soc", 0, 99), ("battery_max_soc", 1, 100)):
         if type(values[key]) is not int or not low <= values[key] <= high:
             raise ValueError(f"Ungültiger Bereich: {key}")
+    if values["battery_min_soc"] >= values["battery_max_soc"]:
+        raise ValueError("Battery minimum must be below maximum SoC")
     if values["schedule"] not in ("off", "once", "weekly"):
         raise ValueError("Ungültiger Zeitplan")
     if (not isinstance(values["departure"], str)
@@ -75,9 +79,21 @@ class Configuration:
         self.directory = Path(directory)
         self.file = self.directory / "daily.json"
         raw = json.loads(self.file.read_text(encoding="utf-8")) if self.file.exists() else {}
-        self.daily = daily_settings({**raw, "fast": False}, options["regulation_interval_s"])
+        self.battery_limits_managed = raw.pop("_battery_limits_managed", False)
+        if type(self.battery_limits_managed) is not bool:
+            raise ValueError("Invalid battery limits synchronization metadata")
+        self.daily = daily_settings({"battery_min_soc": options["battery_min_soc"],
+                                     "battery_max_soc": options["battery_max_soc"],
+                                     **raw, "fast": False}, options["regulation_interval_s"])
 
-    def update(self, values):
-        checked = daily_settings(values, self.options["regulation_interval_s"])
-        save(self.file, {**checked, "fast": False})
+    def update(self, values, *, manage_battery_limits=False):
+        checked = daily_settings({"battery_min_soc": self.daily["battery_min_soc"],
+                                  "battery_max_soc": self.daily["battery_max_soc"], **values},
+                                 self.options["regulation_interval_s"])
+        managed = self.battery_limits_managed or manage_battery_limits
+        persisted = {**checked, "fast": False}
+        if managed:
+            persisted["_battery_limits_managed"] = True
+        save(self.file, persisted)
         self.daily = checked
+        self.battery_limits_managed = managed

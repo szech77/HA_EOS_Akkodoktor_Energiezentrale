@@ -46,8 +46,6 @@ GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_res
  'limits': ['capacity_wh',
             'charging_efficiency',
             'grid_limit_w',
-            'battery_min_soc',
-            'battery_max_soc',
             'battery_charge_w',
             'battery_discharge_w',
             'allow_battery_export',

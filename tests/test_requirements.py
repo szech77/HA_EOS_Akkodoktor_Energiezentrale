@@ -285,6 +285,19 @@ class ControllerRequirements(unittest.TestCase):
         self.assertEqual(result["display"], {})
 
 
+    def test_daily_storage_limits_override_commissioning_values_in_real_commands(self):
+        self.config.daily = daily_settings({"battery_min_soc":40,"battery_max_soc":80},20)
+        self.eos.plan.return_value = {"generated_at":NOW.isoformat(),
+                                     "instructions":[instruction(NOW,"SELF_CONSUMPTION")]}
+        self.app.set_armed(True)
+        self.battery.read.return_value = BatteryReading(35,0,0)
+        self.app.tick(NOW,0)
+        self.assertEqual(self.battery.apply.call_args.args[0],BatteryCommand("limits",4760,0))
+        self.battery.read.return_value = BatteryReading(85,0,0)
+        self.app.tick(NOW+timedelta(seconds=5),5)
+        self.assertEqual(self.battery.apply.call_args.args[0],BatteryCommand("limits",0,4760))
+
+
 class DataAndConfigurationRequirements(unittest.TestCase):
     def test_nrgkick_cannot_enable_with_unconfirmed_current(self):
         ha = Mock()

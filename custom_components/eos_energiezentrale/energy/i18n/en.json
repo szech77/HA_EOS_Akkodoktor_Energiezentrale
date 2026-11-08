@@ -154,6 +154,15 @@
     "error.control_rejected": "Control request rejected",
     "error.change_unconfirmed": "The change could not be confirmed",
     "metric.last_report_age": "Reported {minutes} min ago",
-    "metric.estimated_heat_age": "Estimated · heat pump {minutes} min ago"
+    "metric.estimated_heat_age": "Estimated · heat pump {minutes} min ago",
+    "settings.battery_min_soc": "Battery minimum SoC (%)",
+    "settings.battery_max_soc": "Battery maximum SoC (%)",
+    "settings.battery_limits_info": "Saving sends these limits to EOS even in read-only mode. Local battery control uses the same limits.",
+    "settings.battery_limits_invalid": "Minimum SoC must be below maximum SoC.",
+    "settings.battery_limits_confirmed": "EOS confirmed: battery {minimum}–{maximum}%.",
+    "settings.battery_limits_pending": "Battery limits are queued for EOS synchronization.",
+    "settings.battery_limits_failed": "EOS did not confirm battery limits. Synchronization will be retried; local limits are saved.",
+    "settings.battery_limits_unmanaged": "Not sent to EOS yet. Save to enable synchronization of these battery limits.",
+    "notice.battery_limits": "EOS battery limits"
   }
 }

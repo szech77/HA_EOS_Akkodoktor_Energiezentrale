@@ -172,8 +172,6 @@ Diese Werte stehen im Bereich **Technische Grenzen** der Integration:
 | `capacity_wh` | `77000` | 1000–300000 Wh; nutzbare Fahrzeug-Batteriekapazität für die SoC-Schätzung. |
 | `charging_efficiency` | `0.9` | 0,1–1; angenommener Fahrzeug-Ladewirkungsgrad. |
 | `grid_limit_w` | `17250` | 1380–100000 W; Begrenzung der gesamten Netzbezugsleistung. |
-| `battery_min_soc` | `20` | Untergrenze in %, kleiner als die Obergrenze. |
-| `battery_max_soc` | `100` | Obergrenze in %, höchstens 100. |
 | `battery_charge_w` | `4760` | 0–50000 W; Ladebasis des Speichers. |
 | `battery_discharge_w` | `4760` | 0–50000 W; Entladebasis des Speichers. |
 | `allow_battery_export` | `false` | Erlaubnis für erzwungene Speicherentladung ins Netz; benötigt eine passende `grid_discharge`-Entität. |
@@ -218,7 +216,9 @@ Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entität
 | Einstellung | Bedeutung |
 |---|---|
 | Energiesteuerung | Explizite Freigabe der Geräteansteuerung; nach Neustart zunächst aus. |
-| Ziel-SoC | 1–100 %; Ziel für Terminplanung und Schnellladen. |
+| Speicher Mindest-SoC | 0–99 %; kleiner als der Maximal-SoC. Startwert 20 %. Wird an EOS übergeben und lokal beachtet. |
+| Speicher Maximal-SoC | 1–100 %; größer als der Mindest-SoC. Startwert 100 %. Wird an EOS übergeben und lokal beachtet. |
+| Ziel-SoC | 1–100 %; Fahrzeug-Ziel für Terminplanung und Schnellladen. |
 | PV-Ziel-SoC | 1–100 %; eigenständiges Ziel für PV-Überschussladen, auch ohne Termin. |
 | PV-Überschussladen | Aktiviert die lokale PV-Regelung bis zum PV-Ziel. |
 | Schnellladen | Lädt bis zum Ziel-SoC; wird nach Neustart nicht wieder eingeschaltet. |
@@ -231,6 +231,58 @@ Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entität
 Das Panel übernimmt die vollständige Termin- und Wochentagsauswahl. Für eine
 einmalige Planung muss vor der Wahl von `once` über native Entitäten ein gültiger
 Abfahrtszeitpunkt gesetzt sein. Im Panel werden die Angaben gemeinsam gespeichert.
+
+### Speichergrenzen an EOS übergeben
+
+1. Im Panel **Einstellungen → Hausspeicher** öffnen.
+2. **Speicher Mindest-SoC** und **Speicher Maximal-SoC** setzen, zum Beispiel 30 % und 90 %.
+3. **Speichern** drücken. Die Werte gelten auch für die lokale Speicherregelung.
+4. Unter den Feldern die Rückmeldung prüfen: **EOS bestätigt: Speicher 30–90 %.**
+
+Die Einstellungen stehen zusätzlich als zwei `number`-Entitäten unter dem Gerät
+EOS Energiezentrale zur Verfügung. Ein zusätzlicher Binärsensor meldet
+**EOS-Speichergrenzen bestätigt**. Die tatsächlichen Entity-IDs im HA-Gerät nachsehen.
+Bei Änderungen einzeln über Entitäten muss nach jedem Schritt Mindest-SoC < Maximal-SoC gelten.
+
+Die Übergabe verwendet die konfigurierte Speicherressource, standardmäßig
+`battery1`. In der EOS-Antwort von `GET /v1/config` sind die Werte hier zu finden
+(Ausschnitt zur Kontrolle, keine vollständige Konfiguration zum Ersetzen):
+
+```json
+{
+  "devices": {
+    "batteries": {
+      "battery1": {
+        "min_soc_percentage": 30,
+        "max_soc_percentage": 90
+      }
+    }
+  }
+}
+```
+
+Die Integration liest zuerst die vorhandene Konfiguration, ändert ausschließlich
+die beiden Grenzen der ausgewählten Batterie über
+`PUT /v1/config/devices/batteries` und liest die Werte zur Bestätigung erneut.
+Kapazitäten, Wirkungsgrade, weitere Batterien, Fahrzeuge und Wechselrichter bleiben
+erhalten. Die nächste EOS-Optimierung kann diese Grenzen anschließend berücksichtigen;
+die Bestätigung bedeutet nicht, dass bereits ein neuer Plan erzeugt wurde.
+
+Speichern im Panel beziehungsweise Ändern einer dieser Zahlenentitäten ist eine
+ausdrückliche EOS-Konfigurationsänderung und erfolgt **auch im Lesemodus**. Der
+Lesemodus unterbindet weiterhin die Geräteansteuerung. Ohne eine solche Übergabe
+werden bestehende EOS-Grenzen beim ersten Einrichten nicht automatisch überschrieben.
+
+Nach der ersten Übergabe bleiben die gewünschten Grenzen über Neustarts erhalten.
+Bei einem Fehler wird die Übertragung nach 30 Sekunden erneut versucht, der Status
+zeigt die fehlende Bestätigung an. Bestätigte Vorgaben werden alle 60 Sekunden
+abgeglichen; abweichende spätere Änderungen direkt in EOS werden dabei auf die in
+der Energiezentrale gespeicherten Grenzen zurückgesetzt. Änderungen deshalb über
+die Energiezentrale vornehmen. Die lokale Steuerung bleibt nach Neustarts zunächst aus.
+
+Bestehende Inbetriebnahme-Grenzen aus älteren Integrationsständen werden als
+Startwerte übernommen, wenn noch keine alltäglichen Speichergrenzen gespeichert sind.
+Sie werden jetzt im Panel und über die Zahlenentitäten gepflegt.
 
 ## YAML-Beispiele
 

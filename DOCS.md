@@ -61,6 +61,25 @@ dynamische Null-Einspeisung um. Fehlender oder abgelaufener Plan gibt den Speich
 zurück. Fehler bei Gerätebefehlen deaktivieren die Regelung. Eine unbestätigte
 Rückgabe bleibt als Störung sichtbar und kann mit Ausschalten erneut versucht werden.
 
+## Speichergrenzen
+
+Mindest- und Maximal-SoC werden unter Panel → Einstellungen → Hausspeicher oder
+über die zugehörigen Zahlenentitäten eingestellt. Mindest-SoC muss kleiner als
+Maximal-SoC sein; gültiger Gesamtbereich ist 0–100 %. Lokale Regelung und EOS
+verwenden dieselben gewünschten Grenzen.
+
+Beim Speichern beziehungsweise Ändern der Zahlenentitäten werden die Werte auch
+im Lesemodus an `devices.batteries.<battery_resource>` in EOS übergeben und
+zurückgelesen. Ein eigener Status im Panel und ein Binärsensor zeigen die
+Bestätigung. Die Geräteansteuerung wird dadurch nicht aktiviert. Bestehende
+EOS-Grenzen werden ohne diese ausdrückliche Übergabe nicht automatisch übernommen.
+
+Gespeicherte Vorgaben werden nach Neustarts weiter synchronisiert. Bei Fehlern
+erfolgt nach 30 Sekunden ein weiterer Versuch; bestätigte Werte werden alle
+60 Sekunden überprüft und bei externen Abweichungen wiederhergestellt. Andere
+Batterieparameter und Geräte bleiben erhalten. Die nächste EOS-Optimierung
+erstellt den Plan unter Berücksichtigung der geänderten Konfiguration.
+
 ## Alltagsplanung
 
 Ziel-SoC zur Abfahrt und separates PV-Ziel sind unabhängig. PV-Überschussladen

@@ -348,3 +348,47 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         live = result["live"]
         self.assertEqual((live["battery_charge"], live["battery_discharge"], live["battery"]), (0, 470, -470))
         self.assertEqual((live["car"], live["heat"], live["house"]), (0, 0, 470))
+
+
+    async def test_native_battery_limits_send_immediately_even_in_read_only_mode(self):
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        config.eos = Mock()
+        app = Controller(ha,config)
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        await EnergyNumber(coordinator,"battery_min_soc").async_set_native_value(30)
+        config.eos.set_battery_limits.assert_called_once_with("battery1",30,100)
+        await EnergyNumber(coordinator,"battery_max_soc").async_set_native_value(90)
+        config.eos.set_battery_limits.assert_called_with("battery1",30,90)
+        self.assertFalse(app.armed)
+        self.assertTrue(EnergyBinarySensor(coordinator,"battery_limits_confirmed").is_on)
+        self.assertEqual(EnergyNumber(coordinator,"battery_min_soc").native_value,30)
+
+    async def test_failed_eos_sync_keeps_local_bounds_and_exposes_pending_state(self):
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        config.eos = Mock()
+        config.eos.set_battery_limits.side_effect = OSError("EOS offline")
+        app = Controller(ha,config)
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        await coordinator.async_change(settings={"battery_min_soc":30,"battery_max_soc":90})
+        self.assertEqual(coordinator.data["settings"]["battery_min_soc"],30)
+        self.assertFalse(EnergyBinarySensor(coordinator,"battery_limits_confirmed").is_on)
+        self.assertTrue(EnergyBinarySensor(coordinator,"problem").is_on)
+        self.assertTrue(Configuration(dict(DEFAULTS),ha,self.directory).battery_limits_managed)
+
+    async def test_failed_local_save_does_not_write_eos_or_claim_changed_limits(self):
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        config.eos = Mock()
+        app = Controller(ha,config)
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        with patch("custom_components.eos_energiezentrale.energy.settings.save", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                await coordinator.async_change(settings={"battery_min_soc":30})
+        config.eos.set_battery_limits.assert_not_called()
+        self.assertEqual(config.daily["battery_min_soc"],20)
+        self.assertFalse(config.battery_limits_managed)

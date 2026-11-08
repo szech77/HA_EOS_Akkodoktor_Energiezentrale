@@ -38,8 +38,6 @@
           "capacity_wh": "Fahrzeugkapazität (Wh)",
           "charging_efficiency": "Fahrzeug-Ladewirkungsgrad (0–1)",
           "grid_limit_w": "Netzbezugsgrenze (W)",
-          "battery_min_soc": "Speicher-Untergrenze (%)",
-          "battery_max_soc": "Speicher-Obergrenze (%)",
           "battery_charge_w": "Speicher-Ladebasis (W)",
           "battery_discharge_w": "Speicher-Entladebasis (W)",
           "allow_battery_export": "Speichereinspeisung erlauben",
@@ -104,8 +102,6 @@
           "capacity_wh": "Fahrzeugkapazität (Wh)",
           "charging_efficiency": "Fahrzeug-Ladewirkungsgrad (0–1)",
           "grid_limit_w": "Netzbezugsgrenze (W)",
-          "battery_min_soc": "Speicher-Untergrenze (%)",
-          "battery_max_soc": "Speicher-Obergrenze (%)",
           "battery_charge_w": "Speicher-Ladebasis (W)",
           "battery_discharge_w": "Speicher-Entladebasis (W)",
           "allow_battery_export": "Speichereinspeisung erlauben",
@@ -216,6 +212,12 @@
       },
       "regulation_interval_s": {
         "name": "Regelintervall"
+      },
+      "battery_min_soc": {
+        "name": "Speicher Mindest-SoC"
+      },
+      "battery_max_soc": {
+        "name": "Speicher Maximal-SoC"
       }
     },
     "select": {
@@ -245,6 +247,9 @@
       },
       "release_pending": {
         "name": "Gerätefreigabe ausstehend"
+      },
+      "battery_limits_confirmed": {
+        "name": "EOS-Speichergrenzen bestätigt"
       }
     }
   }

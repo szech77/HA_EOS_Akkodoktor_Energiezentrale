@@ -57,7 +57,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     if settings is not None:
                         values = daily_settings({**self.app.config.daily, **settings},
                                                 self.app.config.options["regulation_interval_s"])
-                        self.app.config.update(values)
+                        manage_limits = bool(settings.keys() & {"battery_min_soc", "battery_max_soc"})
+                        self.app.config.update(values, manage_battery_limits=manage_limits)
+                        if manage_limits:
+                            self.app.sync_battery_limits(datetime.now(timezone.utc), monotonic(), force=True)
                     return self.app.snapshot(datetime.now(timezone.utc))
             try:
                 result = await self.hass.async_add_executor_job(change)

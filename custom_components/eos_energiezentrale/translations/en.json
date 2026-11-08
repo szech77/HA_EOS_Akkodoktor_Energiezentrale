@@ -38,8 +38,6 @@
           "capacity_wh": "Vehicle battery capacity (Wh)",
           "charging_efficiency": "Vehicle charging efficiency (0–1)",
           "grid_limit_w": "Grid import limit (W)",
-          "battery_min_soc": "Battery minimum SoC (%)",
-          "battery_max_soc": "Battery maximum SoC (%)",
           "battery_charge_w": "Battery charging basis (W)",
           "battery_discharge_w": "Battery discharging basis (W)",
           "allow_battery_export": "Allow battery export",
@@ -104,8 +102,6 @@
           "capacity_wh": "Vehicle battery capacity (Wh)",
           "charging_efficiency": "Vehicle charging efficiency (0–1)",
           "grid_limit_w": "Grid import limit (W)",
-          "battery_min_soc": "Battery minimum SoC (%)",
-          "battery_max_soc": "Battery maximum SoC (%)",
           "battery_charge_w": "Battery charging basis (W)",
           "battery_discharge_w": "Battery discharging basis (W)",
           "allow_battery_export": "Allow battery export",
@@ -216,6 +212,12 @@
       },
       "regulation_interval_s": {
         "name": "Regulation interval"
+      },
+      "battery_min_soc": {
+        "name": "Battery minimum SoC"
+      },
+      "battery_max_soc": {
+        "name": "Battery maximum SoC"
       }
     },
     "select": {
@@ -245,6 +247,9 @@
       },
       "release_pending": {
         "name": "Device release pending"
+      },
+      "battery_limits_confirmed": {
+        "name": "EOS battery limits confirmed"
       }
     }
   }

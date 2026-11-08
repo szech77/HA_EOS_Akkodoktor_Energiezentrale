@@ -81,6 +81,12 @@
           <label><input name="day" value="6" type="checkbox"><span data-i18n="weekday.sun"></span></label>
         </div></fieldset>
         <h2 data-i18n="device.battery"></h2>
+        <div class="fields">
+          <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
+          <label><span data-i18n="settings.battery_max_soc"></span><input name="battery_max_soc" type="number" min="1" max="100" step="1" required></label>
+        </div>
+        <p class="footnote" data-i18n="settings.battery_limits_info"></p>
+        <p id="battery-limits-status" class="footnote" role="status"></p>
         <label class="check"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
         <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
       </form>

@@ -154,6 +154,15 @@
     "error.control_rejected": "Steuerfreigabe abgelehnt",
     "error.change_unconfirmed": "Änderung konnte nicht bestätigt werden",
     "metric.last_report_age": "Stand vor {minutes} min",
-    "metric.estimated_heat_age": "Geschätzt · WP vor {minutes} min"
+    "metric.estimated_heat_age": "Geschätzt · WP vor {minutes} min",
+    "settings.battery_min_soc": "Speicher Mindest-SoC (%)",
+    "settings.battery_max_soc": "Speicher Maximal-SoC (%)",
+    "settings.battery_limits_info": "Beim Speichern werden diese Grenzen auch im Lesemodus an EOS übergeben. Die lokale Speicherregelung verwendet dieselben Grenzen.",
+    "settings.battery_limits_invalid": "Der Mindest-SoC muss kleiner als der Maximal-SoC sein.",
+    "settings.battery_limits_confirmed": "EOS bestätigt: Speicher {minimum}–{maximum} %.",
+    "settings.battery_limits_pending": "Speichergrenzen zur Übertragung an EOS vorgemerkt.",
+    "settings.battery_limits_failed": "EOS hat die Speichergrenzen nicht bestätigt. Übertragung wird erneut versucht; lokale Grenzen sind gespeichert.",
+    "settings.battery_limits_unmanaged": "Noch nicht an EOS übergeben. Speichern aktiviert die Übergabe dieser Speichergrenzen.",
+    "notice.battery_limits": "EOS-Speichergrenzen"
   }
 }
