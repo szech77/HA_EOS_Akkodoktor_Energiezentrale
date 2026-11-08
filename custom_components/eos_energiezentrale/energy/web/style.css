@@ -27,7 +27,7 @@
   #eos-energy-design .wires { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   #eos-energy-design .wire,#eos-energy-design .pulse { fill:none; vector-effect:non-scaling-stroke; stroke-linecap:round; }
   #eos-energy-design .wire { stroke:var(--edge); stroke-width:3; }
-  #eos-energy-design .pulse { stroke:var(--energy-color); stroke-width:5; stroke-dasharray:8 92; animation:eos-stream var(--speed,3s) linear infinite; }
+  #eos-energy-design .pulse { stroke:var(--energy-color); stroke-width:var(--pulse-width,5px); stroke-dasharray:var(--pulse-dash,8 92); transition:stroke-width .3s ease; animation:eos-stream var(--speed,3s) linear infinite; }
   @keyframes eos-stream { to { stroke-dashoffset:-100; } }
   @media(prefers-reduced-motion:reduce) { #eos-energy-design .pulse { animation:none; stroke-dashoffset:-48; } }
   #eos-energy-design .solar { --energy-color:var(--solar); --speed:1.9s; }

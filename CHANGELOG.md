@@ -7,6 +7,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Animierte Stromfluss-Punkte skalieren ihre Dicke und Länge mit der Leistung auf einer gemeinsamen, begrenzten Skala.
+
 - Installation als HACS-Custom-Integration mit geführter Einrichtung in Home Assistant.
 - Native Sensoren, Schalter, Ziel-SoCs, Regelparameter und Abfahrtsplanung.
 - Eigenes Seitenleisten-Panel mit vorhandener Stromflussgrafik und Detailseiten.

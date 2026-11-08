@@ -132,6 +132,13 @@ function overview() {
     flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
     flow.classList.toggle('reverse', value < 0);
     flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
+    // One shared power scale keeps sources and consumers visually comparable.
+    // Square-root scaling preserves visibility of small residential loads.
+    const magnitude = valid(value) ? Math.abs(value) : 0;
+    const intensity = Math.sqrt(Math.min(1, magnitude / 11000));
+    const length = 2 + 6 * intensity;
+    flow.style.setProperty('--pulse-width', `${(3 + 9 * intensity).toFixed(2)}px`);
+    flow.style.setProperty('--pulse-dash', `${length.toFixed(2)} ${(100 - length).toFixed(2)}`);
   });
   byId('next').innerHTML = ['battery','car'].map(key => {
     const item = nextPlan(key);
