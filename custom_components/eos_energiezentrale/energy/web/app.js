@@ -141,7 +141,7 @@ function overview() {
     node.title = ageNote.textContent;
     node.querySelector('span:nth-child(2)').textContent = valid(soc) ? `${names[key]} · ${percent(soc)}` : names[key];
     node.setAttribute('aria-label', [names[key],power(value),value ? direction : ''].filter(Boolean).join(' · '));
-    flow.classList.toggle('inactive', stale || !valid(value) || Math.abs(value) < 10);
+    flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
     flow.classList.toggle('reverse', value < 0);
     flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
     // One shared power scale keeps sources and consumers visually comparable.
