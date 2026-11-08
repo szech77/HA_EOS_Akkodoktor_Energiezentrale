@@ -1,0 +1,75 @@
+name: EOS Energiezentrale
+version: "0.1.2"
+slug: eos_energiezentrale
+description: Stromfluss, Akkudoktor-EOS-Planung und modulare Geräteansteuerung
+arch: [amd64, aarch64]
+startup: application
+boot: manual
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:transmission-tower
+homeassistant_api: true
+options:
+  language: auto
+  eos_url: "http://homeassistant.local:8503"
+  timezone: Europe/Berlin
+  battery_resource: battery1
+  vehicle_resource: ev1
+  battery_type: fronius
+  wallbox_type: nrgkick
+  battery_parameters: "{}"
+  wallbox_parameters: "{}"
+  pv_entity: sensor.fronius_symo_gen24_pv_power
+  house_entity: sensor.solarnet_leistung_verbrauch
+  grid_entity: sensor.fronius_smartmeter_ip_meter_1_power
+  heat_entity: sensor.wp_strommesser_leistung_w_rmepumpe
+  price_entity: sensor.blumenstrasse_13_strompreis
+  car_soc_entity: sensor.id4_soc
+  car_soc_scale: factor
+  capacity_wh: 77000
+  charging_efficiency: 0.9
+  grid_limit_w: 17250
+  battery_min_soc: 20
+  battery_max_soc: 100
+  battery_charge_w: 4760
+  battery_discharge_w: 4760
+  allow_battery_export: false
+  max_current_a: 16
+  phase_wait_s: 60
+  regulation_interval_s: 20
+  influx_url: ""
+  influx_database: homeassistant
+  influx_user: ""
+  influx_password: ""
+schema:
+  language: list(auto|en|de)
+  eos_url: url
+  timezone: str
+  battery_resource: str
+  vehicle_resource: str
+  battery_type: str
+  wallbox_type: str
+  battery_parameters: str
+  wallbox_parameters: str
+  pv_entity: str
+  house_entity: str
+  grid_entity: str
+  heat_entity: str
+  price_entity: str
+  car_soc_entity: str
+  car_soc_scale: list(factor|percent)
+  capacity_wh: int(1000,300000)
+  charging_efficiency: float(0.1,1)
+  grid_limit_w: int(1380,100000)
+  battery_min_soc: int(0,99)
+  battery_max_soc: int(1,100)
+  battery_charge_w: int(0,50000)
+  battery_discharge_w: int(0,50000)
+  allow_battery_export: bool
+  max_current_a: int(6,32)
+  phase_wait_s: int(10,600)
+  regulation_interval_s: int(5,120)
+  influx_url: str
+  influx_database: str
+  influx_user: str
+  influx_password: password

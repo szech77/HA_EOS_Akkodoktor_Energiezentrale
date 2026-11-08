@@ -1,0 +1,68 @@
+configuration:
+  language:
+    name: Sprache
+    description: auto übernimmt nach Möglichkeit die Sprache von Home Assistant. Englisch (en) ist der Rückfall. Deutsch (de) und Englisch können auch fest gewählt werden.
+  eos_url:
+    name: Akkudoktor-EOS-API
+    description: Basisadresse einschließlich Port, zum Beispiel http://homeassistant.local:8503.
+  timezone:
+    name: Zeitzone für Ladeplanung und Anzeige
+  battery_resource:
+    name: EOS-Ressource für den Speicher
+  vehicle_resource:
+    name: EOS-Ressource für das Fahrzeug
+  battery_type:
+    name: Speichertreiber
+  wallbox_type:
+    name: Wallbox-Treiber
+  battery_parameters:
+    name: Parameter des Speichertreibers
+    description: JSON-Objekt. Ein leeres Objekt verwendet die Standardparameter des Treibers.
+  wallbox_parameters:
+    name: Parameter des Wallbox-Treibers
+    description: JSON-Objekt. Ein leeres Objekt verwendet die Standardparameter des Treibers.
+  pv_entity:
+    name: Entität für PV-Leistung
+  house_entity:
+    name: Entität für den Hausgesamtverbrauch
+  grid_entity:
+    name: Entität für den Netzzähler
+  heat_entity:
+    name: Entität für die Wärmepumpe
+  price_entity:
+    name: Entität für den Bezugsstrompreis
+  car_soc_entity:
+    name: Entität für den Fahrzeug-SoC
+  car_soc_scale:
+    name: Einheit des Fahrzeug-SoC
+    description: factor für 0 bis 1 oder percent für 0 bis 100.
+  capacity_wh:
+    name: Nutzbare Kapazität des Fahrzeugakkus (Wh)
+  charging_efficiency:
+    name: Ladewirkungsgrad des Fahrzeugs (Faktor)
+  grid_limit_w:
+    name: Maximale Netzbezugsleistung (W)
+  battery_min_soc:
+    name: Untere Speichergrenze (%)
+  battery_max_soc:
+    name: Obere Speichergrenze (%)
+  battery_charge_w:
+    name: Maximale Speicherladeleistung (W)
+  battery_discharge_w:
+    name: Maximale Speicherentladeleistung (W)
+  allow_battery_export:
+    name: Erzwungene Netzentladung erlauben
+  max_current_a:
+    name: Maximaler Ladestrom (A)
+  phase_wait_s:
+    name: Wartezeit für Phasenwechsel (s)
+  regulation_interval_s:
+    name: Startwert des Regelintervalls (s)
+  influx_url:
+    name: InfluxDB-Basisadresse
+  influx_database:
+    name: InfluxDB-Datenbank
+  influx_user:
+    name: InfluxDB-Benutzer
+  influx_password:
+    name: InfluxDB-Passwort

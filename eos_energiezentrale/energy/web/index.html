@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="app.title">EOS Energiezentrale</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body id="eos-energy-design">
+<div class="energy-app">
+  <header>
+    <a class="brand" href="#overview">⚡ EOS <b data-i18n="app.name"></b></a>
+    <nav data-i18n-aria="nav.main">
+      <a href="#overview" data-i18n="nav.overview"></a>
+      <a href="#settings" data-i18n="nav.settings"></a>
+    </nav>
+  </header>
+  <main>
+    <p id="notice" role="status"></p>
+    <section id="overview">
+      <div class="page-top"><div><p class="eyebrow" data-i18n="section.overview"></p><h1 data-i18n="nav.overview"></h1></div><span class="tag" id="connection" data-i18n="status.connecting"></span></div>
+      <div class="kpis" id="overview-kpis"></div>
+      <div class="flow-panel">
+        <div class="panel-heading"><h2 data-i18n="flow.title"></h2><span class="tag" id="live-time">—</span></div>
+        <div class="flow" data-i18n-aria="flow.aria">
+          <svg class="wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path class="wire" d="M18 19 Q34 19 43 42 M18 50 H43 M18 81 Q34 81 43 58 M57 42 Q66 19 82 19 M57 50 H82 M57 58 Q66 81 82 81"/>
+            <path class="pulse solar" data-flow="solar" pathLength="100" d="M18 19 Q34 19 43 42"/>
+            <path class="pulse grid" data-flow="grid" pathLength="100" d="M18 50 H43"/>
+            <path class="pulse battery" data-flow="battery" pathLength="100" d="M43 58 Q34 81 18 81"/>
+            <path class="pulse house" data-flow="house" pathLength="100" d="M57 42 Q66 19 82 19"/>
+            <path class="pulse car" data-flow="car" pathLength="100" d="M57 50 H82"/>
+            <path class="pulse heat" data-flow="heat" pathLength="100" d="M57 58 Q66 81 82 81"/>
+          </svg>
+          <a class="node solar" style="--x:18%;--y:19%" href="#solar" data-node="solar"><span class="orb" aria-hidden="true">☀</span><span data-i18n="node.solar"></span><strong>—</strong></a>
+          <a class="node grid" style="--x:18%;--y:50%" href="#grid" data-node="grid"><span class="orb" aria-hidden="true">⌁</span><span data-i18n="node.grid"></span><strong>—</strong></a>
+          <a class="node battery" style="--x:18%;--y:81%" href="#battery" data-node="battery"><span class="orb" aria-hidden="true">▣</span><span data-i18n="node.battery"></span><strong>—</strong></a>
+          <div class="hub" aria-hidden="true"><b>ϟ</b><span data-i18n="flow.hub"></span></div>
+          <a class="node house" style="--x:82%;--y:19%" href="#house" data-node="house"><span class="orb" aria-hidden="true">⌂</span><span data-i18n="node.house"></span><strong>—</strong></a>
+          <a class="node car" style="--x:82%;--y:50%" href="#car" data-node="car"><span class="orb" aria-hidden="true">▰</span><span data-i18n="node.car"></span><strong>—</strong></a>
+          <a class="node heat" style="--x:82%;--y:81%" href="#heat" data-node="heat"><span class="orb" aria-hidden="true">≋</span><span data-i18n="device.heat"></span><strong>—</strong></a>
+        </div>
+      </div>
+      <div class="next" id="next"></div>
+    </section>
+    <section id="detail" hidden>
+      <a class="back" href="#overview" data-i18n="nav.back"></a>
+      <div class="page-top"><div><p class="eyebrow" data-i18n="section.device"></p><h1 id="detail-title"></h1></div><a class="back" href="#settings" data-i18n="nav.settings"></a></div>
+      <div class="kpis" id="detail-kpis"></div>
+      <section class="chart-panel">
+        <div class="chart-legend"><span data-i18n="chart.measured"></span><span data-i18n="chart.forecast"></span><span data-i18n="chart.now_marker"></span></div>
+        <div id="timeline"></div>
+        <div id="charts"></div>
+      </section>
+      <section class="plan-panel" id="plan"></section>
+    </section>
+    <section id="settings" hidden>
+      <a class="back" href="#overview" data-i18n="nav.back"></a>
+      <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div><span class="tag" id="ownership"></span></div>
+      <form id="daily">
+        <h2 data-i18n="settings.auto_pv"></h2>
+        <div class="checks">
+          <label><input name="pv" type="checkbox"><span data-i18n="settings.pv"></span></label>
+          <label><input name="fast" type="checkbox"><span data-i18n="settings.fast"></span></label>
+          <label><input name="phase_auto" type="checkbox"><span data-i18n="settings.phase_auto"></span></label>
+        </div>
+        <div class="fields">
+          <label><span data-i18n="settings.schedule"></span><select name="schedule"><option value="off" data-i18n="settings.off"></option><option value="weekly" data-i18n="settings.weekly"></option><option value="once" data-i18n="settings.once"></option></select></label>
+          <label data-schedule="weekly"><span data-i18n="settings.departure_time"></span><input name="departure_time" type="time"></label>
+          <label data-schedule="once"><span data-i18n="settings.departure"></span><input name="departure" type="datetime-local"></label>
+          <label><span data-i18n="settings.target_soc"></span><input name="target_soc" type="number" min="1" max="100" required></label>
+          <label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required></label>
+          <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" required></label>
+          <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" required></label>
+        </div>
+        <fieldset data-schedule="weekly"><legend data-i18n="settings.weekdays"></legend><div class="checks">
+          <label><input name="day" value="0" type="checkbox"><span data-i18n="weekday.mon"></span></label><label><input name="day" value="1" type="checkbox"><span data-i18n="weekday.tue"></span></label>
+          <label><input name="day" value="2" type="checkbox"><span data-i18n="weekday.wed"></span></label><label><input name="day" value="3" type="checkbox"><span data-i18n="weekday.thu"></span></label>
+          <label><input name="day" value="4" type="checkbox"><span data-i18n="weekday.fri"></span></label><label><input name="day" value="5" type="checkbox"><span data-i18n="weekday.sat"></span></label>
+          <label><input name="day" value="6" type="checkbox"><span data-i18n="weekday.sun"></span></label>
+        </div></fieldset>
+        <h2 data-i18n="device.battery"></h2>
+        <label class="check"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
+        <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
+      </form>
+      <section class="plan-panel">
+        <h2 data-i18n="control.title"></h2>
+        <p id="control-info" data-i18n="control.restart_info"></p>
+        <button id="control" type="button" data-i18n="control.take"></button>
+        <output id="control-result" aria-live="polite"></output>
+      </section>
+      <section class="plan-panel">
+        <h2 data-i18n="settings.setup"></h2>
+        <dl id="connections"></dl>
+        <p class="footnote" data-i18n="settings.setup_info"></p>
+      </section>
+    </section>
+  </main>
+</div>
+</body>
+</html>
