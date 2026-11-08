@@ -17,11 +17,22 @@ class HomeAssistantAdapter:
             pending.cancel()
             raise
 
+    @staticmethod
+    def _snapshot(state):
+        # HA mutates last_reported for identical reports, but State.as_dict()
+        # may still contain the time cached by an earlier consumer. Read the
+        # public properties directly so idle power remains fresh when reported.
+        return {"entity_id": state.entity_id, "state": state.state,
+                "attributes": dict(state.attributes),
+                "last_changed": state.last_changed.isoformat(),
+                "last_updated": state.last_updated.isoformat(),
+                "last_reported": state.last_reported.isoformat()}
+
     async def _states(self, entity=None):
         if entity is not None:
             state = self.hass.states.get(entity)
-            return state.as_dict() if state else {}
-        return {state.entity_id: state.as_dict() for state in self.hass.states.async_all()}
+            return self._snapshot(state) if state else {}
+        return {state.entity_id: self._snapshot(state) for state in self.hass.states.async_all()}
 
     def states(self):
         return self._wait(self._states())

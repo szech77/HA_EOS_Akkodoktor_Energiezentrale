@@ -287,3 +287,64 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         result = await flow.async_step_limits({"battery_min_soc": 101})
         self.assertEqual(result["type"], "form")
         self.assertEqual(result["errors"], {"base": "invalid_config"})
+
+
+    async def test_identical_meter_reports_refresh_freshness_without_faking_missing_reports(self):
+        from datetime import timedelta
+        from custom_components.eos_energiezentrale.energy.clients import reading
+        now = datetime.now(timezone.utc)
+        earlier = now - timedelta(minutes=10)
+        attrs = {"unit_of_measurement": "W"}
+        self.hass.states.async_set("sensor.idle_heat", "0", attrs, timestamp=earlier.timestamp())
+        adapter = HomeAssistantAdapter(self.hass)
+        # Other HA consumers may already have serialized the original state.
+        self.hass.states.get("sensor.idle_heat").as_dict()
+        self.hass.states.async_set("sensor.idle_heat", "0", attrs, timestamp=now.timestamp())
+        rows = await self.hass.async_add_executor_job(adapter.states)
+        single = await self.hass.async_add_executor_job(adapter.state, "sensor.idle_heat")
+        self.assertEqual(reading(rows, "sensor.idle_heat", now, "power", 120), 0)
+        self.assertEqual(single["last_reported"], now.isoformat())
+        self.assertEqual(single["last_updated"], earlier.isoformat())
+        # Polling the registry must never manufacture fresh data for an offline meter.
+        later = now + timedelta(minutes=3)
+        rows = await self.hass.async_add_executor_job(adapter.states)
+        self.assertIsNone(reading(rows, "sensor.idle_heat", later, "power", 120))
+
+    async def test_read_only_flow_shows_470w_battery_supply_with_idle_car_and_heat(self):
+        from datetime import timedelta
+        from custom_components.eos_energiezentrale.energy.drivers import Fronius, NRGkick
+        now = datetime.now(timezone.utc)
+        earlier = now - timedelta(minutes=10)
+        battery, box = Fronius.defaults, NRGkick.defaults
+        samples = {
+            DEFAULTS["pv_entity"]: (0, "W"), DEFAULTS["house_entity"]: (470, "W"),
+            DEFAULTS["grid_entity"]: (0, "W"), DEFAULTS["heat_entity"]: (0, "W"),
+            DEFAULTS["price_entity"]: (.44, "EUR/kWh"), DEFAULTS["car_soc_entity"]: (.33, None),
+            battery["soc"]: (55.4, "%"), battery["charge_power"]: (0, "W"),
+            battery["discharge_power"]: (470, "W"), box["power"]: (0, "W"),
+            box["status"]: ("connected", None), box["enable"]: ("off", None),
+            box["phases"]: (3, None), box["current"]: (6, "A"),
+        }
+        def report(stamp):
+            for entity, (value, unit) in samples.items():
+                attrs = {"unit_of_measurement": unit} if unit else {}
+                if entity == box["current"]:
+                    attrs.update(step=.1, max=16)
+                self.hass.states.async_set(entity, str(value), attrs, timestamp=stamp.timestamp())
+        report(earlier)
+        adapter = HomeAssistantAdapter(self.hass)
+        await self.hass.async_add_executor_job(adapter.states)
+        report(now)
+        def collect():
+            config = Configuration(dict(DEFAULTS), adapter, self.directory)
+            config.eos = Mock()
+            config.eos.plan.return_value = {}
+            config.eos.solution.return_value = {}
+            app = Controller(adapter, config)
+            app.tick(now, 0)
+            return app.snapshot(now)
+        result = await self.hass.async_add_executor_job(collect)
+        self.assertFalse(result["armed"])
+        live = result["live"]
+        self.assertEqual((live["battery_charge"], live["battery_discharge"], live["battery"]), (0, 470, -470))
+        self.assertEqual((live["car"], live["heat"], live["house"]), (0, 0, 470))
