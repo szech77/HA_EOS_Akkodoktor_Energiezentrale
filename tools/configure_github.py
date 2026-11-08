@@ -8,13 +8,15 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from validate_hacs_metadata import apply_metadata, repository_metadata
+
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args):
         return None
 
 
-def configure(repository, token):
+def configure(repository, token, *, metadata_only=False):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Repository must have the form owner/name")
     root = Path(__file__).resolve().parents[1]
@@ -32,6 +34,10 @@ def configure(repository, token):
         with opener.open(request, timeout=15) as response:
             return json.load(response)
 
+    apply_metadata(api, repository_metadata(root))
+    print("GitHub description and topics checked")
+    if metadata_only:
+        return
     repo = api()
     api("/branches/main")
     if repo["default_branch"] != "main":
@@ -57,12 +63,13 @@ def configure(repository, token):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", required=True, help="GitHub owner/repository")
+    parser.add_argument("--metadata-only", action="store_true", help="Set missing description and add HACS topics without changing branches or rulesets")
     args = parser.parse_args()
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
         parser.error("Set GH_TOKEN to a token with repository administration permission")
     try:
-        configure(args.repo, token)
+        configure(args.repo, token, metadata_only=args.metadata_only)
     except HTTPError as error:
         print(f"GitHub rejected the request (HTTP {error.code}). Check repository administration permission and plan support.",
               file=sys.stderr)

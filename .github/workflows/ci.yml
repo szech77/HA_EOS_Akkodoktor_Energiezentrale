@@ -72,13 +72,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Validate checkout license and repository metadata
+        run: python tools/validate_hacs_metadata.py
       - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361
       - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
           category: integration
           comment: "false"
-          # Custom repositories do not require registration in HA brands.
-          ignore: brands
+          # GitHub's description/topics/license belong to the repository/default
+          # branch. Pending branches validate their own license in the step above.
+          # Keep GitHub metadata checks mandatory once the change reaches main.
+          ignore: ${{ github.ref == 'refs/heads/main' && 'brands' || 'brands description license topics' }}
 
   release_metadata:
     name: Release metadata
