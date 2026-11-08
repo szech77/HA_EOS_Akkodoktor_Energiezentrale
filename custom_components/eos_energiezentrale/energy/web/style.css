@@ -92,7 +92,7 @@
     #eos-energy-design .kpis > div { padding:8px; }
   }
   #eos-energy-design { margin:0; background:var(--bg); }
-  #eos-energy-design .energy-app { max-width:1160px; margin:auto; }
+  #eos-energy-design .energy-app { width:100%; min-height:100vh; min-height:100dvh; margin:0; border:0; border-radius:0; }
   #eos-energy-design nav a,#eos-energy-design .back { display:inline-block; color:var(--accent); text-decoration:none; padding:8px; }
   #eos-energy-design .node { color:var(--ink); text-decoration:none; }
   #eos-energy-design .orb { font-size:24px; }

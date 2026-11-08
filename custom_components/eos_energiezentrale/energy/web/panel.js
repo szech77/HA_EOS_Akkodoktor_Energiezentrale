@@ -3,7 +3,8 @@ class EnergyPanel extends HTMLElement {
   set hass(value) { this._hass = value; }
   connectedCallback() {
     if (this.frame) return;
-    this.style.cssText = 'display:block;height:100%;min-height:0;';
+    // HA's custom-panel wrapper has no definite height for percentage sizing.
+    this.style.cssText = 'display:block;width:100%;height:100vh;height:100dvh;min-width:0;min-height:0;overflow:hidden;box-sizing:border-box;';
     this.frame = document.createElement('iframe');
     this.frame.title = 'EOS Energiezentrale';
     this.frame.style.cssText = 'width:100%;height:100%;border:0;display:block;';
