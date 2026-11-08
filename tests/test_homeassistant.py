@@ -1,0 +1,289 @@
+"""Behavior at HA boundaries, using HA's real state machine and service registry."""
+import asyncio
+from copy import deepcopy
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+from threading import RLock
+from types import MappingProxyType, SimpleNamespace
+import unittest
+from unittest.mock import AsyncMock, Mock, patch
+
+from homeassistant.config_entries import ConfigEntry, ConfigEntries, ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import Unauthorized
+
+from custom_components.eos_energiezentrale import async_setup_entry, async_unload_entry
+from custom_components.eos_energiezentrale.adapter import HomeAssistantAdapter
+from custom_components.eos_energiezentrale.config_flow import ConfigFlow, OptionsFlow, check
+from custom_components.eos_energiezentrale.const import DEFAULTS, DOMAIN, GROUPS
+from custom_components.eos_energiezentrale.coordinator import EnergyCoordinator
+from custom_components.eos_energiezentrale.diagnostics import async_get_config_entry_diagnostics
+from custom_components.eos_energiezentrale.frontend import websocket_request
+from custom_components.eos_energiezentrale.sensor import EnergySensor
+from custom_components.eos_energiezentrale.switch import EnergySwitch
+from custom_components.eos_energiezentrale.energy.settings import daily_settings
+from custom_components.eos_energiezentrale.energy.settings import Configuration
+from custom_components.eos_energiezentrale.energy.controller import Controller
+from custom_components.eos_energiezentrale.number import EnergyNumber
+from custom_components.eos_energiezentrale.select import ScheduleSelect
+from custom_components.eos_energiezentrale.text import EnergyText
+from custom_components.eos_energiezentrale.binary_sensor import EnergyBinarySensor
+from custom_components.eos_energiezentrale.validation import validate_options
+from test_energy import temporary_project_directory
+
+
+class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.directory_context = temporary_project_directory()
+        self.directory = self.directory_context.__enter__()
+        self.hass = HomeAssistant(str(self.directory))
+        self.hass.config_entries = ConfigEntries(self.hass, {})
+        self.entry = ConfigEntry(domain=DOMAIN, data=dict(DEFAULTS), options={}, version=1,
+            minor_version=1, source="user", title="Energy", unique_id=DOMAIN,
+            discovery_keys=MappingProxyType({}), subentries_data=[])
+        await self.hass.config_entries.async_initialize()
+        with patch.object(self.hass.config_entries, "async_setup", new_callable=AsyncMock):
+            await self.hass.config_entries.async_add(self.entry)
+
+    async def asyncTearDown(self):
+        await self.hass.async_stop(force=True)
+        self.directory_context.__exit__(None, None, None)
+
+    def controller(self):
+        app = Mock(lock=RLock(), armed=False, owned=False)
+        app.config.daily = daily_settings({}, 20)
+        app.config.options = dict(DEFAULTS)
+        app.errors = {}
+        app.snapshot.side_effect = lambda _: {"armed": app.armed, "live": {}, "errors": dict(app.errors),
+                                             "settings": dict(app.config.daily)}
+        self.entry.runtime_data = EnergyCoordinator(self.hass, self.entry, app)
+        return self.entry.runtime_data, app
+
+    async def test_driver_service_uses_native_registry_and_preserves_tenths(self):
+        seen = []
+        async def handle(call):
+            seen.append(dict(call.data))
+            self.hass.states.async_set("number.charger", call.data["value"])
+        self.hass.services.async_register("number", "set_value", handle)
+        adapter = HomeAssistantAdapter(self.hass)
+        await self.hass.async_add_executor_job(adapter.set, "number.charger", 6.2)
+        value = await self.hass.async_add_executor_job(adapter.state, "number.charger")
+        self.assertEqual(seen, [{"entity_id": "number.charger", "value": 6.2}])
+        self.assertEqual(value["state"], "6.2")
+        self.assertIn("last_reported", value)
+
+    async def test_driver_cannot_call_unrelated_services_or_nonfinite_current(self):
+        adapter = HomeAssistantAdapter(self.hass)
+        for entity, value in (("homeassistant.restart", True), ("sensor.read_only", 1),
+                              ("number.current", float("nan")), ("number.current", True)):
+            with self.subTest(entity=entity, value=value):
+                with self.assertRaises(ValueError):
+                    await self.hass.async_add_executor_job(adapter.set, entity, value)
+
+    async def test_controller_failure_disarms_and_attempts_device_release(self):
+        coordinator, app = self.controller()
+        app.armed = app.owned = True
+        app.tick.side_effect = OSError("connection lost")
+        result = await coordinator._async_update_data()
+        self.assertFalse(result["armed"])
+        self.assertIn("runtime", result["errors"])
+        app.release.assert_called_once()
+
+    async def test_control_and_meter_poll_never_overlap_in_worker(self):
+        coordinator, app = self.controller()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        async def delayed(job, *args):
+            if job == coordinator._tick:
+                entered.set()
+                await release.wait()
+                return {"live": {}}
+            return job(*args)
+        with patch.object(self.hass, "async_add_executor_job", side_effect=delayed):
+            polling = asyncio.create_task(coordinator._async_update_data())
+            await entered.wait()
+            changing = asyncio.create_task(coordinator.async_change(enabled=True))
+            await asyncio.sleep(0)
+            app.set_armed.assert_not_called()
+            release.set()
+            await asyncio.gather(polling, changing)
+        app.set_armed.assert_called_once_with(True)
+
+    async def test_invalid_daily_setting_does_not_persist_or_arm(self):
+        coordinator, app = self.controller()
+        for values in ({"target_soc": 101}, {"fast": "true"}, {"eos_url": "http://other"}):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                await coordinator.async_change(settings=values)
+        app.config.update.assert_not_called()
+        app.set_armed.assert_not_called()
+
+    async def test_unload_releases_devices_before_removing_platforms(self):
+        coordinator, app = self.controller()
+        events = []
+        app.set_armed.side_effect = lambda enabled: events.append(("control", enabled))
+        async def unload(*_):
+            events.append(("unload", True))
+            return True
+        with (patch.object(self.hass.config_entries, "async_unload_platforms", side_effect=unload),
+              patch("custom_components.eos_energiezentrale.async_remove_panel")):
+            self.assertTrue(await async_unload_entry(self.hass, self.entry))
+        self.assertEqual(events, [("control", False), ("unload", True)])
+        with self.assertRaises(ValueError):
+            await coordinator.async_change(enabled=True)
+
+    async def test_unconfirmed_release_keeps_entities_available_for_retry(self):
+        coordinator, app = self.controller()
+        app.set_armed.side_effect = OSError("device unavailable")
+        with patch.object(self.hass.config_entries, "async_unload_platforms", new_callable=AsyncMock) as unload:
+            self.assertFalse(await async_unload_entry(self.hass, self.entry))
+            unload.assert_not_called()
+        self.assertFalse(coordinator.closing)
+        app.set_armed.side_effect = None
+        await coordinator.async_change(enabled=False)
+
+    async def test_native_sensor_converts_power_and_estimated_soc_consistently(self):
+        coordinator, _ = self.controller()
+        coordinator.async_set_updated_data({"live": {"car": 6443.378, "car_soc": 32.5,
+                                                     "soc_source": "estimate"}})
+        power = EnergySensor(coordinator, "car")
+        self.assertEqual(power.native_unit_of_measurement, "kW")
+        self.assertAlmostEqual(power.native_value, 6.443378)
+        soc = EnergySensor(coordinator, "car_soc_factor")
+        self.assertEqual(soc.native_value, .325)
+        self.assertEqual(soc.extra_state_attributes, {"source": "estimate"})
+        self.assertIsNone(EnergySensor(coordinator, "solar").native_value)
+
+    async def test_setup_does_not_start_controller_or_restore_armed_state(self):
+        # Real config, SQLite cache and drivers, while external APIs remain offline.
+        self.entry._async_set_state(self.hass, ConfigEntryState.SETUP_IN_PROGRESS, None)
+        with (patch("custom_components.eos_energiezentrale.energy.clients.request", side_effect=OSError("offline")),
+              patch.object(self.hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
+              patch("custom_components.eos_energiezentrale.async_register_frontend", new_callable=AsyncMock)):
+            self.assertTrue(await async_setup_entry(self.hass, self.entry))
+        coordinator = self.entry.runtime_data
+        self.assertFalse(coordinator.app.armed)
+        self.assertFalse(coordinator.app.owned)
+        self.assertIn("eos", coordinator.data["errors"])
+        with patch.object(self.hass.config_entries, "async_unload_platforms", new_callable=AsyncMock, return_value=True), patch("custom_components.eos_energiezentrale.async_remove_panel"):
+            self.assertTrue(await async_unload_entry(self.hass, self.entry))
+        # Dispose scheduled callbacks in this direct lifecycle harness.
+        await self.entry._async_process_on_unload(self.hass)
+
+    async def test_config_wizard_preserves_selected_hardware_and_limits(self):
+        flow = ConfigFlow()
+        flow.hass = self.hass
+        flow.context = {"source": "user"}
+        with (patch("custom_components.eos_energiezentrale.config_flow.request", return_value={}),
+              patch.object(flow, "_async_current_entries", return_value=[])):
+            result = await flow.async_step_user({k: DEFAULTS[k] for k in GROUPS["connection"]})
+        self.assertEqual(result["step_id"], "sensors")
+        for group in ("sensors", "hardware", "limits", "history"):
+            values = {k: DEFAULTS[k] for k in GROUPS[group]}
+            if group == "limits":
+                values["phase_wait_s"] = 90
+            result = await getattr(flow, "async_step_" + group)(values)
+        self.assertEqual(result["data"]["phase_wait_s"], 90)
+        self.assertEqual(result["data"]["car_soc_scale"], "factor")
+
+    async def test_invalid_urls_driver_parameters_and_ranges_are_rejected(self):
+        for change in ({"eos_url": "http://user:secret@eos:8503"}, {"phase_wait_s": 0},
+                       {"battery_min_soc": 100}, {"battery_parameters": '{"mode":"sensor.invalid"}'},
+                       {"wallbox_type": "unknown"}, {"battery_resource": "ev1"}):
+            with self.subTest(change=change):
+                self.assertEqual(await check(self.hass, {**DEFAULTS, **change}), {"base": "invalid_config"})
+        with patch("custom_components.eos_energiezentrale.config_flow.request", side_effect=OSError("offline")):
+            self.assertEqual(await check(self.hass, DEFAULTS, True), {"base": "cannot_connect"})
+
+    async def test_websocket_rejects_non_admin_before_accessing_controller(self):
+        connection = Mock(user=SimpleNamespace(is_admin=False))
+        with self.assertRaises(Unauthorized):
+            websocket_request(self.hass, connection, {"id": 1, "action": "control", "values": {"enabled": True}})
+
+    async def invoke(self, msg):
+        connection = Mock(user=SimpleNamespace(is_admin=True))
+        websocket_request(self.hass, connection, {"id": 1, **msg})
+        await self.hass.async_block_till_done()
+        return connection
+
+    async def test_websocket_control_rejects_ambiguous_payload(self):
+        coordinator, app = self.controller()
+        for values in ({"enabled": 1}, {"enabled": True, "entity": "switch.other"}):
+            connection = await self.invoke({"action": "control", "values": values})
+            connection.send_error.assert_called_once()
+        app.set_armed.assert_not_called()
+
+    async def test_websocket_history_keeps_local_data_on_influx_failure(self):
+        coordinator, app = self.controller()
+        app.history.read.return_value = [{"time": "2026-11-08T12:00:00+00:00", "solar": 1000}]
+        with patch("custom_components.eos_energiezentrale.coordinator.influx_series", side_effect=OSError("offline")):
+            connection = await self.invoke({"action": "history"})
+        payload = connection.send_result.call_args.args[1]
+        self.assertTrue(payload["influx_error"])
+        self.assertEqual(payload["local"][0]["solar"], 1000)
+
+    async def test_diagnostics_exclude_credentials_and_private_readings(self):
+        coordinator, app = self.controller()
+        app.config.options.update(influx_password="test-secret", eos_url="http://private-host:8503")
+        coordinator.async_set_updated_data({"live": {"car_soc": 32}, "errors": {"eos": "OSError"}})
+        diagnostics = json.dumps(await async_get_config_entry_diagnostics(self.hass, self.entry))
+        for private in ("test-secret", "private-host", "car_soc"):
+            self.assertNotIn(private, diagnostics)
+
+    async def test_native_controls_preserve_independent_pv_target_and_restart_safety(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        await EnergyNumber(coordinator, "target_soc").async_set_native_value(70)
+        await EnergyNumber(coordinator, "pv_target_soc").async_set_native_value(85)
+        await EnergySwitch(coordinator, "pv").async_turn_on()
+        await EnergySwitch(coordinator, "fast").async_turn_on()
+        self.assertEqual(EnergyNumber(coordinator, "target_soc").native_value, 70)
+        self.assertEqual(EnergyNumber(coordinator, "pv_target_soc").native_value, 85)
+        restored = Configuration(dict(DEFAULTS), Mock(), self.directory)
+        self.assertTrue(restored.daily["pv"])
+        self.assertFalse(restored.daily["fast"])
+        self.assertFalse(app.armed)
+
+    async def test_native_schedule_requires_valid_departure_and_keeps_previous_plan_on_error(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        schedule = ScheduleSelect(coordinator, "schedule")
+        with self.assertRaises(ValueError):
+            await schedule.async_select_option("once")
+        self.assertEqual(schedule.current_option, "off")
+        departure = EnergyText(coordinator, "departure")
+        await departure.async_set_value("2026-11-10T09:45:00+01:00")
+        await schedule.async_select_option("once")
+        with self.assertRaises(ValueError):
+            await departure.async_set_value("not-a-date")
+        self.assertEqual(departure.native_value, "2026-11-10T09:45:00+01:00")
+        self.assertEqual(schedule.current_option, "once")
+
+    async def test_pending_release_visible_immediately_after_failed_native_switch_off(self):
+        ha = Mock()
+        app = Controller(ha, Configuration(dict(DEFAULTS), ha, self.directory))
+        app.armed = app.owned = True
+        ha.states.side_effect = OSError("offline")
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        switch = EnergySwitch(coordinator, "control")
+        from homeassistant.exceptions import HomeAssistantError
+        with self.assertRaises(HomeAssistantError):
+            await switch.async_turn_off()
+        self.assertFalse(switch.is_on)
+        self.assertTrue(EnergyBinarySensor(coordinator, "release_pending").is_on)
+        self.assertTrue(EnergyBinarySensor(coordinator, "problem").is_on)
+
+    async def test_options_edit_keeps_other_hardware_and_sensor_settings(self):
+        flow = OptionsFlow()
+        flow.hass = self.hass
+        flow.handler = self.entry.entry_id
+        flow.context = {"entry_id": self.entry.entry_id}
+        result = await flow.async_step_limits({"phase_wait_s": 90})
+        self.assertEqual(result["data"]["phase_wait_s"], 90)
+        self.assertEqual(result["data"]["grid_entity"], DEFAULTS["grid_entity"])
+        result = await flow.async_step_limits({"battery_min_soc": 101})
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"], {"base": "invalid_config"})

@@ -1,12 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: "docker"
-    directory: "/eos_energiezentrale"
-    schedule:
-      interval: "cron"
-      cronjob: "0 8 * * *"
-      timezone: "Europe/Berlin"
-    open-pull-requests-limit: 5
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

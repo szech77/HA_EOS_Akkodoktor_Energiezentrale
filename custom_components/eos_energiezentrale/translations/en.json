@@ -1,0 +1,251 @@
+{
+  "title": "EOS Energiezentrale",
+  "config": {
+    "step": {
+      "user": {
+        "title": "EOS connection",
+        "data": {
+          "eos_url": "EOS API base URL",
+          "language": "Panel language",
+          "battery_resource": "EOS battery resource",
+          "vehicle_resource": "EOS vehicle resource"
+        }
+      },
+      "sensors": {
+        "title": "Source sensors",
+        "data": {
+          "pv_entity": "PV power",
+          "house_entity": "Total house power including car and heat pump",
+          "grid_entity": "Grid power (positive = import)",
+          "heat_entity": "Heat pump power",
+          "price_entity": "Import price",
+          "car_soc_entity": "Vehicle SoC",
+          "car_soc_scale": "Vehicle SoC unit"
+        }
+      },
+      "hardware": {
+        "title": "Hardware drivers",
+        "data": {
+          "battery_type": "Battery driver",
+          "battery_parameters": "Battery entity overrides (JSON)",
+          "wallbox_type": "Wallbox driver",
+          "wallbox_parameters": "Wallbox entity overrides (JSON)"
+        }
+      },
+      "limits": {
+        "title": "Technical limits",
+        "data": {
+          "capacity_wh": "Vehicle battery capacity (Wh)",
+          "charging_efficiency": "Vehicle charging efficiency (0–1)",
+          "grid_limit_w": "Grid import limit (W)",
+          "battery_min_soc": "Battery minimum SoC (%)",
+          "battery_max_soc": "Battery maximum SoC (%)",
+          "battery_charge_w": "Battery charging basis (W)",
+          "battery_discharge_w": "Battery discharging basis (W)",
+          "allow_battery_export": "Allow battery export",
+          "max_current_a": "Maximum charging current (A)",
+          "phase_wait_s": "Phase change stability wait (s)",
+          "regulation_interval_s": "Default regulation interval (s)"
+        }
+      },
+      "history": {
+        "title": "InfluxDB history (optional)",
+        "data": {
+          "influx_url": "InfluxDB URL (empty = disabled)",
+          "influx_database": "InfluxDB database",
+          "influx_user": "InfluxDB read-only user",
+          "influx_password": "InfluxDB password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "EOS connection failed",
+      "invalid_config": "Check URLs, limits and driver parameters"
+    },
+    "abort": {
+      "already_configured": "Already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "connection": {
+        "title": "EOS connection",
+        "data": {
+          "eos_url": "EOS API base URL",
+          "language": "Panel language",
+          "battery_resource": "EOS battery resource",
+          "vehicle_resource": "EOS vehicle resource"
+        }
+      },
+      "sensors": {
+        "title": "Source sensors",
+        "data": {
+          "pv_entity": "PV power",
+          "house_entity": "Total house power including car and heat pump",
+          "grid_entity": "Grid power (positive = import)",
+          "heat_entity": "Heat pump power",
+          "price_entity": "Import price",
+          "car_soc_entity": "Vehicle SoC",
+          "car_soc_scale": "Vehicle SoC unit"
+        }
+      },
+      "hardware": {
+        "title": "Hardware drivers",
+        "data": {
+          "battery_type": "Battery driver",
+          "battery_parameters": "Battery entity overrides (JSON)",
+          "wallbox_type": "Wallbox driver",
+          "wallbox_parameters": "Wallbox entity overrides (JSON)"
+        }
+      },
+      "limits": {
+        "title": "Technical limits",
+        "data": {
+          "capacity_wh": "Vehicle battery capacity (Wh)",
+          "charging_efficiency": "Vehicle charging efficiency (0–1)",
+          "grid_limit_w": "Grid import limit (W)",
+          "battery_min_soc": "Battery minimum SoC (%)",
+          "battery_max_soc": "Battery maximum SoC (%)",
+          "battery_charge_w": "Battery charging basis (W)",
+          "battery_discharge_w": "Battery discharging basis (W)",
+          "allow_battery_export": "Allow battery export",
+          "max_current_a": "Maximum charging current (A)",
+          "phase_wait_s": "Phase change stability wait (s)",
+          "regulation_interval_s": "Default regulation interval (s)"
+        }
+      },
+      "history": {
+        "title": "InfluxDB history (optional)",
+        "data": {
+          "influx_url": "InfluxDB URL (empty = disabled)",
+          "influx_database": "InfluxDB database",
+          "influx_user": "InfluxDB read-only user",
+          "influx_password": "InfluxDB password"
+        }
+      },
+      "init": {
+        "title": "Commissioning",
+        "menu_options": {
+          "connection": "EOS connection",
+          "sensors": "Source sensors",
+          "hardware": "Hardware drivers",
+          "limits": "Technical limits",
+          "history": "InfluxDB history (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "EOS connection failed",
+      "invalid_config": "Check URLs, limits and driver parameters"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "solar": {
+        "name": "Solar power"
+      },
+      "house": {
+        "name": "House excluding car and heat pump"
+      },
+      "heat": {
+        "name": "Heat pump power"
+      },
+      "grid": {
+        "name": "Grid import / export"
+      },
+      "car": {
+        "name": "Car charging power"
+      },
+      "battery": {
+        "name": "Battery charge / discharge"
+      },
+      "battery_charge": {
+        "name": "Battery charging power"
+      },
+      "battery_discharge": {
+        "name": "Battery discharging power"
+      },
+      "battery_soc": {
+        "name": "Battery SoC"
+      },
+      "car_soc": {
+        "name": "Car SoC"
+      },
+      "car_soc_factor": {
+        "name": "Car SoC factor"
+      },
+      "price": {
+        "name": "Import price"
+      },
+      "battery_mode": {
+        "name": "EOS battery mode"
+      },
+      "car_mode": {
+        "name": "EOS car mode"
+      },
+      "car_status": {
+        "name": "Wallbox status"
+      }
+    },
+    "switch": {
+      "control": {
+        "name": "Energy control"
+      },
+      "pv": {
+        "name": "PV surplus charging"
+      },
+      "fast": {
+        "name": "Fast charging"
+      },
+      "battery_pv_support": {
+        "name": "Battery support during PV charging"
+      },
+      "phase_auto": {
+        "name": "Automatic phases"
+      }
+    },
+    "number": {
+      "target_soc": {
+        "name": "Departure target SoC"
+      },
+      "pv_target_soc": {
+        "name": "PV target SoC"
+      },
+      "reserve_w": {
+        "name": "PV export reserve"
+      },
+      "regulation_interval_s": {
+        "name": "Regulation interval"
+      }
+    },
+    "select": {
+      "schedule": {
+        "name": "Departure schedule",
+        "state": {
+          "off": "Off",
+          "once": "Once",
+          "weekly": "Weekly"
+        }
+      }
+    },
+    "text": {
+      "departure": {
+        "name": "One-time departure (ISO timestamp)"
+      },
+      "departure_time": {
+        "name": "Recurring departure (HH:MM)"
+      }
+    },
+    "binary_sensor": {
+      "plan_current": {
+        "name": "EOS plan current"
+      },
+      "problem": {
+        "name": "Controller problem"
+      },
+      "release_pending": {
+        "name": "Device release pending"
+      }
+    }
+  }
+}

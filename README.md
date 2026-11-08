@@ -1,74 +1,92 @@
-# EOS Energiezentrale für Home Assistant
+# EOS Energiezentrale
 
-Installierbarer Quellstand für eine lokale Home-Assistant-App auf **amd64** und **aarch64**. Die Oberfläche läuft über Ingress und bündelt Stromfluss, Detailseiten, EOS-Planung und Alltagsparameter. Sie nutzt die vorhandenen Geräte-Integrationen und den laufenden Akkudoktor-EOS-Dienst.
+HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen,
+Speichersteuerung und PV-Überschussladen. Ab Version **0.2.0** läuft die
+Energiezentrale direkt in Home Assistant. Der EOS-Server bleibt ein separater Dienst.
 
-## Lokale Installation
+## Installation
 
-1. Kopiere den Unterordner `eos_energiezentrale` in das lokale App-Verzeichnis `/addons/` des Home-Assistant-Hosts. Der Zielpfad ist `/addons/eos_energiezentrale/config.yaml`.
-2. Öffne in Home Assistant **Einstellungen → Apps**, lade den App-Store neu und installiere **EOS Energiezentrale** aus den lokalen Apps. Das Image wird dort gebaut. Die erste Installation benötigt Zugriff auf das Python-Basisimage und die Debian-Paketquelle.
-3. Öffne den Reiter **Konfiguration**. Prüfe `eos_url` (Basisadresse einschließlich Port), die Sensorentitäten, `battery_resource` und `vehicle_resource`. Für vorhandenen InfluxDB-Verlauf trage die Basisadresse sowie die Datenbank und einen Lesezugang ein. Für deine Installation lautet die Datenbank `homeassistant`. Die Integration schreibt ihre Daten wie bisher in InfluxDB. Die App nutzt InfluxQL für Version 1.x.
-4. Starte die App und öffne ihre Weboberfläche. Sie startet im **Lesemodus**. Prüfe den Stromfluss, beide Moduszeitleisten, den Preis und den EOS-Verbindungsstatus. Bei fehlender InfluxDB-Anbindung beginnt der lokale Verlauf ab App-Start.
-5. Wenn die App übernehmen soll, deaktiviere die bisherigen NRGkick- und Fronius-Automationen, die Gerätebefehle schreiben. Die Freigabeschalter der bisherigen EOS-Packages müssen ebenfalls aus sein. Die App prüft bekannte Konfliktentitäten. Prüfe eigene Automationen separat. Wähle anschließend im Dashboard **Einstellungen → Steuerung übernehmen**. Die Übernahme gilt bis zur Rückgabe oder zum nächsten App-Neustart.
+Voraussetzung: Home Assistant **2026.11.0 oder neuer**, HACS und ein erreichbarer
+EOS-Server. Für die Installation über HACS muss das GitHub-Repository öffentlich
+erreichbar sein; die Änderungen müssen zuvor nach GitHub übertragen worden sein.
 
-Die vorhandenen Integrationen für Fronius, NRGkick und die Fahrzeugdaten liefern weiterhin die Entitäten. Das Add-on installiert diese Integrationen oder Akkudoktor EOS nicht selbst. Für den geschätzten SoC kann die EOS-Zuordnung `ev1-soc-factor` auf `sensor.eos_energiezentrale_id4_soc` zeigen. Dieser Faktor wird bei aktiver Steuerungsübernahme veröffentlicht. Die bisherige Zuordnung zu `sensor.id4_soc` funktioniert weiterhin als Fahrzeugquelle.
+1. HACS → Menü → **Benutzerdefinierte Repositories** öffnen.
+2. `https://github.com/szech77/HA_EOS_Akkodoktor_Energiezentrale` hinzufügen,
+   Kategorie **Integration** wählen und EOS Energiezentrale herunterladen.
+3. Home Assistant neu starten.
+4. Einstellungen → Geräte & Dienste → Integration hinzufügen → **EOS Energiezentrale**.
+5. EOS-Adresse, Quellsensoren, Hardware und technische Grenzen im Assistenten einrichten.
+6. Das Panel **EOS Energiezentrale** in der Seitenleiste öffnen. Messwerte zunächst
+   im Lesemodus prüfen. Erst danach die Energiesteuerung einschalten.
 
-## Konfiguration und eigene Hardware
+Alternativ `custom_components/eos_energiezentrale` nach
+`/config/custom_components/eos_energiezentrale` kopieren und HA neu starten.
+Eine Aufnahme in den HACS-Standardkatalog ist dafür nicht erforderlich.
 
-| Option | Bedeutung |
-| --- | --- |
-| `battery_type` | Treiber für den Hausspeicher. Enthalten ist `fronius`. |
-| `wallbox_type` | Treiber für die Wallbox. Enthalten ist `nrgkick`. |
-| `battery_parameters`, `wallbox_parameters` | JSON-Objekt mit Parametern des ausgewählten Treibers. `{}` verwendet die hinterlegten Entitäten. |
-| `battery_resource`, `vehicle_resource` | EOS-Ressourcen im Plan, normalerweise `battery1` und `ev1`. |
-| `grid_limit_w`, Speicher-SoC-Grenzen, Leistungsgrenzen | Technische Grenzen für den Betrieb. |
-| `car_soc_entity`, `car_soc_scale` | Fahrzeug-SoC als Faktor `factor` oder Prozent `percent`. |
+## Wechsel vom bisherigen Energiezentrale-Add-on
 
-Beispiel für `wallbox_parameters` als Textfeld
+Der EOS-Server bleibt als separater Dienst bestehen. Zustände bisheriger
+Regelungs-Packages werden von der Integration nicht ausgewertet.
 
-```json
-{"power":"sensor.meine_wallbox_leistung","status":"sensor.meine_wallbox_status","enable":"switch.meine_wallbox_freigabe","current":"number.meine_wallbox_strom","phases":"number.meine_wallbox_phasen"}
-```
+Die Add-on-Optionen werden nicht automatisch aus Supervisor übernommen. Trage sie
+im Einrichtungsassistenten erneut ein. Es ist kein Supervisor-Token und kein
+Home-Assistant-Zugriffstoken erforderlich. Vorher ein HA-Backup erstellen.
 
-Der Fronius-Treiber akzeptiert `mode`, `soc`, `charge_power`, `discharge_power`, `pv_limit`, `discharge_limit`, `grid_charge` und optional `grid_discharge`. Erzwungene Netzentladung benötigt sowohl die konfigurierte Entität als auch die explizite Option `allow_battery_export`.
+InfluxDB bleibt unverändert nutzbar. Der lokale Kurzzeitverlauf beginnt zunächst neu.
+Optional können bei gestopptem Add-on und entladener Integration dessen Dateien
+`daily.json` und `history.sqlite3` aus einer Datensicherung nach
+`/config/.storage/eos_energiezentrale/<config-entry-id>/` übernommen werden.
+Die Integration erzeugt dieses Verzeichnis beim ersten Einrichten. Anschließend
+neu laden. Schnellladung und Steuerfreigabe werden bewusst nicht wiederhergestellt.
 
-Neue Hardware implementiert `BatteryDriver` oder `WallboxDriver` in `energy/drivers.py` und wird in `BATTERY_DRIVERS` bzw. `WALLBOX_DRIVERS` registriert. Ein Treiber nimmt den Home-Assistant-Client und sein Parameterobjekt entgegen. Der Speicher übersetzt `BatteryCommand` in seine Gerätebefehle. Die Wallbox liefert eine normalisierte `WallboxReading` und bestätigt beim Phasenwechsel eine sichere Ladepause, bevor sie den Wechsel freigibt. Treiber für andere Protokolle können ihre eigene Transportimplementierung mitbringen. Treiber werden aus der mitgelieferten Registrierung ausgewählt. Neue Klassen erfordern einen Image-Neubau.
+## Oberfläche und native Entitäten
 
-## Daten und Regelung
+- Animierter Stromfluss mit PV, Netz, Haus, Speicher, Auto und Wärmepumpe.
+- Detailseiten mit historischen Messwerten, EOS-Prognosen, Strompreis und Modus-Zeitlinien.
+- Native Leistungssensoren in **kW**, SoC in **%**, zusätzlicher Auto-SoC-Faktor **0–1**.
+- Native Schalter für Steuerfreigabe, PV-Überschussladen, Schnellladen und Phasenautomatik.
+- Ziel-SoC, PV-Ziel, Einspeisereserve und Regelintervall als `number`-Entitäten.
+- Einmalige und wiederkehrende Abfahrtsplanung mit Wochentagsauswahl im Panel.
+- Geschätzter Auto-SoC während der Ladung, falls das Fahrzeug keine neuen Werte meldet.
 
-- Der Hauswert zieht ID.4 und Wärmepumpe vom gemessenen Gesamtverbrauch ab. Fehlende Messungen erscheinen als Lücke.
-- Die Detailseiten kombinieren Messwerte mit der verfügbaren GENETIC-Prognose und zeigen EOS-Modi. Die App erfindet keine Wärmepumpenprognose. Der Modusverlauf wird lokal ab App-Start aufgebaut. Der 24-Stunden-Verlauf nutzt bei verfügbarer Verbindung auch die von Home Assistant in InfluxDB geschriebenen Leistungsmessungen.
-- Die Alltagsoberfläche speichert Ladeziele, Abfahrtszeiten, PV-Einspeisereserve und das Regelintervall unter `/data`. Schnellladen wird beim Neustart ausgeschaltet.
-- Das SoC-Modell übernimmt neue Fahrzeugmeldungen und schätzt Zwischenwerte aus Ladeleistung, Kapazität und Ladeeffizienz. Bei einer Messlücke wird fehlende Ladeenergie nicht fortgeschrieben. Die Regelung verwendet die Schätzung als Zielkriterium.
-- Die Regelung wählt vor dem Start passende Phasen, prüft neue Netzzählerwerte vor PV-Korrekturen und verwendet die vom Wallbox-Treiber gemeldete Schrittweite. Batteriestützung bei laufender PV-Autoladung bleibt an gemessene Ladeleistung und Speicher-SoC gebunden.
-- Die UI öffnet keinen separaten öffentlichen Port. Die Serververbindung wird auf den Ingress-Proxy eingeschränkt. Schreibaktionen verlangen JSON und einen anwendungsspezifischen Request-Header. Zugangsdaten verbleiben serverseitig. Browseranfragen können weder beliebige URLs abrufen noch beliebige Home-Assistant-Dienste aufrufen.
+Die Entitäten werden über ihre eindeutige ID registriert. Die tatsächlich vergebenen
+Entity-IDs findest du unter dem Gerät **EOS Energiezentrale**. Bereits bestehende
+Helper werden nicht überschrieben. Einen bisherigen EOS-SoC-Eingang bei Bedarf
+auf den neuen nativen Auto-SoC-Faktor umstellen.
 
-## Tests
+Alltagseinstellungen sind im Panel und über native Entitäten erreichbar.
+Inbetriebnahme-Einstellungen findest du unter Geräte & Dienste → EOS Energiezentrale
+→ **Konfigurieren**. Nach deren Änderung wird die Integration neu geladen und die
+Steuerung bleibt zunächst ausgeschaltet.
+
+Das eigene Panel ist Administratoren vorbehalten und verwendet die bestehende
+HA-Anmeldung. Es gibt keinen zusätzlichen Webserver, Port oder eingebetteten Token.
+Die Sprache folgt standardmäßig Home Assistant; Englisch ist der Rückfall.
+
+## Hardware und Daten
+
+Mitgelieferte Treiber: **Fronius GEN24 / BYD über callifo/fronius_modbus** und
+**NRGkick**. Generische Treiberverträge und Registries ermöglichen weitere Geräte.
+Entitätszuordnungen lassen sich als JSON in den Hardware-Optionen überschreiben.
+Siehe [Einrichtung und Betrieb](DOCS.md) und [Contributing](CONTRIBUTING.md).
+
+InfluxDB 1.x ist optional und wird lesend angesprochen. Die Integration hat keine
+zusätzlichen Python-Laufzeitabhängigkeiten außerhalb von Home Assistant.
+
+## Entwicklung
+
+Python 3.14.2 oder neuer; Tests gegen Home Assistant 2026.11.0:
 
 ```sh
-cd eos_energiezentrale
-python -m pytest -q
-python -m pytest --cov=energy --cov-report=term-missing
-node --check energy/web/app.js
+python -m venv .venv
+python -m pip install -r requirements-dev.txt -r requirements-test.txt
+python -m pytest --cov=custom_components.eos_energiezentrale --cov-branch
+node --test tests/panel.test.cjs
 ```
 
-Die Tests verwenden simulierte Geräte und HTTP-Antworten. Der lokale Quellstand muss auf dem Zielsystem gebaut und im Lesemodus mit den dortigen Entitäten und API-Versionen geprüft werden.
-
-Die fachlichen Regressionstests decken insbesondere die Bestätigung von EOS-Ladezielen, Stromrundung, Regelintervall und Messwertalter, SoC-Schätzung und Zielabschaltung, Wolkenpausen und bestätigte Phasenwechsel, die Speicherfreigabe sowie die Geräterückgabe bei Kommunikationsfehlern ab. Weitere Tests prüfen InfluxDB-Einheiten, Prognoselücken, Treiberparameter, persistierte Einstellungen, Sprache und die Ingress-Schreibgrenzen. Die Darstellung im Browser sowie das Zeitverhalten am realen Wechselrichter und an der Wallbox werden davon nicht abgedeckt.
-
-## Sprache der Oberfläche
-
-Die Sprache wird unter **Einstellungen → Apps → EOS Energiezentrale → Konfiguration → Sprache** eingestellt. Voreingestellt ist `auto`. Das Dashboard übernimmt beim Öffnen nach Möglichkeit die in Home Assistant eingestellte Sprache. Kann es die Sprache nicht lesen oder fehlt das Sprachpaket, verwendet es Englisch. Mit `de` oder `en` lässt sich die Sprache fest einstellen. Nach einer Änderung der Add-on-Option ist ein App-Neustart erforderlich.
-
-Für eine weitere Sprache kopiere `energy/i18n/en.json` nach `energy/i18n/<Sprachcode>.json`, setze `locale` auf das passende BCP-47-Format und übersetze die Werte in `messages`. Die Schlüssel und Platzhalter wie `{start}` und `{energy}` bleiben bestehen. Die Texte werden als Klartext behandelt. Fehlende Übersetzungen übernimmt die App aus dem englischen Katalog.
-
-Ergänze den Dateicode in `config.yaml` bei `schema.language` in der Liste der auswählbaren Sprachen. Wenn auch die Beschriftungen der Add-on-Konfiguration übersetzt werden sollen, kann dafür eine Home-Assistant-Datei unter `translations/<Sprachcode>.yaml` hinzukommen. Baue anschließend das Add-on-Image neu.
-
-## Changelog und Beitr?ge
-
-Die bisherigen Entwicklungsst?nde findest du im [Changelog](CHANGELOG.md). Hinweise zu Entwicklungsumgebung, Tests, Hardwaretreibern und Pull Requests stehen im [Beitragsleitfaden](CONTRIBUTING.md).
+Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).
 
 ## Lizenz
 
-Die eigenen Projektbestandteile stehen unter der [Apache License 2.0](LICENSE), SPDX-Kennung `Apache-2.0`. Die Lizenz erlaubt private und kommerzielle Nutzung, Bearbeitung und Weitergabe unter ihren Bedingungen. Die Urheberhinweise stehen in [NOTICE](NOTICE).
-
-Auch [Akkudoktor EOS](https://github.com/Akkudoktor-EOS/EOS/blob/main/LICENSE) verwendet Apache 2.0. Für separat verwendete Drittkomponenten gelten deren jeweilige Lizenzen. Die bisherige Einschränkung auf private, nichtkommerzielle Nutzung entfällt.
+[Apache License 2.0](LICENSE). Private und kommerzielle Nutzung unter den
+Lizenzbedingungen; Urheberhinweise siehe [NOTICE](NOTICE).

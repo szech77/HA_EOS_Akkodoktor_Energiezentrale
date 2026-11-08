@@ -1,4 +1,4 @@
-"""Validate release metadata and publish a GitHub release after the image build."""
+"""Validate release metadata and publish a GitHub release after integration validation."""
 import argparse
 import json
 import os
@@ -14,14 +14,11 @@ VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z
 
 
 def release_metadata(root):
-    config = (root / "eos_energiezentrale/config.yaml").read_text(encoding="utf-8")
-    match = re.search(r'^version:\s*["\']?([0-9]+\.[0-9]+\.[0-9]+)["\']?\s*$', config, re.MULTILINE)
-    if match is None or VERSION.fullmatch(match[1]) is None:
-        raise ValueError("The add-on needs a stable major.minor.patch version")
-    version = match[1]
+    manifest = json.loads((root / "custom_components/eos_energiezentrale/manifest.json").read_text(encoding="utf-8"))
+    version = manifest.get("version", "")
+    if not isinstance(version, str) or VERSION.fullmatch(version) is None:
+        raise ValueError("The integration needs a stable major.minor.patch version")
     text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
-    if text != (root / "eos_energiezentrale/CHANGELOG.md").read_text(encoding="utf-8"):
-        raise ValueError("Root and add-on changelogs must match")
     heading = re.search(r"^## (?:\[)?" + re.escape(version) + r"(?:\])?(?: - \d{4}-\d{2}-\d{2})?\s*$",
                         text, re.MULTILINE)
     if heading is None:

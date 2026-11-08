@@ -17,29 +17,28 @@ concurrency:
 
 jobs:
   tests:
-    name: Tests Python ${{ matrix.python }}
+    name: Tests Home Assistant 2026.11
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.13", "3.14"]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.14"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
-      - name: Install test tools
-        run: python -m pip install -r requirements-dev.txt
-      - name: Unit and interface tests
-        run: python -m pytest -q --cov=energy --cov-branch --cov-report=term-missing
-      - name: Check browser script syntax
-        run: node --check eos_energiezentrale/energy/web/app.js
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt -r requirements-test.txt
+      - name: Behavioral and native Home Assistant tests
+        run: python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --cov-report=term-missing
+      - name: Browser syntax and authenticated panel bridge
+        run: |
+          node --check custom_components/eos_energiezentrale/energy/web/app.js
+          node --check custom_components/eos_energiezentrale/energy/web/panel.js
+          node --test tests/panel.test.cjs
 
   security:
     name: Source security
@@ -49,53 +48,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - name: Install security tools
         run: python -m pip install -r requirements-dev.txt
       - name: Python static security analysis
-        run: python -m bandit -r eos_energiezentrale/energy tools -ll
-      - name: Audit Python development dependencies
-        run: python -m pip_audit -r requirements-dev.txt --strict
+        run: python -m bandit -r custom_components tools -ll
+      - name: Audit development and Home Assistant test dependencies
+        run: python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
       - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.76.2
           cache: true
-      - name: Scan tracked files for secrets
-        run: trivy fs --scanners secret --exit-code 1 --skip-dirs .git .
+      - name: Scan repository for secrets
+        run: trivy fs --scanners secret --exit-code 1 --skip-dirs .git,.venv .
 
-  container:
-    name: Container ${{ matrix.arch }}
+  integration:
+    name: Home Assistant and HACS metadata
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - name: Build image
-        env:
-          ARCH: ${{ matrix.arch }}
-        run: docker buildx build --platform "linux/$ARCH" --load --pull -t eos-ci:local eos_energiezentrale
-      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+      - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
-          version: v0.76.2
-          cache: true
-      - name: Scan image for fixable high and critical vulnerabilities
-        run: trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 eos-ci:local
-      - name: Check runtime imports, timezone data and absence of pip
-        env:
-          ARCH: ${{ matrix.arch }}
-        run: >-
-          docker run --rm --platform "linux/$ARCH" eos-ci:local
-          python -c "import energy.server; from importlib.util import find_spec; assert find_spec('pip') is None, 'pip must not be installed in the runtime image'; from zoneinfo import ZoneInfo; print(ZoneInfo('Europe/Berlin'))"
+          category: integration
+          comment: "false"
+          # Custom repositories do not require registration in HA brands.
+          ignore: brands
 
   release_metadata:
     name: Release metadata
@@ -108,76 +91,47 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
-      - name: Validate version and changelog
+          python-version: "3.14"
+      - name: Validate manifest version and changelog
         env:
           COMMIT: ${{ github.sha }}
         run: python tools/release.py validate --check-local-tag --commit "$COMMIT"
 
   required:
     name: Required checks
-    needs: [tests, security, container, release_metadata]
+    needs: [tests, security, integration, release_metadata]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Require successful tests and security scans
+      - name: Require successful tests and validation
         env:
           TESTS: ${{ needs.tests.result }}
           SECURITY: ${{ needs.security.result }}
-          CONTAINER: ${{ needs.container.result }}
+          INTEGRATION: ${{ needs.integration.result }}
           RELEASE: ${{ needs.release_metadata.result }}
         run: |
           test "$TESTS" = success
           test "$SECURITY" = success
-          test "$CONTAINER" = success
+          test "$INTEGRATION" = success
           test "$RELEASE" = success
 
   publish:
-    name: Publish main image
+    name: Publish HACS release
     needs: required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 5
     permissions:
       contents: write
-      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
-      - name: Prepare release
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPOSITORY: ${{ github.repository }}
-          COMMIT: ${{ github.sha }}
-        run: python tools/release.py prepare --repository "$REPOSITORY" --commit "$COMMIT" --notes release-notes.md
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - name: Image name
-        id: image
-        env:
-          REPOSITORY: ${{ github.repository }}
-        run: echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: eos_energiezentrale
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:main
-            ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
-            ${{ steps.image.outputs.name }}:${{ steps.release.outputs.version }}
-      - name: Publish GitHub release
+          python-version: "3.14"
+      - name: Publish versioned GitHub release for HACS
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
