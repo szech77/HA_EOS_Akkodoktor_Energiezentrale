@@ -71,7 +71,7 @@
     "settings.setup": "Einrichtung in Home Assistant",
     "settings.setup_info": "API-Adressen, Sensoren, Hardwaretreiber und Gerätegrenzen stehen unter Einstellungen → Apps → EOS Energiezentrale → Konfiguration.",
     "control.title": "Gerätesteuerung",
-    "control.restart_info": "Nach einem Neustart startet die Energiezentrale im Lesemodus.",
+    "control.restart_info": "Die Steuerfreigabe bleibt nach Neustarts erhalten. Bei aktivierter Freigabe wartet die Energiezentrale auf gültige Messwerte und einen EOS-Speicherplan. Nach Regelfehlern bleibt die Steuerung ausgeschaltet.",
     "control.take": "Steuerung übernehmen",
     "control.release": "Steuerung zurückgeben",
     "control.confirm": "Die Energiezentrale übernimmt die Steuerung von Wallbox und Speicher. Steuerung aktivieren?",
@@ -163,6 +163,8 @@
     "settings.battery_limits_pending": "Speichergrenzen zur Übertragung an EOS vorgemerkt.",
     "settings.battery_limits_failed": "EOS hat die Speichergrenzen nicht bestätigt. Übertragung wird erneut versucht; lokale Grenzen sind gespeichert.",
     "settings.battery_limits_unmanaged": "Noch nicht an EOS übergeben. Speichern aktiviert die Übergabe dieser Speichergrenzen.",
-    "notice.battery_limits": "EOS-Speichergrenzen"
+    "notice.battery_limits": "EOS-Speichergrenzen",
+    "control.waiting": "Aktiv · warte auf Messwerte und Plan",
+    "notice.control_persistence": "Steuerfreigabe nicht gespeichert"
   }
 }

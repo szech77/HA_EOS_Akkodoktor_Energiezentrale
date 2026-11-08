@@ -71,7 +71,7 @@
     "settings.setup": "Setup in Home Assistant",
     "settings.setup_info": "Find API addresses, sensors, hardware drivers and device limits under Settings → Apps → EOS Energiezentrale → Configuration.",
     "control.title": "Device control",
-    "control.restart_info": "The Energy Dashboard starts in read-only mode after a restart.",
+    "control.restart_info": "Control permission is retained across restarts. When enabled, the Energy Dashboard waits for valid readings and an EOS battery plan before resuming. Control remains off after controller errors.",
     "control.take": "Take control",
     "control.release": "Release control",
     "control.confirm": "The Energy Dashboard will control the charger and battery. Enable control?",
@@ -163,6 +163,8 @@
     "settings.battery_limits_pending": "Battery limits are queued for EOS synchronization.",
     "settings.battery_limits_failed": "EOS did not confirm battery limits. Synchronization will be retried; local limits are saved.",
     "settings.battery_limits_unmanaged": "Not sent to EOS yet. Save to enable synchronization of these battery limits.",
-    "notice.battery_limits": "EOS battery limits"
+    "notice.battery_limits": "EOS battery limits",
+    "control.waiting": "Enabled · waiting for readings and plan",
+    "notice.control_persistence": "Control permission was not saved"
   }
 }

@@ -77,6 +77,12 @@ class Configuration:
         self.influx = Influx(options["influx_url"], options["influx_database"],
                              options["influx_user"], options["influx_password"])
         self.directory = Path(directory)
+        self.control_file = self.directory / "control.json"
+        control = json.loads(self.control_file.read_text(encoding="utf-8")) if self.control_file.exists() else {"enabled": False}
+        if (not isinstance(control, dict) or control.keys() != {"enabled"}
+                or type(control["enabled"]) is not bool):
+            raise ValueError("Invalid persisted control setting")
+        self.control_enabled = control["enabled"]
         self.file = self.directory / "daily.json"
         raw = json.loads(self.file.read_text(encoding="utf-8")) if self.file.exists() else {}
         self.battery_limits_managed = raw.pop("_battery_limits_managed", False)
@@ -97,3 +103,11 @@ class Configuration:
         save(self.file, persisted)
         self.daily = checked
         self.battery_limits_managed = managed
+
+
+    def set_control_enabled(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError("Explicit boolean required for control setting")
+        if enabled != self.control_enabled:
+            save(self.control_file, {"enabled": enabled})
+            self.control_enabled = enabled

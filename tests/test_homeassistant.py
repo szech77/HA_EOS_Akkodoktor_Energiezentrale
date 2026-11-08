@@ -121,7 +121,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
     async def test_unload_releases_devices_before_removing_platforms(self):
         coordinator, app = self.controller()
         events = []
-        app.set_armed.side_effect = lambda enabled: events.append(("control", enabled))
+        app.set_armed.side_effect = lambda enabled, **kwargs: events.append(("control", enabled))
         async def unload(*_):
             events.append(("unload", True))
             return True
@@ -154,7 +154,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(soc.extra_state_attributes, {"source": "estimate"})
         self.assertIsNone(EnergySensor(coordinator, "solar").native_value)
 
-    async def test_setup_does_not_start_controller_or_restore_armed_state(self):
+    async def test_first_setup_starts_without_control_permission(self):
         # Real config, SQLite cache and drivers, while external APIs remain offline.
         self.entry._async_set_state(self.hass, ConfigEntryState.SETUP_IN_PROGRESS, None)
         with (patch("custom_components.eos_energiezentrale.energy.clients.request", side_effect=OSError("offline")),
@@ -392,3 +392,93 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         config.eos.set_battery_limits.assert_not_called()
         self.assertEqual(config.daily["battery_min_soc"],20)
         self.assertFalse(config.battery_limits_managed)
+
+
+    async def test_graceful_stop_remembers_enabled_setting_for_next_start(self):
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        app = Controller(ha,config)
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        await coordinator.async_change(enabled=True)
+        await coordinator.async_stop()
+        self.assertFalse(app.armed)
+        restored = Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory))
+        self.assertTrue(restored.armed)
+        self.assertTrue(restored.restore_pending)
+
+    async def test_runtime_fault_disables_persistently_instead_of_rearming_after_restart(self):
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        app = Controller(ha,config)
+        app.set_armed(True)
+        app.owned = True
+        app.tick = Mock(side_effect=OSError("unconfirmed command"))
+        app.release = Mock()
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        result = await coordinator._async_update_data()
+        self.assertFalse(result["armed"])
+        app.release.assert_called_once()
+        self.assertFalse(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)
+
+    async def test_restart_waits_for_real_inputs_then_resumes_without_manual_enable(self):
+        from datetime import timedelta
+        from custom_components.eos_energiezentrale.energy.drivers import Fronius,NRGkick
+        from test_energy import instruction
+        now = datetime.now(timezone.utc)
+        adapter = HomeAssistantAdapter(self.hass)
+        config = Configuration(dict(DEFAULTS),adapter,self.directory)
+        config.set_control_enabled(True)
+        config.eos = Mock()
+        config.eos.plan.return_value = {"generated_at":now.isoformat(),"instructions":[instruction(now,"NON_EXPORT")]}
+        config.eos.solution.return_value = {}
+        app = Controller(adapter,config)
+        with (patch.object(config.battery,'apply') as apply,
+              patch.object(config.battery,'release') as release,
+              patch.object(config.wallbox,'pause') as pause):
+            await self.hass.async_add_executor_job(app.tick,now,0)
+            self.assertTrue(app.snapshot(now)["control_waiting"])
+            self.assertTrue(app.armed)
+            apply.assert_not_called()
+            release.assert_not_called()
+            pause.assert_not_called()
+            battery,box = Fronius.defaults,NRGkick.defaults
+            samples = {DEFAULTS["pv_entity"]:(0,"W"),DEFAULTS["grid_entity"]:(0,"W"),
+                       battery["soc"]:(55.4,"%"),battery["charge_power"]:(0,"W"),
+                       battery["discharge_power"]:(470,"W"),battery["mode"]:("Auto",None),
+                       box["power"]:(0,"W"),box["status"]:("connected",None),
+                       box["enable"]:("off",None),box["phases"]:(3,None),box["current"]:(6,"A")}
+            for entity,(value,unit) in samples.items():
+                attrs = {"unit_of_measurement":unit} if unit else {}
+                if entity == box["current"]:
+                    attrs.update(step=.1,max=16)
+                self.hass.states.async_set(entity,str(value),attrs,timestamp=now.timestamp())
+            await self.hass.async_add_executor_job(app.tick,now+timedelta(seconds=5),5)
+            self.assertFalse(app.snapshot(now+timedelta(seconds=5))["control_waiting"])
+            self.assertTrue(app.armed)
+            apply.assert_called_once()
+
+
+    async def test_shutdown_service_error_does_not_erase_saved_control_permission(self):
+        from threading import Event
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        app = Controller(ha,config)
+        app.set_armed(True)
+        entered,finish = Event(),Event()
+        def tick(*_):
+            entered.set()
+            if not finish.wait(5):
+                raise TimeoutError("test worker did not finish")
+            raise OSError("service disappeared during HA shutdown")
+        app.tick = Mock(side_effect=tick)
+        app.release = Mock()
+        app.owned = True
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        polling = asyncio.create_task(coordinator._async_update_data())
+        self.assertTrue(await self.hass.async_add_executor_job(entered.wait,5))
+        stopping = asyncio.create_task(coordinator.async_stop())
+        await asyncio.sleep(0)
+        finish.set()
+        await asyncio.gather(polling,stopping)
+        self.assertFalse(app.armed)
+        self.assertTrue(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)

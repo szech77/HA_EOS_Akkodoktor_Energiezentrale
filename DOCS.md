@@ -109,3 +109,19 @@ bleiben sie zur Wiederherstellung erhalten.
 Sprachen fallen auf Englisch zurück. Inbetriebnahme-Option: `auto`, `en`, `de`.
 Panel-Sprachdateien liegen in `energy/i18n`, native Dialog- und Entitätstexte in
 `translations`. Weitere Sprachen ergänzen beide Bereiche, die Sprachauswahl und Tests.
+
+
+## Persistente Steuerfreigabe
+
+Ein- und Ausschalten der Energiesteuerung speichert die Freigabe separat in
+`control.json` im Datenverzeichnis der Integration. Ein normaler HA-Stopp oder
+Integrations-Reload gibt Geräte zurück, behält aber die gewünschte Freigabe.
+Beim nächsten Start wartet eine gespeicherte Freigabe auf gültige Messwerte und
+einen aktuellen EOS-Speicherplan, bevor Gerätebefehle wieder ausgeführt werden.
+Der Wartezustand wird im Panel angezeigt. Regelfehler setzen die Freigabe dauerhaft
+auf aus; ein Fehler beim Speichern wird sichtbar gemeldet.
+
+Nach dem ersten Update auf diese Funktion die Steuerung einmal aktivieren, damit
+die Freigabe gespeichert wird. Für eine Erstinstallation ohne gespeicherte
+Freigabe bleibt der Lesemodus der Standard. Schnellladung wird weiterhin nicht
+automatisch nach einem Neustart aktiviert.

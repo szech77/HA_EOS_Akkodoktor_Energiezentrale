@@ -1,6 +1,7 @@
 """Serialize all controller work outside Home Assistant's event loop."""
 import asyncio
 from datetime import datetime, timezone
+from functools import partial
 import logging
 from time import monotonic
 
@@ -30,6 +31,12 @@ class EnergyCoordinator(DataUpdateCoordinator):
             except Exception as error:
                 self.app.errors["runtime"] = type(error).__name__
                 self.app.armed = False
+                self.app.restore_pending = False
+                if not self.closing:
+                    try:
+                        self.app.remember_control(False)
+                    except Exception:
+                        pass  # Persistence failure is exposed by the controller.
                 if self.app.owned:
                     try:
                         self.app.release(self.app.ha.states(), datetime.now(timezone.utc))
@@ -89,6 +96,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
             return await self.hass.async_add_executor_job(read)
 
     async def async_stop(self):
+        # Mark shutdown before waiting for an in-flight tick, so a service
+        # disappearing during HA shutdown does not clear the saved user intent.
+        self.closing = True
         async with self.work_lock:
-            self.closing = True
-            await self.hass.async_add_executor_job(self.app.set_armed, False)
+            await self.hass.async_add_executor_job(partial(self.app.set_armed, False, persist=False))

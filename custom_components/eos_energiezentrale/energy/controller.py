@@ -1,4 +1,4 @@
-"""Single-writer coordinator. The UI can arm it only for the current process."""
+"""Single-writer controller with persistent explicit control intent."""
 from datetime import datetime, timedelta, timezone
 from math import isclose
 from threading import Event, RLock
@@ -16,7 +16,8 @@ class Controller:
         self.history = History(config.directory / "history.sqlite3")
         self.lock = RLock()
         self.stop_event = Event()
-        self.armed = False
+        self.armed = getattr(config, "control_enabled", False)
+        self.restore_pending = self.armed
         self.owned = False
         self.live = {}
         self.display = {}
@@ -38,12 +39,35 @@ class Controller:
         self.last_minute = None
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
 
-    def set_armed(self, enabled):
+    def remember_control(self, enabled):
+        store = getattr(self.config, "set_control_enabled", None)
+        if store is None:
+            return
+        try:
+            store(enabled)
+        except Exception as error:
+            self.errors["control_persistence"] = type(error).__name__
+            raise
+        self.errors.pop("control_persistence", None)
+
+    def set_armed(self, enabled, *, persist=True):
         with self.lock:
+            if type(enabled) is not bool:
+                raise ValueError("Explicit boolean required for control setting")
             if enabled:
+                if persist:
+                    self.remember_control(True)
+                self.restore_pending = False
                 self.armed = True
                 return
             self.armed = False
+            self.restore_pending = False
+            persistence_error = None
+            if persist:
+                try:
+                    self.remember_control(False)
+                except Exception as error:
+                    persistence_error = error
             if self.owned:
                 try:
                     self.release(self.ha.states(), datetime.now(timezone.utc))
@@ -51,6 +75,8 @@ class Controller:
                     self.errors["release"] = "Gerätefreigabe nicht bestätigt"
                     raise
                 self.errors.pop("release", None)
+            if persistence_error is not None:
+                raise persistence_error
 
     def release(self, states, now):
         try:
@@ -77,6 +103,11 @@ class Controller:
                         except Exception:
                             self.errors["release"] = "Gerätefreigabe nicht bestätigt"
                     self.armed = False
+                    self.restore_pending = False
+                    try:
+                        self.remember_control(False)
+                    except Exception:
+                        pass  # Persistence failure is exposed in errors.
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
     def sync_battery_limits(self, now, clock, *, force=False):
@@ -197,6 +228,25 @@ class Controller:
             self.last_minute = minute
         if not self.armed:
             return
+        if self.restore_pending:
+            # HA integrations and EOS can become ready after this integration.
+            # Keep the remembered switch on but issue no commands until ready.
+            ready = (battery_order is not None and battery.soc is not None
+                     and all(live[key] is not None for key in
+                             ("solar", "grid", "battery_charge", "battery_discharge"))
+                     and box.watts is not None and box.status not in {"", "unknown", "unavailable"}
+                     and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)
+            ids = getattr(self.config.battery, "ids", {})
+            mode = ids.get("mode") if isinstance(ids, dict) else None
+            if mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"}:
+                ready = False
+            ids = getattr(self.config.wallbox, "ids", {})
+            enable = ids.get("enable") if isinstance(ids, dict) else None
+            if enable and states.get(enable, {}).get("state") not in {"on", "off"}:
+                ready = False
+            if not ready:
+                return
+            self.restore_pending = False
         self.owned = True
         published = (round(self.soc, 4) if self.soc is not None else None, measured)
         if published != self.last_soc_publish:
@@ -313,6 +363,7 @@ class Controller:
                             (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"]),
                         "confirmed_at": self.battery_limits_confirmed_at.isoformat()
                             if self.battery_limits_confirmed_at else None},
+                    "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "errors": dict(self.errors), "zone": opts["timezone"],
                     "influx_configured": bool(self.config.influx.url),

@@ -215,7 +215,7 @@ Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entität
 
 | Einstellung | Bedeutung |
 |---|---|
-| Energiesteuerung | Explizite Freigabe der Geräteansteuerung; nach Neustart zunächst aus. |
+| Energiesteuerung | Explizite Freigabe der Geräteansteuerung; bleibt über Neustarts erhalten. Bei der ersten Einrichtung aus. |
 | Speicher Mindest-SoC | 0–99 %; kleiner als der Maximal-SoC. Startwert 20 %. Wird an EOS übergeben und lokal beachtet. |
 | Speicher Maximal-SoC | 1–100 %; größer als der Mindest-SoC. Startwert 100 %. Wird an EOS übergeben und lokal beachtet. |
 | Ziel-SoC | 1–100 %; Fahrzeug-Ziel für Terminplanung und Schnellladen. |
@@ -278,7 +278,7 @@ Bei einem Fehler wird die Übertragung nach 30 Sekunden erneut versucht, der Sta
 zeigt die fehlende Bestätigung an. Bestätigte Vorgaben werden alle 60 Sekunden
 abgeglichen; abweichende spätere Änderungen direkt in EOS werden dabei auf die in
 der Energiezentrale gespeicherten Grenzen zurückgesetzt. Änderungen deshalb über
-die Energiezentrale vornehmen. Die lokale Steuerung bleibt nach Neustarts zunächst aus.
+die Energiezentrale vornehmen. Die gespeicherte Steuerfreigabe wird nach Neustarts wiederhergestellt.
 
 Bestehende Inbetriebnahme-Grenzen aus älteren Integrationsständen werden als
 Startwerte übernommen, wenn noch keine alltäglichen Speichergrenzen gespeichert sind.
@@ -386,6 +386,26 @@ Template-Änderungen können alternativ über die angebotene Template-Neuladefun
 HA-Neustart erforderlich; reine Panel-JavaScript-/CSS-Updates benötigen eine
 vollständige Browser-Aktualisierung, beispielsweise Strg + F5.
 
+## Steuerfreigabe über Neustarts erhalten
+
+Der Schalter **Energiesteuerung** wird beim bewussten Ein- und Ausschalten
+dauerhaft in `.storage/eos_energiezentrale/<config-entry-id>/control.json` gespeichert.
+Beim normalen Herunterfahren oder Neuladen werden die Geräte freigegeben, ohne
+diese gespeicherte Einstellung auf aus zu setzen.
+
+Nach einem Neustart bleibt ein zuvor aktivierter Schalter eingeschaltet. Die
+Anzeige **Aktiv · warte auf Messwerte und Plan** bedeutet, dass die Freigabe
+gespeichert ist, die Integration aber noch auf gültige Eingangsdaten und einen
+aktuellen EOS-Speicherplan wartet. Anschließend setzt sie die Regelung selbstständig fort.
+
+Ein bewusst ausgeschalteter Schalter bleibt aus. Ein Regelfehler deaktiviert die
+Steuerung ebenfalls dauerhaft; zur Wiederaufnahme muss sie ausdrücklich aktiviert
+werden. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
+Neustart aus, die übrigen alltäglichen Einstellungen bleiben erhalten.
+
+Beim ersten Update auf diese Funktion die Steuerung einmal aktivieren, damit die
+bisher nur im Arbeitsspeicher gehaltene Freigabe dauerhaft gespeichert wird.
+
 ## Messwerte prüfen und Anzeige verstehen
 
 Unter **Entwicklerwerkzeuge → Zustände** kontrollieren: Entitäts-ID, Zustand,
@@ -422,7 +442,8 @@ Optional können bei gestopptem Add-on und entladener Integration dessen Dateien
 `daily.json` und `history.sqlite3` aus einer Datensicherung nach
 `/config/.storage/eos_energiezentrale/<config-entry-id>/` übernommen werden.
 Die Integration erzeugt dieses Verzeichnis beim ersten Einrichten. Anschließend
-neu laden. Schnellladung und Steuerfreigabe werden bewusst nicht wiederhergestellt.
+neu laden. Schnellladung wird nicht wiederhergestellt. Die Steuerfreigabe wird separat
+in `control.json` gespeichert; fehlt diese Datei bei der erstmaligen Einrichtung, ist die Steuerung aus.
 
 ## Oberfläche und native Entitäten
 
@@ -441,8 +462,8 @@ auf den neuen nativen Auto-SoC-Faktor umstellen.
 
 Alltagseinstellungen sind im Panel und über native Entitäten erreichbar.
 Inbetriebnahme-Einstellungen findest du unter Geräte & Dienste → EOS Energiezentrale
-→ **Konfigurieren**. Nach deren Änderung wird die Integration neu geladen und die
-Steuerung bleibt zunächst ausgeschaltet.
+→ **Konfigurieren**. Nach deren Änderung wird die Integration neu geladen. Die
+gespeicherte Steuerfreigabe bleibt erhalten und wird nach Prüfung der Eingangsdaten wieder aktiv.
 
 Das eigene Panel ist Administratoren vorbehalten und verwendet die bestehende
 HA-Anmeldung. Es gibt keinen zusätzlichen Webserver, Port oder eingebetteten Token.

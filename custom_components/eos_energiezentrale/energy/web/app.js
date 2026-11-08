@@ -111,7 +111,7 @@ function solarToday() {
 function overview() {
   const live = snapshot.live;
   const remaining = solarRemaining();
-  byId('connection').textContent = snapshot.armed ? t('control.active') : t('control.read_only');
+  byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? t('control.active') : t('control.read_only');
   byId('live-time').textContent = live.time ? time(live.time) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
     [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
@@ -283,7 +283,7 @@ function settings() {
     fillForm();
     formReady = true;
   }
-  byId('ownership').textContent = snapshot.armed ? t('control.active') : t('control.read_only');
+  byId('ownership').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? t('control.active') : t('control.read_only');
   byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
   byId('control').disabled = !formReady;
   const limits = snapshot.battery_limits;
@@ -302,7 +302,7 @@ function render() {
   byId('detail').hidden = !pages.has(route);
   const errors = Object.keys(snapshot.errors);
   const errorAreas = {goal:'notice.goal',runtime:'control.title',forecast:'notice.forecast',
-    release:'notice.release',battery_limits:'notice.battery_limits',connection:'notice.connection'};
+    release:'notice.release',battery_limits:'notice.battery_limits',control_persistence:'notice.control_persistence',connection:'notice.connection'};
   byId('notice').textContent = errors.length ? `${t('notice.check')} · ${errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()).join(', ')}` : '';
   if (route === 'overview') overview();
   else if (route === 'settings') settings();
