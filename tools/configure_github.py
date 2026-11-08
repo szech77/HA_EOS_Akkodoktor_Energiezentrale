@@ -1,4 +1,4 @@
-"""Apply the repository's main ruleset using an administrator's GitHub token."""
+"""Configure HACS repository metadata and optionally the main ruleset."""
 import argparse
 import json
 import os
@@ -20,7 +20,6 @@ def configure(repository, token, *, metadata_only=False):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Repository must have the form owner/name")
     root = Path(__file__).resolve().parents[1]
-    rules = json.loads((root / ".github/main-ruleset.json").read_text(encoding="utf-8"))
     base = "https://api.github.com/repos/" + repository
     opener = build_opener(NoRedirect())
 
@@ -38,6 +37,7 @@ def configure(repository, token, *, metadata_only=False):
     print("GitHub description and topics checked")
     if metadata_only:
         return
+    rules = json.loads((root / ".github/main-ruleset.json").read_text(encoding="utf-8"))
     repo = api()
     api("/branches/main")
     if repo["default_branch"] != "main":
