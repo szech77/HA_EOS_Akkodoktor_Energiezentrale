@@ -62,3 +62,13 @@ Die Sprache wird unter **Einstellungen → Apps → EOS Energiezentrale → Konf
 Für eine weitere Sprache kopiere `energy/i18n/en.json` nach `energy/i18n/<Sprachcode>.json`, setze `locale` auf das passende BCP-47-Format und übersetze die Werte in `messages`. Die Schlüssel und Platzhalter wie `{start}` und `{energy}` bleiben bestehen. Die Texte werden als Klartext behandelt. Fehlende Übersetzungen übernimmt die App aus dem englischen Katalog.
 
 Ergänze den Dateicode in `config.yaml` bei `schema.language` in der Liste der auswählbaren Sprachen. Wenn auch die Beschriftungen der Add-on-Konfiguration übersetzt werden sollen, kann dafür eine Home-Assistant-Datei unter `translations/<Sprachcode>.yaml` hinzukommen. Baue anschließend das Add-on-Image neu.
+
+## Changelog und Beitr?ge
+
+Die bisherigen Entwicklungsst?nde findest du im [Changelog](CHANGELOG.md). Hinweise zu Entwicklungsumgebung, Tests, Hardwaretreibern und Pull Requests stehen im [Beitragsleitfaden](CONTRIBUTING.md).
+
+## Lizenz
+
+Die eigenen Projektbestandteile stehen unter der [Apache License 2.0](LICENSE), SPDX-Kennung `Apache-2.0`. Die Lizenz erlaubt private und kommerzielle Nutzung, Bearbeitung und Weitergabe unter ihren Bedingungen. Die Urheberhinweise stehen in [NOTICE](NOTICE).
+
+Auch [Akkudoktor EOS](https://github.com/Akkudoktor-EOS/EOS/blob/main/LICENSE) verwendet Apache 2.0. Für separat verwendete Drittkomponenten gelten deren jeweilige Lizenzen. Die bisherige Einschränkung auf private, nichtkommerzielle Nutzung entfällt.

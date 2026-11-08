@@ -139,7 +139,8 @@ class Influx:
         for measurement, scale in measurements:
             if measurement not in {"W", "kW", "%", "EUR/kWh", "€/kWh", "ct/kWh", "state"}:
                 raise ValueError("Ungültiges Measurement")
-            query = (f'SELECT {reducer}("{field}") FROM "{measurement}" WHERE "domain"=\'{domain}\' '
+            # InfluxQL identifiers are restricted by ENTITY and the allowlists above.
+            query = (f'SELECT {reducer}("{field}") FROM "{measurement}" WHERE "domain"=\'{domain}\' '  # nosec B608
                      f'AND "entity_id"=\'{entity_id}\' AND time >= now() - 24h GROUP BY time(5m) fill(none)')
             result = request(self.url + "/query?" + urlencode({"db": self.database, "q": query}),
                              headers=self.headers)["results"][0]

@@ -1,5 +1,6 @@
 import json
 import re
+import shutil
 import unittest
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -36,9 +37,9 @@ def temporary_project_directory():
     try:
         yield path
     finally:
-        for file in path.iterdir():
-            file.unlink()
-        path.rmdir()
+        if path.resolve().parent != Path.cwd().resolve():
+            raise ValueError("Test directory escaped the working directory")
+        shutil.rmtree(path)
 
 
 class DomainTests(unittest.TestCase):
