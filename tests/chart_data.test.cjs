@@ -46,3 +46,13 @@ test('A measured zero forecast is different from absent or invalid forecast valu
   assert.equal(result[0].complete,true);
   assert.equal(result[1].kwh,null);
 });
+
+
+test('power rings use a linear clockwise fraction and signed battery magnitude',()=>{
+  const {powerFraction}=require('../custom_components/eos_energiezentrale/energy/web/chart-data.js');
+  assert.equal(powerFraction(2500,10000),.25);
+  assert.equal(powerFraction(-1190,4760),.25);
+  assert.equal(powerFraction(0,10000),0);
+  assert.equal(powerFraction(12000,10000),1);
+  for(const [value,max] of [[null,1000],[NaN,1000],[100,null],[100,0]])assert.equal(powerFraction(value,max),null);
+});

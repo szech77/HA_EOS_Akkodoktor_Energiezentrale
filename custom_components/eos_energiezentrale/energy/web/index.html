@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title data-i18n="app.title">EOS Energiezentrale</title>
   <link rel="stylesheet" href="./style.css">
-  <script src="./chart-data.js" defer></script>
-  <script src="./accounting.js" defer></script>
-  <script src="./app.js" defer></script>
+  <script src="./bootstrap.js" defer></script>
 </head>
 <body id="eos-energy-design">
 <div class="energy-app">
@@ -20,6 +18,8 @@
   </header>
   <main>
     <p id="notice" role="status"></p>
+    <button id="startup-retry" type="button" hidden>Retry</button>
+    <details id="startup-details" hidden><summary id="startup-details-title">Technical details</summary><code id="startup-detail"></code></details>
     <section id="overview">
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.overview"></p><h1 data-i18n="nav.overview"></h1></div><span class="tag" id="connection" data-i18n="status.connecting"></span></div>
       <div class="kpis" id="overview-kpis"></div>

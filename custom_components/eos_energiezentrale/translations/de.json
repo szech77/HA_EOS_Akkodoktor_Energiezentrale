@@ -20,7 +20,9 @@
           "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
           "price_entity": "Bezugspreis",
           "car_soc_entity": "E-Auto-SoC (optional)",
-          "car_soc_scale": "Fahrzeug-SoC-Einheit"
+          "car_soc_scale": "Fahrzeug-SoC-Einheit",
+          "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
+          "heat_load_scale": "Skalierung der Auslastung"
         }
       },
       "hardware": {
@@ -49,7 +51,8 @@
           "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
           "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
           "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)",
-          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)"
+          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)",
+          "pv_peak_w": "PV-Bezugsleistung für den Ring (W)"
         }
       },
       "history": {
@@ -99,7 +102,9 @@
           "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
           "price_entity": "Bezugspreis",
           "car_soc_entity": "E-Auto-SoC (optional)",
-          "car_soc_scale": "Fahrzeug-SoC-Einheit"
+          "car_soc_scale": "Fahrzeug-SoC-Einheit",
+          "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
+          "heat_load_scale": "Skalierung der Auslastung"
         }
       },
       "hardware": {
@@ -128,7 +133,8 @@
           "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
           "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
           "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)",
-          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)"
+          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)",
+          "pv_peak_w": "PV-Bezugsleistung für den Ring (W)"
         }
       },
       "history": {

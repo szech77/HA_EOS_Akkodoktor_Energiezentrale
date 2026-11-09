@@ -301,6 +301,29 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
                 self.hass.states.async_set(entity.entity_id, entity.state)
                 self.assertEqual(self.hass.states.get(entity.entity_id).state, value)
 
+    async def test_language_failures_are_not_mislabeled_as_invalid_settings(self):
+        self.controller()
+        for failure,code in ((ValueError("broken JSON"),'language_invalid'),(FileNotFoundError("missing file"),'language_unavailable')):
+            with self.subTest(code=code),patch('custom_components.eos_energiezentrale.frontend.load_language',side_effect=failure):
+                connection=await self.invoke({'action':'language','language':'de'})
+                self.assertEqual(connection.send_error.call_args.args[1],code)
+                self.assertNotIn('missing file',connection.send_error.call_args.args[2])
+
+    async def test_unexpected_ui_backend_failure_returns_an_error_instead_of_timing_out(self):
+        coordinator,_=self.controller()
+        coordinator.async_history=AsyncMock(side_effect=RuntimeError('private backend detail'))
+        connection=await self.invoke({'action':'history'})
+        self.assertEqual(connection.send_error.call_args.args[1],'internal_error')
+        self.assertNotIn('private backend detail',connection.send_error.call_args.args[2])
+
+    async def test_frontend_registration_uses_one_asset_version_for_panel_and_iframe(self):
+        from custom_components.eos_energiezentrale.frontend import async_register_frontend
+        self.hass.http=Mock(async_register_static_paths=AsyncMock())
+        with patch('custom_components.eos_energiezentrale.frontend.asset_version',return_value='newbuild'),patch('custom_components.eos_energiezentrale.frontend.panel_custom.async_register_panel',new_callable=AsyncMock) as register,patch('custom_components.eos_energiezentrale.frontend.websocket_api.async_register_command'):
+            await async_register_frontend(self.hass)
+        self.assertTrue(register.call_args.kwargs['module_url'].endswith('panel.js?v=newbuild'))
+        self.assertEqual(register.call_args.kwargs['config']['asset_version'],'newbuild')
+
     async def test_language_request_loads_translations_without_blocking_event_loop(self):
         self.controller()
         from custom_components.eos_energiezentrale.energy.localization import load_language
@@ -339,7 +362,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(config.wallbox.ids,{})
         fields=schema_for("sensors",flow.values)
         submitted={key:flow.values[key] for key in GROUPS["sensors"]
-                   if key not in {"heat_entity","car_soc_entity"}}
+                   if key not in {"heat_entity","car_soc_entity","heat_load_entity"}}
         fields(submitted)
 
     async def test_config_wizard_preserves_selected_hardware_and_limits(self):

@@ -55,8 +55,8 @@ class Configuration:
     def __init__(self, options, ha, directory):
         self.options = options
         self.zone = ZoneInfo(options["timezone"])
-        for key in ("pv_entity", "house_entity", "grid_entity", "heat_entity", "price_entity", "car_soc_entity"):
-            if key in {"heat_entity", "car_soc_entity"} and options[key] == "":
+        for key in ("pv_entity", "house_entity", "grid_entity", "heat_entity", "price_entity", "car_soc_entity", "heat_load_entity"):
+            if key in {"heat_entity", "car_soc_entity", "heat_load_entity"} and options.get(key, "") == "":
                 continue
             if not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):
                 raise ValueError(f"Ungültige Sensorentität: {key}")

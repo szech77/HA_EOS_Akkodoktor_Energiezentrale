@@ -282,6 +282,8 @@ class FleetController(Controller):
     def snapshot(self,now):
         result=Controller.snapshot(self,now)
         result["vehicles"]=self.vehicle_snapshots
+        references=[vehicle.get("power_reference",{}).get("car") for vehicle in self.vehicle_snapshots]
+        result["power_reference"]["car"]=sum(references) if references and all(value is not None for value in references) else None
         result["vehicle_name"]="E-Autos"
         result["forecast"]=[{k:v for k,v in row.items() if k not in {"car","car_soc"}} for row in result["forecast"]]
         return result

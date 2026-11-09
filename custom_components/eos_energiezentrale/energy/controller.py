@@ -1,5 +1,6 @@
 """Single-writer controller with persistent explicit control intent."""
 from copy import deepcopy
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from math import isclose
 from threading import Event, RLock
@@ -10,6 +11,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
+from .presentation import heat_utilization, power_references
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 
@@ -263,6 +265,7 @@ class Controller:
                     soc_source="vehicle" if measured else "estimate" if self.soc is not None else None,
                     car_status=box.status, phases=box.phases, amps=box.amps,
                     battery_charge=battery.charge, battery_discharge=battery.discharge)
+        live["heat_load"] = heat_utilization(states,opts,now)
         car_enabled = opts.get("wallbox_type") != "none"
         heat_enabled = bool(opts.get("heat_entity"))
         live["house"] = house_only(live["house_total"], live["car"] if car_enabled else 0,
@@ -272,10 +275,10 @@ class Controller:
         battery_ids=getattr(self.config.battery,"ids",{})
         wallbox_ids=getattr(self.config.wallbox,"ids",{})
         self.display=self.display_values.update(states,live,opts,
-            battery_ids if isinstance(battery_ids,dict) else {},
-            wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
-        times=report_times(states,opts,battery_ids if isinstance(battery_ids,dict) else {},
-                           wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
+            battery_ids if isinstance(battery_ids,Mapping) else {},
+            wallbox_ids if isinstance(wallbox_ids,Mapping) else {},now)
+        times=report_times(states,opts,battery_ids if isinstance(battery_ids,Mapping) else {},
+                           wallbox_ids if isinstance(wallbox_ids,Mapping) else {},now)
         self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if self.armed else None,command_at=self.last_write)
         battery_order = self.order_for(opts["battery_resource"], now)
         car_order = self.order_for(opts["vehicle_resource"], now)
@@ -303,11 +306,11 @@ class Controller:
                      and box.watts is not None and box.status not in {"", "unknown", "unavailable"}
                      and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)
             ids = getattr(self.config.battery, "ids", {})
-            mode = ids.get("mode") if isinstance(ids, dict) else None
+            mode = ids.get("mode") if isinstance(ids, Mapping) else None
             if mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"}:
                 ready = False
             ids = getattr(self.config.wallbox, "ids", {})
-            enable = ids.get("enable") if isinstance(ids, dict) else None
+            enable = ids.get("enable") if isinstance(ids, Mapping) else None
             if enable and states.get(enable, {}).get("state") not in {"on", "off"}:
                 ready = False
             if not ready:
@@ -442,7 +445,8 @@ class Controller:
             current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
-            return {"live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
+            return {"power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
+                    "heat_load_configured":bool(opts.get("heat_load_entity")), "live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {
                         "managed": getattr(self.config, "battery_limits_managed", False),
                         "confirmed": self.battery_limits_confirmed ==

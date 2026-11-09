@@ -690,3 +690,42 @@ Phasenumschaltfähigkeit bleibt die Regelung bei der vorhandenen Phasenanzahl.
 Die vollständige Schnittstelle, Plugin-Erweiterung und Beispiele sind in
 [PLUGINS.md](PLUGINS.md) beschrieben. Helfer für die generische Anbindung stehen in
 [generic_hardware_helpers.yaml](examples/generic_hardware_helpers.yaml).
+
+
+## Leistungsringe im Stromfluss
+
+Die Außenringe für PV, Akku und E-Auto zeigen die momentane Leistung als linearen
+Anteil der Bezugsleistung: Beginn oben bei 12 Uhr, Füllung im Uhrzeigersinn, 25 %
+entsprechen einem Viertelkreis. Der übrige Ring ist dunkel. Batterie- und Auto-SoC
+bleiben separat innerhalb der Symbole sichtbar.
+
+- **PV:** Bezugsleistung unter **Konfigurieren → Grenzen → PV-Bezugsleistung für den Ring (W)**
+  einstellen (`pv_peak_w`, Standard 10000 W). Dies verändert keine Regelgrenze.
+- **Akku:** Bezug auf die maximale Lade- bzw. Entladeleistung der Integration, je nach
+  aktueller Flussrichtung. Der Ring stellt Leistung und nicht den Ladezustand dar.
+- **E-Auto:** maximal mögliche Ladeleistung aus dem eingestellten Maximalstrom,
+  höchstens 11 kW. Bei fester Phasenanzahl wird diese berücksichtigt; bei mehreren
+  Fahrzeugen werden deren Bezugsleistungen addiert.
+- **Wärmepumpe:** optional unter **Konfigurieren → Sensoren** eine Entität für die
+  Leistungsauslastung (`heat_load_entity`) und die Skalierung (`heat_load_scale`:
+  `percent` für 0–100, `factor` für 0–1) auswählen. Ohne Entität bleibt der bisherige
+  Ring unverändert. Ungültige Werte werden nicht als 0 interpretiert; bei fehlenden
+  Daten bleibt der Leistungsring dunkel. Für diese reine Anzeige gilt der vorhandene
+  längere Anzeigepuffer, nicht die kürzere Regelungsfrist.
+
+
+### Fehler beim Öffnen der Oberfläche
+
+Die UI-Dateien werden pro installiertem Stand gemeinsam versioniert geladen.
+Nach einem Update die **vollständige** Integration übertragen und Home Assistant neu
+starten, damit die neue Panel-Version registriert wird. Der Button **Erneut versuchen**
+lädt die Oberfläche mit einer frischen Cache-Kennung; die Gerätesteuerung wird dadurch
+nicht ein-/ausgeschaltet.
+
+Die Meldung nennt den betroffenen Bereich: Sprachpaket, HA-Verbindung, fehlende Datei
+oder Darstellung. Bei gemischten Dateiversionen die komplette Integration aktualisieren;
+bei einem fehlenden Sprachpaket insbesondere `energy/i18n` mit übertragen. Bei
+fehlender Adminberechtigung mit einem Administrator anmelden. Technische Details nennen
+Fehlerart und gegebenenfalls die betroffene UI-Datei. Unerwartete Backendfehler stehen
+zusätzlich im HA-Protokoll und werden nicht mehr als ungültige Einstellungen gemeldet.
+Die frühere pauschale Anzeige `EOS Energiezentrale · /api/language` wurde entfernt.

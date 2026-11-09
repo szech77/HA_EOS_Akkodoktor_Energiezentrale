@@ -174,3 +174,14 @@
   #eos-energy-design .billing-chart {min-height:200px;}
   #eos-energy-design #usage .kpis {grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+
+/* Clockwise power rings start at twelve o'clock; icon SoC remains independent. */
+#eos-energy-design .orb.power-ring-enabled {position:relative;border:0;}
+#eos-energy-design .node .orb svg.power-ring {position:absolute;inset:0;width:100%;height:100%;fill:none;pointer-events:none;stroke-width:2.5;stroke-linecap:butt;}
+#eos-energy-design .power-ring .ring-track {stroke:#101820;}
+#eos-energy-design .power-ring .ring-value {stroke:var(--energy-color);transition:stroke-dasharray .35s ease;}
+@media(prefers-reduced-motion:reduce){#eos-energy-design .power-ring .ring-value {transition:none;}}
+
+#eos-energy-design #startup-retry {padding:10px 16px;min-height:44px;border:1px solid var(--edge);border-radius:8px;background:var(--surface2);color:var(--ink);margin:0 0 16px;}
+#eos-energy-design #startup-details {margin-bottom:16px;overflow-wrap:anywhere;}
+#eos-energy-design #startup-details code {display:block;white-space:pre-wrap;padding:10px;}

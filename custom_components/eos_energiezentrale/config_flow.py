@@ -20,8 +20,8 @@ def schema_for(group, values):
             field = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
         elif isinstance(default, bool):
             field = selector.BooleanSelector()
-        elif key in {"language", "car_soc_scale", "battery_type", "wallbox_type"}:
-            choices = {"language": ["auto", "en", "de"], "car_soc_scale": ["factor", "percent"],
+        elif key in {"language", "car_soc_scale", "heat_load_scale", "battery_type", "wallbox_type"}:
+            choices = {"language": ["auto", "en", "de"], "car_soc_scale": ["factor", "percent"], "heat_load_scale": ["percent","factor"],
                        "battery_type": plugin_choices(BATTERY_DRIVERS), "wallbox_type": plugin_choices(WALLBOX_DRIVERS)}[key]
             field = selector.SelectSelector(selector.SelectSelectorConfig(options=choices))
         elif isinstance(default, (int, float)):
@@ -30,7 +30,7 @@ def schema_for(group, values):
             field = selector.TextSelector(selector.TextSelectorConfig(
                 type=selector.TextSelectorType.PASSWORD if key == "influx_password"
                 else selector.TextSelectorType.TEXT, multiline=key.endswith("_parameters") or key == "vehicles"))
-        optional_source = key in {"heat_entity", "car_soc_entity"}
+        optional_source = key in {"heat_entity", "car_soc_entity", "heat_load_entity"}
         marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password"} else vol.Required
         fields[marker(key, **({} if optional_source and not default else {"default":default}))] = field
     return vol.Schema(fields)
@@ -63,7 +63,7 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             if group == "sensors":
-                user_input = {"heat_entity":"", "car_soc_entity":"", **user_input}
+                user_input = {"heat_entity":"", "car_soc_entity":"", "heat_load_entity":"", **user_input}
             values = {**self.values, **user_input}
             errors = await check(self.hass, values, group == "connection")
             if not errors:
@@ -103,7 +103,7 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
 
     async def _step(self, group, user_input):
         if group == "sensors" and user_input is not None:
-            user_input = {"heat_entity":"", "car_soc_entity":"", **user_input}
+            user_input = {"heat_entity":"", "car_soc_entity":"", "heat_load_entity":"", **user_input}
         values = {**DEFAULTS, **self.config_entry.data, **self.config_entry.options, **(user_input or {})}
         errors = {}
         if user_input is not None:

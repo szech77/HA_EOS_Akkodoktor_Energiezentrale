@@ -16,13 +16,18 @@ def validate_options(options):
     ZoneInfo(options["timezone"])
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])
-    for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity"):
-        if key in {"heat_entity", "car_soc_entity"} and options[key] == "":
+    for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity", "heat_load_entity"):
+        if key in {"heat_entity", "car_soc_entity", "heat_load_entity"} and options.get(key, "") == "":
             continue
         if not isinstance(options[key], str) or not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):
             raise ValueError("Invalid source entity")
     if options["language"] not in {"auto", "en", "de"} or options["car_soc_scale"] not in {"factor", "percent"}:
         raise ValueError("Invalid language or SoC unit")
+    if options.get("heat_load_scale","percent") not in {"percent","factor"}:
+        raise ValueError("Invalid heat pump load scale")
+    peak = number(options.get("pv_peak_w",10000))
+    if peak is None or not 1<=peak<=1000000:
+        raise ValueError("Invalid PV reference power")
     if not 0 <= options["battery_min_soc"] < options["battery_max_soc"] <= 100:
         raise ValueError("Invalid battery limits")
     for key in ("battery_resource", "vehicle_resource"):

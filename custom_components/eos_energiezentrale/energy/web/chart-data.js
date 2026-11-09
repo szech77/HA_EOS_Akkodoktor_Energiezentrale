@@ -52,7 +52,12 @@
     });
   }
 
-  const api = Object.freeze({points,at,dailySolar});
+  function powerFraction(watts,maximum) {
+    if(!Number.isFinite(watts)||!Number.isFinite(maximum)||maximum<=0)return null;
+    return Math.max(0,Math.min(1,Math.abs(watts)/maximum));
+  }
+
+  const api = Object.freeze({points,at,dailySolar,powerFraction});
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EosChartData = api;
 })(globalThis);

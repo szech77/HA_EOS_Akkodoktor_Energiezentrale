@@ -20,7 +20,9 @@
           "heat_entity": "Heat pump (optional; empty = not installed)",
           "price_entity": "Import price",
           "car_soc_entity": "Vehicle SoC (optional)",
-          "car_soc_scale": "Vehicle SoC unit"
+          "car_soc_scale": "Vehicle SoC unit",
+          "heat_load_entity": "Heat pump power utilization (optional)",
+          "heat_load_scale": "Utilization scale"
         }
       },
       "hardware": {
@@ -49,7 +51,8 @@
           "display_hold_s": "Hold last readings for (seconds; display only)",
           "sensor_alignment_s": "Display measurement alignment tolerance (seconds)",
           "command_settle_s": "Measurement timeout after charging command (seconds)",
-          "display_transition_s": "Hold display jump while vehicle power is delayed (seconds)"
+          "display_transition_s": "Hold display jump while vehicle power is delayed (seconds)",
+          "pv_peak_w": "PV reference power for the ring (W)"
         }
       },
       "history": {
@@ -99,7 +102,9 @@
           "heat_entity": "Heat pump (optional; empty = not installed)",
           "price_entity": "Import price",
           "car_soc_entity": "Vehicle SoC (optional)",
-          "car_soc_scale": "Vehicle SoC unit"
+          "car_soc_scale": "Vehicle SoC unit",
+          "heat_load_entity": "Heat pump power utilization (optional)",
+          "heat_load_scale": "Utilization scale"
         }
       },
       "hardware": {
@@ -128,7 +133,8 @@
           "display_hold_s": "Hold last readings for (seconds; display only)",
           "sensor_alignment_s": "Display measurement alignment tolerance (seconds)",
           "command_settle_s": "Measurement timeout after charging command (seconds)",
-          "display_transition_s": "Hold display jump while vehicle power is delayed (seconds)"
+          "display_transition_s": "Hold display jump while vehicle power is delayed (seconds)",
+          "pv_peak_w": "PV reference power for the ring (W)"
         }
       },
       "history": {

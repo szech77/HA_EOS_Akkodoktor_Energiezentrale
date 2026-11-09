@@ -46,3 +46,38 @@ test('HA errors are returned without credentials or raw exception messages', asy
   assert.equal(reply.origin, f.origin);
   assert.ok(!JSON.stringify(reply).includes('private detail'));
 });
+
+
+test('the HA build version propagates to the iframe and changes after an update',()=>{
+  const f=panelFixture();
+  f.panel.panel={config:{asset_version:'build-one'}};
+  assert.ok(f.frame.src.includes('index.html?v=build-one'));
+  assert.ok(f.frame.src.includes('lang=de'));
+  f.panel.panel={config:{asset_version:'build-two'}};
+  assert.ok(f.frame.src.includes('index.html?v=build-two'));
+});
+
+test('an early request reports bridge readiness without attempting a missing HA connection',async()=>{
+  const f=panelFixture();f.panel.hass=undefined;let reply;
+  f.frame.contentWindow.postMessage=data=>{reply=data;};
+  await f.send({source:f.frame.contentWindow,origin:f.origin,data:{channel:'eos-energy-request',id:4,action:'language'}});
+  assert.equal(reply.error,'bridge_not_ready');
+  assert.equal(f.calls.length,0);
+});
+
+
+test('a response from an earlier iframe build is discarded after navigation',async()=>{
+  const f=panelFixture();let release,reply;
+  f.panel.hass={locale:{language:'de'},callWS:()=>new Promise(resolve=>{release=resolve;})};
+  f.frame.contentWindow.postMessage=data=>{reply=data;};
+  const request=f.send({source:f.frame.contentWindow,origin:f.origin,data:{channel:'eos-energy-request',id:5,action:'language',client:'old-frame'}});
+  f.panel.panel={config:{asset_version:'updated-build'}};
+  release({ok:true});await request;
+  assert.equal(reply,undefined);
+});
+
+test('the iframe identity is echoed so retry cannot consume an old response',async()=>{
+  const f=panelFixture();let reply;f.frame.contentWindow.postMessage=data=>{reply=data;};
+  await f.send({source:f.frame.contentWindow,origin:f.origin,data:{channel:'eos-energy-request',id:6,action:'snapshot',client:'current-frame'}});
+  assert.equal(reply.client,'current-frame');
+});
