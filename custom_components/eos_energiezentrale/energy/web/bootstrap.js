@@ -20,6 +20,8 @@
     const file=String(event.filename||'').split('/').pop().split('?')[0];
     if(known.includes(file))failed(file);
   });
+  for(const use of document.querySelectorAll('use[data-logo]'))use.setAttribute('href','./logo.svg?v='+encodeURIComponent(version)+'#mark');
+  const icon=document.querySelector('link[rel=icon]');if(icon)icon.href='./logo.svg?v='+encodeURIComponent(version);
   document.querySelector('link[rel=stylesheet]').href='./style.css?v='+encodeURIComponent(version);
   async function load(){
     for(const file of known){

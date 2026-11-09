@@ -75,3 +75,48 @@ Alternativ installiert die VS-Code-Aufgabe **Tests: Abhängigkeiten installieren
 die beiden Requirements-Dateien über die Projektumgebung.
 
 Wichtig: Home Assistant 2026.11 ben�tigt mindestens Python 3.14.2. Bei einer �lteren Projektumgebung gen�gt eine Paketnachinstallation nicht: Umgebung sichern, mit einer unterst�tzten Python-Version neu erstellen und anschlie�end beide Requirements-Dateien installieren. F�r die Pr�fung immer den eigenen Interpreter der Umgebung verwenden; ein anderer Python-Prozess mit umgebogenem Suchpfad pr�ft weder deren Interpreter noch deren Dateizugriff.
+
+
+### JavaScript-Tests im VS-Code-Test-Explorer
+
+Die Erweiterung **node:test runner** (`connor4312.nodejs-testing`) ist als
+Workspace-Empfehlung hinterlegt. Sie integriert die vorhandenen `node:test`-Tests
+ohne Jest/Mocha oder zusätzliche npm-Abhängigkeiten in die native Testansicht.
+
+1. Die empfohlenen Erweiterungen installieren. Python/pytest bleibt unverändert.
+2. Node.js 24 verwenden. Die Erweiterung nutzt `node` aus dem PATH; bei einer
+   eigenen Installation in den **Benutzereinstellungen** `nodejs-testing.nodejsPath`
+   auf die eigene `node.exe` setzen. Maschinenabhängige Pfade nicht ins Repo übernehmen.
+3. Nach der Installation **Developer: Reload Window** und **Test: Refresh Tests** aufrufen.
+4. Im Test-Explorer erscheinen Python- und JavaScript-Tests. Über die Play-/Debug-Symbole
+   einzelne Tests, Dateien oder alle Tests ausführen. Fehler und Ausgaben erscheinen dort.
+
+Die Workspace-Konfiguration beschränkt die JavaScript-Erkennung auf `tests/*.test.cjs`.
+Hilfsskripte und virtuelle Python-Umgebungen werden nicht als Tests erkannt. Es gibt
+keinen Kompilierungs- oder Paketinstallationsschritt für die JavaScript-Tests.
+Alternativ führt **Terminal → Run Task → Tests: JavaScript** alle JavaScript-Tests aus;
+die Aufgabe verwendet dieselbe konfigurierte Node-Laufzeit wie der Test-Explorer.
+
+Bei `spawn node ENOENT` ist Node.js für VS Code nicht erreichbar. Den Pfad in den
+Benutzereinstellungen korrigieren bzw. nach einer PATH-Änderung VS Code neu starten.
+
+### Python- und JavaScript-Coverage in VS Code
+
+Die Python-Testkonfiguration übergibt pytest-cov ausdrücklich das gesamte
+Integrationspaket und aktiviert Branch-Coverage. Damit erscheinen auch noch
+nicht ausgeführte Python-Module in der Auswertung; Testdateien werden nicht als
+Produktivcode gezählt. `pytest-cov` ist in `requirements-dev.txt` enthalten.
+
+Im Test-Explorer beim Coverage-Symbol das Dropdown **Configure Test Profiles**
+öffnen und für Coverage sowohl **Python/pytest** als auch **Node.js** auswählen.
+Ein ausschließlich ausgewähltes Node.js-Profil führt keine Python-Coverage aus.
+Alternativ beim Python-Testbaum **Run Tests with Coverage** wählen.
+Die Ansicht **Test Coverage** zeigt die jeweiligen Testergebnisse; dort bei Bedarf
+den Python-Lauf auswählen. Die beiden Erweiterungen liefern getrennte Ergebnisse.
+Nach Änderungen **Test: Refresh Tests** ausführen, gegebenenfalls das Fenster neu laden.
+
+Die Aufgabe **Tests: Python mit Coverage** prüft dieselbe Python-Messung im Terminal.
+Sie ersetzt nicht den Coverage-Lauf des Test-Explorers, der die Editor-Markierungen liefert.
+Da die expliziten pytest-Argumente auch bei normalen Läufen gelten, beim Debuggen
+in einer Python-Test-Debugkonfiguration `--no-cov` übergeben, falls Breakpoints
+durch die Coverage-Messung beeinträchtigt werden.

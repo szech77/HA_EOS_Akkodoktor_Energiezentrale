@@ -5,7 +5,7 @@ async function bootstrap(failingFile){
   const resources=[],stylesheet={};let replaced;
   const context={URL,Date,Error,Promise,encodeURIComponent,navigator:{language:'de-DE'},
     location:{href:'http://ha.test/index.html?v=build123&lang=de',replace(url){replaced=url;}},
-    window:{addEventListener(){}},document:{getElementById:id=>nodes[id],querySelector:()=>stylesheet,createElement:()=>({}),
+    window:{addEventListener(){}},document:{getElementById:id=>nodes[id],querySelector:selector=>selector==='link[rel=icon]'?null:stylesheet,querySelectorAll:()=>[],createElement:()=>({}),
       head:{append(node){resources.push(node.src);queueMicrotask(()=>node.src.includes(failingFile??'never-match')?node.onerror():node.onload());}}}};
   vm.runInNewContext(script,context);await new Promise(resolve=>setImmediate(resolve));
   return {nodes,resources,stylesheet,replaced:()=>replaced};

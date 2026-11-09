@@ -1,3 +1,5 @@
+<p><img src="custom_components/eos_energiezentrale/energy/web/logo.svg" width="96" alt="EOS Energiezentrale Logo"></p>
+
 # EOS Energiezentrale
 
 HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen,

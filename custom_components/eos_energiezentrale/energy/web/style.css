@@ -185,3 +185,18 @@
 #eos-energy-design #startup-retry {padding:10px 16px;min-height:44px;border:1px solid var(--edge);border-radius:8px;background:var(--surface2);color:var(--ink);margin:0 0 16px;}
 #eos-energy-design #startup-details {margin-bottom:16px;overflow-wrap:anywhere;}
 #eos-energy-design #startup-details code {display:block;white-space:pre-wrap;padding:10px;}
+
+/* Approved EOS identity: energy orbit, central E and solar accent. */
+#eos-energy-design .brand .energy-logo {width:38px;height:38px;flex-shrink:0;color:var(--ink);}
+#eos-energy-design .brand-wordmark {display:grid;gap:1px;line-height:1.1;}
+#eos-energy-design .brand-wordmark strong {font-size:20px;font-weight:750;letter-spacing:.035em;}
+#eos-energy-design .brand-wordmark > span {font-size:10px;letter-spacing:.13em;text-transform:uppercase;}
+#eos-energy-design .hub .energy-logo {width:45px;height:45px;display:block;color:var(--ink);}
+#eos-energy-design .hub > span {font-size:10px;line-height:1.2;}
+@media(max-width:450px){
+  #eos-energy-design .brand .energy-logo {width:32px;height:32px;}
+  #eos-energy-design .brand-wordmark strong {font-size:18px;}
+  #eos-energy-design .brand-wordmark > span {font-size:9px;}
+  #eos-energy-design .hub .energy-logo {width:32px;height:32px;}
+  #eos-energy-design .hub > span {font-size:9px;}
+}

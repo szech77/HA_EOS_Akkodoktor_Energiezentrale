@@ -22,7 +22,7 @@ def asset_version(directory=None):
     directory = directory or Path(__file__).parent / "energy" / "web"
     digest = sha256()
     for path in sorted(directory.iterdir()):
-        if path.is_file() and path.suffix in {".js",".html",".css"}:
+        if path.is_file() and path.suffix in {".js",".html",".css",".svg"}:
             digest.update(path.name.encode())
             digest.update(path.read_bytes())
     return digest.hexdigest()[:16]

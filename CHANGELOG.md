@@ -7,6 +7,12 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Lokales Integrationslogo für Home Assistant Geräte & Dienste, mit transparenten hellen und dunklen PNG-Varianten in normaler und doppelter Auflösung.
+
+- JavaScript-Tests im nativen VS-Code-Test-Explorer über node:test runner; Workspace-Empfehlung, begrenzte Test-Erkennung und ausführbare JavaScript-Testaufgabe.
+
+- Eigenständiges SVG-Logo mit türkisem Energiering, zentralem E und Solar-Akzent im Kopfbereich und im klickbaren Zentrum des Energieflussdiagramms.
+
 - Lineare Leistungsringe im Uhrzeigersinn für PV, Akku und Fahrzeuge; optionaler Wärmepumpenring über Prozent-/Faktor-Entität und konfigurierbare PV-Bezugsleistung.
 
 - Versionierte, zur Laufzeit geprüfte Hardware-Interfaces mit Plugin-Namen, Fähigkeiten und dynamischer Erkennung im Plugin-Ordner; Fronius/NRGkick ausgelagert.

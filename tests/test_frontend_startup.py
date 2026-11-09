@@ -16,3 +16,6 @@ class FrontendBuildRequirements(unittest.TestCase):
             current=asset_version(directory)
             (directory/'style.css').write_text('new style')
             self.assertNotEqual(asset_version(directory),current)
+            current=asset_version(directory)
+            (directory/'logo.svg').write_text('<svg/>')
+            self.assertNotEqual(asset_version(directory),current)
