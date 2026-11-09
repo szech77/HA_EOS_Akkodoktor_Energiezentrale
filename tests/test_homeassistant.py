@@ -60,6 +60,32 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.entry.runtime_data = EnergyCoordinator(self.hass, self.entry, app)
         return self.entry.runtime_data, app
 
+    async def test_reporting_storage_error_never_disables_device_control(self):
+        coordinator, app = self.controller()
+        app.armed = True
+        coordinator.accounting = Mock()
+        coordinator.accounting.observe.side_effect = OSError("disk full")
+        result = await coordinator._async_update_data()
+        self.assertTrue(result["armed"])
+        self.assertIn("accounting",result["errors"])
+        app.release.assert_not_called()
+        app.remember_control.assert_not_called()
+
+    async def test_cost_settings_are_persisted_and_reported_via_authenticated_api(self):
+        from zoneinfo import ZoneInfo
+        coordinator, app = self.controller()
+        app.config.directory = self.directory
+        app.config.zone = ZoneInfo("Europe/Berlin")
+        app.config.influx.url = None
+        app.controllers = []
+        await coordinator.async_accounting({"settings":{"pv_price_ct":8,"efficiency_source":"manual"}})
+        report = await coordinator.async_accounting({"period":"month","date":"2026-11-09"})
+        self.assertEqual(report["settings"]["pv_price_ct"],8)
+        self.assertEqual(report["date"],"2026-11-01")
+        self.assertEqual(report["consumers"],{})
+        with self.assertRaises(ValueError):
+            await coordinator.async_accounting({"settings":{"charge_efficiency":0}})
+
     async def test_driver_service_uses_native_registry_and_preserves_tenths(self):
         seen = []
         async def handle(call):

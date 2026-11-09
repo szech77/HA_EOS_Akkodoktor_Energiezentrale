@@ -147,6 +147,7 @@ const displayAge = key => {
 };
 
 function overview() {
+  dayBalance();
   byId('vehicle-cards').innerHTML=vehicleCards();
   const live = snapshot.live;
   const remaining = solarRemaining();
@@ -373,6 +374,9 @@ function timeline(key, now) {
 }
 
 function detail(key) {
+  const usageLink=byId('usage-link');
+  usageLink.hidden=!['house','car','heat'].includes(key)&&!key.startsWith('car/');
+  usageLink.href='#usage/'+key;
   if (key.startsWith('car/')) {
     const vehicle=snapshot.vehicles?.find(item=>item.id===key.slice(4));
     if (!vehicle) return;
@@ -381,6 +385,7 @@ function detail(key) {
       snapshot={...original,...vehicle,vehicles:[],vehicle_name:vehicle.name,display:vehicle.display ?? {},flow_display:vehicle.flow_display ?? {}};
       history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
       detail('car');
+      byId('usage-link').href='#usage/'+key;
       byId('detail-title').textContent=vehicle.name;
     } finally {snapshot=original;history=originalHistory;}
     return;
@@ -476,7 +481,9 @@ function render() {
   const requested = location.hash.slice(1);
   if (requested !== route) hideProbe();
   const vehicleRoute=requested.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===requested.slice(4));
-  route = vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || requested === 'settings' ? requested : 'overview';
+  const usageRoute=billingRoute(requested);
+  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || requested === 'settings' ? requested : 'overview';
+  byId('usage').hidden=!usageRoute;
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
@@ -484,7 +491,8 @@ function render() {
   const errorAreas = {device_pending:'notice.device_pending',goal:'notice.goal',runtime:'control.title',forecast:'notice.forecast',
     release:'notice.release',battery_limits:'notice.battery_limits',control_persistence:'notice.control_persistence',connection:'notice.connection'};
   byId('notice').textContent = errors.length ? `${t('notice.check')} · ${errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()).join(', ')}` : '';
-  if (route === 'overview') overview();
+  if (usageRoute) usageDetail(route.slice(6));
+  else if (route === 'overview') overview();
   else if (route === 'settings') settings();
   else detail(route);
 }
@@ -498,7 +506,7 @@ async function refresh() {
 async function refreshHistory() {
   if (historyRefreshing) return;
   historyRefreshing = true;
-  try { history = await api('history'); }
+  try { history = await api('history'); dayAccounting=await api('accounting',{period:'day',date:localDay(windowNow())}); }
   catch { history.influx_error = true; }
   finally { historyRefreshing = false; render(); }
 }
@@ -550,6 +558,7 @@ async function start() {
   document.querySelectorAll('[data-i18n-aria]').forEach(element => {
     element.setAttribute('aria-label', t(element.dataset.i18nAria));
   });
+  initializeBilling();
   window.addEventListener('hashchange',render);
   render();
   refresh();

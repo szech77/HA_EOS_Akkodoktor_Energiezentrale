@@ -2,6 +2,7 @@
 import base64
 import json
 import re
+from datetime import timedelta
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -70,6 +71,52 @@ class EOS:
     def solution(self):
         return request(self.url + "/v1/energy-management/optimization/solution/GENETIC")
 
+    def feedin_accounting(self, now):
+        configuration = request(self.url + "/v1/config")
+        tariff = configuration.get("feedintariff", {})
+        if tariff.get("provider") == "FeedInTariffFixed":
+            fixed = tariff.get("feedintarifffixed", {}).get("feed_in_tariff_amt_kwh")
+            value = number(fixed) if not isinstance(fixed, dict) else None
+            windows = fixed.get("windows", []) if isinstance(fixed, dict) else []
+            if len(windows) == 1 and isinstance(windows[0], dict):
+                window = windows[0]
+                if (window.get("start_time") in {"00:00", "00:00:00", "00:00:00.000000"}
+                        and window.get("duration") in {"1 day", "24 hours", "PT24H", "P1D"}
+                        and all(window.get(key) is None for key in
+                                ("end_time", "day_of_week", "date", "month", "locale"))):
+                    value = number(window.get("value"))
+            if value is not None and -10 <= value <= 10:
+                return {"constant_ct": value*100}
+        # EOS prediction values use currency/Wh; preserve sign and interval bounds.
+        query = urlencode({"key":"feed_in_tariff_wh", "start_datetime":(now-timedelta(hours=1)).isoformat(),
+                           "end_datetime":(now+timedelta(hours=24)).isoformat()})
+        response = request(self.url + "/v1/prediction/series?" + query)
+        data = response.get("data") if isinstance(response, dict) else None
+        if not isinstance(data, dict):
+            raise ValueError("Feed-in tariff is not ready")
+        points = sorted((instant(stamp),number(value)) for stamp,value in data.items()
+                        if instant(stamp) is not None and number(value) is not None)
+        rows = []
+        for index,(stamp,value) in enumerate(points):
+            end = min(stamp+timedelta(hours=1),points[index+1][0]) if index+1<len(points) else stamp+timedelta(minutes=15)
+            price = value*100000
+            if -1000 <= price <= 1000 and end>stamp:
+                rows.append({"time":stamp.isoformat(),"end":end.isoformat(),"price_ct":price})
+        if not any(instant(row["time"])<=now<instant(row["end"]) for row in rows):
+            raise ValueError("No current feed-in tariff")
+        return {"series":rows}
+
+    def battery_accounting(self, resource):
+        configuration = request(self.url + "/v1/config")
+        battery = configuration.get("devices", {}).get("batteries", {}).get(resource)
+        if not isinstance(battery, dict):
+            raise ValueError("Stationary battery configuration missing")
+        keys = ("capacity_wh", "charging_efficiency", "discharging_efficiency")
+        values = [number(battery.get(key)) for key in keys]
+        if any(value is None for value in values):
+            raise ValueError("Battery capacity/efficiencies missing")
+        return dict(zip(("capacity_wh", "charge_efficiency", "discharge_efficiency"), values))
+
     def set_battery_limits(self, resource, minimum, maximum):
         if (type(minimum) is not int or type(maximum) is not int
                 or not 0 <= minimum < maximum <= 100):
@@ -114,18 +161,24 @@ class Influx:
         encoded = base64.b64encode(f"{user}:{password}".encode()).decode()
         self.headers = {"Authorization": "Basic " + encoded} if user else {}
 
-    def history(self, entity, measurements, reducer="mean", field="value"):
+    def history(self, entity, measurements, reducer="mean", field="value", *, start=None, end=None):
         if not self.url or not ENTITY.fullmatch(entity):
             return []
         domain, entity_id = entity.split(".")
         if field not in {"value", "state"} or reducer not in {"mean", "last"}:
             raise ValueError("Ungültige Verlaufsabfrage")
+        bounds = "time >= now() - 24h"
+        if start is not None or end is not None:
+            first, last = instant(start), instant(end)
+            if first is None or last is None or not 0 < (last-first).total_seconds() <= 367*86400:
+                raise ValueError("Invalid historical time range")
+            bounds = f"time >= '{first.isoformat()}' AND time < '{last.isoformat()}'"
         for measurement, scale in measurements:
             if measurement not in {"W", "kW", "%", "EUR/kWh", "€/kWh", "ct/kWh", "state"}:
                 raise ValueError("Ungültiges Measurement")
             # InfluxQL identifiers are restricted by ENTITY and the allowlists above.
             query = (f'SELECT {reducer}("{field}") FROM "{measurement}" WHERE "domain"=\'{domain}\' '  # nosec B608
-                     f'AND "entity_id"=\'{entity_id}\' AND time >= now() - 24h GROUP BY time(5m) fill(none)')
+                     f'AND "entity_id"=\'{entity_id}\' AND {bounds} GROUP BY time(5m) fill(none)')
             result = request(self.url + "/query?" + urlencode({"db": self.database, "q": query}),
                              headers=self.headers)["results"][0]
             if "error" in result:

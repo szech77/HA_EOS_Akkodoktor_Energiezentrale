@@ -36,6 +36,7 @@ jobs:
         run: python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --cov-report=term-missing
       - name: Browser syntax and authenticated panel bridge
         run: |
+          node --check custom_components/eos_energiezentrale/energy/web/accounting.js
           node --check custom_components/eos_energiezentrale/energy/web/app.js
           node --check custom_components/eos_energiezentrale/energy/web/panel.js
           node --test tests/*.test.cjs

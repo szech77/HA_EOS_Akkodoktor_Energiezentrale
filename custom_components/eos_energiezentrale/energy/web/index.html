@@ -6,6 +6,7 @@
   <title data-i18n="app.title">EOS Energiezentrale</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./chart-data.js" defer></script>
+  <script src="./accounting.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body id="eos-energy-design">
@@ -43,12 +44,14 @@
           <a class="node heat" style="--x:82%;--y:81%" href="#heat" data-node="heat"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 6c3-5 6 5 9 0s6 5 9 0M3 12c3-5 6 5 9 0s6 5 9 0M3 18c3-5 6 5 9 0s6 5 9 0"/></svg></span><span data-i18n="device.heat"></span><strong>—</strong></a>
         </div>
       </div>
+      <section class="plan-panel" id="day-balance"></section>
       <div class="next" id="next"></div>
       <div class="kpis" id="vehicle-cards"></div>
     </section>
     <section id="detail" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.device"></p><h1 id="detail-title"></h1></div><a class="back" href="#settings" data-i18n="nav.settings"></a></div>
+      <a class="back" id="usage-link" hidden data-i18n="billing.open"></a>
       <div class="kpis" id="detail-kpis"></div>
       <section class="chart-panel">
         <div class="chart-legend"><span data-i18n="chart.measured"></span><span data-i18n="chart.forecast"></span><span data-i18n="chart.now_marker"></span></div>
@@ -57,9 +60,38 @@
       </section>
       <section class="plan-panel" id="plan"></section>
     </section>
+    <section id="usage" hidden>
+      <a class="back" id="usage-back" data-i18n="nav.back"></a>
+      <div class="page-top"><h1 id="usage-title"></h1></div>
+      <h2 id="billing-range"></h2>
+      <div class="billing-toolbar">
+        <label><span data-i18n="billing.period"></span><select id="billing-period"><option value="day" data-i18n="billing.day"></option><option value="month" data-i18n="billing.month"></option><option value="year" data-i18n="billing.year"></option></select></label>
+        <button data-billing-move="-1" type="button" data-i18n-aria="billing.previous">‹</button>
+        <input type="date" id="billing-date" min="2000-01-01" max="2100-12-31" data-i18n-aria="billing.date">
+        <button data-billing-move="1" type="button" data-i18n-aria="billing.next">›</button>
+        <button data-billing-move="now" type="button" data-i18n="billing.current"></button>
+      </div>
+      <p id="billing-message" role="status"></p>
+      <div class="kpis" id="usage-kpis"></div><div id="usage-charts"></div>
+      <section class="plan-panel"><h2 data-i18n="billing.breakdown"></h2><div id="usage-table"></div>
+        <details><summary data-i18n="billing.quality"></summary><p id="billing-quality"></p><p data-i18n="billing.inventory_note"></p></details>
+      </section>
+    </section>
     <section id="settings" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div><span class="tag" id="ownership"></span></div>
+      <details id="cost-settings-open" class="plan-panel"><summary data-i18n="billing.settings"></summary>
+        <form id="cost-settings"><div class="fields">
+          <label><span data-i18n="billing.pv_price_source"></span><select name="pv_price_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
+          <label><span data-i18n="billing.pv_price"></span><input name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required></label>
+          <label><span data-i18n="billing.efficiency_source"></span><select name="efficiency_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
+          <label><span data-i18n="billing.charge_efficiency"></span><input name="charge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
+          <label><span data-i18n="billing.discharge_efficiency"></span><input name="discharge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
+          <label><span data-i18n="billing.capacity"></span><input name="capacity_wh" type="number" min="100" max="1000000" required></label>
+          <label><span data-i18n="billing.initial_price"></span><input name="initial_price_ct" type="number" min="-1000" max="1000" step="0.01"></label>
+        </div><p class="footnote" id="pv-cost-effective"></p><p class="footnote" id="cost-effective"></p><p class="footnote" data-i18n="billing.settings_note"></p>
+        <div class="form-footer"><button type="submit" class="save" data-i18n="settings.save"></button><output id="cost-saved" role="status"></output></div></form>
+      </details>
       <form id="daily">
         <label id="vehicle-selector-label" hidden><span data-i18n="settings.vehicle"></span><select id="vehicle-selector"></select></label>
         <div data-optional="car">

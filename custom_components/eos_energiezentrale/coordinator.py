@@ -1,13 +1,17 @@
 """Serialize all controller work outside Home Assistant's event loop."""
 import asyncio
+from copy import deepcopy
 from datetime import datetime, timezone
 from functools import partial
 import logging
+import sqlite3
 from time import monotonic
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .energy.history import influx_series
+from .energy.accounting import Accounting
+from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
 from .energy.drivers import DeviceNotReady
 from .energy.settings import daily_settings
@@ -24,6 +28,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.influx_at = -1000
         self.influx_rows = []
         self.influx_error = False
+        self.accounting = None
+        self.accounting_cache = {}
 
     def _tick(self):
         with self.app.lock:
@@ -56,7 +62,20 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         self.app.release(self.app.ha.states(), datetime.now(timezone.utc))
                     except Exception:
                         self.app.errors["release"] = "Device release unconfirmed"
-            return self.app.snapshot(datetime.now(timezone.utc))
+            now = datetime.now(timezone.utc)
+            result = self.app.snapshot(now)
+            try:
+                ledger = self._accounting()
+                ledger.refresh_eos(self.app.config.eos, self.app.config.options["battery_resource"], now)
+                ledger.observe(result["live"], result.get("vehicles", []))
+                result["accounting"] = ledger.report({"period":"day"}, now)
+                self.app.errors.pop("accounting", None)
+            except (OSError, sqlite3.Error, ValueError, TypeError, KeyError) as error:
+                # Reporting failures must never stop an otherwise safe charge.
+                self.app.errors["accounting"] = type(error).__name__
+                _LOGGER.warning("Energy accounting unavailable: %s", type(error).__name__)
+            result["errors"] = dict(self.app.errors)
+            return result
 
     async def _async_update_data(self):
         async with self.work_lock:
@@ -100,6 +119,45 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self.async_set_updated_data(result)
                 raise
             self.async_set_updated_data(result)
+
+    def _accounting(self):
+        if self.accounting is None:
+            self.accounting = Accounting(self.app.config.directory, self.app.config.zone)
+        return self.accounting
+
+    async def async_accounting(self, values):
+        async with self.work_lock:
+            if self.closing:
+                raise ValueError("Integration is stopping")
+            def read():
+                ledger = self._accounting()
+                if "settings" in values:
+                    if values.keys() != {"settings"}:
+                        raise ValueError("Unexpected settings fields")
+                    ledger.configure(values["settings"])
+                    return {"ok":True}
+                return ledger.report(values, datetime.now(timezone.utc))
+            result = await self.hass.async_add_executor_job(read)
+        if "settings" in values:
+            self.accounting_cache.clear()
+            return result
+        # Network history is read outside the control lock. A slow database must
+        # never delay a scheduled charge or fresh local safety measurements.
+        key = (result["period"],result["date"],result["started"],repr(result["settings"]),repr(result["effective"]),repr(result.get("pv_tariff")))
+        cached = self.accounting_cache.get(key)
+        if cached is not None and monotonic()-cached[0] < 600:
+            return merge_reconstruction(result,deepcopy(cached[1]))
+        vehicles = [(identity,app.config) for identity,app,_ in getattr(self.app,"controllers",[])]
+        try:
+            historical = await self.hass.async_add_executor_job(
+                reconstruct,self.app.config,deepcopy(result),datetime.now(timezone.utc),vehicles)
+        except (OSError, ValueError, KeyError, TypeError):
+            result["historical_error"] = True
+            return result
+        if len(self.accounting_cache) >= 32:
+            self.accounting_cache.pop(next(iter(self.accounting_cache)))
+        self.accounting_cache[key] = (monotonic(),historical)
+        return merge_reconstruction(result,deepcopy(historical))
 
     async def async_history(self):
         async with self.work_lock:

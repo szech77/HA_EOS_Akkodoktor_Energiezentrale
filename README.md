@@ -580,3 +580,90 @@ Nach Ablauf wird die EOS-abhängige Ladung pausiert; die Steuerfreigabe bleibt g
 damit nach Erholung automatisch fortgesetzt werden kann. Lokale Sicherheitsgrenzen
 und die Frische der HA-Messwerte werden weiterhin geprüft. Pro Fahrzeug wird ein
 eigener Plan gepuffert. Die Diagnose zeigt den aktiven Puffer und seine Restzeit.
+
+
+## Verbrauch, Energiequellen und Kosten
+
+Die Übersicht zeigt den bisher erfassten Tagesverbrauch und die variablen Energiekosten
+für Haus, Wärmepumpe und E-Auto. Der Hausverbrauch enthält weder Wärmepumpe noch Fahrzeuge.
+Optionale Verbraucher werden ausgeblendet. Bei mehreren Fahrzeugen enthält die Übersicht
+deren Summe; die Einzelauswertungen sind über die jeweilige Fahrzeug-Detailseite erreichbar.
+
+Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** eine eigene Auswertung:
+
+- **Tag:** stündliche Werte; **Monat:** Tageswerte; **Jahr:** Monatswerte.
+- Pfeile wechseln den Zeitraum; **Aktuell** springt in den aktuellen Zeitraum.
+- Ein Tages-/Monatsbalken öffnet die nächstfeinere Ansicht. Die Datumswahl ermöglicht direkte Sprünge.
+- Getrennte gestapelte Diagramme zeigen kWh und Euro nach PV, Akku, Netz und unbekannter Quelle.
+- Maus/Fokus zeigt die Werte eines Balkens; die Tabelle enthält die Summen je Quelle.
+
+Die neue lokale Bilanz speichert Stundenaggregate dauerhaft in
+`.storage/eos_energiezentrale/<entry_id>/accounting.sqlite3` und ist unabhängig vom
+kurzen Diagrammcache. Datenbank und Kostenbestand gehören in die HA-Sicherung.
+Messlücken über 120 Sekunden sowie Zeiten während eines Neustarts werden nicht mit
+gehaltenen Anzeigewerten aufgefüllt. Die ausgewiesene Beobachtungsdauer macht die Abdeckung sichtbar.
+
+Für Zeiträume vor Beginn der lokalen Bilanz liest die Auswertung vorhandene Messwerte
+aus der konfigurierten InfluxDB 1.x. Diese Rekonstruktion verwendet Fünf-Minuten-Mittelwerte,
+füllt fehlende Intervalle nicht auf und überlappt die neue Bilanz nicht. Sie ist ausdrücklich
+eine Schätzung. Fehlende Preise oder unbekannte anfängliche Akkuenergie bleiben unbekannt.
+Historische Auswertungen verwenden für die Rekonstruktion die aktuell eingestellten
+PV-Kosten und Speicherparameter; bereits dauerhaft erfasste Bilanzwerte werden nicht neu bewertet.
+Die Datenbankabfragen laufen außerhalb der Gerätesteuerung und sind zeitlich begrenzt.
+
+### Einstellungen zur Bilanzierung
+
+Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
+
+| Einstellung | Bedeutung |
+| --- | --- |
+| Quelle für PV-Kostenansatz | Standard EOS-Einspeisevergütung, zur Laufzeit per REST gelesen; alternativ manuell. |
+| PV-Kostenansatz | ct/kWh; im EOS-Modus wird der verwendete Wert angezeigt. Manuelle Vorgabe nur im manuellen Modus. |
+| Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
+| Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
+| Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
+| Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer bedeutet unbekannt. Keine nachträgliche Umbewertung. |
+
+Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
+und `discharging_efficiency` gelesen. Dies verändert keine EOS-Konfiguration. Fehlen diese
+Werte, bleibt die Bewertung von Akkuenergie unbekannt, bis EOS bereit ist oder manuelle
+Parameter eingestellt sind. Der letzte gültige Parametersatz wird während der Laufzeit
+weitergenutzt. Die aktuellen verwendeten Parameter werden im Einstellungsbereich angezeigt.
+
+PV, Netz und Akku werden anteilig auf die gleichzeitig gemessenen Verbraucher,
+Speicherladung und Einspeisung verteilt. Eine eindeutige physische Quellenzuordnung
+pro Verbraucher ist mit den vorhandenen Zählern nicht möglich. Größere Widersprüche
+in der Leistungsbilanz erscheinen als unbekannte Quelle. Die Berechnung setzt die
+Leistungen als Werte auf derselben AC-Bilanzgrenze voraus; abweichende DC-Speichermessungen
+führen zu zusätzlichen Modellabweichungen.
+
+Netzladung erhöht den Akku-Kostenbestand zum jeweiligen Strompreis, PV-Ladung zum
+PV-Kostenansatz. Ladeverluste reduzieren die eingelagerte Energie; bei Entladung wird
+die für die gelieferte Energie nötige gespeicherte Energie einschließlich Entladeverlusten
+ausgebucht. Energie und Kosten werden mit gewichtetem Durchschnitt entnommen.
+Der Kostenbestand bleibt über Neustarts erhalten; nicht beobachtete Bestandszunahmen
+werden beim Abgleich mit dem SoC als unbekannt behandelt. Es werden keine Grundgebühren
+oder Einspeiseerlöse des übrigen Hauses verrechnet. Negative Arbeitspreise sind zulässig.
+
+Bei nur teilweise bekannten Kosten zeigt die UI die bekannte Teilsumme mit `≈` an;
+bei vollständig unbekannten Kosten steht `—`. Unbekannte Energie wird nicht als kostenlos bewertet.
+Die Auswertung ist eine Energiekostenbilanz und ersetzt keine Stromrechnung.
+
+
+Der PV-Kostenansatz wird zur Laufzeit aus der **EOS-REST-API** gelesen. Es werden keine
+Werte aus einer bereitgestellten Konfigurationssicherung eingebaut. Bei einer konstanten
+Einspeisevergütung wird `GET /v1/config` mit dem aktiven `FeedInTariffFixed`-Anbieter
+ausgewertet (`feedintariff.feedintarifffixed.feed_in_tariff_amt_kwh`). Die dortigen
+€/kWh werden in ct/kWh umgerechnet. Bei zeitabhängigen Fenstern bzw. anderen Anbietern
+wird `GET /v1/prediction/series?key=feed_in_tariff_wh` verwendet; dessen €/Wh werden mit
+100000 in ct/kWh umgerechnet. Tarifintervalle werden einschließlich negativer Werte beachtet.
+Ein fehlender Tarif ist nicht gleich 0: Direkte PV-Nutzung und neue PV-Speicherladungen
+werden bis zum Vorliegen eines Tarifs mit unbekannten Kosten geführt. Während eines
+vorübergehenden Fehlers bleibt ein zuletzt gelesener konstanter Tarif erhalten; zeitabhängige
+Tarife werden nur innerhalb ihrer gültigen Intervalle verwendet. Tarife werden alle fünf
+Minuten erneut gelesen, nach Fehlern nach einer Minute.
+
+Die frühere Standardeinstellung 0 wird auf automatische EOS-Übernahme umgestellt;
+bereits eingestellte manuelle Werte ungleich 0 bleiben als manuelle Vorgabe erhalten.
+Eine bewusste manuelle Vorgabe von 0 ist weiterhin möglich. Änderungen bewerten bereits
+gespeicherte Bilanzintervalle und den bisherigen Akku-Kostenbestand nicht rückwirkend neu.

@@ -7,6 +7,9 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Tagesverbrauch und Energiekosten in der Übersicht; eigene Tag-/Monats-/Jahresauswertungen für Haus, Wärmepumpe und Fahrzeuge mit Quellenaufteilung, dauerhafter Bilanz und gekennzeichneter Influx-Rekonstruktion.
+- Gewichteter Akku-Kostenbestand für gemischte PV-/Netzladung, einstellbarer PV-Kostenansatz sowie Lade-/Entladewirkungsgrad und Kapazität aus EOS oder manuellen Einstellungen.
+
 - Proportionaler SoC-Balken im Autosymbol und in den individuellen Fahrzeugkarten; kein gemeinsamer SoC für mehrere Autos.
 
 - Wärmepumpensymbol als größere SVG-Wärmelinien; Batterie mit fünf SoC-Füllbalken und roter Warnfarbe an der eingestellten SoC-Untergrenze.
@@ -37,6 +40,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Tests gegen Home Assistant 2026.11 für Lebenszyklus, Dienste, Einstellungen und authentifizierte Oberfläche.
 
 ### Bugfixes
+
+- PV-Kosten standardmäßig aus der zur Laufzeit gelesenen EOS-Einspeisevergütung statt dem bisherigen Nullwert; manuelle Vorgabe und zeitabhängige Tarifintervalle bleiben berücksichtigt.
 
 - Laufende Fahrzeugladung übernimmt geänderte EOS-Leistungsvorgaben auch ohne erneute Wallbox-Leistungsmeldung; die Messwert-Wartebedingung bleibt auf die reine PV-Nachregelung beschränkt.
 

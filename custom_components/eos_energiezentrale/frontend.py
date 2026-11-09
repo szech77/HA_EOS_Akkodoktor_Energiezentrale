@@ -1,6 +1,7 @@
 """Authenticated HA WebSocket API and same-origin panel resources."""
 from functools import partial
 from pathlib import Path
+import sqlite3
 
 import probatio as vol
 from homeassistant.components import frontend, panel_custom, websocket_api
@@ -34,7 +35,7 @@ def async_remove_panel(hass):
 
 @websocket_api.websocket_command({
     vol.Required("type"): DOMAIN + "/request",
-    vol.Required("action"): vol.In(["snapshot", "history", "language", "settings", "control"]),
+    vol.Required("action"): vol.In(["snapshot", "history", "language", "settings", "control", "accounting"]),
     vol.Optional("values", default={}): dict,
     vol.Optional("language"): str,
 })
@@ -50,6 +51,8 @@ async def websocket_request(hass, connection, msg):
         action, values = msg["action"], msg.get("values", {})
         if action == "snapshot":
             result = coordinator.data
+        elif action == "accounting":
+            result = await coordinator.async_accounting(values)
         elif action == "history":
             result = await coordinator.async_history()
         elif action == "language":
@@ -67,5 +70,5 @@ async def websocket_request(hass, connection, msg):
         connection.send_result(msg["id"], result)
     except ValueError:
         connection.send_error(msg["id"], "invalid_settings", "Change rejected; check settings")
-    except (OSError, HomeAssistantError, TimeoutError):
+    except (OSError, sqlite3.Error, HomeAssistantError, TimeoutError):
         connection.send_error(msg["id"], "change_unconfirmed", "Device or storage change was not confirmed")
