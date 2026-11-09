@@ -36,9 +36,16 @@ async def async_register_frontend(hass):
         websocket_api.async_register_command(hass, websocket_request)
         data["registered"] = True
     version = await hass.async_add_executor_job(asset_version)
+    icons_url = STATIC_URL + "/icons.js?v=" + version
+    if data.get("icons_url") != icons_url:
+        if previous := data.get("icons_url"):
+            frontend.remove_extra_js_url(hass, previous)
+        # Load globally: the sidebar is visible before the custom panel is opened.
+        frontend.add_extra_js_url(hass, icons_url)
+        data["icons_url"] = icons_url
     await panel_custom.async_register_panel(
         hass, frontend_url_path=PANEL_URL, webcomponent_name="eos-energy-panel",
-        sidebar_title="EOS Energiezentrale", sidebar_icon="mdi:transmission-tower",
+        sidebar_title="EOS Energiezentrale", sidebar_icon="eos-energy:logo",
         module_url=STATIC_URL + "/panel.js?v=" + version, require_admin=True,
         config={"asset_version":version},
     )
@@ -46,6 +53,8 @@ async def async_register_frontend(hass):
 
 def async_remove_panel(hass):
     frontend.async_remove_panel(hass, PANEL_URL)
+    if icons_url := hass.data.get(DOMAIN, {}).pop("icons_url", None):
+        frontend.remove_extra_js_url(hass, icons_url)
 
 
 @websocket_api.websocket_command({
