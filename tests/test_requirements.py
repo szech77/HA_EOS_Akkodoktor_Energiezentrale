@@ -312,6 +312,23 @@ class ControllerRequirements(unittest.TestCase):
         self.assertEqual(result["display"], {})
 
 
+    def test_held_grid_value_is_visible_but_never_used_for_pv_charging_or_history(self):
+        self.config.daily=daily_settings({"pv":True},20)
+        self.app.set_armed(True)
+        self.app.tick(NOW,0)
+        states=self.states(when=NOW+timedelta(seconds=60))
+        states["sensor.grid"]=state("unavailable",when=NOW+timedelta(seconds=60))
+        self.ha.states.return_value=states
+        self.box.read.return_value=wallbox(watts=4140,enabled=True,status="charging")
+        self.box.reset_mock()
+        self.app.tick(NOW+timedelta(seconds=60),60)
+        result=self.app.snapshot(NOW+timedelta(seconds=60))
+        self.assertIsNone(result["live"]["grid"])
+        self.assertEqual(result["display"]["grid"],{"value":0,"age_s":60})
+        self.box.pause.assert_called_once()
+        self.box.charge.assert_not_called()
+        self.assertIsNone(self.app.history.read(NOW+timedelta(seconds=60))[-1]["grid"])
+
     def test_daily_storage_limits_override_commissioning_values_in_real_commands(self):
         self.config.daily = daily_settings({"battery_min_soc":40,"battery_max_soc":80},20)
         self.eos.plan.return_value = {"generated_at":NOW.isoformat(),

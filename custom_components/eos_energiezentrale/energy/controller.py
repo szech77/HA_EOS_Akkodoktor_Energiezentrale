@@ -8,6 +8,7 @@ from .clients import reading
 from .domain import (battery_command, current_for_power, current_instruction, estimate_soc,
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
+from .display import DisplayValues
 
 
 class Controller:
@@ -21,6 +22,7 @@ class Controller:
         self.owned = False
         self.live = {}
         self.display = {}
+        self.display_values = DisplayValues(getattr(config,"options",{}).get("display_hold_s",900))
         self.plan = None
         self.forecast = []
         self.errors = {}
@@ -210,21 +212,13 @@ class Controller:
         heat_enabled = bool(opts.get("heat_entity"))
         live["house"] = house_only(live["house_total"], live["car"] if car_enabled else 0,
                                    live["heat"] if heat_enabled else 0)
-        # Presentation only: slow/report-on-change heat meters may retain a
-        # valid last value. Never promote it into fresh control or history data.
-        self.display = {}
-        if heat_enabled and live["heat"] is None:
-            row = states.get(opts["heat_entity"], {})
-            stamp = instant(row.get("last_reported") or row.get("last_updated"))
-            retained_heat = reading(states, opts["heat_entity"], now, "power")
-            if stamp and stamp <= now and retained_heat is not None and retained_heat >= 0:
-                age = (now - stamp).total_seconds()
-                self.display["heat"] = {"value": retained_heat, "age_s": age}
-                estimate = house_only(live["house_total"], live["car"], retained_heat)
-                if estimate is not None:
-                    self.display["house"] = {"value": estimate, "age_s": age, "estimated": True}
         live["battery"] = (battery.charge - battery.discharge
                            if battery.charge is not None and battery.discharge is not None else None)
+        battery_ids=getattr(self.config.battery,"ids",{})
+        wallbox_ids=getattr(self.config.wallbox,"ids",{})
+        self.display=self.display_values.update(states,live,opts,
+            battery_ids if isinstance(battery_ids,dict) else {},
+            wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
         battery_order = current_instruction(self.plan, opts["battery_resource"], now)
         car_order = current_instruction(self.plan, opts["vehicle_resource"], now)
         live["battery_mode"] = battery_order.mode if battery_order else None

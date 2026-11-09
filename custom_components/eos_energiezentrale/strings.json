@@ -45,7 +45,8 @@
           "allow_battery_export": "Allow battery export",
           "max_current_a": "Maximum charging current (A)",
           "phase_wait_s": "Phase change stability wait (s)",
-          "regulation_interval_s": "Default regulation interval (s)"
+          "regulation_interval_s": "Default regulation interval (s)",
+          "display_hold_s": "Hold last readings for (seconds; display only)"
         }
       },
       "history": {
@@ -111,7 +112,8 @@
           "allow_battery_export": "Allow battery export",
           "max_current_a": "Maximum charging current (A)",
           "phase_wait_s": "Phase change stability wait (s)",
-          "regulation_interval_s": "Default regulation interval (s)"
+          "regulation_interval_s": "Default regulation interval (s)",
+          "display_hold_s": "Hold last readings for (seconds; display only)"
         }
       },
       "history": {

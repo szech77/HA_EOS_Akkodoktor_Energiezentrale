@@ -45,7 +45,8 @@
           "allow_battery_export": "Speichereinspeisung erlauben",
           "max_current_a": "Maximaler Ladestrom (A)",
           "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
-          "regulation_interval_s": "Vorgabe Regelintervall (s)"
+          "regulation_interval_s": "Vorgabe Regelintervall (s)",
+          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)"
         }
       },
       "history": {
@@ -111,7 +112,8 @@
           "allow_battery_export": "Speichereinspeisung erlauben",
           "max_current_a": "Maximaler Ladestrom (A)",
           "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
-          "regulation_interval_s": "Vorgabe Regelintervall (s)"
+          "regulation_interval_s": "Vorgabe Regelintervall (s)",
+          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)"
         }
       },
       "history": {

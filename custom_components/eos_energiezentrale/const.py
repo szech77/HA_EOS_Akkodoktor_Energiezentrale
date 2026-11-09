@@ -1,6 +1,6 @@
 """Integration identity and commissioning defaults."""
 DOMAIN = "eos_energiezentrale"
-DEFAULTS = {'vehicles': '[]', 'language': 'auto',
+DEFAULTS = {'display_hold_s': 900, 'vehicles': '[]', 'language': 'auto',
  'eos_url': 'http://homeassistant.local:8503',
  'timezone': 'Europe/Berlin',
  'battery_resource': 'battery1',
@@ -45,7 +45,7 @@ GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_res
               'battery_parameters',
               'wallbox_type',
               'wallbox_parameters'],
- 'limits': ['capacity_wh',
+ 'limits': ['display_hold_s', 'capacity_wh',
             'charging_efficiency',
             'grid_limit_w',
             'battery_charge_w',

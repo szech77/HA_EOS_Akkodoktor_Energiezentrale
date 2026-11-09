@@ -191,3 +191,17 @@ class FleetRequirements(unittest.TestCase):
         self.assertEqual(histories["second"][-1]["car"],2000)
         self.assertEqual(app.history.read(NOW)[-1]["car"],3000)
         self.assertNotIn("history",app.snapshot(NOW)["vehicles"][0])
+
+    def test_retained_fleet_power_sums_all_chargers_without_filling_live_measurements(self):
+        app,ha,opts,_=self.setup_fleet()
+        ha.rows[opts["house_entity"]]["state"]="5000"
+        ha.rows["sensor.first_power"]["state"]="1000"
+        ha.rows["sensor.second_power"]["state"]="2000"
+        app.tick(NOW,0)
+        ha.rows["sensor.first_power"]["state"]="unavailable"
+        ha.rows["sensor.second_power"]["state"]="unavailable"
+        app.tick(NOW+timedelta(seconds=30),30)
+        result=app.snapshot(NOW+timedelta(seconds=30))
+        self.assertIsNone(result["live"]["car"])
+        self.assertEqual(result["display"]["car"]["value"],3000)
+        self.assertEqual(result["display"]["house"]["value"],2000)

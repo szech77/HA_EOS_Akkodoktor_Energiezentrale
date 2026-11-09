@@ -5,10 +5,11 @@ import re
 
 from .clients import reading
 from .controller import Controller
-from .domain import battery_command, current_instruction, house_only
+from .domain import battery_command, current_instruction, house_only, instant
 from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, daily_settings, save
 from .history import History
+from .display import DisplayValues
 
 
 def vehicle_options(options):
@@ -107,6 +108,7 @@ class FleetController(Controller):
         self.vehicle_snapshots=[]
         self.global_options=options
         self.primary_history=None
+        self.fleet_display_values=DisplayValues(options.get("display_hold_s",900))
         for index,(identity,values) in enumerate(vehicles):
             child_dir=directory if index==0 else directory/"vehicles"/identity
             child_dir.mkdir(parents=True,exist_ok=True)
@@ -196,12 +198,33 @@ class FleetController(Controller):
         self.live["car_soc"]=None
         self.live["house"]=house_only(self.live.get("house_total"),self.live["car"],
             self.live.get("heat") if opts["heat_entity"] else 0)
-        if "house" in self.display:
-            estimate=house_only(self.live.get("house_total"),self.live["car"],self.display["heat"]["value"])
-            if estimate is None:
-                self.display.pop("house",None)
-            else:
-                self.display["house"]["value"]=estimate
+        self.display.pop("car",None)
+        self.display.pop("house",None)
+        if complete:
+            stamps=[instant(rows[proxy.ids["power"]]["last_reported"])
+                    for _,_,proxy in self.controllers if rows.get(proxy.ids["power"],{}).get("last_reported")]
+            self.fleet_display_values.remember("car",self.live["car"],min(stamp for stamp in stamps if stamp is not None) if any(stamps) else now,now)
+        else:
+            values=[(payload["live"].get("car"),payload["display"].get("car")) for payload in snapshots]
+            if all(value is not None or retained is not None for value,retained in values):
+                self.display["car"]={"value":sum(value if value is not None else retained["value"] for value,retained in values),
+                                     "age_s":max((retained["age_s"] if value is None else 0 for value,retained in values)),"estimated":True}
+            elif (retained:=self.fleet_display_values.retained("car",now)) is not None:
+                self.display["car"]=retained
+        if self.live["house"] is not None:
+            sources=[opts["house_entity"]]+([opts["heat_entity"]] if opts["heat_entity"] else [])
+            stamps=[instant(rows.get(entity,{}).get("last_reported") or rows.get(entity,{}).get("last_updated")) for entity in sources]
+            if "car" in self.fleet_display_values.samples:
+                stamps.append(self.fleet_display_values.samples["car"][1])
+            self.fleet_display_values.remember("house",self.live["house"],min(stamp for stamp in stamps if stamp is not None) if any(stamps) else now,now)
+        else:
+            values={key:self.live.get(key) if self.live.get(key) is not None else self.display.get(key,{}).get("value")
+                    for key in ("house_total","car","heat")}
+            estimate=house_only(values["house_total"],values["car"],values["heat"] if opts["heat_entity"] else 0)
+            if estimate is not None:
+                self.display["house"]={"value":estimate,"age_s":max((self.display.get(key,{}).get("age_s",0) for key in values)),"estimated":True}
+            elif (retained:=self.fleet_display_values.retained("house",now)) is not None:
+                self.display["house"]=retained
         for payload in snapshots:
             payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
         self.history.write(now,self.live)

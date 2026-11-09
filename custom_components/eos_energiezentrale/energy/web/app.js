@@ -131,8 +131,11 @@ function solarForecastCards(now) {
 const consumerEnabled = key => !["car","heat"].includes(key) || snapshot.features?.[key] !== false;
 
 function vehicleCards() {
-  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small>${html(vehicle.name)}</small><strong>${html(power(vehicle.live.car))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
+  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small>${html(vehicle.name)}</small><strong>${html((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
 }
+
+const displayed = key => valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value;
+const displayedPower = key => (snapshot.display?.[key] && !valid(snapshot.live[key]) ? '≈ ' : '')+power(displayed(key));
 
 function overview() {
   byId('vehicle-cards').innerHTML=vehicleCards();
@@ -142,8 +145,8 @@ function overview() {
   byId('live-time').textContent = live.time ? time(live.time) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
     [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
-    [t('metric.price_now'),price(live.price),t('metric.import')],
-    [t('metric.grid_connection'),power(live.grid),valid(live.grid) ? live.grid < 0 ? t('metric.export') : live.grid > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
+    [t('metric.price_now'),price(displayed('price')),t('metric.import')],
+    [t('metric.grid_connection'),displayedPower('grid'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
   ]);
   const names = {solar:t('node.solar'), grid:t('node.grid'), battery:t('node.battery'), house:t('node.house'), car:t('node.car'), heat:t('device.heat')};
   Object.keys(names).forEach(key => {
@@ -155,7 +158,7 @@ function overview() {
     const retained = snapshot.display?.[key];
     const stale = !valid(live[key]) && valid(retained?.value);
     const value = stale ? retained.value : live[key];
-    const soc = live[key + '_soc'];
+    const soc = displayed(key + '_soc');
     const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
       : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
     node.querySelector('strong').textContent = (stale && retained.estimated ? '≈ ' : '') + power(value);
@@ -380,13 +383,13 @@ function detail(key) {
   byId('detail-title').textContent = name;
   const metadata = {
     solar:[[t('metric.pv_today'),solarToday(),t('metric.available_intervals')],...solarForecastCards(now)],
-    grid:[[t('metric.direction'),valid(live.grid) ? live.grid < 0 ? t('metric.export') : t('metric.import') : '—',t('metric.grid_connection')]],
-    battery:[[t('chart.soc'),percent(live.battery_soc),t('metric.measured')],[t('metric.eos_mode'),modeLabel(live.battery_mode),stateLabel('mode',live.battery_control)]],
-    house:[[t('metric.house_total'),power(live.house_total),t('metric.house_includes')]],
-    car:[[t('chart.soc'),percent(live.car_soc),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
+    grid:[[t('metric.direction'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : t('metric.import') : '—',t('metric.grid_connection')]],
+    battery:[[t('chart.soc'),percent(displayed("battery_soc")),t('metric.measured')],[t('metric.eos_mode'),modeLabel(live.battery_mode),stateLabel('mode',live.battery_control)]],
+    house:[[t('metric.house_total'),displayedPower("house_total"),t('metric.house_includes')]],
+    car:[[t('chart.soc'),percent(displayed("car_soc")),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
     heat:[]
   };
-  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),power(live[key]),key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured')],...metadata[key]]);
+  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),displayedPower(key),snapshot.display?.[key] && !valid(live[key]) ? t('metric.last_report_age',{minutes:Math.ceil(snapshot.display[key].age_s/60)}) : key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured')],...metadata[key]]);
   const withPlan = key === 'battery' || key === 'car';
   byId('timeline').innerHTML = withPlan ? timeline(key,now) : '';
   byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now,withPlan ? [{key:'solar',label:t('chart.solar'),divisor:1000,color:'solar'}] : [])
