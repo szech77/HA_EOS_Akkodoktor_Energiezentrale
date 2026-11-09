@@ -62,6 +62,13 @@ def entities(defaults, supplied):
     return result
 
 
+class DeviceConfirmationError(ValueError):
+    """A local control entity did not confirm the requested state."""
+    def __init__(self, entity):
+        super().__init__(f"Device state not confirmed: {entity}")
+        self.entity = entity
+
+
 def confirmed_state(ha, entity, matches, timeout=5):
     deadline = monotonic() + timeout
     while True:
@@ -69,7 +76,7 @@ def confirmed_state(ha, entity, matches, timeout=5):
         if matches(row):
             return row
         if monotonic() >= deadline:
-            raise ValueError("Gerätewert nicht bestätigt")
+            raise DeviceConfirmationError(entity)
         sleep(0.4)
 
 

@@ -24,6 +24,8 @@ class Controller:
         self.plan = None
         self.forecast = []
         self.errors = {}
+        self.control_step = "startup"
+        self.last_failure = None
         self.goal = None
         self.goal_at = None
         self.battery_limits_confirmed = None
@@ -57,8 +59,9 @@ class Controller:
             if enabled:
                 if persist:
                     self.remember_control(True)
-                self.restore_pending = False
+                self.restore_pending = True
                 self.armed = True
+                self.errors.pop("runtime", None)
                 return
             self.armed = False
             self.restore_pending = False
@@ -133,7 +136,12 @@ class Controller:
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
             try:
-                self.plan = self.config.eos.plan()
+                candidate = self.config.eos.plan()
+                if (not isinstance(candidate, dict)
+                        or instant(candidate.get("generated_at")) is None
+                        or not isinstance(candidate.get("instructions"), list)):
+                    raise ValueError("EOS plan is not ready")
+                self.plan = candidate
                 self.errors.pop("eos", None)
             except Exception as error:
                 self.errors["eos"] = type(error).__name__
@@ -179,6 +187,7 @@ class Controller:
         return goal is not None and goal == self.goal and self.goal_at is not None
 
     def tick(self, now, clock):
+        self.control_step = "read_inputs"
         self.sync_battery_limits(now, clock)
         self.update_eos(now, clock)
         states = self.ha.states()
@@ -269,12 +278,14 @@ class Controller:
                 and car_order and car_order.mode == "NON_EXPORT" and self.soc < daily["target_soc"])))
         if not (pv and planned == 0):
             self.pv_session = False
+        self.control_step = "wallbox_control"
         self.regulate_car(box, live, planned, pv, now, clock, states)
         command = battery_command(battery_order, battery.soc,
                                   {**opts, "battery_min_soc": daily["battery_min_soc"],
                                    "battery_max_soc": daily["battery_max_soc"]},
                                   daily["battery_pv_support"] and box.charging and self.pv_session,
                                   live["grid"], battery.discharge, battery.charge)
+        self.control_step = "battery_control"
         if command is None:
             self.config.battery.release(states)
         else:
@@ -365,7 +376,7 @@ class Controller:
                             if self.battery_limits_confirmed_at else None},
                     "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
-                    "errors": dict(self.errors), "zone": opts["timezone"],
+                    "errors": dict(self.errors), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "influx_configured": bool(self.config.influx.url),
                     "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,

@@ -8,6 +8,7 @@ from time import monotonic
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .energy.history import influx_series
+from .energy.clients import ENTITY
 from .energy.settings import daily_settings
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,9 +28,17 @@ class EnergyCoordinator(DataUpdateCoordinator):
         with self.app.lock:
             try:
                 self.app.tick(datetime.now(timezone.utc), monotonic())
-                self.app.errors.pop("runtime", None)
+                if self.app.armed:
+                    self.app.errors.pop("runtime", None)
             except Exception as error:
                 self.app.errors["runtime"] = type(error).__name__
+                entity = getattr(error, "entity", None)
+                self.app.last_failure = {
+                    "type": type(error).__name__,
+                    "step": getattr(self.app, "control_step", "unknown"),
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "entity": entity if isinstance(entity, str) and ENTITY.fullmatch(entity) else None}
+                _LOGGER.exception("Energy control failed during %s", self.app.last_failure["step"])
                 self.app.armed = False
                 self.app.restore_pending = False
                 if not self.closing:

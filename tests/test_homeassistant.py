@@ -90,6 +90,29 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertIn("runtime", result["errors"])
         app.release.assert_called_once()
 
+    async def test_failure_survives_read_only_polls_with_actionable_confirmation_context(self):
+        from custom_components.eos_energiezentrale.energy.drivers import DeviceConfirmationError
+        ha=Mock()
+        config=Configuration(dict(DEFAULTS),ha,self.directory)
+        app=Controller(ha,config)
+        app.set_armed(True)
+        app.control_step="battery_control"
+        app.tick=Mock(side_effect=DeviceConfirmationError("number.battery_limit"))
+        coordinator=EnergyCoordinator(self.hass,self.entry,app)
+        self.entry.runtime_data=coordinator
+        with self.assertLogs("custom_components.eos_energiezentrale.coordinator",level="ERROR"):
+            await coordinator._async_update_data()
+        app.tick.side_effect=None
+        result=await coordinator._async_update_data()
+        self.assertFalse(result["armed"])
+        self.assertEqual(result["errors"]["runtime"],"DeviceConfirmationError")
+        coordinator.async_set_updated_data(result)
+        diagnostic=await async_get_config_entry_diagnostics(self.hass,self.entry)
+        self.assertEqual(diagnostic["last_failure"]["entity"],"number.battery_limit")
+        self.assertEqual(diagnostic["last_failure"]["step"],"battery_control")
+        app.set_armed(True)
+        self.assertNotIn("runtime",app.errors)
+
     async def test_control_and_meter_poll_never_overlap_in_worker(self):
         coordinator, app = self.controller()
         entered = asyncio.Event()
@@ -483,6 +506,58 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.armed)
             apply.assert_called_once()
 
+
+    async def test_eos_startup_errors_keep_saved_permission_and_resume_after_recovery(self):
+        from datetime import timedelta
+        from urllib.error import HTTPError
+        from custom_components.eos_energiezentrale.energy.drivers import Fronius, NRGkick
+        from test_energy import instruction
+        now = datetime.now(timezone.utc)
+        adapter = HomeAssistantAdapter(self.hass)
+        config = Configuration(dict(DEFAULTS),adapter,self.directory)
+        config.eos = Mock()
+        config.eos.solution.side_effect = TimeoutError("optimization not ready")
+        app = Controller(adapter,config)
+        app.set_armed(True)
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        battery,box = Fronius.defaults,NRGkick.defaults
+        samples = {DEFAULTS["pv_entity"]:(0,"W"),DEFAULTS["grid_entity"]:(0,"W"),
+                   battery["soc"]:(55.4,"%"),battery["charge_power"]:(0,"W"),
+                   battery["discharge_power"]:(0,"W"),battery["mode"]:("Auto",None),
+                   box["power"]:(0,"W"),box["status"]:("connected",None),
+                   box["enable"]:("off",None),box["phases"]:(3,None),box["current"]:(6,"A")}
+        for entity,(value,unit) in samples.items():
+            attrs = {"unit_of_measurement":unit} if unit else {}
+            if entity == box["current"]:
+                attrs.update(step=.1,max=16)
+            self.hass.states.async_set(entity,str(value),attrs,timestamp=now.timestamp())
+        with (patch.object(config.battery,'apply') as apply,
+              patch.object(config.battery,'release') as release,
+              patch.object(config.wallbox,'pause') as pause):
+            for response in (TimeoutError("offline"), HTTPError("http://eos",503,"not ready",{},None),
+                             ValueError("invalid JSON"), None, {"detail":"still planning"}):
+                app.last_plan_fetch = app.last_forecast_fetch = -1000
+                config.eos.plan.side_effect = response if isinstance(response,Exception) else None
+                config.eos.plan.return_value = response
+                result = await coordinator._async_update_data()
+                self.assertTrue(result["armed"])
+                self.assertTrue(result["control_waiting"])
+                self.assertIn("eos",result["errors"])
+                self.assertNotIn("runtime",result["errors"])
+                self.assertTrue(Configuration(dict(DEFAULTS),adapter,self.directory).control_enabled)
+            apply.assert_not_called()
+            release.assert_not_called()
+            pause.assert_not_called()
+            config.eos.plan.side_effect = None
+            config.eos.plan.return_value = {"generated_at":now.isoformat(),"instructions":[instruction(now-timedelta(seconds=1),"NON_EXPORT")]}
+            config.eos.solution.side_effect = None
+            config.eos.solution.return_value = {}
+            app.last_plan_fetch = app.last_forecast_fetch = -1000
+            result = await coordinator._async_update_data()
+            self.assertTrue(result["armed"])
+            self.assertFalse(result["control_waiting"])
+            self.assertNotIn("eos",result["errors"])
+            apply.assert_called_once()
 
     async def test_shutdown_service_error_does_not_erase_saved_control_permission(self):
         from threading import Event
