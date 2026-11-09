@@ -411,7 +411,7 @@ function render() {
   byId('settings').hidden = route !== 'settings';
   byId('detail').hidden = !pages.has(route);
   const errors = Object.keys(snapshot.errors);
-  const errorAreas = {goal:'notice.goal',runtime:'control.title',forecast:'notice.forecast',
+  const errorAreas = {device_pending:'notice.device_pending',goal:'notice.goal',runtime:'control.title',forecast:'notice.forecast',
     release:'notice.release',battery_limits:'notice.battery_limits',control_persistence:'notice.control_persistence',connection:'notice.connection'};
   byId('notice').textContent = errors.length ? `${t('notice.check')} · ${errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()).join(', ')}` : '';
   if (route === 'overview') overview();

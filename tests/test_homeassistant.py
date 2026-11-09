@@ -113,6 +113,21 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         app.set_armed(True)
         self.assertNotIn("runtime",app.errors)
 
+    async def test_pending_mode_values_keep_control_enabled_and_resume_on_next_poll(self):
+        from custom_components.eos_energiezentrale.energy.drivers import DeviceNotReady
+        coordinator,app=self.controller()
+        app.armed=app.owned=True
+        app.tick.side_effect=DeviceNotReady("number.pv_limit")
+        result=await coordinator._async_update_data()
+        self.assertTrue(result["armed"])
+        self.assertIn("device_pending",result["errors"])
+        app.remember_control.assert_not_called()
+        app.release.assert_not_called()
+        app.tick.side_effect=None
+        result=await coordinator._async_update_data()
+        self.assertTrue(result["armed"])
+        self.assertNotIn("device_pending",result["errors"])
+
     async def test_control_and_meter_poll_never_overlap_in_worker(self):
         coordinator, app = self.controller()
         entered = asyncio.Event()

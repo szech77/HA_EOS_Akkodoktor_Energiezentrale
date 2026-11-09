@@ -186,6 +186,35 @@ class DriverTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             NRGkick(ha, {"enable":"sensor.wrong_domain"})
 
+    def test_fronius_waits_for_mode_dependent_limit_and_resumes_without_repeating_mode_write(self):
+        from custom_components.eos_energiezentrale.energy.drivers import DeviceNotReady
+        ha=Mock()
+        driver=Fronius(ha,{})
+        command=BatteryCommand("block_discharge",4760)
+        mode={driver.ids["mode"]:{"state":"Block Discharging"}}
+        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=100):
+            ha.state.return_value={"state":"unavailable"}
+            with self.assertRaises(DeviceNotReady):
+                driver.apply(command,mode)
+        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=130):
+            ha.state.return_value={"state":"4760","attributes":{"max":10240,"step":10,"unit_of_measurement":"W"}}
+            driver.apply(command,mode)
+        ha.set.assert_not_called()
+
+    def test_fronius_permanently_missing_limit_fails_after_bounded_wait(self):
+        from custom_components.eos_energiezentrale.energy.drivers import DeviceNotReady, DeviceConfirmationError
+        ha=Mock()
+        ha.state.return_value={"state":"unavailable"}
+        driver=Fronius(ha,{})
+        mode={driver.ids["mode"]:{"state":"Block Discharging"}}
+        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=100):
+            with self.assertRaises(DeviceNotReady):
+                driver.apply(BatteryCommand("block_discharge",4760),mode)
+        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=145):
+            with self.assertRaises(DeviceConfirmationError):
+                driver.apply(BatteryCommand("block_discharge",4760),mode)
+        ha.set.assert_not_called()
+
     def test_measurement_age_and_units(self):
         rows = {"sensor.power":{"state":"1.5","attributes":{"unit_of_measurement":"kW"},"last_updated":NOW.isoformat()}}
         self.assertEqual(reading(rows,"sensor.power",NOW,"power",45),1500)

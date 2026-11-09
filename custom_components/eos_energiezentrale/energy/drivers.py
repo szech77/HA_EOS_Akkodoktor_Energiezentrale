@@ -62,6 +62,13 @@ def entities(defaults, supplied):
     return result
 
 
+class DeviceNotReady(RuntimeError):
+    """A mode-dependent control entity is still waiting for its next report."""
+    def __init__(self, entity):
+        super().__init__(f"Waiting for control entity: {entity}")
+        self.entity = entity
+
+
 class DeviceConfirmationError(ValueError):
     """A local control entity did not confirm the requested state."""
     def __init__(self, entity):
@@ -94,6 +101,7 @@ class Fronius:
     def __init__(self, ha, params):
         self.ha = ha
         self.ids = entities(self.defaults, params)
+        self.pending_limits = {}
 
     def read(self, states, now):
         return BatteryReading(reading(states, self.ids["soc"], now, "soc", 120),
@@ -101,6 +109,7 @@ class Fronius:
                               reading(states, self.ids["discharge_power"], now, "power", 120))
 
     def release(self, states):
+        self.pending_limits.clear()
         if states.get(self.ids["mode"], {}).get("state") != "Auto":
             self.ha.set(self.ids["mode"], "Auto")
             confirmed_state(self.ha, self.ids["mode"], lambda row: row.get("state") == "Auto")
@@ -119,7 +128,14 @@ class Fronius:
             confirmed_state(self.ha, mode_id, lambda row: row.get("state") == mode)
         for key, watts in limits:
             entity = self.ids[key]
-            row = confirmed_state(self.ha, entity, lambda sample: number(sample.get("state")) is not None)
+            row = self.ha.state(entity)
+            if number(row.get("state")) is None:
+                now = monotonic()
+                since = self.pending_limits.setdefault(entity, now)
+                if now - since >= 45:
+                    raise DeviceConfirmationError(entity)
+                raise DeviceNotReady(entity)
+            self.pending_limits.pop(entity, None)
             attrs = row.get("attributes", {})
             maximum, step = number(attrs.get("max")), number(attrs.get("step"))
             if maximum is None or not step or attrs.get("unit_of_measurement") != "W":

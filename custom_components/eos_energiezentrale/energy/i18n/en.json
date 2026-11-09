@@ -182,6 +182,7 @@
     "metric.forecast_today_total": "Measured intervals so far + remaining forecast",
     "metric.forecast_remaining_only": "Remaining forecast only; measured yield unavailable",
     "metric.forecast_partial": "Partial forecast · day not fully covered",
-    "metric.forecast_complete": "Full calendar day"
+    "metric.forecast_complete": "Full calendar day",
+    "notice.device_pending": "Waiting for device values after mode change"
   }
 }

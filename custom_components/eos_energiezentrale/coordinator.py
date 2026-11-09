@@ -9,6 +9,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .energy.history import influx_series
 from .energy.clients import ENTITY
+from .energy.drivers import DeviceNotReady
 from .energy.settings import daily_settings
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,9 +29,13 @@ class EnergyCoordinator(DataUpdateCoordinator):
         with self.app.lock:
             try:
                 self.app.tick(datetime.now(timezone.utc), monotonic())
+                self.app.errors.pop("device_pending", None)
                 if self.app.armed:
                     self.app.errors.pop("runtime", None)
+            except DeviceNotReady as error:
+                self.app.errors["device_pending"] = error.entity
             except Exception as error:
+                self.app.errors.pop("device_pending", None)
                 self.app.errors["runtime"] = type(error).__name__
                 entity = getattr(error, "entity", None)
                 self.app.last_failure = {

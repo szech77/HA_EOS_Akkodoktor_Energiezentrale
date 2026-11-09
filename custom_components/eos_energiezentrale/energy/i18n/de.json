@@ -182,6 +182,7 @@
     "metric.forecast_today_total": "Messintervalle bisher + Restprognose",
     "metric.forecast_remaining_only": "Nur Restprognose; bisheriger Ertrag fehlt",
     "metric.forecast_partial": "Teilprognose · Tag nicht vollständig abgedeckt",
-    "metric.forecast_complete": "Vollständiger Kalendertag"
+    "metric.forecast_complete": "Vollständiger Kalendertag",
+    "notice.device_pending": "Warte auf Gerätewerte nach Moduswechsel"
   }
 }

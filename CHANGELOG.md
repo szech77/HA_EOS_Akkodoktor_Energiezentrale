@@ -28,6 +28,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- Fronius wartet bei vorübergehend nicht verfügbaren Leistungsentitäten bis zu 45 Sekunden über mehrere Polls; Freigabe bleibt erhalten, fehlende Bestätigungen geschriebener Sollwerte bleiben Fehler.
+
 - Steuerfehler bleiben im Lesemodus diagnostizierbar; Regelschritt und betroffene Entität bei ausbleibender Bestätigung sowie vollständiger Stacktrace im HA-Log ergänzt.
 
 - Steuerfreigabe wartet auch nach manuellem Aktivieren auf bereite Eingangsdaten und EOS-Plan; unvollständige EOS-Pläne werden als temporärer Abruffehler behandelt und löschen keine Freigabe.
@@ -77,6 +79,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- Fronius wartet bei vorübergehend nicht verfügbaren Leistungsentitäten bis zu 45 Sekunden über mehrere Polls; Freigabe bleibt erhalten, fehlende Bestätigungen geschriebener Sollwerte bleiben Fehler.
+
 - Steuerfehler bleiben im Lesemodus diagnostizierbar; Regelschritt und betroffene Entität bei ausbleibender Bestätigung sowie vollständiger Stacktrace im HA-Log ergänzt.
 
 - Steuerfreigabe wartet auch nach manuellem Aktivieren auf bereite Eingangsdaten und EOS-Plan; unvollständige EOS-Pläne werden als temporärer Abruffehler behandelt und löschen keine Freigabe.
@@ -101,6 +105,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Fachliche Regressionstests für Ladeziele, Messwertalter, Phasenwechsel, Speicherfreigabe, Persistenz und Ingress-Grenzen.
 
 ### Bugfixes
+
+- Fronius wartet bei vorübergehend nicht verfügbaren Leistungsentitäten bis zu 45 Sekunden über mehrere Polls; Freigabe bleibt erhalten, fehlende Bestätigungen geschriebener Sollwerte bleiben Fehler.
 
 - Steuerfehler bleiben im Lesemodus diagnostizierbar; Regelschritt und betroffene Entität bei ausbleibender Bestätigung sowie vollständiger Stacktrace im HA-Log ergänzt.
 
@@ -128,6 +134,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Sprachauswahl in der Add-on-Konfiguration.
 
 ### Bugfixes
+
+- Fronius wartet bei vorübergehend nicht verfügbaren Leistungsentitäten bis zu 45 Sekunden über mehrere Polls; Freigabe bleibt erhalten, fehlende Bestätigungen geschriebener Sollwerte bleiben Fehler.
 
 - Steuerfehler bleiben im Lesemodus diagnostizierbar; Regelschritt und betroffene Entität bei ausbleibender Bestätigung sowie vollständiger Stacktrace im HA-Log ergänzt.
 
@@ -157,6 +165,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Lesemodus, explizite Steuerungsübernahme und über Ingress erreichbare Oberfläche.
 
 ### Bugfixes
+
+- Fronius wartet bei vorübergehend nicht verfügbaren Leistungsentitäten bis zu 45 Sekunden über mehrere Polls; Freigabe bleibt erhalten, fehlende Bestätigungen geschriebener Sollwerte bleiben Fehler.
 
 - Steuerfehler bleiben im Lesemodus diagnostizierbar; Regelschritt und betroffene Entität bei ausbleibender Bestätigung sowie vollständiger Stacktrace im HA-Log ergänzt.
 
