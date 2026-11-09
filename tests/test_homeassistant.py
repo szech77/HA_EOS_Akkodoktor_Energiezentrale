@@ -319,10 +319,12 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
     async def test_frontend_registration_uses_one_asset_version_for_panel_and_iframe(self):
         from custom_components.eos_energiezentrale.frontend import async_register_frontend
         self.hass.http=Mock(async_register_static_paths=AsyncMock())
-        with patch('custom_components.eos_energiezentrale.frontend.asset_version',return_value='newbuild'),patch('custom_components.eos_energiezentrale.frontend.panel_custom.async_register_panel',new_callable=AsyncMock) as register,patch('custom_components.eos_energiezentrale.frontend.websocket_api.async_register_command'):
+        with patch('custom_components.eos_energiezentrale.frontend.asset_version',return_value='newbuild'),patch('custom_components.eos_energiezentrale.frontend.panel_custom.async_register_panel',new_callable=AsyncMock) as register,patch('custom_components.eos_energiezentrale.frontend.websocket_api.async_register_command'),patch('custom_components.eos_energiezentrale.frontend.frontend.add_extra_js_url') as add_icons:
             await async_register_frontend(self.hass)
         self.assertTrue(register.call_args.kwargs['module_url'].endswith('panel.js?v=newbuild'))
         self.assertEqual(register.call_args.kwargs['config']['asset_version'],'newbuild')
+        self.assertEqual(register.call_args.kwargs['sidebar_icon'],'eos-energy:logo')
+        add_icons.assert_called_once_with(self.hass,'/eos-energiezentrale-static/icons.js?v=newbuild')
 
     async def test_language_request_loads_translations_without_blocking_event_loop(self):
         self.controller()

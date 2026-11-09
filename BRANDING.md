@@ -37,3 +37,14 @@ Bilddienst nötig. Bei manueller Installation den gesamten Integrationsordner
 einschließlich `brand` kopieren, Home Assistant neu starten und die Seite neu laden.
 
 Vorgaben: https://contributors.home-assistant.io/core/integrations/brands/
+
+
+## Seitenleisten-Symbol
+
+`energy/web/icons.js` registriert `eos-energy:logo` über Home Assistants
+Custom-Icon-Schnittstelle. Die Pfadkontur ist aus dem SVG-Master abgeleitet;
+Home Assistant färbt sie entsprechend dem Seitenleisten-Theme ein.
+Das Modul wird global und mit derselben Build-Version wie das Panel geladen,
+damit das Symbol auch vor dem ersten Öffnen des Panels verfügbar ist.
+Nach der Installation Home Assistant neu starten und das gesamte HA-Frontend
+neu laden. Eine zusätzliche Lovelace-Ressource ist nicht erforderlich.
