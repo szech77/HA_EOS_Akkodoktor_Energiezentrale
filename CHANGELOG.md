@@ -7,6 +7,10 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Proportionaler SoC-Balken im Autosymbol und in den individuellen Fahrzeugkarten; kein gemeinsamer SoC für mehrere Autos.
+
+- Wärmepumpensymbol als größere SVG-Wärmelinien; Batterie mit fünf SoC-Füllbalken und roter Warnfarbe an der eingestellten SoC-Untergrenze.
+
 - Konfigurierbarer Anzeigepuffer für letzte gültige Sensorwerte (Standard 15 Minuten), ohne veraltete Werte an Regelung oder Historie weiterzugeben.
 
 - Bis zu acht Fahrzeug-/Wallbox-Paare mit eigener Planung, SoC-Verarbeitung, nativen Sensoren und gemeinsamer Reservierung von PV- und Netzanschlussleistung.

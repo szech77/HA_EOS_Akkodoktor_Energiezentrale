@@ -130,8 +130,13 @@ function solarForecastCards(now) {
 
 const consumerEnabled = key => !["car","heat"].includes(key) || snapshot.features?.[key] !== false;
 
+function carIcon(soc) {
+  const known=valid(soc) && soc>=0 && soc<=100;
+  return `<svg class="vehicle-soc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 1.5-4h11L19 9M4 17v3m16-3v3"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 13h2m8 0h2"/>${known ? `<rect class="car-soc-track" x="7.5" y="6.2" width="9" height="1.8" rx=".4"/><rect class="car-soc-fill" x="7.5" y="6.2" width="${(9*soc/100).toFixed(3)}" height="1.8" rx=".4"/>` : ''}</svg>`;
+}
+
 function vehicleCards() {
-  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small>${html(vehicle.name)}</small><strong>${html((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
+  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small class="vehicle-heading">${carIcon(valid(vehicle.live.car_soc) ? vehicle.live.car_soc : vehicle.display?.car_soc?.value)}${html(vehicle.name)}</small><strong>${html((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
 }
 
 const displayed = key => valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value;
@@ -158,7 +163,20 @@ function overview() {
     const retained = snapshot.display?.[key];
     const stale = !valid(live[key]) && valid(retained?.value);
     const value = stale ? retained.value : live[key];
-    const soc = displayed(key + '_soc');
+    const soc = key === 'car' && snapshot.vehicles?.length ? undefined : displayed(key + '_soc');
+    if (key === 'car') {
+      const knownSoc=valid(soc) && soc>=0 && soc<=100;
+      node.querySelector('.car-soc')?.toggleAttribute('hidden',!knownSoc);
+      node.querySelector('.car-soc-fill')?.setAttribute('width',knownSoc ? String(9*soc/100) : '0');
+    }
+    if (key === 'battery') {
+      const knownSoc=valid(soc) && soc>=0 && soc<=100;
+      const minimum=snapshot.settings.battery_min_soc;
+      const low=knownSoc && valid(minimum) && soc<=minimum;
+      const filled=knownSoc ? Math.ceil(soc/20) : 0;
+      node.classList.toggle('battery-low',low);
+      node.querySelectorAll('.battery-bar').forEach((bar,index)=>bar.classList.toggle('filled',index<filled));
+    }
     const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
       : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
     node.querySelector('strong').textContent = (stale && retained.estimated ? '≈ ' : '') + power(value);
@@ -175,6 +193,10 @@ function overview() {
     if (key === "car" && snapshot.vehicles?.length) names.car=t("fleet.vehicles",{count:snapshot.vehicles.length});
     node.querySelector('span:nth-child(2)').textContent = valid(soc) ? `${names[key]} · ${percent(soc)}` : names[key];
     node.setAttribute('aria-label', [names[key],power(value),value ? direction : ''].filter(Boolean).join(' · '));
+    if (['battery','car'].includes(key) && valid(soc)) {
+      const warning=node.classList.contains('battery-low') ? t('battery.minimum_reached') : '';
+      node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
+    }
     flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
     flow.classList.toggle('reverse', value < 0);
     flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);

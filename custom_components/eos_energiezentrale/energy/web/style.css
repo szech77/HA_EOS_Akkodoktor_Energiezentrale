@@ -132,3 +132,14 @@
 #eos-energy-design .vehicle-card {display:grid;gap:8px;padding:16px;background:var(--surface);border:1px solid var(--edge);border-radius:12px;color:var(--ink);text-decoration:none;}
 #eos-energy-design .vehicle-card strong {color:var(--car);font-size:24px;}
 #eos-energy-design .vehicle-card:hover {border-color:var(--car);}
+
+#eos-energy-design .node.heat .orb svg {width:32px;height:32px;}
+#eos-energy-design .orb svg .battery-bar {fill:currentColor;stroke:none;opacity:.16;transition:opacity .2s ease;}
+#eos-energy-design .orb svg .battery-bar.filled {opacity:1;}
+#eos-energy-design .node.battery-low .orb {color:light-dark(#b42318,#ff7979);}
+@media(prefers-reduced-motion:reduce) {#eos-energy-design .orb svg .battery-bar {transition:none;}}
+
+#eos-energy-design .vehicle-heading {display:flex;align-items:center;gap:10px;}
+#eos-energy-design .vehicle-soc-icon {width:32px;height:32px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--car);}
+#eos-energy-design svg .car-soc-track {fill:currentColor;stroke:none;opacity:.18;}
+#eos-energy-design svg .car-soc-fill {fill:currentColor;stroke:none;}
