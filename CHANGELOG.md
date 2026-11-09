@@ -3,11 +3,27 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
-## 0.2.0
+## 0.3.0 - 2026-11-10
 
 ### Features
 
 - Eigenes EOS-Logo als themeabhängiges Home-Assistant-Seitenleistensymbol, global ohne vorheriges Öffnen des Panels geladen.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine sicherheitsrelevanten Änderungen.
+
+## 0.2.0
+
+### Features
 
 - Aktuelles Wettersymbol und Temperatur im Energieflussdiagramm mit optional auswählbarer Home-Assistant-Wetterquelle.
 
