@@ -667,3 +667,26 @@ Die frühere Standardeinstellung 0 wird auf automatische EOS-Übernahme umgestel
 bereits eingestellte manuelle Werte ungleich 0 bleiben als manuelle Vorgabe erhalten.
 Eine bewusste manuelle Vorgabe von 0 ist weiterhin möglich. Änderungen bewerten bereits
 gespeicherte Bilanzintervalle und den bisherigen Akku-Kostenbestand nicht rückwirkend neu.
+
+
+## Dynamische Hardware-Plugins
+
+Speicher-/Wechselrichter und Wallboxen werden über versionierte Interfaces und lokale,
+dynamisch erkannte Plugins angebunden. Fronius und NRGkick sind eigene Plugins;
+zusätzlich gibt es für beide Gerätearten **Generic Home Assistant**. Plugin-Name,
+Fähigkeiten (z. B. Phasenumschaltung) und Konfigurationsfelder kommen vom Plugin.
+
+Bei der Hardwareeinrichtung zuerst das Plugin auswählen, anschließend dessen
+Entitäten und Parameter konfigurieren. Weitere Wallboxen werden unter
+**Konfigurieren → Fahrzeuge und Wallboxen → Hinzufügen** über denselben Ablauf angelegt.
+Die typisierten Felder erscheinen als native HA-Auswahlfelder; JSON für die gesamte
+Hardwarekonfiguration ist im normalen Ablauf nicht mehr erforderlich.
+
+Alle Plugin-Messwerte und Schreibvorgaben durchlaufen eine zentrale Prüfung.
+Fehlende Messwerte bleiben fehlend; NaN, falsche Einheiten/Skalen und unmögliche
+Werte werden nicht als gültige Regelgrößen übernommen. Ohne deklarierte
+Phasenumschaltfähigkeit bleibt die Regelung bei der vorhandenen Phasenanzahl.
+
+Die vollständige Schnittstelle, Plugin-Erweiterung und Beispiele sind in
+[PLUGINS.md](PLUGINS.md) beschrieben. Helfer für die generische Anbindung stehen in
+[generic_hardware_helpers.yaml](examples/generic_hardware_helpers.yaml).

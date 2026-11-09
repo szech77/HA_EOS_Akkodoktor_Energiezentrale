@@ -52,11 +52,11 @@ class HomeAssistantAdapter:
         if not isinstance(entity, str) or not ENTITY.fullmatch(entity):
             raise ValueError("Invalid control entity")
         domain = entity.split(".", 1)[0]
-        if domain == "switch" and type(value) is bool:
+        if domain in {"switch","input_boolean"} and type(value) is bool:
             service, extra = ("turn_on" if value else "turn_off"), {}
-        elif domain == "select" and isinstance(value, str):
+        elif domain in {"select","input_select"} and isinstance(value, str):
             service, extra = "select_option", {"option": value}
-        elif domain == "number" and type(value) is not bool and number(value) is not None:
+        elif domain in {"number","input_number"} and type(value) is not bool and number(value) is not None:
             service, extra = "set_value", {"value": value}
         else:
             raise ValueError("Unsupported driver command")

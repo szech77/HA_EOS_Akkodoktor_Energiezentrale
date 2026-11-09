@@ -247,6 +247,13 @@
     "billing.history_error": "Influx-Verlauf nicht verfügbar; angezeigt wird nur die lokale Bilanz.",
     "billing.pv_price_source": "Quelle für PV-Kostenansatz",
     "billing.pv_effective": "Aktueller PV-Kostenansatz",
-    "billing.pv_missing": "EOS-Einspeisevergütung fehlt; Kosten bleiben unbekannt."
+    "billing.pv_missing": "EOS-Einspeisevergütung fehlt; Kosten bleiben unbekannt.",
+    "plugin.feature.phase_switching": "Phasenumschaltung",
+    "plugin.feature.charge_limit": "Ladebegrenzung",
+    "plugin.feature.discharge_limit": "Entladebegrenzung",
+    "plugin.feature.grid_charge": "Netzladung",
+    "plugin.feature.grid_discharge": "Akku-Einspeisung",
+    "plugin.yes": "Ja",
+    "plugin.no": "Nein"
   }
 }

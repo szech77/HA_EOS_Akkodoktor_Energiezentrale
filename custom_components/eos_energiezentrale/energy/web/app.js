@@ -476,6 +476,10 @@ function settings() {
     : limits?.managed ? t('settings.battery_limits_pending') : t('settings.battery_limits_unmanaged');
   byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${snapshot.errors.eos ? th('status.fetch_failed') : snapshot.plan.battery?.length || snapshot.plan.car?.length ? th('status.plan_available') : th('status.no_plan')}</dd>
     <dt>InfluxDB</dt><dd>${!snapshot.influx_configured ? th('status.local_history') : history.influx_error ? th('status.fetch_failed') : history.influx.length ? th('status.history_available') : th('status.no_samples')}</dd>`;
+  for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}</dd>`;}
+  const wallbox=snapshot.vehicles?.find(item=>item.id===selector.value)?.plugins?.wallbox??snapshot.plugins?.wallbox;
+  form.elements.phase_auto.disabled=wallbox?.features?.phase_switching===false;
+  if(form.elements.phase_auto.disabled)form.elements.phase_auto.checked=false;
 }
 function render() {
   const requested = location.hash.slice(1);

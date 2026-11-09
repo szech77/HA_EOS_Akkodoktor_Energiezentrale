@@ -153,7 +153,7 @@ class DriverTests(unittest.TestCase):
         box = NRGkick(ha, {})
         def sample(enabled, offset, watts=0, status="connected", phase=1):
             return WallboxReading(watts,status,enabled,phase,6,.1,16,NOW+timedelta(seconds=offset))
-        with patch("custom_components.eos_energiezentrale.energy.drivers.datetime") as clock:
+        with patch("custom_components.eos_energiezentrale.energy.entity_wallbox.datetime") as clock:
             clock.now.return_value = NOW + timedelta(seconds=2)
             self.assertFalse(box.phase(3, sample(True,0,1380,"charging")))
         ha.set.assert_called_once_with(box.ids["enable"], False)
@@ -192,11 +192,11 @@ class DriverTests(unittest.TestCase):
         driver=Fronius(ha,{})
         command=BatteryCommand("block_discharge",4760)
         mode={driver.ids["mode"]:{"state":"Block Discharging"}}
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=100):
+        with patch("custom_components.eos_energiezentrale.energy.plugins.fronius.monotonic",return_value=100):
             ha.state.return_value={"state":"unavailable"}
             with self.assertRaises(DeviceNotReady):
                 driver.apply(command,mode)
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=130):
+        with patch("custom_components.eos_energiezentrale.energy.plugins.fronius.monotonic",return_value=130):
             ha.state.return_value={"state":"4760","attributes":{"max":10240,"step":10,"unit_of_measurement":"W"}}
             driver.apply(command,mode)
         ha.set.assert_not_called()
@@ -207,10 +207,10 @@ class DriverTests(unittest.TestCase):
         ha.state.return_value={"state":"unavailable"}
         driver=Fronius(ha,{})
         mode={driver.ids["mode"]:{"state":"Block Discharging"}}
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=100):
+        with patch("custom_components.eos_energiezentrale.energy.plugins.fronius.monotonic",return_value=100):
             with self.assertRaises(DeviceNotReady):
                 driver.apply(BatteryCommand("block_discharge",4760),mode)
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic",return_value=145):
+        with patch("custom_components.eos_energiezentrale.energy.plugins.fronius.monotonic",return_value=145):
             with self.assertRaises(DeviceConfirmationError):
                 driver.apply(BatteryCommand("block_discharge",4760),mode)
         ha.set.assert_not_called()
@@ -272,6 +272,9 @@ class LanguageTests(unittest.TestCase):
         keys.update(re.findall(r"\b(?:t|th)\('([a-z.]+)'", script))
         for page in ("solar", "grid", "battery", "house", "car", "heat"):
             keys.update((f"device.{page}", f"chart.{page}"))
+        from dataclasses import fields
+        from custom_components.eos_energiezentrale.energy.contracts import BatteryFeatures, WallboxFeatures
+        keys.update("plugin.feature."+field.name for model in (BatteryFeatures,WallboxFeatures) for field in fields(model))
         self.assertEqual(keys - pack["messages"].keys(), set())
         self.assertEqual(pack["locale"], "en-GB")
         self.assertEqual(pack["messages"]["settings.save"], "Save")

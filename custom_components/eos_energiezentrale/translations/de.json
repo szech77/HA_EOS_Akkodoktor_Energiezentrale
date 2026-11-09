@@ -60,6 +60,14 @@
           "influx_user": "InfluxDB-Lesebenutzer",
           "influx_password": "InfluxDB-Passwort"
         }
+      },
+      "hardware_parameters": {
+        "title": "Plugin konfigurieren",
+        "description": "Die Felder werden von den ausgewählten Plugins definiert.",
+        "data": {
+          "battery_parameters": "Speicher / Wechselrichter",
+          "wallbox_parameters": "Wallbox"
+        }
       }
     },
     "error": {
@@ -67,7 +75,8 @@
       "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen"
     },
     "abort": {
-      "already_configured": "Bereits eingerichtet"
+      "already_configured": "Bereits eingerichtet",
+      "invalid_plugin": "Plugin nicht verfügbar oder ungültig."
     }
   },
   "options": {
@@ -166,7 +175,8 @@
           "wallbox_status": "Wallbox-Status",
           "wallbox_enable": "Ladefreigabe",
           "wallbox_current": "Ladestromvorgabe",
-          "wallbox_phases": "Phasenanzahl"
+          "wallbox_phases": "Phasenanzahl",
+          "wallbox_parameters": "Plugin-Einstellungen"
         },
         "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
       },
@@ -209,6 +219,41 @@
           "wallbox_phases": "Phasenanzahl"
         },
         "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
+      },
+      "hardware_parameters": {
+        "title": "Plugin konfigurieren",
+        "description": "Die Felder werden von den ausgewählten Plugins definiert.",
+        "data": {
+          "battery_parameters": "Speicher / Wechselrichter",
+          "wallbox_parameters": "Wallbox"
+        }
+      },
+      "vehicle_plugin": {
+        "title": "Wallbox-Plugin auswählen",
+        "data": {
+          "wallbox_type": "Wallbox-Plugin"
+        }
+      },
+      "vehicle_parameters": {
+        "title": "Fahrzeug und Wallbox hinzufügen / bearbeiten",
+        "data": {
+          "vehicle_id": "Fahrzeug",
+          "id": "Stabile Fahrzeug-ID",
+          "name": "Fahrzeugname",
+          "resource": "EOS-Ressource",
+          "soc_entity": "SoC-Sensor (optional)",
+          "soc_scale": "SoC-Skalierung",
+          "capacity_wh": "Kapazität (Wh)",
+          "charging_efficiency": "Ladewirkungsgrad",
+          "max_current_a": "Maximalstrom (A)",
+          "wallbox_power": "Wallbox-Leistung",
+          "wallbox_status": "Wallbox-Status",
+          "wallbox_enable": "Ladefreigabe",
+          "wallbox_current": "Ladestromvorgabe",
+          "wallbox_phases": "Phasenanzahl",
+          "wallbox_parameters": "Plugin-Einstellungen"
+        },
+        "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
       }
     },
     "error": {
@@ -216,7 +261,8 @@
       "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen"
     },
     "abort": {
-      "no_vehicles": "Kein Fahrzeug vorhanden"
+      "no_vehicles": "Kein Fahrzeug vorhanden",
+      "invalid_plugin": "Plugin nicht verfügbar oder ungültig."
     }
   },
   "entity": {

@@ -86,6 +86,75 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await coordinator.async_accounting({"settings":{"charge_efficiency":0}})
 
+    async def test_first_setup_routes_from_sensor_selection_to_plugin_selection(self):
+        flow=ConfigFlow();flow.hass=self.hass
+        flow.values={**DEFAULTS,'wallbox_type':'none','heat_entity':'','car_soc_entity':''}
+        result=await flow.async_step_sensors({key:flow.values[key] for key in ('pv_entity','house_entity','grid_entity','heat_entity','price_entity','car_soc_entity','car_soc_scale')})
+        self.assertEqual(result['step_id'],'hardware')
+        self.assertEqual({str(key) for key in result['data_schema'].schema},{'battery_type','wallbox_type','vehicle_name'})
+        params=await flow.async_step_hardware({'battery_type':'fronius','wallbox_type':'none','vehicle_name':'E-Auto'})
+        self.assertEqual(params['step_id'],'hardware_parameters')
+        following=await flow.async_step_hardware_parameters({'battery_parameters':{}})
+        self.assertEqual(following['step_id'],'limits')
+
+    async def test_plugin_selection_builds_battery_and_wallbox_fields_from_their_schemas(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
+        selected=await flow.async_step_hardware({"battery_type":"generic","wallbox_type":"generic","vehicle_name":"E-Auto"})
+        self.assertEqual(selected["step_id"],"hardware_parameters")
+        schema={str(key):value for key,value in selected["data_schema"].schema.items()}
+        battery_fields=schema['battery_parameters'].serialize()['selector']['object']['fields']
+        wallbox_fields=schema['wallbox_parameters'].serialize()['selector']['object']['fields']
+        self.assertIn('soc_scale',battery_fields)
+        self.assertIn('phase_switching',wallbox_fields)
+        self.assertIn('input_boolean',wallbox_fields['enable']['selector']['entity']['domain'])
+        battery={"soc":"sensor.soc","charge_power":"sensor.charge","discharge_power":"sensor.discharge",
+                 "mode":"input_select.battery","charge_limit":"input_number.charge","discharge_limit":"input_number.discharge"}
+        from test_plugins import generic_wallbox
+        wallbox,_=generic_wallbox()
+        result=await flow.async_step_hardware_parameters({"battery_parameters":battery,"wallbox_parameters":wallbox})
+        self.assertEqual(result['type'],'create_entry')
+        self.assertEqual(result['data']['battery_type'],'generic')
+        self.assertFalse(json.loads(result['data']['wallbox_parameters'])['phase_switching'])
+
+    async def test_common_battery_form_does_not_edit_hidden_wallboxes_in_a_fleet(self):
+        from test_fleet import definitions
+        self.hass.config_entries.async_update_entry(self.entry,options={"vehicles":json.dumps(definitions())})
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
+        result=await flow.async_step_hardware()
+        self.assertEqual({str(key) for key in result['data_schema'].schema},{'battery_type'})
+        result=await flow.async_step_hardware({'battery_type':'fronius'})
+        self.assertEqual({str(key) for key in result['data_schema'].schema},{'battery_parameters'})
+        result=await flow.async_step_hardware_parameters({'battery_parameters':{}})
+        self.assertEqual(json.loads(result['data']['vehicles']),definitions())
+
+    async def test_wallbox_add_wizard_uses_selected_plugin_and_preserves_first_vehicle(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
+        choice=await flow.async_step_vehicle_add()
+        self.assertEqual(choice['step_id'],'vehicle_plugin')
+        selected=await flow.async_step_vehicle_plugin({'wallbox_type':'generic'})
+        self.assertEqual(selected['step_id'],'vehicle_parameters')
+        from test_plugins import generic_wallbox
+        params,_=generic_wallbox()
+        result=await flow.async_step_vehicle_parameters({'id':'second','name':'Second EV','resource':'ev2','soc_entity':'sensor.ev2_soc',
+            'soc_scale':'factor','capacity_wh':60000,'charging_efficiency':.9,'max_current_a':16,'wallbox_parameters':params})
+        self.assertEqual(result['type'],'create_entry')
+        stored=json.loads(result['data']['vehicles'])
+        self.assertEqual(len(stored),2)
+        self.assertEqual(stored[0]['wallbox_type'],'nrgkick')
+        self.assertEqual(stored[1]['wallbox_type'],'generic')
+
+    async def test_generic_helpers_use_only_the_matching_home_assistant_services(self):
+        seen=[]
+        async def record(call):seen.append((call.domain,call.service,dict(call.data)))
+        for domain,service in (('input_number','set_value'),('input_boolean','turn_on'),('input_select','select_option')):
+            self.hass.services.async_register(domain,service,record)
+        adapter=HomeAssistantAdapter(self.hass)
+        for entity,value in (('input_number.current',6.2),('input_boolean.charging',True),('input_select.mode','limits')):
+            await self.hass.async_add_executor_job(adapter.set,entity,value)
+        self.assertEqual([(domain,service) for domain,service,_ in seen],[('input_number','set_value'),('input_boolean','turn_on'),('input_select','select_option')])
+        self.assertEqual(seen[0][2]['value'],6.2)
+        with self.assertRaises(ValueError):await self.hass.async_add_executor_job(adapter.set,'script.unrestricted',True)
+
     async def test_driver_service_uses_native_registry_and_preserves_tenths(self):
         seen = []
         async def handle(call):

@@ -247,6 +247,13 @@
     "billing.history_error": "Influx history unavailable; showing the local ledger only.",
     "billing.pv_price_source": "PV cost source",
     "billing.pv_effective": "Current PV cost basis",
-    "billing.pv_missing": "EOS feed-in tariff unavailable; costs remain unknown."
+    "billing.pv_missing": "EOS feed-in tariff unavailable; costs remain unknown.",
+    "plugin.feature.phase_switching": "Phase switching",
+    "plugin.feature.charge_limit": "Charge limit",
+    "plugin.feature.discharge_limit": "Discharge limit",
+    "plugin.feature.grid_charge": "Grid charging",
+    "plugin.feature.grid_discharge": "Battery export",
+    "plugin.yes": "Yes",
+    "plugin.no": "No"
   }
 }

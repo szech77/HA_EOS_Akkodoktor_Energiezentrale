@@ -8,6 +8,8 @@ from homeassistant.helpers import selector
 from .const import DEFAULTS, DOMAIN, GROUPS
 from .energy.clients import request
 from .validation import validate_options
+from .plugin_forms import PluginFormMixin, plugin_choices, plugin_object, configured
+from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 
 
 def schema_for(group, values):
@@ -20,7 +22,7 @@ def schema_for(group, values):
             field = selector.BooleanSelector()
         elif key in {"language", "car_soc_scale", "battery_type", "wallbox_type"}:
             choices = {"language": ["auto", "en", "de"], "car_soc_scale": ["factor", "percent"],
-                       "battery_type": ["fronius"], "wallbox_type": ["none", "nrgkick"]}[key]
+                       "battery_type": plugin_choices(BATTERY_DRIVERS), "wallbox_type": plugin_choices(WALLBOX_DRIVERS)}[key]
             field = selector.SelectSelector(selector.SelectSelectorConfig(options=choices))
         elif isinstance(default, (int, float)):
             field = vol.Coerce(type(default))
@@ -46,7 +48,7 @@ async def check(hass, values, connection=False):
     return {}
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self):
@@ -70,6 +72,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 position = groups.index(group) + 1
                 if position == len(groups):
                     return self.async_create_entry(title="EOS Energiezentrale", data=self.values)
+                if groups[position] == "hardware":
+                    return await self.async_step_hardware()
                 return await self._step(groups[position], None)
         return self.async_show_form(step_id="user" if group == "connection" else group,
                                     data_schema=schema_for(group, {**self.values, **(user_input or {})}),
@@ -79,7 +83,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self._step("sensors", user_input)
 
     async def async_step_hardware(self, user_input=None):
-        return await self._step("hardware", user_input)
+        return await self._hardware_selection(user_input)
 
     async def async_step_limits(self, user_input=None):
         return await self._step("limits", user_input)
@@ -93,7 +97,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return OptionsFlow()
 
 
-class OptionsFlow(config_entries.OptionsFlow):
+class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(step_id="init", menu_options=[*GROUPS,"vehicles"])
 
@@ -115,7 +119,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         return await self._step("sensors", user_input)
 
     async def async_step_hardware(self, user_input=None):
-        return await self._step("hardware", user_input)
+        return await self._hardware_selection(user_input)
 
     async def async_step_limits(self, user_input=None):
         return await self._step("limits", user_input)
@@ -167,7 +171,23 @@ class OptionsFlow(config_entries.OptionsFlow):
         return self.async_create_entry(title="",data=values)
 
     async def async_step_vehicle_add(self,user_input=None):
-        return await self._vehicle_form("vehicle_add",None,user_input)
+        if user_input is not None and "id" in user_input:
+            return await self._vehicle_form("vehicle_add",None,user_input)
+        self._editing_vehicle = None
+        return await self.async_step_vehicle_plugin(user_input)
+
+    async def async_step_vehicle_plugin(self,user_input=None):
+        if user_input is not None:
+            plugin = user_input.get("wallbox_type")
+            if plugin not in WALLBOX_DRIVERS or plugin=="none":
+                return self.async_abort(reason="invalid_plugin")
+            self._vehicle_plugin = plugin
+            return await self.async_step_vehicle_parameters()
+        return self.async_show_form(step_id="vehicle_plugin",data_schema=vol.Schema({
+            vol.Required("wallbox_type"):selector.SelectSelector(selector.SelectSelectorConfig(options=plugin_choices(WALLBOX_DRIVERS,False)))}))
+
+    async def async_step_vehicle_parameters(self,user_input=None):
+        return await self._vehicle_form("vehicle_parameters",self._editing_vehicle,user_input)
 
     async def async_step_vehicle_edit(self,user_input=None):
         if user_input is None or "vehicle_id" in user_input:
@@ -175,12 +195,11 @@ class OptionsFlow(config_entries.OptionsFlow):
             if not isinstance(selected,str):
                 return selected
             self._editing_vehicle=selected
-            return await self._vehicle_form("vehicle_edit",selected,None)
+            return await self.async_step_vehicle_plugin()
         return await self._vehicle_form("vehicle_edit",self._editing_vehicle,user_input)
 
     async def _vehicle_form(self,step_id,identity,user_input):
         import json
-        from .energy.drivers import NRGkick
         rows=self._vehicle_rows()
         old=next((row for row in rows if row["id"]==identity),{})
         index=len(rows)+1
@@ -188,14 +207,21 @@ class OptionsFlow(config_entries.OptionsFlow):
                   "resource":old.get("resource",f"ev{index}"),"soc_entity":old.get("soc_entity",""),
                   "soc_scale":old.get("soc_scale","factor"),"capacity_wh":old.get("capacity_wh",77000),
                   "charging_efficiency":old.get("charging_efficiency",.9),"max_current_a":old.get("max_current_a",16)}
-        ids={**NRGkick.defaults,**old.get("wallbox_parameters",{})}
-        defaults.update({"wallbox_"+key:value for key,value in ids.items()})
+        plugin_id = getattr(self,"_vehicle_plugin",old.get("wallbox_type","nrgkick"))
+        factory = WALLBOX_DRIVERS[plugin_id]
+        old_parameters = old.get("wallbox_parameters",{}) if old.get("wallbox_type",plugin_id)==plugin_id else {}
+        defaults["wallbox_parameters"] = old_parameters
         errors={}
         if user_input is not None:
             row={key:user_input.get(key,"") for key in ("id","name","resource","soc_entity","soc_scale","capacity_wh","charging_efficiency","max_current_a")}
             if identity is not None and row["id"]!=identity:
                 errors={"base":"invalid_config"}
-            row.update(wallbox_type="nrgkick",wallbox_parameters={key:user_input["wallbox_"+key] for key in NRGkick.defaults})
+            try:
+                raw = user_input.get("wallbox_parameters")
+                if raw is None: raw={field.key:user_input["wallbox_"+field.key] for field in factory.configuration if "wallbox_"+field.key in user_input}
+                row.update(wallbox_type=plugin_id,wallbox_parameters=configured(factory,raw))
+            except (ValueError,KeyError,TypeError):
+                errors={"base":"invalid_config"}
             updated=[row if item["id"]==identity else item for item in rows]
             if identity is None:
                 updated.append(row)
@@ -206,9 +232,10 @@ class OptionsFlow(config_entries.OptionsFlow):
             defaults.update(user_input)
         fields={}
         for key,value in defaults.items():
-            if key=="soc_entity" or key.startswith("wallbox_"):
-                domain="switch" if key=="wallbox_enable" else "number" if key in {"wallbox_current","wallbox_phases"} else "sensor"
-                field=selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
+            if key=="wallbox_parameters":
+                field,value=plugin_object(factory,value)
+            elif key=="soc_entity":
+                field=selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
             elif key=="soc_scale":
                 field=selector.SelectSelector(selector.SelectSelectorConfig(options=["factor","percent"]))
             elif key in {"capacity_wh","max_current_a"}:

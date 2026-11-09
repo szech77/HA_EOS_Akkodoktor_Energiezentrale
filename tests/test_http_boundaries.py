@@ -106,7 +106,7 @@ class DeviceBoundaryTests(unittest.TestCase):
         selector = driver.ids["mode"]
         active = {selector: {"state": "Block Discharging"}}
         ha.state.return_value = active[selector]
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic", side_effect=iter(range(0, 30, 6))):
+        with patch("custom_components.eos_energiezentrale.energy.device_io.monotonic", side_effect=iter(range(0, 30, 6))):
             with self.assertRaises(ValueError):
                 driver.release(active)
         self.assertIn((selector, "Auto"), [call.args for call in ha.set.call_args_list])
@@ -119,7 +119,7 @@ class DeviceBoundaryTests(unittest.TestCase):
         readings = {driver.ids["pv_limit"]: {"state": "0", "attributes": attrs},
                     driver.ids["discharge_limit"]: {"state": "4760", "attributes": attrs}}
         ha.state.side_effect = readings.__getitem__
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic", side_effect=iter(range(0, 30, 6))):
+        with patch("custom_components.eos_energiezentrale.energy.device_io.monotonic", side_effect=iter(range(0, 30, 6))):
             with self.assertRaises(ValueError):
                 driver.apply(BatteryCommand("limits", 0, 0), mode)
         self.assertIn((driver.ids["discharge_limit"], 0), [call.args for call in ha.set.call_args_list])

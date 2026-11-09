@@ -448,7 +448,7 @@ class DataAndConfigurationRequirements(unittest.TestCase):
     def test_nrgkick_cannot_enable_with_unconfirmed_current(self):
         ha = Mock()
         driver = NRGkick(ha, {})
-        with patch("custom_components.eos_energiezentrale.energy.drivers.confirmed_state", side_effect=ValueError("No acknowledgement")):
+        with patch("custom_components.eos_energiezentrale.energy.entity_wallbox.confirmed_state", side_effect=ValueError("No acknowledgement")):
             with self.assertRaises(ValueError):
                 driver.charge(6.2, wallbox(phases=1))
         ha.set.assert_called_once_with(driver.ids["current"], 6.2)
@@ -468,7 +468,7 @@ class DataAndConfigurationRequirements(unittest.TestCase):
         driver = Fronius(ha, {})
         selector = driver.ids["mode"]
         ha.state.return_value = {"state":"Auto"}
-        with patch("custom_components.eos_energiezentrale.energy.drivers.monotonic", side_effect=iter(range(0, 30, 6))):
+        with patch("custom_components.eos_energiezentrale.energy.device_io.monotonic", side_effect=iter(range(0, 30, 6))):
             with self.assertRaises(ValueError):
                 driver.apply(BatteryCommand("grid_charge", charge_w=3000), {selector: {"state":"Auto"}})
         ha.set.assert_called_once_with(selector, "Charge from Grid")

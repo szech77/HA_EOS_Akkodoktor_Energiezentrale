@@ -10,6 +10,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
+from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 
 
@@ -389,7 +390,9 @@ class Controller:
         nearest = pv and surplus > planned and box.charging and daily["reserve_w"] == 0 and box.step <= 0.1
         maximum = min(opts["max_current_a"], box.maximum)
         phase = box.phases
-        if daily["phase_auto"]:
+        if not getattr(getattr(driver,"features",None),"phase_switching",True):
+            self.phase_target = None
+        if daily["phase_auto"] and getattr(getattr(driver,"features",None),"phase_switching",True):
             if self.phase_target is not None:
                 # Revalidate after opening the relay because export can have changed.
                 phase = self.phase_target if desired >= 1380 * self.phase_target else box.phases
@@ -452,6 +455,7 @@ class Controller:
                     "errors": dict(self.errors), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
+                    "plugins": {"battery":describe(self.config.battery),"wallbox":describe(self.config.wallbox)},
                     "influx_configured": bool(self.config.influx.url),
                     "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}

@@ -60,6 +60,14 @@
           "influx_user": "InfluxDB read-only user",
           "influx_password": "InfluxDB password"
         }
+      },
+      "hardware_parameters": {
+        "title": "Configure hardware plugins",
+        "description": "Fields are provided by the selected plugins.",
+        "data": {
+          "battery_parameters": "Battery / inverter",
+          "wallbox_parameters": "Wallbox"
+        }
       }
     },
     "error": {
@@ -67,7 +75,8 @@
       "invalid_config": "Check URLs, limits and driver parameters"
     },
     "abort": {
-      "already_configured": "Already configured"
+      "already_configured": "Already configured",
+      "invalid_plugin": "Plugin unavailable or invalid."
     }
   },
   "options": {
@@ -166,7 +175,8 @@
           "wallbox_status": "Charger status",
           "wallbox_enable": "Charging enabled",
           "wallbox_current": "Charging current",
-          "wallbox_phases": "Number of phases"
+          "wallbox_phases": "Number of phases",
+          "wallbox_parameters": "Plugin settings"
         },
         "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
       },
@@ -209,6 +219,41 @@
           "wallbox_phases": "Number of phases"
         },
         "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
+      },
+      "hardware_parameters": {
+        "title": "Configure hardware plugins",
+        "description": "Fields are provided by the selected plugins.",
+        "data": {
+          "battery_parameters": "Battery / inverter",
+          "wallbox_parameters": "Wallbox"
+        }
+      },
+      "vehicle_plugin": {
+        "title": "Select wallbox plugin",
+        "data": {
+          "wallbox_type": "Wallbox-Plugin"
+        }
+      },
+      "vehicle_parameters": {
+        "title": "Add / edit vehicle and wallbox",
+        "data": {
+          "vehicle_id": "Vehicle",
+          "id": "Stable vehicle ID",
+          "name": "Vehicle name",
+          "resource": "EOS resource",
+          "soc_entity": "SoC sensor (optional)",
+          "soc_scale": "SoC scale",
+          "capacity_wh": "Capacity (Wh)",
+          "charging_efficiency": "Charging efficiency",
+          "max_current_a": "Maximum current (A)",
+          "wallbox_power": "Charger power",
+          "wallbox_status": "Charger status",
+          "wallbox_enable": "Charging enabled",
+          "wallbox_current": "Charging current",
+          "wallbox_phases": "Number of phases",
+          "wallbox_parameters": "Plugin settings"
+        },
+        "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
       }
     },
     "error": {
@@ -216,7 +261,8 @@
       "invalid_config": "Check URLs, limits and driver parameters"
     },
     "abort": {
-      "no_vehicles": "No vehicle configured"
+      "no_vehicles": "No vehicle configured",
+      "invalid_plugin": "Plugin unavailable or invalid."
     }
   },
   "entity": {
