@@ -32,7 +32,7 @@ def validate_options(options):
         raise ValueError("Resources must be different")
     if type(options["allow_battery_export"]) is not bool:
         raise ValueError("Invalid export permission")
-    for key, low, high in (("display_hold_s",60,86400),("capacity_wh", 1000, 300000), ("charging_efficiency", .1, 1),
+    for key, low, high in (("sensor_alignment_s",1,60),("command_settle_s",5,300),("display_hold_s",60,86400),("capacity_wh", 1000, 300000), ("charging_efficiency", .1, 1),
                            ("grid_limit_w", 1380, 100000), ("max_current_a", 6, 32),
                            ("phase_wait_s", 10, 600), ("regulation_interval_s", 5, 120),
                            ("battery_charge_w", 0, 50000), ("battery_discharge_w", 0, 50000)):

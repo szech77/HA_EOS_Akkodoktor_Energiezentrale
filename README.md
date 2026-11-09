@@ -549,3 +549,22 @@ ab Einrichtung geführt; ältere individuelle Influx-Verläufe werden hier noch 
 ### Letzte Sensorwerte anzeigen
 
 Unter **Konfigurieren → Grenzen → Letzte Messwerte anzeigen für** wird die Anzeigedauer in Sekunden eingestellt (Standard 900 = 15 Minuten, Bereich 60–86400). Kurzzeitig fehlende oder nicht mehr frische Messwerte bleiben mit Altersangabe sichtbar. Abgeleitete Leistungen sind als Schätzung markiert. Die Regelung und historischen Messreihen verwenden weiterhin ausschließlich ihre regulär gültigen Werte. Der Anzeigepuffer wird bei einem Integrationsneustart neu aufgebaut.
+
+### Unterschiedliche Aktualisierungszeiten der Messgeräte
+
+Das Auslesen des HA-Zustands bildet einen gemeinsamen Cache-Schnappschuss, erzwingt
+aber keine gleichzeitigen Messungen von Smart Meter und Wallbox. Für das Stromflussbild
+werden deshalb jüngere Messungen gepuffert und zu einem zeitlich passenden Satz
+zusammengestellt. Maximaler Zeitversatz: standardmäßig 10 Sekunden. Ein älterer
+abgeglichener Satz bleibt innerhalb der eingestellten Anzeigehaltezeit sichtbar;
+Zeitstempel und Altersangaben kennzeichnen die Verzögerung. Eine echte Synchronisation
+der Hardware oder Kenntnis eines verborgenen geräteinternen Messverzugs ersetzt dies nicht.
+
+Nach einem Ladebefehl erfolgen weitere Strom-, Phasen- oder PV-Stoppentscheidungen
+erst nach Ablauf des Regelintervalls und nach neuen Meldungen sowohl des Netzzählers
+als auch der Wallboxleistung. Bei ausbleibenden Meldungen wird nach standardmäßig
+60 Sekunden pausiert. Netzgrenzüberschreitung, fehlende erforderliche Messwerte,
+Abstecken und eine reguläre Stoppvorgabe werden weiterhin sofort behandelt.
+Beide Zeitparameter sind unter **Konfigurieren → Grenzen** einstellbar.
+Die abgeglichenen Anzeigewerte werden nicht als frische Regelwerte oder neue
+historische Messungen ausgegeben und verändern die EOS-Messeingänge nicht.

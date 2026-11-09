@@ -9,6 +9,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
+from .alignment import FlowAlignment, report_times
 
 
 class Controller:
@@ -22,6 +23,9 @@ class Controller:
         self.owned = False
         self.live = {}
         self.display = {}
+        self.flow_display = {}
+        settings=getattr(config,"options",{})
+        self.flow_alignment=FlowAlignment(settings.get("sensor_alignment_s",10),settings.get("display_hold_s",900))
         self.display_values = DisplayValues(getattr(config,"options",{}).get("display_hold_s",900))
         self.plan = None
         self.forecast = []
@@ -219,6 +223,9 @@ class Controller:
         self.display=self.display_values.update(states,live,opts,
             battery_ids if isinstance(battery_ids,dict) else {},
             wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
+        times=report_times(states,opts,battery_ids if isinstance(battery_ids,dict) else {},
+                           wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
+        self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display)
         battery_order = current_instruction(self.plan, opts["battery_resource"], now)
         car_order = current_instruction(self.plan, opts["vehicle_resource"], now)
         live["battery_mode"] = battery_order.mode if battery_order else None
@@ -303,6 +310,19 @@ class Controller:
             return
         grid, discharge = live["grid"], max(0, live["battery_discharge"])
         hard = min(11000, max(0, box.watts + opts["grid_limit_w"] - grid - discharge - 100))
+        if self.last_write is not None and grid<=opts["grid_limit_w"]:
+            meter=states.get(opts["grid_entity"],{})
+            grid_report=instant(meter.get("last_reported") or meter.get("last_updated"))
+            elapsed=(now-self.last_write).total_seconds()
+            new_reports=(grid_report is not None and grid_report>self.last_write
+                         and box.sample is not None and box.sample>self.last_write)
+            if elapsed<daily["regulation_interval_s"] or not new_reports:
+                if not new_reports and elapsed>=opts.get("command_settle_s",60):
+                    driver.pause(box)
+                    self.pv_session=False
+                live["car_control"]="waiting_measurements"
+                return
+
         solar_only = pv and planned == 0
         relative = solar_only and box.charging
         surplus = (pv_budget(max(0, live["solar"]), grid, box.watts if box.enabled else 0,
@@ -346,13 +366,6 @@ class Controller:
             if not driver.phase(phase, box):
                 return
             self.phase_target = None
-        if box.enabled and self.last_write is not None:
-            meter = states.get(opts["grid_entity"], {})
-            report = instant(meter.get("last_reported") or meter.get("last_updated"))
-            if (now - self.last_write).total_seconds() < daily["regulation_interval_s"]:
-                return
-            if pv and (report is None or report <= self.last_write):
-                return
         if not box.enabled or abs(box.amps - amps) >= 0.05:
             driver.charge(amps, box)
             self.last_write = now
@@ -367,7 +380,7 @@ class Controller:
             current = bool(generated and 0 <= (now - generated).total_seconds() < 3600)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
-            return {"live": dict(self.live), "display": dict(self.display), "settings": dict(self.config.daily),
+            return {"live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {
                         "managed": getattr(self.config, "battery_limits_managed", False),
                         "confirmed": self.battery_limits_confirmed ==

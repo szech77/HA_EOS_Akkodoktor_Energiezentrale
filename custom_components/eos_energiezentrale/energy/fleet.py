@@ -10,6 +10,7 @@ from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, daily_settings, save
 from .history import History
 from .display import DisplayValues
+from .alignment import FlowAlignment, report_times
 
 
 def vehicle_options(options):
@@ -109,6 +110,7 @@ class FleetController(Controller):
         self.global_options=options
         self.primary_history=None
         self.fleet_display_values=DisplayValues(options.get("display_hold_s",900))
+        self.fleet_alignment=FlowAlignment(options.get("sensor_alignment_s",10),options.get("display_hold_s",900))
         for index,(identity,values) in enumerate(vehicles):
             child_dir=directory if index==0 else directory/"vehicles"/identity
             child_dir.mkdir(parents=True,exist_ok=True)
@@ -225,6 +227,12 @@ class FleetController(Controller):
                 self.display["house"]={"value":estimate,"age_s":max((self.display.get(key,{}).get("age_s",0) for key in values)),"estimated":True}
             elif (retained:=self.fleet_display_values.retained("house",now)) is not None:
                 self.display["house"]=retained
+        times=report_times(rows,opts,self.battery_driver.ids,{},now)
+        car_times=[instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")) for _,_,proxy in self.controllers]
+        times["car"]=min(car_times) if all(car_times) else None
+        cars={identity:(actual[identity],instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")))
+              for identity,_,proxy in self.controllers}
+        self.flow_display=self.fleet_alignment.update(self.live,times,now,True,bool(opts["heat_entity"]),self.display,cars=cars)
         for payload in snapshots:
             payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
         self.history.write(now,self.live)

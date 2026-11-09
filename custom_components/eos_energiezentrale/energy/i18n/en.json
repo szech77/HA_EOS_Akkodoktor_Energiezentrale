@@ -189,6 +189,9 @@
     "fleet.title": "Vehicles and charging points",
     "fleet.total": "Total vehicle charging power",
     "fleet.forecast_note": "Select a vehicle for its SoC, EOS modes and measurements. Resource-specific EV power/SoC forecasts are not available in the legacy EOS solution; no shared curve is assigned to individual vehicles.",
-    "battery.minimum_reached": "Minimum state of charge reached"
+    "battery.minimum_reached": "Minimum state of charge reached",
+    "metric.aligned_age": "Time-aligned · {minutes} min ago",
+    "mode.waiting_measurements": "Waiting for grid and charger readings",
+    "metric.estimated_age": "Estimated · oldest reading {minutes} min ago"
   }
 }

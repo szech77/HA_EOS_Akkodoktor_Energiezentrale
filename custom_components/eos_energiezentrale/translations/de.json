@@ -46,7 +46,9 @@
           "max_current_a": "Maximaler Ladestrom (A)",
           "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
           "regulation_interval_s": "Vorgabe Regelintervall (s)",
-          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)"
+          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
+          "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
+          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)"
         }
       },
       "history": {
@@ -113,7 +115,9 @@
           "max_current_a": "Maximaler Ladestrom (A)",
           "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
           "regulation_interval_s": "Vorgabe Regelintervall (s)",
-          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)"
+          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
+          "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
+          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)"
         }
       },
       "history": {

@@ -120,9 +120,31 @@ class ControllerRequirements(unittest.TestCase):
             self.app.regulate_car(current, dict(live), 0, True, NOW+timedelta(seconds=elapsed), elapsed,
                                   self.states(when=sample))
             self.box.charge.assert_not_called()
-        self.app.regulate_car(current, dict(live), 0, True, NOW+timedelta(seconds=20), 20,
+        fresh=replace(current,sample=NOW+timedelta(seconds=19))
+        self.app.regulate_car(fresh, dict(live), 0, True, NOW+timedelta(seconds=20), 20,
                               self.states(when=NOW+timedelta(seconds=19)))
-        self.box.charge.assert_called_once_with(6.4, current)
+        self.box.charge.assert_called_once_with(6.4, fresh)
+
+    def test_late_wallbox_sample_cannot_trigger_stop_or_phase_switch_after_charging_command(self):
+        self.app.last_write=NOW
+        current=wallbox(watts=0,enabled=True,status="connected")
+        self.app.regulate_car(current,{"grid":2000,"solar":7000,"battery_discharge":0},
+                              0,True,NOW+timedelta(seconds=25),25,self.states(when=NOW+timedelta(seconds=24)))
+        self.box.pause.assert_not_called()
+        self.box.phase.assert_not_called()
+        self.box.charge.assert_not_called()
+        self.assertIsNone(self.app.candidate)
+
+    def test_sensor_settling_timeout_pauses_but_grid_overload_is_not_delayed(self):
+        self.app.last_write=NOW
+        current=wallbox(watts=4140,enabled=True,status="charging")
+        self.app.regulate_car(current,{"grid":0,"solar":7000,"battery_discharge":0},
+                              0,True,NOW+timedelta(seconds=61),61,self.states(when=NOW+timedelta(seconds=60)))
+        self.box.pause.assert_called_once()
+        self.box.reset_mock()
+        self.app.regulate_car(current,{"grid":18000,"solar":7000,"battery_discharge":0},
+                              0,True,NOW+timedelta(seconds=1),1,self.states(when=NOW+timedelta(seconds=1)))
+        self.box.pause.assert_called_once()
 
     def test_mixed_mode_uses_nearest_tenth_only_when_pv_dominates(self):
         self.config.daily = daily_settings({"pv":True}, 20)
@@ -134,13 +156,17 @@ class ControllerRequirements(unittest.TestCase):
     def test_cloud_cancels_phase_change_until_a_full_new_wait(self):
         self.config.daily = daily_settings({"pv":True}, 20)
         current = wallbox(watts=4140, enabled=True, status="charging")
-        for seconds, grid in ((0, 500), (40, -100), (50, 500), (109, 500)):
-            self.app.regulate_car(current, {"grid":grid, "solar":7000, "battery_discharge":0},
-                                  0, True, NOW+timedelta(seconds=seconds), seconds, self.states())
+        for seconds, grid in ((0, 500), (40, -100), (60, 500), (119, 500)):
+            fresh=replace(current,sample=NOW+timedelta(seconds=seconds))
+            self.app.regulate_car(fresh, {"grid":grid, "solar":7000, "battery_discharge":0},
+                                  0, True, NOW+timedelta(seconds=seconds), seconds,
+                                  self.states(when=NOW+timedelta(seconds=seconds)))
             self.box.phase.assert_not_called()
-        self.app.regulate_car(current, {"grid":500, "solar":7000, "battery_discharge":0},
-                              0, True, NOW+timedelta(seconds=110), 110, self.states())
-        self.box.phase.assert_called_once_with(1, current)
+        fresh=replace(current,sample=NOW+timedelta(seconds=120))
+        self.app.regulate_car(fresh, {"grid":500, "solar":7000, "battery_discharge":0},
+                              0, True, NOW+timedelta(seconds=120), 120,
+                              self.states(when=NOW+timedelta(seconds=120)))
+        self.box.phase.assert_called_once_with(1, fresh)
 
     def test_absent_consumers_do_not_block_storage_or_reduce_house_consumption(self):
         from custom_components.eos_energiezentrale.energy.drivers import NoWallbox

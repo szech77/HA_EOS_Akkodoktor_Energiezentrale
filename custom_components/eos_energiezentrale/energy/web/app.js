@@ -139,15 +139,20 @@ function vehicleCards() {
   return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small class="vehicle-heading">${carIcon(valid(vehicle.live.car_soc) ? vehicle.live.car_soc : vehicle.display?.car_soc?.value)}${html(vehicle.name)}</small><strong>${html((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
 }
 
-const displayed = key => valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value;
-const displayedPower = key => (snapshot.display?.[key] && !valid(snapshot.live[key]) ? '≈ ' : '')+power(displayed(key));
+const displayed = key => snapshot.flow_display?.[key]?.value ?? (valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value);
+const displayedPower = key => (snapshot.flow_display?.[key] || (snapshot.display?.[key] && !valid(snapshot.live[key])) ? '≈ ' : '')+power(displayed(key));
+const displayAge = key => {
+  const retained=snapshot.flow_display?.[key] ?? snapshot.display?.[key];
+  return retained && (retained.aligned || !valid(snapshot.live[key])) ? t(retained.aligned ? 'metric.aligned_age' : 'metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : null;
+};
 
 function overview() {
   byId('vehicle-cards').innerHTML=vehicleCards();
   const live = snapshot.live;
   const remaining = solarRemaining();
   byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? t('control.active') : t('control.read_only');
-  byId('live-time').textContent = live.time ? time(live.time) : t('status.no_readings');
+  const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
+  byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
     [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
     [t('metric.price_now'),price(displayed('price')),t('metric.import')],
@@ -160,8 +165,8 @@ function overview() {
     node.hidden = !consumerEnabled(key);
     flow.style.display = consumerEnabled(key) ? "" : "none";
     if (!consumerEnabled(key)) return;
-    const retained = snapshot.display?.[key];
-    const stale = !valid(live[key]) && valid(retained?.value);
+    const retained = snapshot.flow_display?.[key] ?? snapshot.display?.[key];
+    const stale = valid(retained?.value) && (retained.aligned || !valid(live[key]));
     const value = stale ? retained.value : live[key];
     const soc = key === 'car' && snapshot.vehicles?.length ? undefined : displayed(key + '_soc');
     if (key === 'car') {
@@ -186,8 +191,8 @@ function overview() {
       ageNote.className = 'reading-age';
       node.append(ageNote);
     }
-    ageNote.hidden = !stale;
-    ageNote.textContent = stale ? t(retained.estimated ? 'metric.estimated_heat_age' : 'metric.last_report_age',
+    ageNote.hidden = !stale || (retained.aligned && retained.age_s<10);
+    ageNote.textContent = stale ? t(retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
       {minutes:Math.ceil(retained.age_s / 60)}) : '';
     node.title = ageNote.textContent;
     if (key === "car" && snapshot.vehicles?.length) names.car=t("fleet.vehicles",{count:snapshot.vehicles.length});
@@ -284,10 +289,7 @@ function energyDetail(now) {
   byId('detail-title').textContent=t('device.energy');
   const names = {solar:t('node.solar'),grid:t('node.grid'),battery:t('node.battery'),house:t('node.house'),car:t('node.car'),heat:t('device.heat')};
   byId('detail-kpis').innerHTML=cards(Object.entries(names).filter(([key])=>consumerEnabled(key)).map(([key,label])=>{
-    const retained=snapshot.display?.[key];
-    const estimated=!valid(snapshot.live[key]) && valid(retained?.value);
-    return [label,(estimated ? '≈ ' : '')+power(estimated ? retained.value : snapshot.live[key]),
-      estimated ? t('metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : t('metric.measured')];
+    return [label,displayedPower(key),displayAge(key) ?? t("metric.measured")];
   }));
   byId('timeline').innerHTML='';
   const additional = ['grid','battery','house','car','heat'].filter(consumerEnabled).map(key=>({key,label:names[key],divisor:1000,color:key,future:key!=='house'}));
@@ -376,7 +378,7 @@ function detail(key) {
     if (!vehicle) return;
     const original=snapshot, originalHistory=history;
     try {
-      snapshot={...original,...vehicle,vehicles:[],vehicle_name:vehicle.name};
+      snapshot={...original,...vehicle,vehicles:[],vehicle_name:vehicle.name,display:vehicle.display ?? {},flow_display:vehicle.flow_display ?? {}};
       history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
       detail('car');
       byId('detail-title').textContent=vehicle.name;
@@ -411,7 +413,7 @@ function detail(key) {
     car:[[t('chart.soc'),percent(displayed("car_soc")),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
     heat:[]
   };
-  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),displayedPower(key),snapshot.display?.[key] && !valid(live[key]) ? t('metric.last_report_age',{minutes:Math.ceil(snapshot.display[key].age_s/60)}) : key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured')],...metadata[key]]);
+  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),displayedPower(key),displayAge(key) ?? (key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured'))],...metadata[key]]);
   const withPlan = key === 'battery' || key === 'car';
   byId('timeline').innerHTML = withPlan ? timeline(key,now) : '';
   byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now,withPlan ? [{key:'solar',label:t('chart.solar'),divisor:1000,color:'solar'}] : [])
