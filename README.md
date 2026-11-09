@@ -6,6 +6,60 @@ HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen
 Speichersteuerung und PV-Überschussladen. Ab Version **0.2.0** läuft die
 Energiezentrale direkt in Home Assistant. Der EOS-Server bleibt ein separater Dienst.
 
+## Einblick in die Oberfläche
+
+Die folgenden Screenshots zeigen die aktuelle Oberfläche mit **synthetischen
+Beispieldaten**, nicht die Messwerte einer echten Anlage. Sichtbare Geräte und
+Prognosen hängen von der eigenen Konfiguration und den verfügbaren Daten ab.
+Die Beispieldaten verwenden eine geprüfte Leistungsbilanz; Ladezustände und
+Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screenshots/README.md#plausibilität-der-beispieldaten).
+
+### Übersicht: Energiefluss, Wetter und Tagesbilanz
+
+Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
+Energiefluss. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
+Ein Klick auf ein Gerätesymbol öffnet die zugehörige Detailansicht.
+
+![Desktop-Übersicht mit Energiefluss, Wetter, Ladezuständen und Tagesverbrauch samt Kosten](docs/screenshots/overview.png)
+
+### Hausspeicher: Verlauf und EOS-Plan
+
+Die farbige Zeitleiste zeigt vergangene und geplante Betriebsmodi. Darunter stehen
+Lade-/Entladeleistung, PV-Produktion, Ladezustand und Strompreis. Durchgezogene
+Linien zeigen Messwerte, gestrichelte Linien die Prognose.
+
+![Hausspeicher mit EOS-Moduszeitleiste, Leistungs-, SoC- und Preisverlauf](docs/screenshots/battery.png)
+
+<details>
+<summary><strong>E-Auto: Ladeleistung, Ladeziel und Prognose</strong></summary>
+
+Die Fahrzeugansicht zeigt Ladeziel und Abfahrtszeit sowie die EOS-Lademodi,
+Wallbox-Leistung, PV-Produktion, SoC und Bezugspreise.
+
+![E-Auto-Detailansicht mit Ladeziel, Moduszeitleiste, Wallbox-Leistung, SoC und Strompreis](docs/screenshots/vehicle.png)
+
+</details>
+
+<details>
+<summary><strong>Photovoltaik: Ertrag und Tagesprognosen</strong></summary>
+
+Aktuelle PV-Leistung, heutiger Ertrag und Prognosen für heute, morgen und
+übermorgen stehen über dem gemeinsamen Verlauf aus Messung und Prognose.
+
+![PV-Detailansicht mit Tagesertrag, Prognosen für drei Tage und Leistungsverlauf](docs/screenshots/solar.png)
+
+</details>
+
+<details>
+<summary><strong>Handyansicht der Übersicht</strong></summary>
+
+Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
+Übersicht; Tagesbilanz und weitere Informationen folgen darunter beim Scrollen.
+
+<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit aktuellen Energiewerten, Wettersymbol und Energieflussdiagramm">
+
+</details>
+
 ## Installation
 
 Voraussetzung: Home Assistant **2026.11.0 oder neuer** und ein erreichbarer
