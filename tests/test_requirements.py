@@ -389,6 +389,14 @@ class DataAndConfigurationRequirements(unittest.TestCase):
         self.assertIsNone(second["house"])
         self.assertIsNone(second.get("battery"))
 
+    def test_pv_forecast_retains_available_energy_beyond_the_chart_day(self):
+        solution = {"start_solution_datetime": NOW.isoformat(), "interval_seconds": 3600,
+                    "parameters": {"ems": {"pv_forecast_wh": [1000] * 60}}, "result": {}}
+        rows = forecast_rows(solution, NOW)
+        self.assertEqual(len(rows), 60)
+        self.assertEqual(sum(row["solar"] for row in rows), 60000)
+        self.assertEqual(rows[-1]["end"], (NOW + timedelta(hours=60)).isoformat())
+
     def test_forecast_signed_power_and_units_with_missing_values(self):
         solution = {"start_solution_datetime":NOW.isoformat(), "interval_seconds":900,
                     "parameters":{"ems":{"pv_forecast_wh":[1500,None], "total_load":[750,800]},

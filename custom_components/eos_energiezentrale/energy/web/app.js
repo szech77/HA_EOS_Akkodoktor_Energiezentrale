@@ -96,7 +96,7 @@ function solarRemaining() {
   return covered ? `${decimal(wh / 1000)} ${t('unit.kwh')}` : null;
 }
 
-function solarToday() {
+function solarTodayEnergy() {
   const now = windowNow();
   const date = localDay(now);
   const points = actualPoints('solar').filter(row => localDay(row.time) === date);
@@ -108,7 +108,24 @@ function solarToday() {
       covered += duration;
     }
   }
-  return covered ? `${decimal(wh / 1000)} ${t('unit.kwh')}` : '—';
+  return covered ? wh / 1000 : null;
+}
+
+function solarToday() {
+  const energy=solarTodayEnergy();
+  return valid(energy) ? `${decimal(energy)} ${t('unit.kwh')}` : '—';
+}
+
+function solarForecastCards(now) {
+  const days=EosChartData.dailySolar(snapshot.forecast,now,snapshot.zone);
+  const measured=solarTodayEnergy();
+  return days.map((row,i)=>{
+    const totalToday=i===0 && valid(measured) && valid(row.kwh);
+    const value=valid(row.kwh) ? `${totalToday ? '≈ ' : ''}${decimal(row.kwh+(totalToday ? measured : 0))} ${t('unit.kwh')}` : '—';
+    return [t(['metric.pv_forecast_today','metric.pv_forecast_tomorrow','metric.pv_forecast_day_after'][i]),value,
+      !valid(row.kwh) ? t('metric.forecast_missing') : totalToday ? t('metric.forecast_today_total')+(row.complete ? '' : ' · '+t('metric.forecast_partial'))
+      : i===0 ? t('metric.forecast_remaining_only') : row.complete ? t('metric.forecast_complete') : t('metric.forecast_partial')];
+  });
 }
 
 function overview() {
@@ -329,7 +346,7 @@ function detail(key) {
   const [name,title] = [t(`device.${key}`),t(`chart.${key}`)];
   byId('detail-title').textContent = name;
   const metadata = {
-    solar:[[t('metric.pv_today'),solarToday(),t('metric.available_intervals')]],
+    solar:[[t('metric.pv_today'),solarToday(),t('metric.available_intervals')],...solarForecastCards(now)],
     grid:[[t('metric.direction'),valid(live.grid) ? live.grid < 0 ? t('metric.export') : t('metric.import') : '—',t('metric.grid_connection')]],
     battery:[[t('chart.soc'),percent(live.battery_soc),t('metric.measured')],[t('metric.eos_mode'),modeLabel(live.battery_mode),stateLabel('mode',live.battery_control)]],
     house:[[t('metric.house_total'),power(live.house_total),t('metric.house_includes')]],

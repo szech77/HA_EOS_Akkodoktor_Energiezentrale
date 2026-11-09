@@ -35,9 +35,9 @@ def forecast_rows(solution, now):
         return delta * (number(settings.get("discharging_efficiency")) or 1) if bidirectional else 0
 
     rows = []
-    for i in range(min(1441, int(25 * 3600 / step))):
+    for i in range(min(4321, int(73 * 3600 / step))):
         time = start + timedelta(seconds=step * i)
-        if time + timedelta(seconds=step) <= now or time > now + timedelta(hours=24):
+        if time + timedelta(seconds=step) <= now or time > now + timedelta(hours=72):
             continue
         solar = at(ems, "pv_forecast_wh", i)
         load = at(ems, "total_load", i)
