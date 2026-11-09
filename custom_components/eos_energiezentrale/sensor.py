@@ -28,7 +28,7 @@ class EnergySensor(EnergyEntity, SensorEntity):
         self._attr_device_class = device_class
         if unit is not None or key == "car_soc_factor":
             self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_suggested_display_precision = 2 if unit == "kW" else 1
+            self._attr_suggested_display_precision = 2 if unit == "kW" else 1
 
     @property
     def native_value(self):

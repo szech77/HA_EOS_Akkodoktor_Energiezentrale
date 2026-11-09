@@ -26,6 +26,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- EOS-Modus- und Wallbox-Statussensoren bleiben Textsensoren; Sprachpakete werden ohne blockierenden Dateizugriff im HA-Eventloop geladen.
+
 - HACS prüft Feature-Branch-Lizenzen lokal, während GitHub-Metadaten auf main validiert werden; Einrichtung von Beschreibung und Topics ergänzt und Energie-Kategorie im Manifest hinterlegt.
 
 - Letzte gültige Wärmepumpenleistung bleibt mit Altersangabe in der Übersicht sichtbar; daraus geschätzter Hausverbrauch ist gekennzeichnet und wird nicht als frischer Regel- oder Verlaufswert verwendet.
@@ -69,6 +71,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- EOS-Modus- und Wallbox-Statussensoren bleiben Textsensoren; Sprachpakete werden ohne blockierenden Dateizugriff im HA-Eventloop geladen.
+
 - Keine.
 
 ### Breaking Changes
@@ -87,6 +91,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Fachliche Regressionstests für Ladeziele, Messwertalter, Phasenwechsel, Speicherfreigabe, Persistenz und Ingress-Grenzen.
 
 ### Bugfixes
+
+- EOS-Modus- und Wallbox-Statussensoren bleiben Textsensoren; Sprachpakete werden ohne blockierenden Dateizugriff im HA-Eventloop geladen.
 
 - Die Regelung bleibt nach einer fehlgeschlagenen Geräterückgabe deaktiviert. Eine ausstehende Rückgabe kann erneut versucht werden.
 - Vor dem NRGkick-Phasenwechsel werden zwei frische Nullleistungsmessungen nach dem Abschaltbefehl verlangt.
@@ -108,6 +114,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Sprachauswahl in der Add-on-Konfiguration.
 
 ### Bugfixes
+
+- EOS-Modus- und Wallbox-Statussensoren bleiben Textsensoren; Sprachpakete werden ohne blockierenden Dateizugriff im HA-Eventloop geladen.
 
 - Keine.
 
@@ -131,6 +139,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Lesemodus, explizite Steuerungsübernahme und über Ingress erreichbare Oberfläche.
 
 ### Bugfixes
+
+- EOS-Modus- und Wallbox-Statussensoren bleiben Textsensoren; Sprachpakete werden ohne blockierenden Dateizugriff im HA-Eventloop geladen.
 
 - Keine.
 

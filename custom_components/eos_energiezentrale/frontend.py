@@ -1,4 +1,5 @@
 """Authenticated HA WebSocket API and same-origin panel resources."""
+from functools import partial
 from pathlib import Path
 
 import probatio as vol
@@ -52,8 +53,9 @@ async def websocket_request(hass, connection, msg):
         elif action == "history":
             result = await coordinator.async_history()
         elif action == "language":
-            result = load_language(coordinator.app.config.options["language"],
-                                   ha_language=msg.get("language") or hass.config.language)
+            result = await hass.async_add_executor_job(partial(
+                load_language, coordinator.app.config.options["language"],
+                ha_language=msg.get("language") or hass.config.language))
         else:
             if action == "control":
                 if values.keys() != {"enabled"} or type(values["enabled"]) is not bool:

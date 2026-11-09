@@ -154,6 +154,32 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(soc.extra_state_attributes, {"source": "estimate"})
         self.assertIsNone(EnergySensor(coordinator, "solar").native_value)
 
+    async def test_mode_and_status_sensors_publish_text_through_ha_state_machine(self):
+        coordinator, _ = self.controller()
+        readings = {"battery_mode": "NON_EXPORT", "car_mode": "IDLE", "car_status": "connected"}
+        coordinator.async_set_updated_data({"live": readings})
+        for key, value in readings.items():
+            with self.subTest(key=key):
+                entity = EnergySensor(coordinator, key)
+                entity.hass = self.hass
+                entity.entity_id = "sensor.regression_" + key
+                entity.platform_data = SimpleNamespace(platform_name=DOMAIN, domain="sensor",
+                                                       default_language_platform_translations={})
+                self.hass.states.async_set(entity.entity_id, entity.state)
+                self.assertEqual(self.hass.states.get(entity.entity_id).state, value)
+
+    async def test_language_request_loads_translations_without_blocking_event_loop(self):
+        self.controller()
+        from custom_components.eos_energiezentrale.energy.localization import load_language
+        def checked_load(*args, **kwargs):
+            with self.assertRaises(RuntimeError):
+                asyncio.get_running_loop()
+            return load_language(*args, **kwargs)
+        with patch("custom_components.eos_energiezentrale.frontend.load_language", side_effect=checked_load):
+            connection = await self.invoke({"action": "language", "language": "de"})
+        connection.send_error.assert_not_called()
+        self.assertEqual(connection.send_result.call_args.args[1]["locale"], "de-DE")
+
     async def test_first_setup_starts_without_control_permission(self):
         # Real config, SQLite cache and drivers, while external APIs remain offline.
         self.entry._async_set_state(self.hass, ConfigEntryState.SETUP_IN_PROGRESS, None)
