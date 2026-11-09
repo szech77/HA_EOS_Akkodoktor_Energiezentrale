@@ -20,16 +20,17 @@ def schema_for(group, values):
             field = selector.BooleanSelector()
         elif key in {"language", "car_soc_scale", "battery_type", "wallbox_type"}:
             choices = {"language": ["auto", "en", "de"], "car_soc_scale": ["factor", "percent"],
-                       "battery_type": ["fronius"], "wallbox_type": ["nrgkick"]}[key]
+                       "battery_type": ["fronius"], "wallbox_type": ["none", "nrgkick"]}[key]
             field = selector.SelectSelector(selector.SelectSelectorConfig(options=choices))
         elif isinstance(default, (int, float)):
             field = vol.Coerce(type(default))
         else:
             field = selector.TextSelector(selector.TextSelectorConfig(
                 type=selector.TextSelectorType.PASSWORD if key == "influx_password"
-                else selector.TextSelectorType.TEXT, multiline=key.endswith("_parameters")))
-        marker = vol.Optional if key in {"influx_url", "influx_user", "influx_password"} else vol.Required
-        fields[marker(key, default=default)] = field
+                else selector.TextSelectorType.TEXT, multiline=key.endswith("_parameters") or key == "vehicles"))
+        optional_source = key in {"heat_entity", "car_soc_entity"}
+        marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password"} else vol.Required
+        fields[marker(key, **({} if optional_source and not default else {"default":default}))] = field
     return vol.Schema(fields)
 
 
@@ -49,7 +50,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self):
-        self.values = dict(DEFAULTS)
+        self.values = {**DEFAULTS, "wallbox_type":"none", "heat_entity":"", "car_soc_entity":""}
 
     async def async_step_user(self, user_input=None):
         await self.async_set_unique_id(DOMAIN)
@@ -59,6 +60,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _step(self, group, user_input):
         errors = {}
         if user_input is not None:
+            if group == "sensors":
+                user_input = {"heat_entity":"", "car_soc_entity":"", **user_input}
             values = {**self.values, **user_input}
             errors = await check(self.hass, values, group == "connection")
             if not errors:
@@ -95,6 +98,8 @@ class OptionsFlow(config_entries.OptionsFlow):
         return self.async_show_menu(step_id="init", menu_options=list(GROUPS))
 
     async def _step(self, group, user_input):
+        if group == "sensors" and user_input is not None:
+            user_input = {"heat_entity":"", "car_soc_entity":"", **user_input}
         values = {**DEFAULTS, **self.config_entry.data, **self.config_entry.options, **(user_input or {})}
         errors = {}
         if user_input is not None:

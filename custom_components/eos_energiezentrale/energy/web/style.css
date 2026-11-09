@@ -126,3 +126,9 @@
 #eos-energy-design .tooltip-series {display:flex;gap:6px;align-items:center;margin-top:7px;}
 #eos-energy-design .tooltip-series strong {margin-left:auto;white-space:nowrap;}
 @media(max-width:600px) {#eos-energy-design .interactive-plot svg {height:230px;}}
+
+#eos-energy-design .node[hidden] {display:none;}
+
+#eos-energy-design .vehicle-card {display:grid;gap:8px;padding:16px;background:var(--surface);border:1px solid var(--edge);border-radius:12px;color:var(--ink);text-decoration:none;}
+#eos-energy-design .vehicle-card strong {color:var(--car);font-size:24px;}
+#eos-energy-design .vehicle-card:hover {border-color:var(--car);}

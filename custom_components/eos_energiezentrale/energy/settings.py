@@ -56,6 +56,8 @@ class Configuration:
         self.options = options
         self.zone = ZoneInfo(options["timezone"])
         for key in ("pv_entity", "house_entity", "grid_entity", "heat_entity", "price_entity", "car_soc_entity"):
+            if key in {"heat_entity", "car_soc_entity"} and options[key] == "":
+                continue
             if not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):
                 raise ValueError(f"Ungültige Sensorentität: {key}")
         if not 0 <= options["battery_min_soc"] < options["battery_max_soc"] <= 100:

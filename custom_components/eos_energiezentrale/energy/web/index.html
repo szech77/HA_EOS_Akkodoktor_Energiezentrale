@@ -44,6 +44,7 @@
         </div>
       </div>
       <div class="next" id="next"></div>
+      <div class="kpis" id="vehicle-cards"></div>
     </section>
     <section id="detail" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>
@@ -60,6 +61,8 @@
       <a class="back" href="#overview" data-i18n="nav.back"></a>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div><span class="tag" id="ownership"></span></div>
       <form id="daily">
+        <label id="vehicle-selector-label" hidden><span data-i18n="settings.vehicle"></span><select id="vehicle-selector"></select></label>
+        <div data-optional="car">
         <h2 data-i18n="settings.auto_pv"></h2>
         <div class="checks">
           <label><input name="pv" type="checkbox"><span data-i18n="settings.pv"></span></label>
@@ -81,6 +84,7 @@
           <label><input name="day" value="4" type="checkbox"><span data-i18n="weekday.fri"></span></label><label><input name="day" value="5" type="checkbox"><span data-i18n="weekday.sat"></span></label>
           <label><input name="day" value="6" type="checkbox"><span data-i18n="weekday.sun"></span></label>
         </div></fieldset>
+        </div>
         <h2 data-i18n="device.battery"></h2>
         <div class="fields">
           <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
@@ -88,7 +92,7 @@
         </div>
         <p class="footnote" data-i18n="settings.battery_limits_info"></p>
         <p id="battery-limits-status" class="footnote" role="status"></p>
-        <label class="check"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
+        <label class="check" data-optional="car"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
         <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
       </form>
       <section class="plan-panel">

@@ -510,3 +510,36 @@ Lizenzbedingungen; Urheberhinweise siehe [NOTICE](NOTICE).
 ### Interaktive Energie-Diagramme
 
 Ein Klick auf **Energie** in der Mitte des Stromflussbilds öffnet alle verfügbaren Energieflüsse. Speicher- und Fahrzeugdiagramme enthalten zusätzlich die PV-Messwerte und PV-Prognose. Mausbewegung oder Tippen zeigt Werte und Messzeitpunkte; per Tab und Pfeiltasten ist dieselbe Auswahl möglich. Historie ist durchgezogen, Prognose gestrichelt. Fehlende Daten bleiben Lücken. Die Hausgesamtprognose enthält Auto und Wärmepumpe und wird entsprechend beschriftet.
+
+### Optionale Verbraucher
+
+Neue Einrichtungen starten ohne E-Auto und Wärmepumpe. Unter den Integrationsoptionen aktiviert ein ausgewählter Wärmepumpensensor die Wärmepumpe; ein leeres Feld entfernt sie. Für das E-Auto unter Hardware den Wallbox-Typ `nrgkick` auswählen, zum Deaktivieren `none`. Ohne diese Verbraucher entfallen ihre Knoten, Leitungen und Detailnavigation im Stromfluss. Der Hausverbrauch berücksichtigt nur konfigurierte Verbraucher. Ein konfigurierter, aber ausgefallener Sensor bleibt hingegen ein fehlender Messwert. Bestehende Einrichtungen behalten ihre bisherigen Einstellungen.
+
+### Mehrere Fahrzeuge und Wallboxen
+
+Unter **Integration → Konfigurieren → Hardware → Mehrere Fahrzeuge / Wallboxen**
+eine JSON-Liste eintragen. Ein vollständiges Beispiel steht in
+[examples/vehicles.json](examples/vehicles.json). `[]` verwendet weiterhin die
+bisherige Einzelkonfiguration. Eine nicht leere Liste ersetzt die Einzelzuordnung.
+Bis zu acht Fahrzeug-Wallbox-Paare sind möglich; für jedes Paar Name, stabile `id`,
+eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, Kapazität und die fünf
+Wallbox-Entitäten angeben. Die Fahrzeuge müssen auch in EOS angelegt sein.
+Die Konfiguration erstellt oder überschreibt keine EOS-Gerätedefinitionen.
+
+In den Alltagseinstellungen das Fahrzeug auswählen und dessen Ziel-SoC,
+PV-Ziel, Abfahrt und Schnellladung speichern. Die Speichergrenzen bleiben global.
+Der Stromfluss zeigt die gesamte Autoladeleistung; einzelne Fahrzeugkarten öffnen
+Messwerte, SoC und den jeweiligen EOS-Zeitplan. Es entstehen eigene native Sensoren
+für Leistung, SoC und Status jedes Fahrzeugs. Die Fahrzeug-ID bestimmt deren Identität.
+
+Alle Regler verwenden denselben Netzanschluss. Nicht gemessene Leistungserhöhungen
+werden bereits reserviert; Minderungen werden erst nach Messung frei. Bei knappem
+Budget hat die Reihenfolge in der Liste Vorrang. Beim Abschalten werden alle Ladepunkte
+pausiert und der Speicher freigegeben. Die Hausleistung zieht alle gemessenen
+Fahrzeugleistungen genau einmal ab.
+
+Die bisherige EOS-Lösungsantwort enthält nur eine nicht nach Fahrzeugressourcen
+aufgeschlüsselte EV-Prognose. In der Mehrfahrzeugansicht werden deshalb keine
+Leistungs-/SoC-Prognosen einzelnen Fahrzeugen zugeordnet. PV-Prognose und
+ressourcenspezifische EOS-Moduspläne bleiben verfügbar. Fahrzeughistorie wird lokal
+ab Einrichtung geführt; ältere individuelle Influx-Verläufe werden hier noch nicht geladen.

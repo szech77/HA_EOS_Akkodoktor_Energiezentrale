@@ -225,5 +225,21 @@ class NRGkick:
             self.ha.set(self.ids["enable"], True)
 
 
+class NoWallbox:
+    """Explicitly absent vehicle: no device reads or commands."""
+    ids = {}
+    def __init__(self, ha, params):
+        if not isinstance(params, dict):
+            raise ValueError("Wallbox parameters must be an object")
+    def read(self, states, now):
+        return WallboxReading(0, "disconnected", False, 1, 6, .1, 16, now)
+    def pause(self, state):
+        pass
+    def charge(self, amps, state):
+        raise ValueError("No wallbox configured")
+    def phase(self, phases, state):
+        raise ValueError("No wallbox configured")
+
+
 BATTERY_DRIVERS = {"fronius": Fronius}
-WALLBOX_DRIVERS = {"nrgkick": NRGkick}
+WALLBOX_DRIVERS = {"nrgkick": NRGkick, "none": NoWallbox}

@@ -155,6 +155,8 @@ class Controller:
                 self.errors["forecast"] = type(error).__name__
 
     def update_soc(self, states, box, now):
+        if self.config.options.get("wallbox_type") == "none":
+            return False
         options = self.config.options
         entity = options["car_soc_entity"]
         raw = reading(states, entity, now, "soc")
@@ -204,11 +206,14 @@ class Controller:
                     soc_source="vehicle" if measured else "estimate" if self.soc is not None else None,
                     car_status=box.status, phases=box.phases, amps=box.amps,
                     battery_charge=battery.charge, battery_discharge=battery.discharge)
-        live["house"] = house_only(live["house_total"], live["car"], live["heat"])
+        car_enabled = opts.get("wallbox_type") != "none"
+        heat_enabled = bool(opts.get("heat_entity"))
+        live["house"] = house_only(live["house_total"], live["car"] if car_enabled else 0,
+                                   live["heat"] if heat_enabled else 0)
         # Presentation only: slow/report-on-change heat meters may retain a
         # valid last value. Never promote it into fresh control or history data.
         self.display = {}
-        if live["heat"] is None:
+        if heat_enabled and live["heat"] is None:
             row = states.get(opts["heat_entity"], {})
             stamp = instant(row.get("last_reported") or row.get("last_updated"))
             retained_heat = reading(states, opts["heat_entity"], now, "power")
@@ -261,7 +266,7 @@ class Controller:
         if published != self.last_soc_publish:
             self.ha.publish_soc(self.soc, measured)
             self.last_soc_publish = published
-        synchronized = self.sync_goal(now, clock, departure)
+        synchronized = self.sync_goal(now, clock, departure) if car_enabled else False
         generated = instant(self.plan.get("generated_at")) if isinstance(self.plan, dict) else None
         planned = 0
         maximum_power = min(11000, opts["max_current_a"] * 690)
@@ -279,7 +284,8 @@ class Controller:
         if not (pv and planned == 0):
             self.pv_session = False
         self.control_step = "wallbox_control"
-        self.regulate_car(box, live, planned, pv, now, clock, states)
+        if car_enabled:
+            self.regulate_car(box, live, planned, pv, now, clock, states)
         command = battery_command(battery_order, battery.soc,
                                   {**opts, "battery_min_soc": daily["battery_min_soc"],
                                    "battery_max_soc": daily["battery_max_soc"]},
@@ -377,10 +383,11 @@ class Controller:
                     "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "errors": dict(self.errors), "last_failure": self.last_failure, "zone": opts["timezone"],
+                    "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "influx_configured": bool(self.config.influx.url),
                     "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}
                                    for item in plan_series(plan, opts[resource])]
-                             if current else [] for key, resource in (("battery", "battery_resource"),
+                             if current and (key != "car" or opts.get("wallbox_type") != "none") else [] for key, resource in (("battery", "battery_resource"),
                                                                         ("car", "vehicle_resource"))}}

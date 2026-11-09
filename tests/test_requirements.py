@@ -142,6 +142,30 @@ class ControllerRequirements(unittest.TestCase):
                               0, True, NOW+timedelta(seconds=110), 110, self.states())
         self.box.phase.assert_called_once_with(1, current)
 
+    def test_absent_consumers_do_not_block_storage_or_reduce_house_consumption(self):
+        from custom_components.eos_energiezentrale.energy.drivers import NoWallbox
+        self.config.options.update(wallbox_type="none",heat_entity="",car_soc_entity="")
+        self.config.wallbox=NoWallbox(self.ha,{})
+        self.ha.states.return_value={key:value for key,value in self.states().items() if key not in {"sensor.heat","sensor.soc"}}
+        self.app.set_armed(True)
+        self.app.tick(NOW,0)
+        result=self.app.snapshot(NOW)
+        self.assertEqual(result["features"],{"car":False,"heat":False})
+        self.assertEqual(result["live"]["house"],4000)
+        self.assertFalse(result["control_waiting"])
+        self.assertTrue(result["armed"])
+        self.battery.apply.assert_called_once()
+        self.eos.set_vehicle_goal.assert_not_called()
+        self.box.charge.assert_not_called()
+        self.assertEqual(result["plan"]["car"],[])
+
+    def test_configured_but_unavailable_heat_meter_is_not_treated_as_absent(self):
+        self.ha.states.return_value.pop("sensor.heat")
+        self.app.tick(NOW,0)
+        result=self.app.snapshot(NOW)
+        self.assertTrue(result["features"]["heat"])
+        self.assertIsNone(result["live"]["house"])
+
     def test_stale_grid_pauses_and_plan_expiry_releases_battery(self):
         self.config.daily = daily_settings({"pv":True}, 20)
         self.app.set_armed(True)

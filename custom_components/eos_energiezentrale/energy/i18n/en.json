@@ -183,6 +183,11 @@
     "metric.forecast_remaining_only": "Remaining forecast only; measured yield unavailable",
     "metric.forecast_partial": "Partial forecast · day not fully covered",
     "metric.forecast_complete": "Full calendar day",
-    "notice.device_pending": "Waiting for device values after mode change"
+    "notice.device_pending": "Waiting for device values after mode change",
+    "settings.vehicle": "Vehicle / charging point",
+    "fleet.vehicles": "Vehicles ({count})",
+    "fleet.title": "Vehicles and charging points",
+    "fleet.total": "Total vehicle charging power",
+    "fleet.forecast_note": "Select a vehicle for its SoC, EOS modes and measurements. Resource-specific EV power/SoC forecasts are not available in the legacy EOS solution; no shared curve is assigned to individual vehicles."
   }
 }

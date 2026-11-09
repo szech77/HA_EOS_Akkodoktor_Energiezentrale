@@ -128,7 +128,14 @@ function solarForecastCards(now) {
   });
 }
 
+const consumerEnabled = key => !["car","heat"].includes(key) || snapshot.features?.[key] !== false;
+
+function vehicleCards() {
+  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small>${html(vehicle.name)}</small><strong>${html(power(vehicle.live.car))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
+}
+
 function overview() {
+  byId('vehicle-cards').innerHTML=vehicleCards();
   const live = snapshot.live;
   const remaining = solarRemaining();
   byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? t('control.active') : t('control.read_only');
@@ -142,6 +149,9 @@ function overview() {
   Object.keys(names).forEach(key => {
     const node = document.querySelector(`[data-node="${key}"]`);
     const flow = document.querySelector(`[data-flow="${key}"]`);
+    node.hidden = !consumerEnabled(key);
+    flow.style.display = consumerEnabled(key) ? "" : "none";
+    if (!consumerEnabled(key)) return;
     const retained = snapshot.display?.[key];
     const stale = !valid(live[key]) && valid(retained?.value);
     const value = stale ? retained.value : live[key];
@@ -159,6 +169,7 @@ function overview() {
     ageNote.textContent = stale ? t(retained.estimated ? 'metric.estimated_heat_age' : 'metric.last_report_age',
       {minutes:Math.ceil(retained.age_s / 60)}) : '';
     node.title = ageNote.textContent;
+    if (key === "car" && snapshot.vehicles?.length) names.car=t("fleet.vehicles",{count:snapshot.vehicles.length});
     node.querySelector('span:nth-child(2)').textContent = valid(soc) ? `${names[key]} · ${percent(soc)}` : names[key];
     node.setAttribute('aria-label', [names[key],power(value),value ? direction : ''].filter(Boolean).join(' · '));
     flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
@@ -172,7 +183,7 @@ function overview() {
     flow.style.setProperty('--pulse-width', `${(3 + 9 * intensity).toFixed(2)}px`);
     flow.style.setProperty('--pulse-dash', `${length.toFixed(2)} ${(100 - length).toFixed(2)}`);
   });
-  byId('next').innerHTML = ['battery','car'].map(key => {
+  byId('next').innerHTML = ['battery','car'].filter(consumerEnabled).filter(key=>key!=='car' || !snapshot.vehicles?.length).map(key => {
     const item = nextPlan(key);
     return `<div><small>${th('metric.eos_mode')} · ${key === 'car' ? th('node.car') : th('device.battery')}</small><b>${html(modeLabel(live[key + '_mode']))}</b><span>${item ? html(time(item.time) + ' · ' + modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
   }).join('');
@@ -247,14 +258,14 @@ function showProbe(id, ratio) {
 function energyDetail(now) {
   byId('detail-title').textContent=t('device.energy');
   const names = {solar:t('node.solar'),grid:t('node.grid'),battery:t('node.battery'),house:t('node.house'),car:t('node.car'),heat:t('device.heat')};
-  byId('detail-kpis').innerHTML=cards(Object.entries(names).map(([key,label])=>{
+  byId('detail-kpis').innerHTML=cards(Object.entries(names).filter(([key])=>consumerEnabled(key)).map(([key,label])=>{
     const retained=snapshot.display?.[key];
     const estimated=!valid(snapshot.live[key]) && valid(retained?.value);
     return [label,(estimated ? '≈ ' : '')+power(estimated ? retained.value : snapshot.live[key]),
       estimated ? t('metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : t('metric.measured')];
   }));
   byId('timeline').innerHTML='';
-  const additional = ['grid','battery','house','car','heat'].map(key=>({key,label:names[key],divisor:1000,color:key,future:key!=='house'}));
+  const additional = ['grid','battery','house','car','heat'].filter(consumerEnabled).map(key=>({key,label:names[key],divisor:1000,color:key,future:key!=='house'}));
   additional.push({key:'house_total',label:t('chart.house_forecast'),divisor:1000,color:'house',actual:false});
   byId('charts').innerHTML=chart(t('chart.energy'),'solar',1000,t('unit.kw'),'solar',now,additional)
     + `<p class="footnote">${th('chart.energy_signs')}</p>`
@@ -335,6 +346,28 @@ function timeline(key, now) {
 }
 
 function detail(key) {
+  if (key.startsWith('car/')) {
+    const vehicle=snapshot.vehicles?.find(item=>item.id===key.slice(4));
+    if (!vehicle) return;
+    const original=snapshot, originalHistory=history;
+    try {
+      snapshot={...original,...vehicle,vehicles:[],vehicle_name:vehicle.name};
+      history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
+      detail('car');
+      byId('detail-title').textContent=vehicle.name;
+    } finally {snapshot=original;history=originalHistory;}
+    return;
+  }
+  if (key==='car' && snapshot.vehicles?.length) {
+    chartModels.clear();
+    byId('detail-title').textContent=t('fleet.title');
+    byId('detail-kpis').innerHTML=vehicleCards();
+    byId('timeline').innerHTML='';
+    byId('charts').innerHTML=chart(t('fleet.total'),'car',1000,t('unit.kw'),'car',windowNow());
+    byId('plan').hidden=false;
+    byId('plan').innerHTML=`<p>${th('fleet.forecast_note')}</p>`;
+    return;
+  }
   const now = windowNow();
   chartModels.clear();
   if (key === 'energy') {
@@ -372,10 +405,12 @@ const form = byId('daily');
 function scheduleFields() {
   const selected = form.elements.schedule.value;
   form.querySelectorAll('[data-schedule]').forEach(element => { element.hidden = element.dataset.schedule !== selected; });
-  form.elements.departure.required = selected === 'once';
+  form.elements.departure.required = selected === 'once' && consumerEnabled('car');
 }
 function fillForm() {
-  for (const [key,value] of Object.entries(snapshot.settings)) {
+  const vehicle=snapshot.vehicles?.find(item=>item.id===byId("vehicle-selector").value);
+  const selected={...(vehicle?.settings ?? snapshot.settings),battery_min_soc:snapshot.settings.battery_min_soc,battery_max_soc:snapshot.settings.battery_max_soc,battery_pv_support:snapshot.settings.battery_pv_support};
+  for (const [key,value] of Object.entries(selected)) {
     const input = form.elements.namedItem(key);
     if (!input) continue;
     if (input.type === 'checkbox') input.checked = value;
@@ -384,10 +419,17 @@ function fillForm() {
       input.value = valid(parsed.getTime()) ? new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0,16) : '';
     } else input.value = value;
   }
-  form.querySelectorAll('[name=day]').forEach(input => { input.checked = snapshot.settings.weekdays?.includes(Number(input.value)) ?? false; });
+  form.querySelectorAll('[name=day]').forEach(input => { input.checked = selected.weekdays?.includes(Number(input.value)) ?? false; });
   scheduleFields();
 }
 function settings() {
+  const selector=byId('vehicle-selector');
+  byId('vehicle-selector-label').hidden=!snapshot.vehicles?.length;
+  if (snapshot.vehicles?.length && selector.options.length!==snapshot.vehicles.length) {
+    selector.innerHTML=snapshot.vehicles.map(vehicle=>`<option value="${html(vehicle.id)}">${html(vehicle.name)}</option>`).join('');
+    formReady=false;
+  }
+  document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   if (!formReady && 'schedule' in snapshot.settings) {
     fillForm();
     formReady = true;
@@ -406,10 +448,11 @@ function settings() {
 function render() {
   const requested = location.hash.slice(1);
   if (requested !== route) hideProbe();
-  route = pages.has(requested) || requested === 'settings' ? requested : 'overview';
+  const vehicleRoute=requested.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===requested.slice(4));
+  route = vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || requested === 'settings' ? requested : 'overview';
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
-  byId('detail').hidden = !pages.has(route);
+  byId('detail').hidden = !pages.has(route) && !vehicleRoute;
   const errors = Object.keys(snapshot.errors);
   const errorAreas = {device_pending:'notice.device_pending',goal:'notice.goal',runtime:'control.title',forecast:'notice.forecast',
     release:'notice.release',battery_limits:'notice.battery_limits',control_persistence:'notice.control_persistence',connection:'notice.connection'};
@@ -432,6 +475,7 @@ async function refreshHistory() {
   catch { history.influx_error = true; }
   finally { historyRefreshing = false; render(); }
 }
+byId('vehicle-selector').addEventListener('change',()=>{formReady=false;settings();});
 form.elements.schedule.addEventListener('change',scheduleFields);
 form.addEventListener('submit', async event => {
   event.preventDefault();
@@ -445,6 +489,7 @@ form.addEventListener('submit', async event => {
   for (const name of ['schedule','departure_time']) values[name] = form.elements[name].value;
   values.departure = form.elements.departure.value ? new Date(form.elements.departure.value).toISOString() : '';
   values.weekdays = [...form.querySelectorAll('[name=day]:checked')].map(input => Number(input.value));
+  if (snapshot.vehicles?.length) values.vehicle_id=byId('vehicle-selector').value;
   try { await api('settings',values); byId('saved').textContent = t('settings.saved'); await refresh(); }
   catch (error) { byId('saved').textContent = error.message; }
 });

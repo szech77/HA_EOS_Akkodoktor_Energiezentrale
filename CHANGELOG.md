@@ -7,6 +7,10 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Bis zu acht Fahrzeug-/Wallbox-Paare mit eigener Planung, SoC-Verarbeitung, nativen Sensoren und gemeinsamer Reservierung von PV- und Netzanschlussleistung.
+
+- E-Auto und Wärmepumpe optional; neue Einrichtungen ohne diese Verbraucher, ausgeblendete Stromflussknoten und passende Hausverbrauchsberechnung.
+
 - PV-Detailansicht mit Tageserträgen in kWh für heute, morgen und übermorgen sowie Kennzeichnung unvollständiger Prognosen.
 
 - Werteanzeigen per Maus, Touch und Tastatur; PV-Historie und Prognose in Speicher- und Autodiagrammen; gemeinsame Energieflussübersicht über die Mitte des Stromflussbilds.

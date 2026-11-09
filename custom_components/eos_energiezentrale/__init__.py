@@ -10,8 +10,7 @@ from homeassistant.helpers import config_validation as cv
 from .adapter import HomeAssistantAdapter
 from .const import DEFAULTS, DOMAIN
 from .coordinator import EnergyCoordinator
-from .energy.controller import Controller
-from .energy.settings import Configuration
+from .energy.fleet import create_controller
 from .frontend import async_register_frontend, async_remove_panel
 from .validation import validate_options
 
@@ -28,7 +27,7 @@ async def async_setup_entry(hass, entry):
     def create():
         validate_options(options)
         directory.mkdir(parents=True, exist_ok=True)
-        return Controller(adapter, Configuration(options, adapter, directory))
+        return create_controller(adapter, options, directory)
 
     try:
         app = await hass.async_add_executor_job(create)

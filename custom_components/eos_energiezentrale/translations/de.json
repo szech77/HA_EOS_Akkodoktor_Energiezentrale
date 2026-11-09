@@ -17,9 +17,9 @@
           "pv_entity": "PV-Leistung",
           "house_entity": "Gesamter Hausverbrauch einschließlich Auto und Wärmepumpe",
           "grid_entity": "Netzleistung (positiv = Bezug)",
-          "heat_entity": "Wärmepumpenleistung",
+          "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
           "price_entity": "Bezugspreis",
-          "car_soc_entity": "Fahrzeug-SoC",
+          "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit"
         }
       },
@@ -28,9 +28,10 @@
         "data": {
           "battery_type": "Speichertreiber",
           "battery_parameters": "Speicher-Entitäten (JSON)",
-          "wallbox_type": "Wallbox-Treiber",
+          "wallbox_type": "Wallbox-Typ (none = kein E-Auto)",
           "wallbox_parameters": "Wallbox-Entitäten (JSON)",
-          "vehicle_name": "Fahrzeugname"
+          "vehicle_name": "Fahrzeugname",
+          "vehicles": "Mehrere Fahrzeuge / Wallboxen (JSON-Liste, [] = Einzelkonfiguration)"
         }
       },
       "limits": {
@@ -82,9 +83,9 @@
           "pv_entity": "PV-Leistung",
           "house_entity": "Gesamter Hausverbrauch einschließlich Auto und Wärmepumpe",
           "grid_entity": "Netzleistung (positiv = Bezug)",
-          "heat_entity": "Wärmepumpenleistung",
+          "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
           "price_entity": "Bezugspreis",
-          "car_soc_entity": "Fahrzeug-SoC",
+          "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit"
         }
       },
@@ -93,9 +94,10 @@
         "data": {
           "battery_type": "Speichertreiber",
           "battery_parameters": "Speicher-Entitäten (JSON)",
-          "wallbox_type": "Wallbox-Treiber",
+          "wallbox_type": "Wallbox-Typ (none = kein E-Auto)",
           "wallbox_parameters": "Wallbox-Entitäten (JSON)",
-          "vehicle_name": "Fahrzeugname"
+          "vehicle_name": "Fahrzeugname",
+          "vehicles": "Mehrere Fahrzeuge / Wallboxen (JSON-Liste, [] = Einzelkonfiguration)"
         }
       },
       "limits": {

@@ -183,6 +183,11 @@
     "metric.forecast_remaining_only": "Nur Restprognose; bisheriger Ertrag fehlt",
     "metric.forecast_partial": "Teilprognose · Tag nicht vollständig abgedeckt",
     "metric.forecast_complete": "Vollständiger Kalendertag",
-    "notice.device_pending": "Warte auf Gerätewerte nach Moduswechsel"
+    "notice.device_pending": "Warte auf Gerätewerte nach Moduswechsel",
+    "settings.vehicle": "Fahrzeug / Ladepunkt",
+    "fleet.vehicles": "E-Autos ({count})",
+    "fleet.title": "Fahrzeuge und Ladepunkte",
+    "fleet.total": "Gesamte Autoladeleistung",
+    "fleet.forecast_note": "Ein Fahrzeug auswählen, um SoC, EOS-Modi und Messwerte zu sehen. Die bisherige EOS-Lösung liefert keine eindeutig zugeordneten Leistungs-/SoC-Prognosen für mehrere Fahrzeuge; eine gemeinsame Kurve wird nicht einzelnen Autos zugewiesen."
   }
 }

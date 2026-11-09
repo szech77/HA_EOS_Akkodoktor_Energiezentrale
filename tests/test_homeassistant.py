@@ -234,6 +234,19 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         # Dispose scheduled callbacks in this direct lifecycle harness.
         await self.entry._async_process_on_unload(self.hass)
 
+    async def test_new_installation_has_no_optional_consumers_and_accepts_empty_sources(self):
+        from custom_components.eos_energiezentrale.config_flow import schema_for
+        flow=ConfigFlow()
+        self.assertEqual(flow.values["wallbox_type"],"none")
+        self.assertEqual(flow.values["heat_entity"],"")
+        validate_options(flow.values)
+        config=Configuration(flow.values,Mock(),self.directory)
+        self.assertEqual(config.wallbox.ids,{})
+        fields=schema_for("sensors",flow.values)
+        submitted={key:flow.values[key] for key in GROUPS["sensors"]
+                   if key not in {"heat_entity","car_soc_entity"}}
+        fields(submitted)
+
     async def test_config_wizard_preserves_selected_hardware_and_limits(self):
         flow = ConfigFlow()
         flow.hass = self.hass

@@ -17,6 +17,8 @@ def validate_options(options):
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])
     for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity"):
+        if key in {"heat_entity", "car_soc_entity"} and options[key] == "":
+            continue
         if not isinstance(options[key], str) or not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):
             raise ValueError("Invalid source entity")
     if options["language"] not in {"auto", "en", "de"} or options["car_soc_scale"] not in {"factor", "percent"}:
@@ -41,3 +43,7 @@ def validate_options(options):
         if options[kind + "_type"] not in registry:
             raise ValueError("Unsupported hardware")
         registry[options[kind + "_type"]](None, json.loads(options[kind + "_parameters"]))
+
+    from .energy.fleet import vehicle_options
+    for _, values in vehicle_options(options):
+        validate_options(values)

@@ -71,15 +71,23 @@ class EnergyCoordinator(DataUpdateCoordinator):
         async with self.work_lock:
             if self.closing:
                 raise ValueError("Integration is stopping")
-            def change():
+            def change(settings=settings):
                 with self.app.lock:
                     if enabled is not None:
                         self.app.set_armed(enabled)
+                    if settings is not None and "vehicle_id" in settings:
+                        identity=settings["vehicle_id"]
+                        if not hasattr(self.app,"change_vehicle_settings"):
+                            raise ValueError("No vehicle fleet configured")
+                        self.app.change_vehicle_settings(identity,{key:value for key,value in settings.items() if key!="vehicle_id"})
+                        settings=None
                     if settings is not None:
                         values = daily_settings({**self.app.config.daily, **settings},
                                                 self.app.config.options["regulation_interval_s"])
                         manage_limits = bool(settings.keys() & {"battery_min_soc", "battery_max_soc"})
                         self.app.config.update(values, manage_battery_limits=manage_limits)
+                        if hasattr(self.app,"persist_primary_settings"):
+                            self.app.persist_primary_settings()
                         if manage_limits:
                             self.app.sync_battery_limits(datetime.now(timezone.utc), monotonic(), force=True)
                     return self.app.snapshot(datetime.now(timezone.utc))
@@ -105,8 +113,12 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         self.influx_error = False
                     except Exception:
                         self.influx_error = True
-                return {"local": self.app.history.read(datetime.now(timezone.utc)),
+                now=datetime.now(timezone.utc)
+                result={"local": self.app.history.read(now),
                         "influx": self.influx_rows, "influx_error": self.influx_error}
+                if callable(getattr(type(self.app),"vehicle_histories",None)):
+                    result["vehicles"]=self.app.vehicle_histories(now)
+                return result
             return await self.hass.async_add_executor_job(read)
 
     async def async_stop(self):

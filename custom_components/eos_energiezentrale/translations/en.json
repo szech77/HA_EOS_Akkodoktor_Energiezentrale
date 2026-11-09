@@ -17,9 +17,9 @@
           "pv_entity": "PV power",
           "house_entity": "Total house power including car and heat pump",
           "grid_entity": "Grid power (positive = import)",
-          "heat_entity": "Heat pump power",
+          "heat_entity": "Heat pump (optional; empty = not installed)",
           "price_entity": "Import price",
-          "car_soc_entity": "Vehicle SoC",
+          "car_soc_entity": "Vehicle SoC (optional)",
           "car_soc_scale": "Vehicle SoC unit"
         }
       },
@@ -28,9 +28,10 @@
         "data": {
           "battery_type": "Battery driver",
           "battery_parameters": "Battery entity overrides (JSON)",
-          "wallbox_type": "Wallbox driver",
+          "wallbox_type": "Charger type (none = no electric vehicle)",
           "wallbox_parameters": "Wallbox entity overrides (JSON)",
-          "vehicle_name": "Vehicle name"
+          "vehicle_name": "Vehicle name",
+          "vehicles": "Multiple vehicles / chargers (JSON list, [] = single-vehicle settings)"
         }
       },
       "limits": {
@@ -82,9 +83,9 @@
           "pv_entity": "PV power",
           "house_entity": "Total house power including car and heat pump",
           "grid_entity": "Grid power (positive = import)",
-          "heat_entity": "Heat pump power",
+          "heat_entity": "Heat pump (optional; empty = not installed)",
           "price_entity": "Import price",
-          "car_soc_entity": "Vehicle SoC",
+          "car_soc_entity": "Vehicle SoC (optional)",
           "car_soc_scale": "Vehicle SoC unit"
         }
       },
@@ -93,9 +94,10 @@
         "data": {
           "battery_type": "Battery driver",
           "battery_parameters": "Battery entity overrides (JSON)",
-          "wallbox_type": "Wallbox driver",
+          "wallbox_type": "Charger type (none = no electric vehicle)",
           "wallbox_parameters": "Wallbox entity overrides (JSON)",
-          "vehicle_name": "Vehicle name"
+          "vehicle_name": "Vehicle name",
+          "vehicles": "Multiple vehicles / chargers (JSON list, [] = single-vehicle settings)"
         }
       },
       "limits": {

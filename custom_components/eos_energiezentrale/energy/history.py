@@ -94,12 +94,15 @@ def influx_series(config):
                     "car_soc": (options["car_soc_entity"], [("state", 100)] if options["car_soc_scale"] == "factor" else [("%", 1)])})
     rows = {}
     for key, (entity, measurements) in sources.items():
+        if not entity:
+            continue
         for stamp, value in config.influx.history(entity, measurements):
             rows.setdefault(stamp, {"time": stamp})[key] = value
     for row in rows.values():
         row["solar"] = row.get("pv")
         row["house_total"] = row.get("house")
-        row["house"] = house_only(row.get("house_total"), row.get("car"), row.get("heat"))
+        row["house"] = house_only(row.get("house_total"), row.get("car") if options.get("wallbox_type") != "none" else 0,
+                                   row.get("heat") if options.get("heat_entity") else 0)
         if "battery_charge" in row and "battery_discharge" in row:
             row["battery"] = row["battery_charge"] - row["battery_discharge"]
     return [rows[key] for key in sorted(rows)]
