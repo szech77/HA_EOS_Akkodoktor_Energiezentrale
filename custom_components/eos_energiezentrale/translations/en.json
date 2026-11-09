@@ -22,7 +22,8 @@
           "car_soc_entity": "Vehicle SoC (optional)",
           "car_soc_scale": "Vehicle SoC unit",
           "heat_load_entity": "Heat pump power utilization (optional)",
-          "heat_load_scale": "Utilization scale"
+          "heat_load_scale": "Utilization scale",
+          "weather_entity": "Weather (optional; empty = automatic selection)"
         }
       },
       "hardware": {
@@ -104,7 +105,8 @@
           "car_soc_entity": "Vehicle SoC (optional)",
           "car_soc_scale": "Vehicle SoC unit",
           "heat_load_entity": "Heat pump power utilization (optional)",
-          "heat_load_scale": "Utilization scale"
+          "heat_load_scale": "Utilization scale",
+          "weather_entity": "Weather (optional; empty = automatic selection)"
         }
       },
       "hardware": {

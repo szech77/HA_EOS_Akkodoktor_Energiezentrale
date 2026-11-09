@@ -13,6 +13,7 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'pv_entity': 'sensor.fronius_symo_gen24_pv_power',
  'house_entity': 'sensor.solarnet_leistung_verbrauch',
  'grid_entity': 'sensor.fronius_smartmeter_ip_meter_1_power',
+ 'weather_entity': '',
  'heat_load_entity': '',
  'heat_load_scale': 'percent',
  'pv_peak_w': 10000,
@@ -36,7 +37,7 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'influx_user': '',
  'influx_password': ''}
 GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_resource'],
- 'sensors': ['pv_entity',
+ 'sensors': ['weather_entity', 'pv_entity',
              'house_entity',
              'grid_entity',
              'heat_entity',

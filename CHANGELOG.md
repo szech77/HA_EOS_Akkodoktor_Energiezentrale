@@ -7,6 +7,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Aktuelles Wettersymbol und Temperatur im Energieflussdiagramm mit optional auswählbarer Home-Assistant-Wetterquelle.
+
 - Lokales Integrationslogo für Home Assistant Geräte & Dienste, mit transparenten hellen und dunklen PNG-Varianten in normaler und doppelter Auflösung.
 
 - JavaScript-Tests im nativen VS-Code-Test-Explorer über node:test runner; Workspace-Empfehlung, begrenzte Test-Erkennung und ausführbare JavaScript-Testaufgabe.

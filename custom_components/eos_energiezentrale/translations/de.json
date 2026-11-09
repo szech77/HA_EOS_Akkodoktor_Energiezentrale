@@ -22,7 +22,8 @@
           "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
-          "heat_load_scale": "Skalierung der Auslastung"
+          "heat_load_scale": "Skalierung der Auslastung",
+          "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
         }
       },
       "hardware": {
@@ -104,7 +105,8 @@
           "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
-          "heat_load_scale": "Skalierung der Auslastung"
+          "heat_load_scale": "Skalierung der Auslastung",
+          "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
         }
       },
       "hardware": {

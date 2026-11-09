@@ -274,6 +274,28 @@ function overview() {
   byId('vehicle-cards').innerHTML=vehicleCards();
   const live = snapshot.live;
   const remaining = solarRemaining();
+  const weather = live.weather;
+  const weatherNode = byId('flow-weather');
+  weatherNode.hidden = !weather;
+  if (weather) {
+    const condition = weather.condition;
+    const sun = '<circle cx="16" cy="13" r="6"/><path d="M16 2v2m0 18v2M5 13H3m26 0h-2M7 4l2 2m14 14 2 2M25 4l-2 2M9 20l-2 2"/>';
+    const cloud = '<path d="M8 23h16a6 6 0 0 0 0-12 8 8 0 0 0-15-1 6.5 6.5 0 0 0-1 13Z"/>';
+    let shape = condition === 'sunny' ? sun : condition === 'clear-night' ? '<path d="M24 23A12 12 0 0 1 11 3a12 12 0 1 0 13 20Z"/>' : cloud;
+    if (condition === 'partlycloudy') shape = '<circle cx="9" cy="8" r="5"/>' + cloud;
+    if (['rainy','pouring','lightning-rainy','snowy-rainy'].includes(condition)) shape += '<path d="m9 26-1 3m8-3-1 3m8-3-1 3"/>';
+    if (['lightning','lightning-rainy'].includes(condition)) shape += '<path d="m17 17-4 7h5l-3 6"/>';
+    if (['snowy','snowy-rainy','hail'].includes(condition)) shape += '<path d="M8 27h3m-1.5-1.5v3M22 27h3m-1.5-1.5v3"/>';
+    if (condition === 'fog') shape += '<path d="M4 26h24M7 30h18"/>';
+    if (['windy','windy-variant'].includes(condition)) shape = '<path d="M3 11h20a4 4 0 1 0-4-4M3 17h24M3 23h15a4 4 0 1 1-4 4"/>';
+    if (['unknown','exceptional'].includes(condition)) shape = '<circle cx="16" cy="16" r="12"/><path d="M16 8v10m0 5v1"/>';
+    byId('weather-shape').innerHTML = shape;
+    const temperature = valid(weather.temperature) ? decimal(weather.temperature) + ' ' + weather.unit : '—';
+    byId('weather-temperature').textContent = temperature;
+    const description = stateLabel('weather', condition) + ' · ' + temperature;
+    weatherNode.setAttribute('aria-label', description);
+    weatherNode.title = description;
+  }
   byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? Object.keys(snapshot.eos_cache ?? {}).length ? t('control.cached_eos') : t('control.active') : t('control.read_only');
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
   byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');

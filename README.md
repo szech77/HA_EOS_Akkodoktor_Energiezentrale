@@ -731,3 +731,14 @@ fehlender Adminberechtigung mit einem Administrator anmelden. Technische Details
 Fehlerart und gegebenenfalls die betroffene UI-Datei. Unerwartete Backendfehler stehen
 zusätzlich im HA-Protokoll und werden nicht mehr als ungültige Einstellungen gemeldet.
 Die frühere pauschale Anzeige `EOS Energiezentrale · /api/language` wurde entfernt.
+
+
+### Wetter im Energieflussdiagramm
+
+Unter **Einstellungen → Geräte & Dienste → EOS Energiezentrale → Konfigurieren →
+Quellsensoren** kann eine optionale `weather.*`-Entität ausgewählt werden. Das
+Diagramm zeigt deren aktuelle Wetterlage und Temperatur (°C, °F oder K).
+Ohne Auswahl wird die alphabetisch erste verfügbare Wetterentität verwendet;
+ohne Wetterentität bleibt die Anzeige verborgen. Nicht verfügbare oder länger
+als eine Stunde nicht gemeldete Werte erscheinen als unbekannt, nicht als 0 °C.
+Die Wetteranzeige hat keinen Einfluss auf die Energieregelung oder EOS-Prognose.

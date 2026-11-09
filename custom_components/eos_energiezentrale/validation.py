@@ -13,6 +13,9 @@ def validate_options(options):
     if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 60
             or any(ord(char) < 32 or ord(char) == 127 for char in name)):
         raise ValueError("Vehicle name must contain 1 to 60 printable characters")
+    weather = options.get("weather_entity", "")
+    if not isinstance(weather, str) or (weather and (not ENTITY.fullmatch(weather) or not weather.startswith("weather."))):
+        raise ValueError("Invalid weather entity")
     ZoneInfo(options["timezone"])
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])

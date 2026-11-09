@@ -11,7 +11,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
-from .presentation import heat_utilization, power_references
+from .presentation import heat_utilization, power_references, weather_display
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 
@@ -267,6 +267,7 @@ class Controller:
                     car_status=box.status, phases=box.phases, amps=box.amps,
                     battery_charge=battery.charge, battery_discharge=battery.discharge)
         live["heat_load"] = heat_utilization(states,opts,now)
+        live["weather"] = weather_display(states,opts,now)
         car_enabled = opts.get("wallbox_type") != "none"
         heat_enabled = bool(opts.get("heat_entity"))
         live["house"] = house_only(live["house_total"], live["car"] if car_enabled else 0,

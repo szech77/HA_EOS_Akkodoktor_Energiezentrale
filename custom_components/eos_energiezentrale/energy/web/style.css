@@ -200,3 +200,10 @@
   #eos-energy-design .hub .energy-logo {width:32px;height:32px;}
   #eos-energy-design .hub > span {font-size:9px;}
 }
+
+#eos-energy-design .flow-weather {margin-left:auto; display:inline-flex; align-items:center; gap:8px; font-size:1.1rem; font-weight:600; white-space:nowrap;}
+#eos-energy-design .flow-weather[hidden] {display:none;}
+#eos-energy-design .flow-weather svg {width:32px; height:32px; fill:none; stroke:#ffcb62; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
+@media(max-width:450px){#eos-energy-design .flow-weather{font-size:1rem;}}
+
+#eos-energy-design .flow-footer {display:flex; justify-content:flex-end; padding-top:12px;}
