@@ -10,7 +10,7 @@ from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, daily_settings, save
 from .history import History
 from .display import DisplayValues
-from .alignment import FlowAlignment, report_times
+from .alignment import ChargeTransitionDisplay, report_times
 
 
 def vehicle_options(options):
@@ -110,7 +110,7 @@ class FleetController(Controller):
         self.global_options=options
         self.primary_history=None
         self.fleet_display_values=DisplayValues(options.get("display_hold_s",900))
-        self.fleet_alignment=FlowAlignment(options.get("sensor_alignment_s",10),options.get("display_hold_s",900))
+        self.fleet_alignment=ChargeTransitionDisplay(options.get("display_hold_s",900),options.get("display_transition_s",30))
         for index,(identity,values) in enumerate(vehicles):
             child_dir=directory if index==0 else directory/"vehicles"/identity
             child_dir.mkdir(parents=True,exist_ok=True)
@@ -230,9 +230,10 @@ class FleetController(Controller):
         times=report_times(rows,opts,self.battery_driver.ids,{},now)
         car_times=[instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")) for _,_,proxy in self.controllers]
         times["car"]=min(car_times) if all(car_times) else None
-        cars={identity:(actual[identity],instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")))
-              for identity,_,proxy in self.controllers}
-        self.flow_display=self.fleet_alignment.update(self.live,times,now,True,bool(opts["heat_entity"]),self.display,cars=cars)
+        commands=[app.last_write for _,app,_ in self.controllers if app.last_write is not None]
+        expected=sum(max(self.targets.get(identity,0),actual[identity] or 0) for identity,_,_ in self.controllers) if self.armed else None
+        self.flow_display=self.fleet_alignment.update(self.live,times,now,True,bool(opts["heat_entity"]),self.display,
+            expected_car_w=expected,command_at=max(commands) if commands else None)
         for payload in snapshots:
             payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
         self.history.write(now,self.live)

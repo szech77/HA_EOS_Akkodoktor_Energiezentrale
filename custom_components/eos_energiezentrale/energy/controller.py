@@ -9,7 +9,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
-from .alignment import FlowAlignment, report_times
+from .alignment import ChargeTransitionDisplay, report_times
 
 
 class Controller:
@@ -25,7 +25,7 @@ class Controller:
         self.display = {}
         self.flow_display = {}
         settings=getattr(config,"options",{})
-        self.flow_alignment=FlowAlignment(settings.get("sensor_alignment_s",10),settings.get("display_hold_s",900))
+        self.flow_alignment=ChargeTransitionDisplay(settings.get("display_hold_s",900),settings.get("display_transition_s",30))
         self.display_values = DisplayValues(getattr(config,"options",{}).get("display_hold_s",900))
         self.plan = None
         self.forecast = []
@@ -41,6 +41,7 @@ class Controller:
         self.soc_w = 0
         self.last_soc_publish = None
         self.last_write = None
+        self.commanded_car_w = None
         self.candidate = None
         self.phase_target = None
         self.pv_session = False
@@ -70,6 +71,7 @@ class Controller:
                 self.errors.pop("runtime", None)
                 return
             self.armed = False
+            self.commanded_car_w = None
             self.restore_pending = False
             persistence_error = None
             if persist:
@@ -225,7 +227,7 @@ class Controller:
             wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
         times=report_times(states,opts,battery_ids if isinstance(battery_ids,dict) else {},
                            wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
-        self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display)
+        self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if self.armed else None,command_at=self.last_write)
         battery_order = current_instruction(self.plan, opts["battery_resource"], now)
         car_order = current_instruction(self.plan, opts["vehicle_resource"], now)
         live["battery_mode"] = battery_order.mode if battery_order else None
@@ -305,6 +307,7 @@ class Controller:
                 or box.watts is None or live["grid"] is None or live["battery_discharge"] is None
                 or (pv and live["solar"] is None) or (not pv and planned <= 0)):
             driver.pause(box)
+            self.commanded_car_w = 0
             self.pv_session = False
             self.candidate = self.phase_target = None
             return
@@ -319,6 +322,7 @@ class Controller:
             if elapsed<daily["regulation_interval_s"] or not new_reports:
                 if not new_reports and elapsed>=opts.get("command_settle_s",60):
                     driver.pause(box)
+                    self.commanded_car_w = 0
                     self.pv_session=False
                 live["car_control"]="waiting_measurements"
                 return
@@ -357,6 +361,7 @@ class Controller:
             self.candidate = None
         if amps is None:
             driver.pause(box)
+            self.commanded_car_w = 0
             self.pv_session = False
             self.phase_target = None
             return
@@ -368,6 +373,7 @@ class Controller:
             self.phase_target = None
         if not box.enabled or abs(box.amps - amps) >= 0.05:
             driver.charge(amps, box)
+            self.commanded_car_w = amps*phase*230
             self.last_write = now
         self.pv_session = solar_only
         live["car_control"] = "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"

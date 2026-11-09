@@ -552,19 +552,19 @@ Unter **Konfigurieren → Grenzen → Letzte Messwerte anzeigen für** wird die 
 
 ### Unterschiedliche Aktualisierungszeiten der Messgeräte
 
-Das Auslesen des HA-Zustands bildet einen gemeinsamen Cache-Schnappschuss, erzwingt
-aber keine gleichzeitigen Messungen von Smart Meter und Wallbox. Für das Stromflussbild
-werden deshalb jüngere Messungen gepuffert und zu einem zeitlich passenden Satz
-zusammengestellt. Maximaler Zeitversatz: standardmäßig 10 Sekunden. Ein älterer
-abgeglichener Satz bleibt innerhalb der eingestellten Anzeigehaltezeit sichtbar;
-Zeitstempel und Altersangaben kennzeichnen die Verzögerung. Eine echte Synchronisation
-der Hardware oder Kenntnis eines verborgenen geräteinternen Messverzugs ersetzt dies nicht.
+Das Stromflussbild verwendet aktuelle Werte, ohne sie allgemein auf alte
+Meldezeitpunkte zurückzurechnen. Nur nach einer angeforderten Erhöhung der
+Autoladeleistung wird ein dazu passender Anstieg von Hauslast bzw. Quellenleistung
+kurz zurückgehalten, solange die tatsächliche Autoleistung noch fehlt. Bis dahin
+bleibt der vorherige Messwertsatz sichtbar. Sobald die Wallboxleistung nachzieht,
+wird die Anzeige freigegeben; spätestens 30 Sekunden nach dem erkannten Sprung
+erscheinen wieder die aktuellen Werte. Neue Ladebefehle verlängern eine bereits
+laufende Wartezeit nicht. Der Sollstrom wird niemals als gemessene Leistung ausgegeben.
+Unter **Konfigurieren → Grenzen** ist diese reine Anzeigeverzögerung einstellbar;
+0 schaltet sie aus. Die bisherige allgemeine zeitliche Anzeigeausrichtung entfällt.
 
-Nach einem Ladebefehl erfolgen weitere Strom-, Phasen- oder PV-Stoppentscheidungen
-erst nach Ablauf des Regelintervalls und nach neuen Meldungen sowohl des Netzzählers
-als auch der Wallboxleistung. Bei ausbleibenden Meldungen wird nach standardmäßig
-60 Sekunden pausiert. Netzgrenzüberschreitung, fehlende erforderliche Messwerte,
-Abstecken und eine reguläre Stoppvorgabe werden weiterhin sofort behandelt.
-Beide Zeitparameter sind unter **Konfigurieren → Grenzen** einstellbar.
-Die abgeglichenen Anzeigewerte werden nicht als frische Regelwerte oder neue
-historische Messungen ausgegeben und verändern die EOS-Messeingänge nicht.
+Der Regler wartet weiterhin nach einem Ladebefehl auf das Regelintervall sowie neue
+Meldungen von Netzzähler und Wallboxleistung. Bei ausbleibenden Meldungen wird nach
+standardmäßig 60 Sekunden pausiert. Netzgrenzüberschreitung, fehlende erforderliche
+Messwerte, Abstecken und eine reguläre Stoppvorgabe werden sofort behandelt.
+Diese Regelungslogik ist von der 30-Sekunden-Anzeigeverzögerung unabhängig.

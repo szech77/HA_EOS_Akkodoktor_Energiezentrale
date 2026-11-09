@@ -48,7 +48,8 @@
           "regulation_interval_s": "Vorgabe Regelintervall (s)",
           "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
           "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
-          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)"
+          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)",
+          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)"
         }
       },
       "history": {
@@ -117,7 +118,8 @@
           "regulation_interval_s": "Vorgabe Regelintervall (s)",
           "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
           "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
-          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)"
+          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)",
+          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)"
         }
       },
       "history": {

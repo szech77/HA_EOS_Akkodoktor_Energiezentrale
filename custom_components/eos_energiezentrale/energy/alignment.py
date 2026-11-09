@@ -1,5 +1,4 @@
-"""Align observed values for presentation without changing regulation inputs."""
-from collections import deque
+"""Brief display-only hold when charging demand arrives before charger telemetry."""
 from datetime import timedelta
 from .domain import instant,number,house_only
 
@@ -13,59 +12,72 @@ def report_times(states,options,battery_ids,wallbox_ids,now):
             if isinstance(entity,str) and entity else now for key,entity in sources.items()}
 
 
-class FlowAlignment:
-    def __init__(self,tolerance=10,hold=900):
-        self.tolerance=tolerance
+class ChargeTransitionDisplay:
+    def __init__(self,hold=900,transition=30):
         self.hold=hold
-        self.buffers={}
+        self.transition=transition
         self.last={}
+        self.command_at=None
+        self.pending=None
 
-    def update(self,live,times,now,car=True,heat=True,retained=None,cars=None):
+    @staticmethod
+    def supplied(values):
+        keys=("solar","grid","battery_charge","battery_discharge")
+        if not all(key in values for key in keys):
+            return None
+        return values["solar"]+values["grid"]-values["battery_charge"]+values["battery_discharge"]
+
+    def update(self,live,times,now,car=True,heat=True,retained=None,cars=None,expected_car_w=None,command_at=None):
         retained=retained or {}
-        keys=["solar","grid","house_total","battery_charge","battery_discharge"]
-        samples=dict(live)
-        times=dict(times)
-        car_keys=[]
-        if cars is not None:
-            for identity,(value,stamp) in cars.items():
-                key="car:"+identity
-                car_keys.append(key)
-                samples[key]=value
-                times[key]=stamp
-            keys.extend(car_keys)
-        elif car:
-            keys.append("car")
-        for key in [*keys,*( ["heat"] if heat else [])]:
-            value=samples.get(key)
+        samples={}
+        keys=("solar","grid","house_total","battery_charge","battery_discharge","car","heat")
+        for key in keys:
+            value=live.get(key)
             stamp=times.get(key)
             if value is None and key in retained:
                 value=retained[key]["value"]
                 stamp=now-timedelta(seconds=retained[key]["age_s"])
-            if number(value) is None or stamp is None or not 0<=(now-stamp).total_seconds()<=self.hold:
-                continue
-            rows=self.buffers.setdefault(key,deque(maxlen=256))
-            if not rows or stamp>rows[-1][0]:
-                rows.append((stamp,value))
-            elif stamp==rows[-1][0]:
-                rows[-1]=(stamp,value)
-        if all(self.buffers.get(key) for key in keys):
-            anchor=min(self.buffers[key][-1][0] for key in keys)
-            selected={key:min(self.buffers[key],key=lambda row:abs((row[0]-anchor).total_seconds())) for key in keys}
-            stamps=[stamp for stamp,_ in selected.values()]
-            coherent=(max(stamps)-min(stamps)).total_seconds()<=self.tolerance
-            if coherent and 0<=(now-anchor).total_seconds()<=self.hold:
-                values={key:value for key,(_,value) in selected.items()}
-                if car_keys:
-                    values["car"]=sum(values.pop(key) for key in car_keys)
-                values["battery"]=values["battery_charge"]-values["battery_discharge"]
-                heat_row=min(self.buffers["heat"],key=lambda row:abs((row[0]-anchor).total_seconds())) if heat and self.buffers.get("heat") else None
-                heat_value=heat_row[1] if heat_row and 0<=(now-heat_row[0]).total_seconds()<=self.hold else None
-                if heat_value is not None:
-                    values["heat"]=heat_value
-                house=house_only(values["house_total"],values.get("car",0),heat_value if heat else 0)
-                if house is not None:
-                    values["house"]=house
-                self.last={key:(value,min(anchor,heat_row[0]) if key in {"heat","house"} and heat_row else anchor)
-                           for key,value in values.items()}
-        return {key:{"value":value,"age_s":(now-stamp).total_seconds(),"estimated":True,"aligned":True}
-                for key,(value,stamp) in self.last.items() if 0<=(now-stamp).total_seconds()<=self.hold}
+            if number(value) is not None and stamp and 0<=(now-stamp).total_seconds()<=self.hold:
+                samples[key]=(value,stamp)
+        values={key:value for key,(value,_) in samples.items()}
+        if all(key in samples for key in ("battery_charge","battery_discharge")):
+            samples["battery"]=(values["battery_charge"]-values["battery_discharge"],min(samples["battery_charge"][1],samples["battery_discharge"][1]))
+        house=house_only(values.get("house_total"),values.get("car") if car else 0,values.get("heat") if heat else 0)
+        if house is not None:
+            stamps=[samples[key][1] for key in ("house_total","car","heat") if key in samples]
+            samples["house"]=(house,min(stamps))
+        baseline={key:value for key,(value,_) in self.last.items()}
+        if not car or expected_car_w is None or expected_car_w<=0 or not self.transition:
+            self.pending=None
+        elif command_at is not None and command_at!=self.command_at:
+            self.command_at=command_at
+            old_car=baseline.get("car")
+            if old_car is not None and expected_car_w-old_car>=300:
+                if self.pending and self.pending["since"] is not None and not self.pending["done"]:
+                    self.pending["target"]=expected_car_w
+                else:
+                    self.pending={"baseline":dict(self.last),"target":expected_car_w,"since":None,"done":False}
+            else:
+                self.pending=None
+        pending=self.pending
+        if pending and not pending["done"]:
+            base={key:value for key,(value,_) in pending["baseline"].items()}
+            measured=values.get("car")
+            reached=measured is not None and measured>=pending["target"]-max(250,pending["target"]*.15)
+            before,after=self.supplied(base),self.supplied(values)
+            source_rise=(after-before if before is not None and after is not None else 0)
+            house_rise=values.get("house_total",base.get("house_total",0))-base.get("house_total",0)
+            if reached:
+                pending["done"]=True
+            elif max(source_rise,house_rise)>=300:
+                if pending["since"] is None:
+                    pending["since"]=now
+                if (now-pending["since"]).total_seconds()<self.transition:
+                    return {key:{"value":value,"age_s":(now-stamp).total_seconds(),"estimated":True,"transition_held":True}
+                            for key,(value,stamp) in pending["baseline"].items() if 0<=(now-stamp).total_seconds()<=self.hold}
+                pending["done"]=True
+            elif pending["since"] is not None:
+                # Source increase disappeared; show the actual values again.
+                pending["done"]=True
+        self.last=samples
+        return {}

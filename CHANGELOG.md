@@ -38,6 +38,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- Allgemeine zeitliche Anzeigeausrichtung durch gezielte, auf 30 Sekunden begrenzte Verzögerung bei erwarteter Autoladung ersetzt; bewährte Regler-Warteprüfung bleibt erhalten.
+
 - Asynchrone Netz-/Wallboxmeldungen: zeitlich abgeglichenes Stromflussbild und Prüfung neuer Messungen vor Phasen-, Strom- und PV-Stoppentscheidungen; begrenzte Wartefrist mit Pause bei ausbleibenden Meldungen.
 
 - Fronius wartet bei vorübergehend nicht verfügbaren Leistungsentitäten bis zu 45 Sekunden über mehrere Polls; Freigabe bleibt erhalten, fehlende Bestätigungen geschriebener Sollwerte bleiben Fehler.

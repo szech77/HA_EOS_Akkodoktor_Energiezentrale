@@ -48,7 +48,8 @@
           "regulation_interval_s": "Default regulation interval (s)",
           "display_hold_s": "Hold last readings for (seconds; display only)",
           "sensor_alignment_s": "Display measurement alignment tolerance (seconds)",
-          "command_settle_s": "Measurement timeout after charging command (seconds)"
+          "command_settle_s": "Measurement timeout after charging command (seconds)",
+          "display_transition_s": "Hold display jump while vehicle power is delayed (seconds)"
         }
       },
       "history": {
@@ -117,7 +118,8 @@
           "regulation_interval_s": "Default regulation interval (s)",
           "display_hold_s": "Hold last readings for (seconds; display only)",
           "sensor_alignment_s": "Display measurement alignment tolerance (seconds)",
-          "command_settle_s": "Measurement timeout after charging command (seconds)"
+          "command_settle_s": "Measurement timeout after charging command (seconds)",
+          "display_transition_s": "Hold display jump while vehicle power is delayed (seconds)"
         }
       },
       "history": {

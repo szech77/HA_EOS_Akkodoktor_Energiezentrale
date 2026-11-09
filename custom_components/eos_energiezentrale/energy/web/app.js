@@ -143,7 +143,7 @@ const displayed = key => snapshot.flow_display?.[key]?.value ?? (valid(snapshot.
 const displayedPower = key => (snapshot.flow_display?.[key] || (snapshot.display?.[key] && !valid(snapshot.live[key])) ? '≈ ' : '')+power(displayed(key));
 const displayAge = key => {
   const retained=snapshot.flow_display?.[key] ?? snapshot.display?.[key];
-  return retained && (retained.aligned || !valid(snapshot.live[key])) ? t(retained.aligned ? 'metric.aligned_age' : 'metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : null;
+  return retained && (retained.transition_held || retained.aligned || !valid(snapshot.live[key])) ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : 'metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : null;
 };
 
 function overview() {
@@ -166,7 +166,7 @@ function overview() {
     flow.style.display = consumerEnabled(key) ? "" : "none";
     if (!consumerEnabled(key)) return;
     const retained = snapshot.flow_display?.[key] ?? snapshot.display?.[key];
-    const stale = valid(retained?.value) && (retained.aligned || !valid(live[key]));
+    const stale = valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
     const value = stale ? retained.value : live[key];
     const soc = key === 'car' && snapshot.vehicles?.length ? undefined : displayed(key + '_soc');
     if (key === 'car') {
@@ -192,7 +192,7 @@ function overview() {
       node.append(ageNote);
     }
     ageNote.hidden = !stale || (retained.aligned && retained.age_s<10);
-    ageNote.textContent = stale ? t(retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
+    ageNote.textContent = stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
       {minutes:Math.ceil(retained.age_s / 60)}) : '';
     node.title = ageNote.textContent;
     if (key === "car" && snapshot.vehicles?.length) names.car=t("fleet.vehicles",{count:snapshot.vehicles.length});
