@@ -492,9 +492,12 @@ Python 3.14.2 oder neuer; Tests gegen Home Assistant 2026.11.0:
 
 ```sh
 python -m venv .venv
+# Windows PowerShell: Umgebung für die folgenden Befehle aktivieren
+.\.venv\Scripts\Activate.ps1
+# Linux/macOS stattdessen: source .venv/bin/activate
 python -m pip install -r requirements-dev.txt -r requirements-test.txt
 python -m pytest --cov=custom_components.eos_energiezentrale --cov-branch
-node --test tests/panel.test.cjs
+node --test tests/*.test.cjs
 ```
 
 Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).
