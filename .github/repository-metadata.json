@@ -1,0 +1,11 @@
+{
+  "description": "Home Assistant integration for Akkudoktor EOS with solar surplus EV charging, battery control and energy dashboards.",
+  "topics": [
+    "home-assistant",
+    "hacs",
+    "akkudoktor-eos",
+    "energy-management",
+    "solar-energy",
+    "ev-charging"
+  ]
+}

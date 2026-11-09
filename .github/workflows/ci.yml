@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/**", "bug/**"]
+  pull_request:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests Home Assistant 2026.11
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt -r requirements-test.txt
+      - name: Behavioral and native Home Assistant tests
+        run: python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --cov-report=term-missing
+      - name: Browser syntax and authenticated panel bridge
+        run: |
+          node --check custom_components/eos_energiezentrale/energy/web/accounting.js
+          node --check custom_components/eos_energiezentrale/energy/web/app.js
+          node --check custom_components/eos_energiezentrale/energy/web/panel.js
+          node --test tests/*.test.cjs
+
+  security:
+    name: Source security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install security tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Python static security analysis
+        run: python -m bandit -r custom_components tools -ll
+      - name: Audit development and Home Assistant test dependencies
+        run: python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.2
+          cache: true
+      - name: Scan repository for secrets
+        run: trivy fs --scanners secret --exit-code 1 --skip-dirs .git,.venv .
+
+  integration:
+    name: Home Assistant and HACS metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Validate checkout license and repository metadata
+        run: python tools/validate_hacs_metadata.py
+      - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        with:
+          category: integration
+          comment: "false"
+          # GitHub's description/topics/license belong to the repository/default
+          # branch. Pending branches validate their own license in the step above.
+          # Keep GitHub metadata checks mandatory once the change reaches main.
+          ignore: ${{ github.ref == 'refs/heads/main' && 'brands' || 'brands description license topics' }}
+
+  release_metadata:
+    name: Release metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Validate manifest version and changelog
+        env:
+          COMMIT: ${{ github.sha }}
+        run: python tools/release.py validate --check-local-tag --commit "$COMMIT"
+
+  required:
+    name: Required checks
+    needs: [tests, security, integration, release_metadata]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require successful tests and validation
+        env:
+          TESTS: ${{ needs.tests.result }}
+          SECURITY: ${{ needs.security.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          RELEASE: ${{ needs.release_metadata.result }}
+        run: |
+          test "$TESTS" = success
+          test "$SECURITY" = success
+          test "$INTEGRATION" = success
+          test "$RELEASE" = success
+
+  publish:
+    name: Publish HACS release
+    needs: required
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Publish versioned GitHub release for HACS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: python tools/release.py publish --repository "$REPOSITORY" --commit "$COMMIT"

@@ -1,0 +1,23 @@
+{
+  "domain": "eos_energiezentrale",
+  "name": "EOS Energiezentrale",
+  "categories": [
+    "energy"
+  ],
+  "codeowners": [
+    "@szech77"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/szech77/HA_EOS_Akkodoktor_Energiezentrale",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/szech77/HA_EOS_Akkodoktor_Energiezentrale/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}

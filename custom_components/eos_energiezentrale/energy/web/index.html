@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="app.title">EOS Energiezentrale</title>
+  <link rel="icon" type="image/svg+xml" href="./logo.svg">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./bootstrap.js" defer></script>
+</head>
+<body id="eos-energy-design">
+<div class="energy-app">
+  <header>
+    <a class="brand" href="#overview"><svg class="energy-logo" viewBox="0 0 128 128" aria-hidden="true" focusable="false"><use data-logo href="./logo.svg#mark"/></svg><span class="brand-wordmark"><strong>EOS</strong><span data-i18n="app.name"></span></span></a>
+    <nav data-i18n-aria="nav.main">
+      <a href="#overview" data-i18n="nav.overview"></a>
+      <a href="#settings" data-i18n="nav.settings"></a>
+    </nav>
+  </header>
+  <main>
+    <p id="notice" role="status"></p>
+    <button id="startup-retry" type="button" hidden>Retry</button>
+    <details id="startup-details" hidden><summary id="startup-details-title">Technical details</summary><code id="startup-detail"></code></details>
+    <section id="overview">
+      <div class="page-top"><div><p class="eyebrow" data-i18n="section.overview"></p><h1 data-i18n="nav.overview"></h1></div><span class="tag" id="connection" data-i18n="status.connecting"></span></div>
+      <div class="kpis" id="overview-kpis"></div>
+      <div class="flow-panel">
+        <div class="panel-heading"><h2 data-i18n="flow.title"></h2><span id="flow-weather" class="flow-weather" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><g id="weather-shape"/></svg><span id="weather-temperature"></span></span></div>
+        <div class="flow" data-i18n-aria="flow.aria">
+          <svg class="wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path class="wire" d="M18 19 Q34 19 43 42 M18 50 H43 M18 81 Q34 81 43 58 M57 42 Q66 19 82 19 M57 50 H82 M57 58 Q66 81 82 81"/>
+            <path class="pulse solar" data-flow="solar" pathLength="100" d="M18 19 Q34 19 43 42"/>
+            <path class="pulse grid" data-flow="grid" pathLength="100" d="M18 50 H43"/>
+            <path class="pulse battery" data-flow="battery" pathLength="100" d="M43 58 Q34 81 18 81"/>
+            <path class="pulse house" data-flow="house" pathLength="100" d="M57 42 Q66 19 82 19"/>
+            <path class="pulse car" data-flow="car" pathLength="100" d="M57 50 H82"/>
+            <path class="pulse heat" data-flow="heat" pathLength="100" d="M57 58 Q66 81 82 81"/>
+          </svg>
+          <a class="node solar" style="--x:18%;--y:19%" href="#solar" data-node="solar"><span class="orb" aria-hidden="true">☀</span><span data-i18n="node.solar"></span><strong>—</strong></a>
+          <a class="node grid" style="--x:18%;--y:50%" href="#grid" data-node="grid"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m8 21 3-18h2l3 18M7 7h10M5 12h14M9.2 14l5.5 5M14.8 14l-5.5 5M3 7v3m18-3v3M2 7h5m10 0h5M3 12v3m18-3v3M3 21h5m8 0h5"/></svg></span><span data-i18n="node.grid"></span><strong>—</strong></a>
+          <a class="node battery" style="--x:18%;--y:81%" href="#battery" data-node="battery"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect class="battery-bar" x="4" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="7" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="10" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="13" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="16" y="9" width="2" height="6" rx="0.45"/></svg></span><span data-i18n="node.battery"></span><strong>—</strong></a>
+          <a class="hub" href="#energy" data-i18n-aria="flow.open_energy"><svg class="energy-logo" viewBox="0 0 128 128" aria-hidden="true" focusable="false"><use data-logo href="./logo.svg#mark"/></svg></a>
+          <a class="node house" style="--x:82%;--y:19%" href="#house" data-node="house"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 10.5 12 3l9 7.5M5.5 9v11h13V9M10 20v-6h4v6M16 4v3"/><path d="M8 11h.01M16 11h.01"/></svg></span><span data-i18n="node.house"></span><strong>—</strong></a>
+          <a class="node car" style="--x:82%;--y:50%" href="#car" data-node="car"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 9 1.5-4h11L19 9M4 17v3m16-3v3"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 13h2m8 0h2"/><g class="car-soc" hidden><rect class="car-soc-track" x="7.5" y="6.2" width="9" height="1.8" rx=".4"/><rect class="car-soc-fill" x="7.5" y="6.2" width="0" height="1.8" rx=".4"/></g></svg></span><span data-i18n="node.car"></span><strong>—</strong></a>
+          <a class="node heat" style="--x:82%;--y:81%" href="#heat" data-node="heat"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 6c3-5 6 5 9 0s6 5 9 0M3 12c3-5 6 5 9 0s6 5 9 0M3 18c3-5 6 5 9 0s6 5 9 0"/></svg></span><span data-i18n="device.heat"></span><strong>—</strong></a>
+        </div>
+        <div class="flow-footer"><span class="tag" id="live-time">—</span></div>
+      </div>
+      <section class="plan-panel" id="day-balance"></section>
+      <div class="next" id="next"></div>
+      <div class="kpis" id="vehicle-cards"></div>
+    </section>
+    <section id="detail" hidden>
+      <a class="back" href="#overview" data-i18n="nav.back"></a>
+      <div class="page-top"><div><p class="eyebrow" data-i18n="section.device"></p><h1 id="detail-title"></h1></div><a class="back" href="#settings" data-i18n="nav.settings"></a></div>
+      <a class="back" id="usage-link" hidden data-i18n="billing.open"></a>
+      <div class="kpis" id="detail-kpis"></div>
+      <section class="chart-panel">
+        <div class="chart-legend"><span data-i18n="chart.measured"></span><span data-i18n="chart.forecast"></span><span data-i18n="chart.now_marker"></span></div>
+        <div id="timeline"></div>
+        <div id="charts"></div>
+      </section>
+      <section class="plan-panel" id="plan"></section>
+    </section>
+    <section id="usage" hidden>
+      <a class="back" id="usage-back" data-i18n="nav.back"></a>
+      <div class="page-top"><h1 id="usage-title"></h1></div>
+      <h2 id="billing-range"></h2>
+      <div class="billing-toolbar">
+        <label><span data-i18n="billing.period"></span><select id="billing-period"><option value="day" data-i18n="billing.day"></option><option value="month" data-i18n="billing.month"></option><option value="year" data-i18n="billing.year"></option></select></label>
+        <button data-billing-move="-1" type="button" data-i18n-aria="billing.previous">‹</button>
+        <input type="date" id="billing-date" min="2000-01-01" max="2100-12-31" data-i18n-aria="billing.date">
+        <button data-billing-move="1" type="button" data-i18n-aria="billing.next">›</button>
+        <button data-billing-move="now" type="button" data-i18n="billing.current"></button>
+      </div>
+      <p id="billing-message" role="status"></p>
+      <div class="kpis" id="usage-kpis"></div><div id="usage-charts"></div>
+      <section class="plan-panel"><h2 data-i18n="billing.breakdown"></h2><div id="usage-table"></div>
+        <details><summary data-i18n="billing.quality"></summary><p id="billing-quality"></p><p data-i18n="billing.inventory_note"></p></details>
+      </section>
+    </section>
+    <section id="settings" hidden>
+      <a class="back" href="#overview" data-i18n="nav.back"></a>
+      <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div><span class="tag" id="ownership"></span></div>
+      <details id="cost-settings-open" class="plan-panel"><summary data-i18n="billing.settings"></summary>
+        <form id="cost-settings"><div class="fields">
+          <label><span data-i18n="billing.pv_price_source"></span><select name="pv_price_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
+          <label><span data-i18n="billing.pv_price"></span><input name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required></label>
+          <label><span data-i18n="billing.efficiency_source"></span><select name="efficiency_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
+          <label><span data-i18n="billing.charge_efficiency"></span><input name="charge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
+          <label><span data-i18n="billing.discharge_efficiency"></span><input name="discharge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
+          <label><span data-i18n="billing.capacity"></span><input name="capacity_wh" type="number" min="100" max="1000000" required></label>
+          <label><span data-i18n="billing.initial_price"></span><input name="initial_price_ct" type="number" min="-1000" max="1000" step="0.01"></label>
+        </div><p class="footnote" id="pv-cost-effective"></p><p class="footnote" id="cost-effective"></p><p class="footnote" data-i18n="billing.settings_note"></p>
+        <div class="form-footer"><button type="submit" class="save" data-i18n="settings.save"></button><output id="cost-saved" role="status"></output></div></form>
+      </details>
+      <form id="daily">
+        <label id="vehicle-selector-label" hidden><span data-i18n="settings.vehicle"></span><select id="vehicle-selector"></select></label>
+        <div data-optional="car">
+        <h2 data-i18n="settings.auto_pv"></h2>
+        <div class="checks">
+          <label><input name="pv" type="checkbox"><span data-i18n="settings.pv"></span></label>
+          <label><input name="fast" type="checkbox"><span data-i18n="settings.fast"></span></label>
+          <label><input name="phase_auto" type="checkbox"><span data-i18n="settings.phase_auto"></span></label>
+        </div>
+        <div class="fields">
+          <label><span data-i18n="settings.schedule"></span><select name="schedule"><option value="off" data-i18n="settings.off"></option><option value="weekly" data-i18n="settings.weekly"></option><option value="once" data-i18n="settings.once"></option></select></label>
+          <label data-schedule="weekly"><span data-i18n="settings.departure_time"></span><input name="departure_time" type="time"></label>
+          <label data-schedule="once"><span data-i18n="settings.departure"></span><input name="departure" type="datetime-local"></label>
+          <label><span data-i18n="settings.target_soc"></span><input name="target_soc" type="number" min="1" max="100" required></label>
+          <label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required></label>
+          <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" required></label>
+          <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" required></label>
+        </div>
+        <fieldset data-schedule="weekly"><legend data-i18n="settings.weekdays"></legend><div class="checks">
+          <label><input name="day" value="0" type="checkbox"><span data-i18n="weekday.mon"></span></label><label><input name="day" value="1" type="checkbox"><span data-i18n="weekday.tue"></span></label>
+          <label><input name="day" value="2" type="checkbox"><span data-i18n="weekday.wed"></span></label><label><input name="day" value="3" type="checkbox"><span data-i18n="weekday.thu"></span></label>
+          <label><input name="day" value="4" type="checkbox"><span data-i18n="weekday.fri"></span></label><label><input name="day" value="5" type="checkbox"><span data-i18n="weekday.sat"></span></label>
+          <label><input name="day" value="6" type="checkbox"><span data-i18n="weekday.sun"></span></label>
+        </div></fieldset>
+        </div>
+        <h2 data-i18n="device.battery"></h2>
+        <div class="fields">
+          <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
+          <label><span data-i18n="settings.battery_max_soc"></span><input name="battery_max_soc" type="number" min="1" max="100" step="1" required></label>
+        </div>
+        <p class="footnote" data-i18n="settings.battery_limits_info"></p>
+        <p id="battery-limits-status" class="footnote" role="status"></p>
+        <label class="check" data-optional="car"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
+        <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
+      </form>
+      <section class="plan-panel">
+        <h2 data-i18n="control.title"></h2>
+        <p id="control-info" data-i18n="control.restart_info"></p>
+        <button id="control" type="button" data-i18n="control.take"></button>
+        <output id="control-result" aria-live="polite"></output>
+      </section>
+      <section class="plan-panel">
+        <h2 data-i18n="settings.setup"></h2>
+        <dl id="connections"></dl>
+        <p class="footnote" data-i18n="settings.setup_info"></p>
+      </section>
+    </section>
+  </main>
+</div>
+</body>
+</html>

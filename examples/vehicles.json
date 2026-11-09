@@ -1,0 +1,38 @@
+[
+  {
+    "id": "id4",
+    "name": "VW ID.4",
+    "resource": "ev1",
+    "soc_entity": "sensor.id4_soc",
+    "soc_scale": "factor",
+    "capacity_wh": 77000,
+    "charging_efficiency": 0.9,
+    "max_current_a": 16,
+    "wallbox_type": "nrgkick",
+    "wallbox_parameters": {
+      "power": "sensor.nrgkick_id_4_gesamt_wirkleistung",
+      "status": "sensor.nrgkick_id_4_status",
+      "enable": "switch.nrgkick_id_4_laden_aktiviert",
+      "current": "number.nrgkick_id_4_ladestromstarke",
+      "phases": "number.nrgkick_id_4_phasenanzahl"
+    }
+  },
+  {
+    "id": "auto2",
+    "name": "E-Auto 2",
+    "resource": "ev2",
+    "soc_entity": "sensor.auto_2_soc",
+    "soc_scale": "factor",
+    "capacity_wh": 77000,
+    "charging_efficiency": 0.9,
+    "max_current_a": 16,
+    "wallbox_type": "nrgkick",
+    "wallbox_parameters": {
+      "power": "sensor.nrgkick_auto_2_gesamt_wirkleistung",
+      "status": "sensor.nrgkick_auto_2_status",
+      "enable": "switch.nrgkick_auto_2_laden_aktiviert",
+      "current": "number.nrgkick_auto_2_ladestromstarke",
+      "phases": "number.nrgkick_auto_2_phasenanzahl"
+    }
+  }
+]

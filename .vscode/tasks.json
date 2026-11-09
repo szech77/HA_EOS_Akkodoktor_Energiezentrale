@@ -1,0 +1,55 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Tests: Abhängigkeiten installieren",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        "requirements-dev.txt",
+        "-r",
+        "requirements-test.txt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests: JavaScript",
+      "type": "process",
+      "command": "${config:nodejs-testing.nodejsPath}",
+      "args": [
+        "--test",
+        "tests/*.test.cjs"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests: Python mit Coverage",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=custom_components.eos_energiezentrale",
+        "--cov-branch",
+        "--cov-report=term-missing:skip-covered"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

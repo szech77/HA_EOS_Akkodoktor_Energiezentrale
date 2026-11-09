@@ -1,0 +1,394 @@
+{
+  "title": "EOS Energiezentrale",
+  "config": {
+    "step": {
+      "user": {
+        "title": "EOS-Verbindung",
+        "data": {
+          "eos_url": "EOS-API-Basisadresse",
+          "language": "Panel-Sprache",
+          "battery_resource": "EOS-Speicherressource",
+          "vehicle_resource": "EOS-Fahrzeugressource"
+        }
+      },
+      "sensors": {
+        "title": "Quellsensoren",
+        "data": {
+          "pv_entity": "PV-Leistung",
+          "house_entity": "Gesamter Hausverbrauch einschließlich Auto und Wärmepumpe",
+          "grid_entity": "Netzleistung (positiv = Bezug)",
+          "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
+          "price_entity": "Bezugspreis",
+          "car_soc_entity": "E-Auto-SoC (optional)",
+          "car_soc_scale": "Fahrzeug-SoC-Einheit",
+          "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
+          "heat_load_scale": "Skalierung der Auslastung",
+          "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
+        }
+      },
+      "hardware": {
+        "title": "Hardware-Treiber",
+        "data": {
+          "battery_type": "Speichertreiber",
+          "battery_parameters": "Speicher-Entitäten (JSON)",
+          "wallbox_type": "Wallbox-Typ (none = kein E-Auto)",
+          "wallbox_parameters": "Wallbox-Entitäten (JSON)",
+          "vehicle_name": "Fahrzeugname",
+          "vehicles": "Mehrere Fahrzeuge / Wallboxen (JSON-Liste, [] = Einzelkonfiguration)"
+        }
+      },
+      "limits": {
+        "title": "Technische Grenzen",
+        "data": {
+          "capacity_wh": "Fahrzeugkapazität (Wh)",
+          "charging_efficiency": "Fahrzeug-Ladewirkungsgrad (0–1)",
+          "grid_limit_w": "Netzbezugsgrenze (W)",
+          "battery_charge_w": "Speicher-Ladebasis (W)",
+          "battery_discharge_w": "Speicher-Entladebasis (W)",
+          "allow_battery_export": "Speichereinspeisung erlauben",
+          "max_current_a": "Maximaler Ladestrom (A)",
+          "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
+          "regulation_interval_s": "Vorgabe Regelintervall (s)",
+          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
+          "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
+          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)",
+          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)",
+          "pv_peak_w": "PV-Bezugsleistung für den Ring (W)"
+        }
+      },
+      "history": {
+        "title": "InfluxDB-Verlauf (optional)",
+        "data": {
+          "influx_url": "InfluxDB-Adresse (leer = deaktiviert)",
+          "influx_database": "InfluxDB-Datenbank",
+          "influx_user": "InfluxDB-Lesebenutzer",
+          "influx_password": "InfluxDB-Passwort"
+        }
+      },
+      "hardware_parameters": {
+        "title": "Plugin konfigurieren",
+        "description": "Die Felder werden von den ausgewählten Plugins definiert.",
+        "data": {
+          "battery_parameters": "Speicher / Wechselrichter",
+          "wallbox_parameters": "Wallbox"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "EOS-Verbindung fehlgeschlagen",
+      "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen"
+    },
+    "abort": {
+      "already_configured": "Bereits eingerichtet",
+      "invalid_plugin": "Plugin nicht verfügbar oder ungültig."
+    }
+  },
+  "options": {
+    "step": {
+      "connection": {
+        "title": "EOS-Verbindung",
+        "data": {
+          "eos_url": "EOS-API-Basisadresse",
+          "language": "Panel-Sprache",
+          "battery_resource": "EOS-Speicherressource",
+          "vehicle_resource": "EOS-Fahrzeugressource"
+        }
+      },
+      "sensors": {
+        "title": "Quellsensoren",
+        "data": {
+          "pv_entity": "PV-Leistung",
+          "house_entity": "Gesamter Hausverbrauch einschließlich Auto und Wärmepumpe",
+          "grid_entity": "Netzleistung (positiv = Bezug)",
+          "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
+          "price_entity": "Bezugspreis",
+          "car_soc_entity": "E-Auto-SoC (optional)",
+          "car_soc_scale": "Fahrzeug-SoC-Einheit",
+          "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
+          "heat_load_scale": "Skalierung der Auslastung",
+          "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
+        }
+      },
+      "hardware": {
+        "title": "Hardware-Treiber",
+        "data": {
+          "battery_type": "Speichertreiber",
+          "battery_parameters": "Speicher-Entitäten (JSON)",
+          "wallbox_type": "Wallbox-Typ (none = kein E-Auto)",
+          "wallbox_parameters": "Wallbox-Entitäten (JSON)",
+          "vehicle_name": "Fahrzeugname",
+          "vehicles": "Mehrere Fahrzeuge / Wallboxen (JSON-Liste, [] = Einzelkonfiguration)"
+        }
+      },
+      "limits": {
+        "title": "Technische Grenzen",
+        "data": {
+          "capacity_wh": "Fahrzeugkapazität (Wh)",
+          "charging_efficiency": "Fahrzeug-Ladewirkungsgrad (0–1)",
+          "grid_limit_w": "Netzbezugsgrenze (W)",
+          "battery_charge_w": "Speicher-Ladebasis (W)",
+          "battery_discharge_w": "Speicher-Entladebasis (W)",
+          "allow_battery_export": "Speichereinspeisung erlauben",
+          "max_current_a": "Maximaler Ladestrom (A)",
+          "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
+          "regulation_interval_s": "Vorgabe Regelintervall (s)",
+          "display_hold_s": "Letzte Messwerte anzeigen für (Sekunden; nur Anzeige)",
+          "sensor_alignment_s": "Zeitversatz der Anzeige-Messwerte (Sekunden)",
+          "command_settle_s": "Wartefrist auf Messungen nach Ladebefehl (Sekunden)",
+          "display_transition_s": "Anzeigesprung bei verzögerter Autoleistung zurückhalten (Sekunden)",
+          "pv_peak_w": "PV-Bezugsleistung für den Ring (W)"
+        }
+      },
+      "history": {
+        "title": "InfluxDB-Verlauf (optional)",
+        "data": {
+          "influx_url": "InfluxDB-Adresse (leer = deaktiviert)",
+          "influx_database": "InfluxDB-Datenbank",
+          "influx_user": "InfluxDB-Lesebenutzer",
+          "influx_password": "InfluxDB-Passwort"
+        }
+      },
+      "init": {
+        "title": "Inbetriebnahme",
+        "menu_options": {
+          "connection": "EOS-Verbindung",
+          "sensors": "Quellsensoren",
+          "hardware": "Hardware-Treiber",
+          "limits": "Technische Grenzen",
+          "history": "InfluxDB-Verlauf (optional)",
+          "vehicles": "Fahrzeuge und Wallboxen"
+        }
+      },
+      "vehicles": {
+        "title": "Fahrzeuge und Wallboxen",
+        "menu_options": {
+          "vehicle_add": "Hinzufügen",
+          "vehicle_edit": "Bearbeiten",
+          "vehicle_remove": "Entfernen"
+        }
+      },
+      "vehicle_add": {
+        "title": "Fahrzeug hinzufügen",
+        "data": {
+          "vehicle_id": "Fahrzeug",
+          "id": "Stabile Fahrzeug-ID",
+          "name": "Fahrzeugname",
+          "resource": "EOS-Ressource",
+          "soc_entity": "SoC-Sensor (optional)",
+          "soc_scale": "SoC-Skalierung",
+          "capacity_wh": "Kapazität (Wh)",
+          "charging_efficiency": "Ladewirkungsgrad",
+          "max_current_a": "Maximalstrom (A)",
+          "wallbox_power": "Wallbox-Leistung",
+          "wallbox_status": "Wallbox-Status",
+          "wallbox_enable": "Ladefreigabe",
+          "wallbox_current": "Ladestromvorgabe",
+          "wallbox_phases": "Phasenanzahl",
+          "wallbox_parameters": "Plugin-Einstellungen"
+        },
+        "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
+      },
+      "vehicle_edit": {
+        "title": "Fahrzeug bearbeiten",
+        "data": {
+          "vehicle_id": "Fahrzeug",
+          "id": "Stabile Fahrzeug-ID",
+          "name": "Fahrzeugname",
+          "resource": "EOS-Ressource",
+          "soc_entity": "SoC-Sensor (optional)",
+          "soc_scale": "SoC-Skalierung",
+          "capacity_wh": "Kapazität (Wh)",
+          "charging_efficiency": "Ladewirkungsgrad",
+          "max_current_a": "Maximalstrom (A)",
+          "wallbox_power": "Wallbox-Leistung",
+          "wallbox_status": "Wallbox-Status",
+          "wallbox_enable": "Ladefreigabe",
+          "wallbox_current": "Ladestromvorgabe",
+          "wallbox_phases": "Phasenanzahl"
+        },
+        "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
+      },
+      "vehicle_remove": {
+        "title": "Fahrzeug entfernen",
+        "data": {
+          "vehicle_id": "Fahrzeug",
+          "id": "Stabile Fahrzeug-ID",
+          "name": "Fahrzeugname",
+          "resource": "EOS-Ressource",
+          "soc_entity": "SoC-Sensor (optional)",
+          "soc_scale": "SoC-Skalierung",
+          "capacity_wh": "Kapazität (Wh)",
+          "charging_efficiency": "Ladewirkungsgrad",
+          "max_current_a": "Maximalstrom (A)",
+          "wallbox_power": "Wallbox-Leistung",
+          "wallbox_status": "Wallbox-Status",
+          "wallbox_enable": "Ladefreigabe",
+          "wallbox_current": "Ladestromvorgabe",
+          "wallbox_phases": "Phasenanzahl"
+        },
+        "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
+      },
+      "hardware_parameters": {
+        "title": "Plugin konfigurieren",
+        "description": "Die Felder werden von den ausgewählten Plugins definiert.",
+        "data": {
+          "battery_parameters": "Speicher / Wechselrichter",
+          "wallbox_parameters": "Wallbox"
+        }
+      },
+      "vehicle_plugin": {
+        "title": "Wallbox-Plugin auswählen",
+        "data": {
+          "wallbox_type": "Wallbox-Plugin"
+        }
+      },
+      "vehicle_parameters": {
+        "title": "Fahrzeug und Wallbox hinzufügen / bearbeiten",
+        "data": {
+          "vehicle_id": "Fahrzeug",
+          "id": "Stabile Fahrzeug-ID",
+          "name": "Fahrzeugname",
+          "resource": "EOS-Ressource",
+          "soc_entity": "SoC-Sensor (optional)",
+          "soc_scale": "SoC-Skalierung",
+          "capacity_wh": "Kapazität (Wh)",
+          "charging_efficiency": "Ladewirkungsgrad",
+          "max_current_a": "Maximalstrom (A)",
+          "wallbox_power": "Wallbox-Leistung",
+          "wallbox_status": "Wallbox-Status",
+          "wallbox_enable": "Ladefreigabe",
+          "wallbox_current": "Ladestromvorgabe",
+          "wallbox_phases": "Phasenanzahl",
+          "wallbox_parameters": "Plugin-Einstellungen"
+        },
+        "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
+      }
+    },
+    "error": {
+      "cannot_connect": "EOS-Verbindung fehlgeschlagen",
+      "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen"
+    },
+    "abort": {
+      "no_vehicles": "Kein Fahrzeug vorhanden",
+      "invalid_plugin": "Plugin nicht verfügbar oder ungültig."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "solar": {
+        "name": "Solarleistung"
+      },
+      "house": {
+        "name": "Haus ohne Auto und Wärmepumpe"
+      },
+      "heat": {
+        "name": "Wärmepumpenleistung"
+      },
+      "grid": {
+        "name": "Netzbezug / Einspeisung"
+      },
+      "car": {
+        "name": "{vehicle} Ladeleistung"
+      },
+      "battery": {
+        "name": "Speicher Laden / Entladen"
+      },
+      "battery_charge": {
+        "name": "Speicher-Ladeleistung"
+      },
+      "battery_discharge": {
+        "name": "Speicher-Entladeleistung"
+      },
+      "battery_soc": {
+        "name": "Speicher-SoC"
+      },
+      "car_soc": {
+        "name": "{vehicle} SoC"
+      },
+      "car_soc_factor": {
+        "name": "{vehicle} SoC-Faktor"
+      },
+      "price": {
+        "name": "Bezugspreis"
+      },
+      "battery_mode": {
+        "name": "EOS-Speichermodus"
+      },
+      "car_mode": {
+        "name": "EOS-Modus {vehicle}"
+      },
+      "car_status": {
+        "name": "{vehicle} Ladestatus"
+      }
+    },
+    "switch": {
+      "control": {
+        "name": "Energiesteuerung"
+      },
+      "pv": {
+        "name": "PV-Überschussladen"
+      },
+      "fast": {
+        "name": "Schnellladen"
+      },
+      "battery_pv_support": {
+        "name": "Speicherunterstützung beim PV-Laden"
+      },
+      "phase_auto": {
+        "name": "Phasenautomatik"
+      }
+    },
+    "number": {
+      "target_soc": {
+        "name": "Ziel-SoC zur Abfahrt"
+      },
+      "pv_target_soc": {
+        "name": "PV-Ziel-SoC"
+      },
+      "reserve_w": {
+        "name": "PV-Einspeisereserve"
+      },
+      "regulation_interval_s": {
+        "name": "Regelintervall"
+      },
+      "battery_min_soc": {
+        "name": "Speicher Mindest-SoC"
+      },
+      "battery_max_soc": {
+        "name": "Speicher Maximal-SoC"
+      }
+    },
+    "select": {
+      "schedule": {
+        "name": "Abfahrtsplanung",
+        "state": {
+          "off": "Aus",
+          "once": "Einmalig",
+          "weekly": "Wöchentlich"
+        }
+      }
+    },
+    "text": {
+      "departure": {
+        "name": "Einmalige Abfahrt (ISO-Zeitstempel)"
+      },
+      "departure_time": {
+        "name": "Wiederkehrende Abfahrt (HH:MM)"
+      }
+    },
+    "binary_sensor": {
+      "plan_current": {
+        "name": "EOS-Plan aktuell"
+      },
+      "problem": {
+        "name": "Reglerstörung"
+      },
+      "release_pending": {
+        "name": "Gerätefreigabe ausstehend"
+      },
+      "battery_limits_confirmed": {
+        "name": "EOS-Speichergrenzen bestätigt"
+      }
+    }
+  }
+}

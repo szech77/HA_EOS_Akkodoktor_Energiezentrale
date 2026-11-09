@@ -1,8 +1,32 @@
 {
     "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
     "python.testing.cwd": "${workspaceFolder}",
-    "python.testing.pytestArgs": [],
+    "python.testing.pytestArgs": [
+        "--cov=custom_components.eos_energiezentrale",
+        "--cov-branch",
+        "--cov-report=term-missing:skip-covered"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "python.terminal.activateEnvironment": true
+    "python.terminal.activateEnvironment": true,
+    "nodejs-testing.include": [
+        "tests"
+    ],
+    "nodejs-testing.exclude": [
+        "**/node_modules/**",
+        "**/.venv/**",
+        "**/.venv-before-repair-*/**",
+        "**/.test-*/**"
+    ],
+    "nodejs-testing.extensions": [
+        {
+            "extensions": [
+                "cjs"
+            ],
+            "filePatterns": [
+                "**/*.test.cjs"
+            ],
+            "parameters": []
+        }
+    ]
 }
