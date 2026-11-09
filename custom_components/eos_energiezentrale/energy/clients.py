@@ -144,13 +144,16 @@ class EOS:
         current = vehicles[resource]
         desired = {"min_soc_percentage": target, "max_soc_percentage": target,
                    "min_soc_deadline_datetime": departure.isoformat() if departure else None}
+        if departure is None:
+            desired["min_soc_max_duration_h"] = None
         if all(current.get(key) == value for key, value in desired.items()):
             return
         updated = {**vehicles, resource: {**current, **desired}}
         request(self.url + "/v1/config/devices/electric_vehicles", method="PUT", payload=updated)
         confirmed = request(self.url + "/v1/config")["devices"]["electric_vehicles"][resource]
         if (confirmed.get("min_soc_percentage") != target or confirmed.get("max_soc_percentage") != target
-                or instant(confirmed.get("min_soc_deadline_datetime")) != departure):
+                or instant(confirmed.get("min_soc_deadline_datetime")) != departure
+                or (departure is None and confirmed.get("min_soc_max_duration_h") is not None)):
             raise ValueError("EOS hat das Ladeziel nicht bestätigt")
 
 

@@ -233,10 +233,11 @@ class Controller:
     def sync_goal(self, now, clock, departure):
         daily = self.config.daily
         goal = (daily["target_soc"], departure) if departure else None
-        if goal != self.goal and self.soc is not None and clock - self.last_goal_attempt >= 30:
+        if (goal != self.goal or self.goal_at is None) and clock - self.last_goal_attempt >= 30:
             self.last_goal_attempt = clock
             try:
-                target, deadline = goal or (int(self.soc or 0), None)
+                # No schedule means no optimizer-managed EV charging; local PV charging stays independent.
+                target, deadline = goal or (0, None)
                 self.config.eos.set_vehicle_goal(self.config.options["vehicle_resource"], target, deadline)
                 self.goal, self.goal_at = goal, now
                 self.errors.pop("goal", None)

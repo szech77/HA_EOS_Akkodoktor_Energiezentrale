@@ -53,6 +53,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- Deaktivierte Fahrzeugplanung entfernt EOS-Ladeziele auch nach einem Neustart ohne Fahrzeug-SoC; beide Terminformen werden gelöscht und die Abschaltung bestätigt.
+
 - Einheitliche Inhaltsversion für Panel, HTML, JavaScript und CSS verhindert gemischte UI-Dateien nach Updates; aussagekräftige Meldungen für Sprach-, Verbindungs-, Datei- und Darstellungsfehler mit erneutem Ladeversuch und technischen Details.
 
 - PV-Kosten standardmäßig aus der zur Laufzeit gelesenen EOS-Einspeisevergütung statt dem bisherigen Nullwert; manuelle Vorgabe und zeitabhängige Tarifintervalle bleiben berücksichtigt.
