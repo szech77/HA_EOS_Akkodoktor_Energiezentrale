@@ -5,7 +5,7 @@ import re
 
 from .clients import reading
 from .controller import Controller
-from .domain import battery_command, current_instruction, house_only, instant
+from .domain import battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, daily_settings, save
 from .history import History
@@ -134,9 +134,12 @@ class FleetController(Controller):
                 controller=Controller(proxy,config)
                 controller.update_eos=lambda now,clock,child=controller:self._share_plan(child)
             self.controllers.append((identity,controller,proxy))
+        self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
 
     def _share_plan(self,child):
         child.plan=self.plan
+        child.resource_plans=self.resource_plans
+        child.eos_failure_since=self.eos_failure_since
         child.forecast=[{key:value for key,value in row.items() if key not in {"car","car_soc"}} for row in self.forecast]
 
     def persist_primary_settings(self):
@@ -241,7 +244,7 @@ class FleetController(Controller):
             return
         self.control_step="battery_control"
         battery=self.battery_driver.read(rows,now)
-        order=current_instruction(self.plan,opts["battery_resource"],now)
+        order=self.order_for(opts["battery_resource"],now)
         command=battery_command(order,battery.soc,{**opts,"battery_min_soc":self.config.daily["battery_min_soc"],
             "battery_max_soc":self.config.daily["battery_max_soc"]},self.config.daily["battery_pv_support"] and
             any(app.pv_session and app.config.wallbox.read(rows,now).charging for _,app,_ in self.controllers),

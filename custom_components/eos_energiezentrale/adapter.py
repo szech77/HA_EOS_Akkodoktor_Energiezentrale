@@ -1,8 +1,14 @@
 """Synchronous driver interface to HA's event loop, only used in an executor."""
 from asyncio import run_coroutine_threadsafe
+from datetime import datetime, timezone
 
 from .energy.clients import ENTITY
 from .energy.domain import number
+
+
+class StateSnapshot(dict):
+    """State batch with the time at which the HA loop finished reading it."""
+    captured_at = None
 
 
 class HomeAssistantAdapter:
@@ -32,7 +38,9 @@ class HomeAssistantAdapter:
         if entity is not None:
             state = self.hass.states.get(entity)
             return self._snapshot(state) if state else {}
-        return {state.entity_id: self._snapshot(state) for state in self.hass.states.async_all()}
+        result=StateSnapshot({state.entity_id:self._snapshot(state) for state in self.hass.states.async_all()})
+        result.captured_at=datetime.now(timezone.utc)
+        return result
 
     def states(self):
         return self._wait(self._states())

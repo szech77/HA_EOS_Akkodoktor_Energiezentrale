@@ -1,4 +1,5 @@
 """Single-writer controller with persistent explicit control intent."""
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from math import isclose
 from threading import Event, RLock
@@ -28,6 +29,8 @@ class Controller:
         self.flow_alignment=ChargeTransitionDisplay(settings.get("display_hold_s",900),settings.get("display_transition_s",30))
         self.display_values = DisplayValues(getattr(config,"options",{}).get("display_hold_s",900))
         self.plan = None
+        self.resource_plans = {}
+        self.eos_failure_since = {}
         self.forecast = []
         self.errors = {}
         self.control_step = "startup"
@@ -140,18 +143,60 @@ class Controller:
             self.battery_limits_confirmed_at = now
             self.errors.pop("battery_limits", None)
 
+    def eos_resources(self):
+        configured=getattr(self,"fleet_resources",None)
+        if configured is not None:
+            return configured
+        options=self.config.options
+        return {options["battery_resource"]} | ({options["vehicle_resource"]} if options.get("wallbox_type")!="none" else set())
+
+    def plan_for(self,resource,now):
+        failed=self.eos_failure_since.get(resource)
+        if failed is not None and (now-failed).total_seconds()>=300:
+            return None
+        return self.resource_plans.get(resource,self.plan if failed is None else None)
+
+    def order_for(self,resource,now):
+        plan=self.plan_for(resource,now)
+        order=current_instruction(plan,resource,now)
+        if (order is None and plan is not None and resource in self.eos_failure_since
+                and resource!=self.config.options["battery_resource"]):
+            # Age can be relaxed during an outage; validity bounds and stops cannot.
+            order=current_instruction({**plan,"generated_at":now.isoformat()},resource,now)
+        return order
+
     def update_eos(self, now, clock):
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
+            resources=self.eos_resources()
             try:
                 candidate = self.config.eos.plan()
                 if (not isinstance(candidate, dict)
                         or instant(candidate.get("generated_at")) is None
                         or not isinstance(candidate.get("instructions"), list)):
                     raise ValueError("EOS plan is not ready")
-                self.plan = candidate
-                self.errors.pop("eos", None)
+                candidate=deepcopy(candidate)
+                accepted=False
+                incomplete=False
+                for resource in resources:
+                    previous=self.resource_plans.get(resource)
+                    newer=previous is None or instant(candidate["generated_at"])>=instant(previous["generated_at"])
+                    if newer and current_instruction(candidate,resource,now) is not None:
+                        self.resource_plans[resource]=candidate
+                        self.eos_failure_since.pop(resource,None)
+                        accepted=True
+                    else:
+                        self.eos_failure_since.setdefault(resource,now)
+                        incomplete=True
+                if accepted:
+                    self.plan = candidate
+                if incomplete:
+                    self.errors["eos"]="PlanIncomplete"
+                else:
+                    self.errors.pop("eos", None)
             except Exception as error:
+                for resource in resources:
+                    self.eos_failure_since.setdefault(resource,now)
                 self.errors["eos"] = type(error).__name__
         if clock - self.last_forecast_fetch >= 60:
             self.last_forecast_fetch = clock
@@ -201,6 +246,9 @@ class Controller:
         self.sync_battery_limits(now, clock)
         self.update_eos(now, clock)
         states = self.ha.states()
+        captured=getattr(states,"captured_at",None)
+        if captured is not None and isinstance(captured,datetime) and captured.utcoffset() is not None:
+            now=max(now,captured)
         self.errors.pop("ha", None)
         opts, daily = self.config.options, self.config.daily
         battery = self.config.battery.read(states, now)
@@ -228,8 +276,8 @@ class Controller:
         times=report_times(states,opts,battery_ids if isinstance(battery_ids,dict) else {},
                            wallbox_ids if isinstance(wallbox_ids,dict) else {},now)
         self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if self.armed else None,command_at=self.last_write)
-        battery_order = current_instruction(self.plan, opts["battery_resource"], now)
-        car_order = current_instruction(self.plan, opts["vehicle_resource"], now)
+        battery_order = self.order_for(opts["battery_resource"], now)
+        car_order = self.order_for(opts["vehicle_resource"], now)
         live["battery_mode"] = battery_order.mode if battery_order else None
         live["car_mode"] = car_order.mode if car_order else None
         live["car_actual_mode"] = ("NON_EXPORT" if box.charging and self.pv_session
@@ -270,7 +318,8 @@ class Controller:
             self.ha.publish_soc(self.soc, measured)
             self.last_soc_publish = published
         synchronized = self.sync_goal(now, clock, departure) if car_enabled else False
-        generated = instant(self.plan.get("generated_at")) if isinstance(self.plan, dict) else None
+        vehicle_plan=self.plan_for(opts["vehicle_resource"],now)
+        generated = instant(vehicle_plan.get("generated_at")) if isinstance(vehicle_plan, dict) else None
         planned = 0
         maximum_power = min(11000, opts["max_current_a"] * 690)
         if daily["fast"] and self.soc is not None and self.soc < daily["target_soc"]:
@@ -319,8 +368,12 @@ class Controller:
             elapsed=(now-self.last_write).total_seconds()
             new_reports=(grid_report is not None and grid_report>self.last_write
                          and box.sample is not None and box.sample>self.last_write)
-            if elapsed<daily["regulation_interval_s"] or not new_reports:
-                if not new_reports and elapsed>=opts.get("command_settle_s",60):
+            # Only the closed-loop PV correction needs a post-command power sample.
+            # EOS supplies an absolute target; unchanged wallbox readings must not
+            # prevent a later scheduled increase or reduction from being applied.
+            awaiting_feedback = pv and planned == 0 and not new_reports
+            if elapsed<daily["regulation_interval_s"] or awaiting_feedback:
+                if awaiting_feedback and elapsed>=opts.get("command_settle_s",60):
                     driver.pause(box)
                     self.commanded_car_w = 0
                     self.pv_session=False
@@ -380,10 +433,10 @@ class Controller:
 
     def snapshot(self, now):
         with self.lock:
-            plan = self.plan
             opts = self.config.options
+            plan = self.plan_for(opts["battery_resource"],now)
             generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
-            current = bool(generated and 0 <= (now - generated).total_seconds() < 3600)
+            current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
             return {"live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
@@ -395,12 +448,13 @@ class Controller:
                             if self.battery_limits_confirmed_at else None},
                     "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
+                    "eos_cache": {resource:{"remaining_s":max(0,300-(now-failed).total_seconds())} for resource,failed in self.eos_failure_since.items() if resource in self.resource_plans and (now-failed).total_seconds()<300 and self.order_for(resource,now) is not None},
                     "errors": dict(self.errors), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "influx_configured": bool(self.config.influx.url),
                     "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}
-                                   for item in plan_series(plan, opts[resource])]
-                             if current and (key != "car" or opts.get("wallbox_type") != "none") else [] for key, resource in (("battery", "battery_resource"),
+                                   for item in plan_series(self.plan_for(opts[resource],now), opts[resource])]
+                             if self.order_for(opts[resource],now) is not None and (key != "car" or opts.get("wallbox_type") != "none") else [] for key, resource in (("battery", "battery_resource"),
                                                                         ("car", "vehicle_resource"))}}

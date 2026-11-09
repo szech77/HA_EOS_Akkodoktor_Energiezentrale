@@ -38,6 +38,10 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- Laufende Fahrzeugladung übernimmt geänderte EOS-Leistungsvorgaben auch ohne erneute Wallbox-Leistungsmeldung; die Messwert-Wartebedingung bleibt auf die reine PV-Nachregelung beschränkt.
+
+- Fünf Minuten Überbrückung für ausgefallene oder unvollständige EOS-Pläne pro Fahrzeug; keine Fristverlängerung durch wiederholte Fehler. HA-Messwerte werden gegen den Zeitpunkt des eingelesenen Zustands statt gegen den Zeitpunkt vor einem langsamen EOS-Abruf geprüft.
+
 - Allgemeine zeitliche Anzeigeausrichtung durch gezielte, auf 30 Sekunden begrenzte Verzögerung bei erwarteter Autoladung ersetzt; bewährte Regler-Warteprüfung bleibt erhalten.
 
 - Asynchrone Netz-/Wallboxmeldungen: zeitlich abgeglichenes Stromflussbild und Prüfung neuer Messungen vor Phasen-, Strom- und PV-Stoppentscheidungen; begrenzte Wartefrist mit Pause bei ausbleibenden Meldungen.
@@ -197,3 +201,4 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 ### Security
 
 - Keine.
+

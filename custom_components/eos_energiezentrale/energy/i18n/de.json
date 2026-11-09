@@ -193,6 +193,7 @@
     "metric.aligned_age": "Zeitlich abgeglichen · vor {minutes} Min.",
     "mode.waiting_measurements": "Warte auf Netz- und Wallboxmessung",
     "metric.estimated_age": "Geschätzt · ältester Messwert vor {minutes} Min.",
-    "metric.waiting_car_power": "Vorheriger Messwert · warte auf Autoleistung"
+    "metric.waiting_car_power": "Vorheriger Messwert · warte auf Autoleistung",
+    "control.cached_eos": "Aktiv · EOS-Ersatzplan, maximal 5 Minuten"
   }
 }

@@ -568,3 +568,15 @@ Meldungen von Netzzähler und Wallboxleistung. Bei ausbleibenden Meldungen wird 
 standardmäßig 60 Sekunden pausiert. Netzgrenzüberschreitung, fehlende erforderliche
 Messwerte, Abstecken und eine reguläre Stoppvorgabe werden sofort behandelt.
 Diese Regelungslogik ist von der 30-Sekunden-Anzeigeverzögerung unabhängig.
+
+### EOS-Abruf vorübergehend nicht verfügbar
+
+Bei einem fehlgeschlagenen oder für ein Fahrzeug unvollständigen Planabruf arbeitet
+die EOS-abhängige Ladung bis zu fünf Minuten mit dem letzten gültigen Plan weiter.
+Die Frist beginnt beim ersten fehlgeschlagenen Abruf und wird durch weitere Fehler
+nicht verlängert. Neue gültige Stoppanweisungen, bekannte geplante Stopps und explizite
+Gültigkeitsenden gelten sofort. Ohne vorherigen gültigen Plan wird keine Ladung erfunden.
+Nach Ablauf wird die EOS-abhängige Ladung pausiert; die Steuerfreigabe bleibt gesetzt,
+damit nach Erholung automatisch fortgesetzt werden kann. Lokale Sicherheitsgrenzen
+und die Frische der HA-Messwerte werden weiterhin geprüft. Pro Fahrzeug wird ein
+eigener Plan gepuffert. Die Diagnose zeigt den aktiven Puffer und seine Restzeit.

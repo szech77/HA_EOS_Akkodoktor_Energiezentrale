@@ -205,3 +205,15 @@ class FleetRequirements(unittest.TestCase):
         self.assertIsNone(result["live"]["car"])
         self.assertEqual(result["display"]["car"]["value"],3000)
         self.assertEqual(result["display"]["house"]["value"],2000)
+
+    def test_missing_second_vehicle_plan_keeps_only_its_own_last_instruction_for_grace(self):
+        app,_,_,_=self.setup_fleet()
+        app.tick(NOW,0)
+        later=NOW+timedelta(seconds=15)
+        app.config.eos.plan.return_value={"generated_at":later.isoformat(),"instructions":[
+            instruction(later,"NON_EXPORT"),{**instruction(later,"IDLE"),"resource_id":"ev1"}]}
+        app.tick(later,15)
+        self.assertEqual(app.order_for("ev1",later).mode,"IDLE")
+        second=app.controllers[1][1]
+        self.assertEqual(second.order_for("ev2",later).mode,"NON_EXPORT")
+        self.assertIsNone(second.order_for("ev2",NOW+timedelta(seconds=315)))

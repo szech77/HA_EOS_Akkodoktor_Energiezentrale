@@ -619,7 +619,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             release.assert_not_called()
             pause.assert_not_called()
             config.eos.plan.side_effect = None
-            config.eos.plan.return_value = {"generated_at":now.isoformat(),"instructions":[instruction(now-timedelta(seconds=1),"NON_EXPORT")]}
+            config.eos.plan.return_value = {"generated_at":now.isoformat(),"instructions":[instruction(now-timedelta(seconds=1),"NON_EXPORT"),{**instruction(now-timedelta(seconds=1),"IDLE"),"resource_id":"ev1"}]}
             config.eos.solution.side_effect = None
             config.eos.solution.return_value = {}
             app.last_plan_fetch = app.last_forecast_fetch = -1000

@@ -86,6 +86,40 @@ class ControllerRequirements(unittest.TestCase):
         self.app.tick(now, 134)
         self.box.charge.assert_called_once_with(7.9, self.box.read.return_value)
 
+    def test_running_charge_tracks_new_eos_power_without_waiting_for_wallbox_report(self):
+        self.config.daily=daily_settings({"target_soc":70,"phase_auto":False},20)
+        self.app.sync_goal=Mock(return_value=True)
+        self.app.goal_at=NOW-timedelta(minutes=3)
+        self.app.set_armed(True)
+        # An unchanged power report is still valid, but predates the previous command.
+        for elapsed, factor, previous_amps, expected_amps in (
+                (0,.5,6,7.9),(20,.8,7.9,12.7),(40,.6,12.7,9.5)):
+            now=NOW+timedelta(seconds=elapsed)
+            self.eos.plan.return_value=self.plan(now,factor=factor)
+            self.ha.states.return_value=self.states(when=now)
+            self.box.read.return_value=wallbox(watts=4140,status="charging",enabled=True,amps=previous_amps)
+            self.app.tick(now,elapsed)
+            self.assertAlmostEqual(self.box.charge.call_args.args[0],expected_amps)
+        self.assertEqual(self.box.charge.call_count,3)
+        self.box.pause.assert_not_called()
+        # A valid zero-power instruction stops immediately, without waiting for the interval.
+        now=NOW+timedelta(seconds=55)
+        self.eos.plan.return_value=self.plan(now,factor=0)
+        self.ha.states.return_value=self.states(when=now)
+        self.app.tick(now,55)
+        self.box.pause.assert_called_once()
+
+    def test_absolute_charge_target_still_obeys_regulation_interval_and_grid_limit(self):
+        self.config.daily=daily_settings({"phase_auto":False},20)
+        self.app.last_write=NOW
+        current=wallbox(watts=4140,enabled=True,status="charging")
+        self.app.regulate_car(current,{"grid":0,"battery_discharge":0},8800,False,
+                              NOW+timedelta(seconds=19),19,self.states())
+        self.box.charge.assert_not_called()
+        self.app.regulate_car(current,{"grid":18000,"battery_discharge":0},8800,False,
+                              NOW+timedelta(seconds=19),19,self.states())
+        self.box.pause.assert_called_once()
+
     def test_failed_goal_sync_does_not_enable_grid_charge(self):
         self.config.daily = daily_settings({"schedule":"once", "departure":(NOW+timedelta(hours=2)).isoformat()}, 20)
         self.eos.set_vehicle_goal.side_effect = ValueError("EOS rejected goal")
@@ -145,6 +179,48 @@ class ControllerRequirements(unittest.TestCase):
         self.app.regulate_car(current,{"grid":18000,"solar":7000,"battery_discharge":0},
                               0,True,NOW+timedelta(seconds=1),1,self.states(when=NOW+timedelta(seconds=1)))
         self.box.pause.assert_called_once()
+
+    def test_actual_charging_continues_through_eos_outage_then_pauses_after_five_minutes(self):
+        self.config.daily=daily_settings({"target_soc":70,"phase_auto":False},20)
+        self.app.sync_goal=Mock(return_value=True)
+        self.app.goal_at=NOW-timedelta(minutes=3)
+        self.app.set_armed(True)
+        for elapsed in (0,15,150,314):
+            now=NOW+timedelta(seconds=elapsed)
+            self.ha.states.return_value=self.states(when=now)
+            self.box.read.return_value=replace(wallbox(watts=4140,enabled=True,status="charging"),sample=now)
+            if elapsed:
+                self.eos.plan.side_effect=TimeoutError("EOS not ready")
+            self.app.tick(now,elapsed)
+            self.box.pause.assert_not_called()
+            self.assertTrue(self.app.armed)
+        now=NOW+timedelta(seconds=315)
+        self.ha.states.return_value=self.states(when=now)
+        self.box.read.return_value=replace(wallbox(watts=4140,enabled=True,status="charging"),sample=now)
+        self.app.tick(now,315)
+        self.box.pause.assert_called_once()
+        self.assertTrue(self.app.armed)
+        # Recovery requires no manual re-arming.
+        self.eos.plan.side_effect=None
+        self.eos.plan.return_value=self.plan(NOW+timedelta(seconds=330))
+        now=NOW+timedelta(seconds=330)
+        self.ha.states.return_value=self.states(when=now)
+        self.box.read.return_value=replace(wallbox(watts=4140,enabled=True,status="charging"),sample=now)
+        self.box.reset_mock()
+        self.app.tick(now,330)
+        self.box.pause.assert_not_called()
+        self.assertEqual(self.app.live["car_mode"],"GRID_SUPPORT_IMPORT")
+
+    def test_sensor_reports_received_during_eos_request_are_not_rejected_as_future(self):
+        from custom_components.eos_energiezentrale.adapter import StateSnapshot
+        captured=NOW+timedelta(seconds=10)
+        states=StateSnapshot(self.states(when=captured))
+        states.captured_at=captured
+        self.ha.states.return_value=states
+        self.app.tick(NOW,0)
+        self.assertEqual(self.app.live["solar"],7000)
+        self.assertEqual(self.app.live["grid"],0)
+        self.assertEqual(self.app.live["time"],captured.isoformat())
 
     def test_mixed_mode_uses_nearest_tenth_only_when_pv_dominates(self):
         self.config.daily = daily_settings({"pv":True}, 20)

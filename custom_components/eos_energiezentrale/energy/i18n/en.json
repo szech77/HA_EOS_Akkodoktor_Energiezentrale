@@ -193,6 +193,7 @@
     "metric.aligned_age": "Time-aligned · {minutes} min ago",
     "mode.waiting_measurements": "Waiting for grid and charger readings",
     "metric.estimated_age": "Estimated · oldest reading {minutes} min ago",
-    "metric.waiting_car_power": "Previous reading · waiting for vehicle power"
+    "metric.waiting_car_power": "Previous reading · waiting for vehicle power",
+    "control.cached_eos": "Active · cached EOS plan, up to 5 minutes"
   }
 }

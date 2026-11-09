@@ -150,7 +150,7 @@ function overview() {
   byId('vehicle-cards').innerHTML=vehicleCards();
   const live = snapshot.live;
   const remaining = solarRemaining();
-  byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? t('control.active') : t('control.read_only');
+  byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? Object.keys(snapshot.eos_cache ?? {}).length ? t('control.cached_eos') : t('control.active') : t('control.read_only');
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
   byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
@@ -461,7 +461,7 @@ function settings() {
     fillForm();
     formReady = true;
   }
-  byId('ownership').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? t('control.active') : t('control.read_only');
+  byId('ownership').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? Object.keys(snapshot.eos_cache ?? {}).length ? t('control.cached_eos') : t('control.active') : t('control.read_only');
   byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
   byId('control').disabled = !formReady;
   const limits = snapshot.battery_limits;
