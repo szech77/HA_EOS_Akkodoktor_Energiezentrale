@@ -130,13 +130,85 @@
           "sensors": "Source sensors",
           "hardware": "Hardware drivers",
           "limits": "Technical limits",
-          "history": "InfluxDB history (optional)"
+          "history": "InfluxDB history (optional)",
+          "vehicles": "Vehicles and chargers"
         }
+      },
+      "vehicles": {
+        "title": "Vehicles and chargers",
+        "menu_options": {
+          "vehicle_add": "Add",
+          "vehicle_edit": "Edit",
+          "vehicle_remove": "Remove"
+        }
+      },
+      "vehicle_add": {
+        "title": "Add vehicle",
+        "data": {
+          "vehicle_id": "Vehicle",
+          "id": "Stable vehicle ID",
+          "name": "Vehicle name",
+          "resource": "EOS resource",
+          "soc_entity": "SoC sensor (optional)",
+          "soc_scale": "SoC scale",
+          "capacity_wh": "Capacity (Wh)",
+          "charging_efficiency": "Charging efficiency",
+          "max_current_a": "Maximum current (A)",
+          "wallbox_power": "Charger power",
+          "wallbox_status": "Charger status",
+          "wallbox_enable": "Charging enabled",
+          "wallbox_current": "Charging current",
+          "wallbox_phases": "Number of phases"
+        },
+        "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
+      },
+      "vehicle_edit": {
+        "title": "Edit vehicle",
+        "data": {
+          "vehicle_id": "Vehicle",
+          "id": "Stable vehicle ID",
+          "name": "Vehicle name",
+          "resource": "EOS resource",
+          "soc_entity": "SoC sensor (optional)",
+          "soc_scale": "SoC scale",
+          "capacity_wh": "Capacity (Wh)",
+          "charging_efficiency": "Charging efficiency",
+          "max_current_a": "Maximum current (A)",
+          "wallbox_power": "Charger power",
+          "wallbox_status": "Charger status",
+          "wallbox_enable": "Charging enabled",
+          "wallbox_current": "Charging current",
+          "wallbox_phases": "Number of phases"
+        },
+        "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
+      },
+      "vehicle_remove": {
+        "title": "Remove vehicle",
+        "data": {
+          "vehicle_id": "Vehicle",
+          "id": "Stable vehicle ID",
+          "name": "Vehicle name",
+          "resource": "EOS resource",
+          "soc_entity": "SoC sensor (optional)",
+          "soc_scale": "SoC scale",
+          "capacity_wh": "Capacity (Wh)",
+          "charging_efficiency": "Charging efficiency",
+          "max_current_a": "Maximum current (A)",
+          "wallbox_power": "Charger power",
+          "wallbox_status": "Charger status",
+          "wallbox_enable": "Charging enabled",
+          "wallbox_current": "Charging current",
+          "wallbox_phases": "Number of phases"
+        },
+        "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
       }
     },
     "error": {
       "cannot_connect": "EOS connection failed",
       "invalid_config": "Check URLs, limits and driver parameters"
+    },
+    "abort": {
+      "no_vehicles": "No vehicle configured"
     }
   },
   "entity": {

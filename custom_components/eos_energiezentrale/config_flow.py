@@ -95,7 +95,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=list(GROUPS))
+        return self.async_show_menu(step_id="init", menu_options=[*GROUPS,"vehicles"])
 
     async def _step(self, group, user_input):
         if group == "sensors" and user_input is not None:
@@ -122,3 +122,101 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_history(self, user_input=None):
         return await self._step("history", user_input)
+
+
+    def _vehicle_values(self):
+        return {**DEFAULTS,**self.config_entry.data,**self.config_entry.options}
+
+    def _vehicle_rows(self):
+        import json
+        values=self._vehicle_values()
+        rows=json.loads(values.get("vehicles","[]"))
+        if not rows and values["wallbox_type"]!="none":
+            rows=[{"id":"vehicle1","name":values["vehicle_name"],"resource":values["vehicle_resource"],
+                   "soc_entity":values["car_soc_entity"],"soc_scale":values["car_soc_scale"],
+                   "capacity_wh":values["capacity_wh"],"charging_efficiency":values["charging_efficiency"],
+                   "max_current_a":values["max_current_a"],"wallbox_type":values["wallbox_type"],
+                   "wallbox_parameters":json.loads(values["wallbox_parameters"])}]
+        return rows
+
+    async def async_step_vehicles(self,user_input=None):
+        return self.async_show_menu(step_id="vehicles",menu_options=["vehicle_add","vehicle_edit","vehicle_remove"])
+
+    async def _choose_vehicle(self,step_id,user_input):
+        rows=self._vehicle_rows()
+        if not rows:
+            return self.async_abort(reason="no_vehicles")
+        if user_input is None:
+            return self.async_show_form(step_id=step_id,data_schema=vol.Schema({
+                vol.Required("vehicle_id"):selector.SelectSelector(selector.SelectSelectorConfig(
+                    options=[{"value":row["id"],"label":row.get("name",row["id"])} for row in rows]))}))
+        identity=user_input.get("vehicle_id")
+        if not any(row["id"]==identity for row in rows):
+            return self.async_abort(reason="no_vehicles")
+        return identity
+
+    async def async_step_vehicle_remove(self,user_input=None):
+        import json
+        selected=await self._choose_vehicle("vehicle_remove",user_input)
+        if not isinstance(selected,str):
+            return selected
+        rows=[row for row in self._vehicle_rows() if row["id"]!=selected]
+        values={**self._vehicle_values(),"vehicles":json.dumps(rows)}
+        if not rows:
+            values["wallbox_type"]="none"
+        return self.async_create_entry(title="",data=values)
+
+    async def async_step_vehicle_add(self,user_input=None):
+        return await self._vehicle_form("vehicle_add",None,user_input)
+
+    async def async_step_vehicle_edit(self,user_input=None):
+        if user_input is None or "vehicle_id" in user_input:
+            selected=await self._choose_vehicle("vehicle_edit",user_input)
+            if not isinstance(selected,str):
+                return selected
+            self._editing_vehicle=selected
+            return await self._vehicle_form("vehicle_edit",selected,None)
+        return await self._vehicle_form("vehicle_edit",self._editing_vehicle,user_input)
+
+    async def _vehicle_form(self,step_id,identity,user_input):
+        import json
+        from .energy.drivers import NRGkick
+        rows=self._vehicle_rows()
+        old=next((row for row in rows if row["id"]==identity),{})
+        index=len(rows)+1
+        defaults={"id":identity or f"vehicle{index}","name":old.get("name","E-Auto"),
+                  "resource":old.get("resource",f"ev{index}"),"soc_entity":old.get("soc_entity",""),
+                  "soc_scale":old.get("soc_scale","factor"),"capacity_wh":old.get("capacity_wh",77000),
+                  "charging_efficiency":old.get("charging_efficiency",.9),"max_current_a":old.get("max_current_a",16)}
+        ids={**NRGkick.defaults,**old.get("wallbox_parameters",{})}
+        defaults.update({"wallbox_"+key:value for key,value in ids.items()})
+        errors={}
+        if user_input is not None:
+            row={key:user_input.get(key,"") for key in ("id","name","resource","soc_entity","soc_scale","capacity_wh","charging_efficiency","max_current_a")}
+            if identity is not None and row["id"]!=identity:
+                errors={"base":"invalid_config"}
+            row.update(wallbox_type="nrgkick",wallbox_parameters={key:user_input["wallbox_"+key] for key in NRGkick.defaults})
+            updated=[row if item["id"]==identity else item for item in rows]
+            if identity is None:
+                updated.append(row)
+            values={**self._vehicle_values(),"vehicles":json.dumps(updated)}
+            errors=errors or await check(self.hass,values)
+            if not errors:
+                return self.async_create_entry(title="",data=values)
+            defaults.update(user_input)
+        fields={}
+        for key,value in defaults.items():
+            if key=="soc_entity" or key.startswith("wallbox_"):
+                domain="switch" if key=="wallbox_enable" else "number" if key in {"wallbox_current","wallbox_phases"} else "sensor"
+                field=selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
+            elif key=="soc_scale":
+                field=selector.SelectSelector(selector.SelectSelectorConfig(options=["factor","percent"]))
+            elif key in {"capacity_wh","max_current_a"}:
+                field=vol.Coerce(int)
+            elif key=="charging_efficiency":
+                field=vol.Coerce(float)
+            else:
+                field=str
+            marker=vol.Optional if key=="soc_entity" else vol.Required
+            fields[marker(key,**({} if key=="soc_entity" and not value else {"default":value}))]=field
+        return self.async_show_form(step_id=step_id,data_schema=vol.Schema(fields),errors=errors)

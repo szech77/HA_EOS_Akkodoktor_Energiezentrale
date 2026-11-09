@@ -202,6 +202,8 @@ class FleetController(Controller):
                 self.display.pop("house",None)
             else:
                 self.display["house"]["value"]=estimate
+        for payload in snapshots:
+            payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
         self.history.write(now,self.live)
         if not self.armed or not any(app.owned for _,app,_ in self.controllers):
             return
@@ -237,8 +239,10 @@ class FleetController(Controller):
             app.owned=False
 
     def vehicle_histories(self,now):
-        return {key:(self.primary_history if app is self else app.history).read(now)
-                for key,app,_ in self.controllers}
+        keys={"time","car","car_soc","car_actual_mode","car_mode","car_status","solar","price"}
+        return {identity:[{key:value for key,value in row.items() if key in keys}
+                          for row in (self.primary_history if app is self else app.history).read(now)]
+                for identity,app,_ in self.controllers}
 
     def snapshot(self,now):
         result=Controller.snapshot(self,now)

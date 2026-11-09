@@ -153,3 +153,41 @@ class FleetRequirements(unittest.TestCase):
         with self.assertRaises(ValueError):
             app.change_vehicle_settings("second",{"target_soc":70,"battery_min_soc":100})
         self.assertEqual([child.config.daily for _,child,_ in app.controllers],before)
+
+    def test_release_failure_of_one_charger_does_not_prevent_attempts_for_the_others(self):
+        app,ha,_,_=self.setup_fleet()
+        for row in definitions():
+            ha.rows[row["wallbox_parameters"]["enable"]]["state"]="on"
+        original_set=ha.set
+        def fail_first(entity,value):
+            if entity=="switch.first_enabled":
+                raise OSError("charger offline")
+            return original_set(entity,value)
+        ha.set=fail_first
+        with self.assertRaises(OSError):
+            app.release(ha.states(),NOW)
+        self.assertIn(("switch.second_enabled",False),ha.writes)
+        app.battery_driver.release.assert_called_once()
+
+    def test_each_vehicle_updates_its_own_eos_goal(self):
+        app,_,_,_=self.setup_fleet()
+        deadline=NOW+timedelta(hours=4)
+        for index,(identity,child,_) in enumerate(app.controllers):
+            if child is not app:
+                child.config.eos=Mock()
+            app.change_vehicle_settings(identity,{"schedule":"once","departure":deadline.isoformat(),"target_soc":70+index*20})
+        app.set_armed(True)
+        app.tick(NOW,0)
+        for index,(_,child,_) in enumerate(app.controllers):
+            child.config.eos.set_vehicle_goal.assert_called_once_with("ev"+str(index+1),70+index*20,deadline)
+
+    def test_vehicle_histories_remain_distinct_when_aggregate_power_is_written(self):
+        app,ha,_,_=self.setup_fleet()
+        ha.rows["sensor.first_power"]["state"]="1000"
+        ha.rows["sensor.second_power"]["state"]="2000"
+        app.tick(NOW,0)
+        histories=app.vehicle_histories(NOW)
+        self.assertEqual(histories["first"][-1]["car"],1000)
+        self.assertEqual(histories["second"][-1]["car"],2000)
+        self.assertEqual(app.history.read(NOW)[-1]["car"],3000)
+        self.assertNotIn("history",app.snapshot(NOW)["vehicles"][0])

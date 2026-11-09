@@ -353,6 +353,48 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(EnergyBinarySensor(coordinator, "release_pending").is_on)
         self.assertTrue(EnergyBinarySensor(coordinator, "problem").is_on)
 
+    async def test_vehicle_manager_adds_second_charger_without_losing_existing_vehicle(self):
+        from test_fleet import definitions
+        flow=OptionsFlow()
+        flow.hass=self.hass
+        flow.handler=self.entry.entry_id
+        flow.context={"entry_id":self.entry.entry_id}
+        row=definitions()[1]
+        fields={key:value for key,value in row.items() if key!="wallbox_parameters"}
+        fields.pop("wallbox_type",None)
+        fields.update(capacity_wh=77000,charging_efficiency=.9,max_current_a=16,soc_scale="factor")
+        fields.update({"wallbox_"+key:value for key,value in row["wallbox_parameters"].items()})
+        result=await flow.async_step_vehicle_add(fields)
+        self.assertEqual(result["type"],"create_entry")
+        stored=json.loads(result["data"]["vehicles"])
+        self.assertEqual(len(stored),2)
+        self.assertEqual(stored[0]["resource"],"ev1")
+        self.assertEqual(stored[1]["id"],"second")
+        self.assertEqual(result["data"]["battery_type"],DEFAULTS["battery_type"])
+
+    async def test_removing_last_vehicle_does_not_restore_legacy_charger(self):
+        flow=OptionsFlow()
+        flow.hass=self.hass
+        flow.handler=self.entry.entry_id
+        flow.context={"entry_id":self.entry.entry_id}
+        result=await flow.async_step_vehicle_remove({"vehicle_id":"vehicle1"})
+        self.assertEqual(json.loads(result["data"]["vehicles"]),[])
+        self.assertEqual(result["data"]["wallbox_type"],"none")
+
+    async def test_individual_vehicle_sensors_use_distinct_values_and_stable_identity(self):
+        from custom_components.eos_energiezentrale.sensor import VehicleSensor
+        coordinator,_=self.controller()
+        coordinator.async_set_updated_data({"vehicles":[
+            {"id":"one","live":{"car":1000,"car_soc":40}},
+            {"id":"two","live":{"car":2000,"car_soc":60}}]})
+        one=VehicleSensor(coordinator,"one","Auto 1","car")
+        two=VehicleSensor(coordinator,"two","Auto 2","car")
+        self.assertEqual((one.native_value,two.native_value),(1,2))
+        self.assertNotEqual(one.unique_id,two.unique_id)
+        renamed=VehicleSensor(coordinator,"one","Neuer Name","car")
+        self.assertEqual(one.unique_id,renamed.unique_id)
+        self.assertEqual(VehicleSensor(coordinator,"two","Auto 2","car_soc_factor").native_value,.6)
+
     async def test_options_edit_keeps_other_hardware_and_sensor_settings(self):
         flow = OptionsFlow()
         flow.hass = self.hass

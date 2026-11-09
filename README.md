@@ -517,8 +517,10 @@ Neue Einrichtungen starten ohne E-Auto und Wärmepumpe. Unter den Integrationsop
 
 ### Mehrere Fahrzeuge und Wallboxen
 
-Unter **Integration → Konfigurieren → Hardware → Mehrere Fahrzeuge / Wallboxen**
-eine JSON-Liste eintragen. Ein vollständiges Beispiel steht in
+Unter **Integration → Konfigurieren → Fahrzeuge und Wallboxen** können Ladepunkte
+über Formulare hinzugefügt, bearbeitet und entfernt werden. Die bisherige
+Einzelkonfiguration wird beim ersten Hinzufügen übernommen. Alternativ steht unter
+**Hardware → Mehrere Fahrzeuge / Wallboxen** die JSON-Liste zur Verfügung. Ein vollständiges Beispiel steht in
 [examples/vehicles.json](examples/vehicles.json). `[]` verwendet weiterhin die
 bisherige Einzelkonfiguration. Eine nicht leere Liste ersetzt die Einzelzuordnung.
 Bis zu acht Fahrzeug-Wallbox-Paare sind möglich; für jedes Paar Name, stabile `id`,

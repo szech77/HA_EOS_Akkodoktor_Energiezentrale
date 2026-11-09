@@ -27,7 +27,7 @@ class EnergySensor(EnergyEntity, SensorEntity):
         super().__init__(coordinator, key)
         if key in {"car", "car_soc", "car_soc_factor", "car_mode", "car_status"}:
             self._attr_translation_placeholders = {
-                "vehicle": "E-Autos" if hasattr(coordinator.app,"controllers") else coordinator.app.config.options.get("vehicle_name", "E-Auto").strip()}
+                "vehicle": "E-Autos" if isinstance(getattr(coordinator.app,"controllers",None),list) else coordinator.app.config.options.get("vehicle_name", "E-Auto").strip()}
         unit, device_class = SENSORS[key]
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
