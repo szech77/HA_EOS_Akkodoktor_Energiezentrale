@@ -53,6 +53,7 @@ class Controller:
         self.pv_session = False
         self.last_minute = None
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
+        self.external_eos_polling = False
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -171,44 +172,63 @@ class Controller:
     def update_eos(self, now, clock):
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
-            resources=self.eos_resources()
             try:
                 candidate = self.config.eos.plan()
-                if (not isinstance(candidate, dict)
-                        or instant(candidate.get("generated_at")) is None
-                        or not isinstance(candidate.get("instructions"), list)):
-                    raise ValueError("EOS plan is not ready")
-                candidate=deepcopy(candidate)
-                accepted=False
-                incomplete=False
-                for resource in resources:
-                    previous=self.resource_plans.get(resource)
-                    newer=previous is None or instant(candidate["generated_at"])>=instant(previous["generated_at"])
-                    if newer and current_instruction(candidate,resource,now) is not None:
-                        self.resource_plans[resource]=candidate
-                        self.eos_failure_since.pop(resource,None)
-                        accepted=True
-                    else:
-                        self.eos_failure_since.setdefault(resource,now)
-                        incomplete=True
-                if accepted:
-                    self.plan = candidate
-                if incomplete:
-                    self.errors["eos"]="PlanIncomplete"
-                else:
-                    self.errors.pop("eos", None)
             except Exception as error:
-                for resource in resources:
-                    self.eos_failure_since.setdefault(resource,now)
-                self.errors["eos"] = type(error).__name__
+                self.apply_eos_plan(None, now, error)
+            else:
+                self.apply_eos_plan(candidate, now)
         if clock - self.last_forecast_fetch >= 60:
             self.last_forecast_fetch = clock
             try:
-                self.forecast = forecast_rows(self.config.eos.solution(), now)
-                self.errors.pop("forecast", None)
+                solution = self.config.eos.solution()
             except Exception as error:
-                self.forecast = []
-                self.errors["forecast"] = type(error).__name__
+                self.apply_eos_forecast(None, now, error)
+            else:
+                self.apply_eos_forecast(solution, now)
+
+    def apply_eos_plan(self, candidate, now, error=None):
+        resources = self.eos_resources()
+        try:
+            if error is not None:
+                raise error
+            if (not isinstance(candidate, dict)
+                    or instant(candidate.get("generated_at")) is None
+                    or not isinstance(candidate.get("instructions"), list)):
+                raise ValueError("EOS plan is not ready")
+            candidate = deepcopy(candidate)
+            accepted = False
+            incomplete = False
+            for resource in resources:
+                previous = self.resource_plans.get(resource)
+                newer = previous is None or instant(candidate["generated_at"]) >= instant(previous["generated_at"])
+                if newer and current_instruction(candidate, resource, now) is not None:
+                    self.resource_plans[resource] = candidate
+                    self.eos_failure_since.pop(resource, None)
+                    accepted = True
+                else:
+                    self.eos_failure_since.setdefault(resource, now)
+                    incomplete = True
+            if accepted:
+                self.plan = candidate
+            if incomplete:
+                self.errors["eos"] = "PlanIncomplete"
+            else:
+                self.errors.pop("eos", None)
+        except Exception as error:
+            for resource in resources:
+                self.eos_failure_since.setdefault(resource,now)
+            self.errors["eos"] = type(error).__name__
+
+    def apply_eos_forecast(self, solution, now, error=None):
+        try:
+            if error is not None:
+                raise error
+            self.forecast = forecast_rows(solution, now)
+            self.errors.pop("forecast", None)
+        except Exception as error:
+            self.forecast = []
+            self.errors["forecast"] = type(error).__name__
 
     def update_soc(self, states, box, now):
         if self.config.options.get("wallbox_type") == "none":
@@ -248,7 +268,8 @@ class Controller:
     def tick(self, now, clock):
         self.control_step = "read_inputs"
         self.sync_battery_limits(now, clock)
-        self.update_eos(now, clock)
+        if not self.external_eos_polling:
+            self.update_eos(now, clock)
         states = self.ha.states()
         captured=getattr(states,"captured_at",None)
         if captured is not None and isinstance(captured,datetime) and captured.utcoffset() is not None:

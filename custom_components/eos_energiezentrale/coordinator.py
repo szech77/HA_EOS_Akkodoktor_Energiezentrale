@@ -13,6 +13,7 @@ from .energy.history import influx_series
 from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
+from .energy.controller import Controller
 from .energy.drivers import DeviceNotReady
 from .energy.settings import daily_settings
 
@@ -33,6 +34,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.accounting_cache = {}
         self.accounting_refresh_task = None
         self.accounting_revision = 0
+        self.eos_poll_tasks = {}
+        self.eos_poll_started = {"plan": float("-inf"), "solution": float("-inf")}
+        if isinstance(app, Controller):
+            app.external_eos_polling = True
 
     def _tick(self):
         with self.app.lock:
@@ -83,12 +88,44 @@ class EnergyCoordinator(DataUpdateCoordinator):
         async with self.work_lock:
             if self.closing:
                 return self.data
+            self._schedule_eos_polling()
             try:
                 result = await self.hass.async_add_executor_job(self._tick)
             except (OSError, ValueError) as error:
                 raise UpdateFailed("Local controller unavailable") from error
             self._schedule_accounting_refresh()
             return result
+
+    def _schedule_eos_polling(self):
+        if not isinstance(self.app, Controller):
+            return
+        now = monotonic()
+        for kind, interval in (("plan", 15), ("solution", 60)):
+            task = self.eos_poll_tasks.get(kind)
+            if (task and not task.done()) or now - self.eos_poll_started[kind] < interval:
+                continue
+            self.eos_poll_started[kind] = now
+            self.eos_poll_tasks[kind] = self.hass.async_create_background_task(
+                self._async_poll_eos(kind), "EOS " + kind + " polling")
+
+    async def _async_poll_eos(self, kind):
+        started = datetime.now(timezone.utc)
+        try:
+            result = await self.hass.async_add_executor_job(getattr(self.app.config.eos, kind))
+            error = None
+        except Exception as caught:
+            result, error = None, caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            def apply():
+                with self.app.lock:
+                    now = started if error is not None else datetime.now(timezone.utc)
+                    if kind == "plan":
+                        self.app.apply_eos_plan(result, now, error)
+                    else:
+                        self.app.apply_eos_forecast(result, now, error)
+            await self.hass.async_add_executor_job(apply)
 
     def _schedule_accounting_refresh(self):
         """Refresh accounting data without holding the device-control lock."""
@@ -222,6 +259,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
         # Mark shutdown before waiting for an in-flight tick, so a service
         # disappearing during HA shutdown does not clear the saved user intent.
         self.closing = True
+        for task in self.eos_poll_tasks.values():
+            if not task.done():
+                task.cancel()
         if self.accounting_refresh_task and not self.accounting_refresh_task.done():
             self.accounting_refresh_task.cancel()
         async with self.work_lock:

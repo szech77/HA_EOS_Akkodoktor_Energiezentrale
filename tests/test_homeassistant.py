@@ -80,6 +80,37 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
                 finish.set()
             self.assertEqual((await history)["influx"], [{"solar": 123}])
 
+    async def test_slow_eos_plan_does_not_block_control_or_local_measurements(self):
+        from threading import Event
+        started, finish = Event(), Event()
+        adapter = Mock()
+        adapter.states.return_value = {}
+        config = Configuration({**DEFAULTS, "wallbox_type": "none"}, adapter, self.directory)
+        config.eos = Mock()
+        config.eos.solution.return_value = {}
+
+        def delayed_plan():
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS plan request")
+            raise OSError("offline")
+
+        config.eos.plan.side_effect = delayed_plan
+        app = Controller(adapter, config)
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        try:
+            result = await asyncio.wait_for(coordinator._async_update_data(), timeout=2)
+            self.assertIn("time", result["live"])
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+            self.assertTrue(app.armed)
+            self.assertTrue(app.restore_pending)
+            self.assertIsNone(app.order_for("battery1", datetime.now(timezone.utc)))
+        finally:
+            finish.set()
+        await asyncio.wait_for(coordinator.eos_poll_tasks["plan"], timeout=3)
+        self.assertIn("eos", app.errors)
+
     async def test_reporting_storage_error_never_disables_device_control(self):
         coordinator, app = self.controller()
         app.armed = True
@@ -458,6 +489,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
               patch.object(self.hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
               patch("custom_components.eos_energiezentrale.async_register_frontend", new_callable=AsyncMock)):
             self.assertTrue(await async_setup_entry(self.hass, self.entry))
+            coordinator = self.entry.runtime_data
+            await asyncio.gather(*coordinator.eos_poll_tasks.values())
+            coordinator.async_set_updated_data(await coordinator._async_update_data())
         coordinator = self.entry.runtime_data
         self.assertFalse(coordinator.app.armed)
         self.assertFalse(coordinator.app.owned)
@@ -842,9 +876,11 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
               patch.object(config.wallbox,'pause') as pause):
             for response in (TimeoutError("offline"), HTTPError("http://eos",503,"not ready",{},None),
                              ValueError("invalid JSON"), None, {"detail":"still planning"}):
-                app.last_plan_fetch = app.last_forecast_fetch = -1000
+                coordinator.eos_poll_started = {"plan": -1000, "solution": -1000}
                 config.eos.plan.side_effect = response if isinstance(response,Exception) else None
                 config.eos.plan.return_value = response
+                await coordinator._async_update_data()
+                await asyncio.gather(*coordinator.eos_poll_tasks.values())
                 result = await coordinator._async_update_data()
                 self.assertTrue(result["armed"])
                 self.assertTrue(result["control_waiting"])
@@ -858,7 +894,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             config.eos.plan.return_value = {"generated_at":now.isoformat(),"instructions":[instruction(now-timedelta(seconds=1),"NON_EXPORT"),{**instruction(now-timedelta(seconds=1),"IDLE"),"resource_id":"ev1"}]}
             config.eos.solution.side_effect = None
             config.eos.solution.return_value = {}
-            app.last_plan_fetch = app.last_forecast_fetch = -1000
+            coordinator.eos_poll_started = {"plan": -1000, "solution": -1000}
+            await coordinator._async_update_data()
+            await asyncio.gather(*coordinator.eos_poll_tasks.values())
             result = await coordinator._async_update_data()
             self.assertTrue(result["armed"])
             self.assertFalse(result["control_waiting"])
