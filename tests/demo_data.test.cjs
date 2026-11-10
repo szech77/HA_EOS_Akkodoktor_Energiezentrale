@@ -37,7 +37,7 @@ test('daily demo energies integrate measured intervals; sources and costs add up
   near(total.kwh,Object.values(total.sources).reduce((sum,item)=>sum+item.kwh,0));
   near(total.cost_eur,Object.values(total.sources).reduce((sum,item)=>sum+item.cost_eur,0));
   assert.ok(total.cost_eur>=0);
-  near(total.sources.pv.cost_eur,total.sources.pv.kwh*.08);
+  near(total.sources.pv.cost_eur,total.sources.pv.kwh*.082);
  }
 });
 
@@ -50,4 +50,11 @@ test('planned vehicle modes match charging behavior and the departure target is 
   assert.equal(mode==='IDLE',row.car===0);
  }
  assert.ok(rows.find(row=>Date.parse(row.time)===deadline).car_soc>=70-1e-7);
+});
+
+
+test('documentation uses 8.2 ct/kWh PV opportunity cost and a priced initial grid charge',()=>{
+ const {tariffs}=createDemo();
+ near(tariffs.pv,.082);
+ near(tariffs.initialGrid,.24);
 });

@@ -2,9 +2,15 @@
 let dayAccounting=null;
 const billing = {period:'month',date:null,data:null,key:null,loading:false,at:0,error:null};
 const sourceColors = {pv:'#f2c94c',battery:'#55c7cb',grid:'#5794f2',unknown:'#8995a5'};
-const money = value => new Intl.NumberFormat(language.locale,{style:'currency',currency:'EUR'}).format(value);
+const money = value => {
+  const tiny = value !== 0 && Math.abs(value) < .0001;
+  const format = new Intl.NumberFormat(language.locale,{style:'currency',currency:'EUR',
+    minimumFractionDigits:2, maximumFractionDigits:value !== 0 && Math.abs(value)<.01 ? 4 : 2});
+  return tiny ? (value>0 ? '< ' : '> ')+format.format(Math.sign(value)*.0001) : format.format(value);
+};
 const energyValue = value => `${decimal(value,2)} kWh`;
-const costValue = amount => amount && !(amount.kwh>.0001 && amount.cost_unknown_kwh>=amount.kwh-.0001) ? `${amount.cost_unknown_kwh > .0001 ? '≈ ' : ''}${money(amount.cost_eur)}` : '—';
+const costValue = amount => amount && !(amount.kwh>.0001 && amount.cost_unknown_kwh>=amount.kwh-.0001) ? `${amount.cost_unknown_kwh > .0001 ? '≈ ' : ''}${money(amount.cost_eur)}${amount.cost_unknown_kwh > .0001 ? ' ('+t('billing.known_portion')+')' : ''}` : '—';
+const averageCost = amount => amount?.kwh>0 && amount.cost_unknown_kwh<.0001 ? price(amount.cost_eur/amount.kwh*100) : '—';
 const billingName = key => key.startsWith('car/') ? snapshot.vehicles?.find(item=>item.id===key.slice(4))?.name ?? t('device.car') : t(`device.${key}`);
 
 function dayBalance() {
@@ -21,7 +27,7 @@ function dayBalance() {
   const amounts=items.map(totalFor).filter(Boolean);
   const kwh=amounts.reduce((sum,item)=>sum+item.kwh,0),cost=amounts.reduce((sum,item)=>sum+item.cost_eur,0);
   const unknown=amounts.reduce((sum,item)=>sum+item.cost_unknown_kwh,0);
-  target.innerHTML=`<div class="panel-heading"><h2>${th('billing.today')}</h2><span>${th('billing.total')}: ${html(energyValue(kwh))} · ${html(costValue({cost_eur:cost,cost_unknown_kwh:unknown}))}</span></div>
+  target.innerHTML=`<div class="panel-heading"><h2>${th('billing.today')}</h2><span>${th('billing.total')}: ${html(energyValue(kwh))} · ${html(costValue({kwh,cost_eur:cost,cost_unknown_kwh:unknown}))}</span></div>
     <div class="balance-grid">${items.map(key=>{
       const value=totalFor(key);
       return `<a class="balance-card" href="#usage/${key}"><span>${html(billingName(key))}</span><strong>${html(value?energyValue(value.kwh):'—')}</strong><span>${html(costValue(value))}</span>${sourceBar(value)}<small>${value?.kwh>0?Object.entries(value.sources).filter(([,item])=>item.kwh>.0001).map(([source,item])=>`${th("billing."+source)} ${decimal(item.kwh/value.kwh*100)} %`).join(" · "):""}</small><small>${th('billing.observed')}</small></a>`;
@@ -104,12 +110,12 @@ function usageDetail(key, fetch=true) {
   byId('billing-message').textContent=billing.error??(billing.loading?t('billing.loading'):'');
   byId('usage-kpis').innerHTML=cards([
     [t('billing.consumption'),amount?energyValue(amount.kwh):'—',t('billing.observed')],
-    [t('billing.costs'),costValue(amount),amount?.cost_unknown_kwh>.0001?t('billing.unknown_cost'):t('billing.variable')],
+    [t(amount?.cost_unknown_kwh>.0001?'billing.known_costs':'billing.costs'),costValue(amount),amount?.cost_unknown_kwh>.0001?t('billing.missing_costs_for',{energy:energyValue(amount.cost_unknown_kwh)}):t('billing.variable')],
     [t('billing.pv_share'),amount?.kwh>0?percent(amount.sources.pv.kwh/amount.kwh*100):'—',t('billing.direct_pv')],
-    [t('billing.average'),amount?.kwh>0&&amount.cost_unknown_kwh<.0001?price(amount.cost_eur/amount.kwh*100):'—',t('billing.variable')]]);
+    [t('billing.average'),averageCost(amount),t('billing.variable')]]);
   const legend=Object.entries(sourceColors).map(([key,color])=>`<span><i style="background:${color}"></i>${th('billing.'+key)}</span>`).join('');
   byId('usage-charts').innerHTML=`<section class="chart-panel"><h2>${th('billing.energy_chart')} · kWh</h2><div class="series-legend">${legend}</div>${billingChart(entry)}</section><section class="chart-panel"><h2>${th('billing.cost_chart')} · €</h2>${billingChart(entry,true)}</section>`;
-  byId('usage-table').innerHTML=amount?`<div class="table-scroll"><table><thead><tr><th>${th('billing.source')}</th><th>kWh</th><th>€</th><th>%</th></tr></thead><tbody>${Object.entries(amount.sources).map(([key,item])=>`<tr><td><i class="source-dot" style="background:${sourceColors[key]}"></i>${th('billing.'+key)}</td><td>${decimal(item.kwh,2)}</td><td>${html(costValue(item))}</td><td>${amount.kwh>0?decimal(item.kwh/amount.kwh*100):'—'}</td></tr>`).join('')}</tbody></table></div><p>${th('billing.observed')}: ${decimal(amount.seconds/3600,1)} h · ${th('billing.unknown_cost_energy')}: ${energyValue(amount.cost_unknown_kwh)}</p>`:'';
+  byId('usage-table').innerHTML=amount?`<div class="table-scroll"><table><thead><tr><th>${th('billing.source')}</th><th>kWh</th><th>€</th><th>ct/kWh</th><th>%</th></tr></thead><tbody>${Object.entries(amount.sources).map(([key,item])=>`<tr><td><i class="source-dot" style="background:${sourceColors[key]}"></i>${th('billing.'+key)}</td><td>${decimal(item.kwh,2)}</td><td>${html(costValue(item))}</td><td>${html(averageCost(item))}</td><td>${amount.kwh>0?decimal(item.kwh/amount.kwh*100):'—'}</td></tr>`).join('')}</tbody></table></div><p>${th('billing.observed')}: ${decimal(amount.seconds/3600,1)} h · ${th('billing.unknown_cost_energy')}: ${energyValue(amount.cost_unknown_kwh)}</p>`:'';
   byId('billing-quality').textContent=(data?.historical_error?t('billing.history_error')+' ':'')+(data?.reconstructed?t('billing.reconstructed')+' ':'')+t('billing.method')+' '+t('billing.partial')+' '+(data?.started?`${t('billing.recording_since')} ${time(data.started)}.`:'');
   if(key==='car'&&snapshot.vehicles?.length)byId('usage-table').innerHTML+=`<div class="billing-links">${snapshot.vehicles.map(item=>`<a href="#usage/car/${html(item.id)}">${html(item.name)} →</a>`).join('')}</div>`;
 }

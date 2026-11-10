@@ -301,6 +301,9 @@
     "weather.sunny": "Sonnig",
     "weather.windy": "Windig",
     "weather.windy-variant": "Windig und bewölkt",
-    "weather.unknown": "Wetter nicht verfügbar"
+    "weather.unknown": "Wetter nicht verfügbar",
+    "billing.known_portion": "bekannter Anteil",
+    "billing.known_costs": "Bekannte Kosten",
+    "billing.missing_costs_for": "Kosten fehlen für {energy}"
   }
 }

@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.3.1 - 2026-11-10
+
+### Features
+
+- Keine neuen Funktionen.
+
+### Bugfixes
+
+- Beträge unter einem Cent werden mit bis zu vier Euro-Nachkommastellen dargestellt, damit kleine PV-Anteile nicht wie kostenlose Energie wirken.
+- Kostenaufteilung unterscheidet Gesamtbetrag in Euro und Preis pro kWh; unvollständige Kosten werden ausdrücklich als bekannter Anteil gekennzeichnet. Tageskosten ohne bekannte Anschaffungspreise erscheinen als unbekannt.
+- Screenshot-Simulation nutzt 8,2 ct/kWh PV-Kosten und eine nachvollziehbare Netzladungsbewertung des anfänglichen Akkuinhalts.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine sicherheitsrelevanten Änderungen.
+
 ## 0.3.0 - 2026-11-10
 
 ### Features
