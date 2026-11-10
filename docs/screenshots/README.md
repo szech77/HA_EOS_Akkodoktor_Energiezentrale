@@ -43,7 +43,7 @@ diesem Beispiel keinen Fahrverbrauch und erreicht sein 70-%-Ziel vor der Abfahrt
 
 Die Tagesbilanzen werden ab lokaler Mitternacht bis zum Aufnahmezeitpunkt aus
 denselben Leistungen integriert. Kosten nutzen den zeitabhängigen Netzpreis,
-0,08 €/kWh PV-Opportunitätskosten und einen gewichteten Kostenbestand des Speichers
+0,082 €/kWh PV-Opportunitätskosten und einen gewichteten Kostenbestand des Speichers
 einschließlich Umwandlungsverlusten. Gleichzeitige Quellen werden proportional
 auf Verbraucher verteilt; dies ist eine Modellannahme, keine gemessene Zuordnung.
 
@@ -54,3 +54,9 @@ Ladeziel und die Übereinstimmung der Modi mit dem Ladeverlauf:
 ```sh
 node --test tests/demo_data.test.cjs
 ```
+
+
+Der vor dem gezeigten Verlauf vorhandene Akkuinhalt wird als Netzladung zu
+24 ct/kWh AC-Eingangspreis angesetzt. Seine gespeicherte Energie enthält bereits
+die Ladekosten einschließlich 95 % Ladewirkungsgrad; bei Abgabe kommen die
+Entladeverluste hinzu. Ein willkürlicher Startpreis von 14 ct/kWh wird nicht verwendet.

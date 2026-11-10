@@ -301,6 +301,9 @@
     "weather.sunny": "Sunny",
     "weather.windy": "Windy",
     "weather.windy-variant": "Windy and cloudy",
-    "weather.unknown": "Weather unavailable"
+    "weather.unknown": "Weather unavailable",
+    "billing.known_portion": "known portion",
+    "billing.known_costs": "Known costs",
+    "billing.missing_costs_for": "Costs missing for {energy}"
   }
 }

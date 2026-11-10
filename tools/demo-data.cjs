@@ -5,13 +5,14 @@ const HOUR=3600000, STEP=120000, NOW=Date.parse('2026-11-09T11:00:00Z');
 const iso=stamp=>new Date(stamp).toISOString();
 const BATTERY={capacity:11059,efficiency:.95,min:.2,max:1,maxPower:4760};
 const CAR={capacity:77000,efficiency:.9,target:.7,pvTarget:.8,maxPower:11000};
-const PV_PRICE=.08;
+const PV_PRICE=.082;
+const INITIAL_GRID_PRICE=.24;
 const emptyAmount=()=>({kwh:0,cost_eur:0,cost_unknown_kwh:0,seconds:0,
  sources:Object.fromEntries(['pv','battery','grid','unknown'].map(key=>[key,{kwh:0,cost_eur:0,cost_unknown_kwh:0}]))});
 
 function createDemo(){
  const rows=[], consumers=Object.fromEntries(['house','heat','car'].map(key=>[key,{total:emptyAmount()}]));
- let batteryWh=BATTERY.capacity*.45,carWh=CAR.capacity*.28,batteryCost=batteryWh/1000*.14;
+ let batteryWh=BATTERY.capacity*.45,carWh=CAR.capacity*.28,batteryCost=batteryWh/1000*INITIAL_GRID_PRICE/BATTERY.efficiency;
  const dt=STEP/HOUR;
  for(let stamp=NOW-24*HOUR;stamp<=NOW+72*HOUR;stamp+=STEP){
   const date=new Date(stamp),h=date.getUTCHours()+1+date.getUTCMinutes()/60;
@@ -84,6 +85,7 @@ function createDemo(){
   forecast:rows.filter(row=>Date.parse(row.time)>=NOW),zone:'Europe/Berlin',plan_end:iso(NOW+24*HOUR),
   power_reference:{solar:10000,car:11000,battery_charge:4760,battery_discharge:4760},
   battery_limits:{managed:true,confirmed:true},accounting:{date:'2026-11-09',consumers}};
- return {snapshot,rows,now:NOW,step:STEP,battery:BATTERY,car:CAR};
+ return {snapshot,rows,now:NOW,step:STEP,battery:BATTERY,car:CAR,
+   tariffs:{pv:PV_PRICE,initialGrid:INITIAL_GRID_PRICE}};
 }
 module.exports={createDemo};

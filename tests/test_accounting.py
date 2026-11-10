@@ -217,7 +217,7 @@ class EnergyAccountingRequirements(TestCase):
         result=reconstruct(config,report,start+timedelta(minutes=15))["house"]["total"]
         self.assertAlmostEqual(result["kwh"],.9)
         self.assertAlmostEqual(result["cost_eur"],.27)
-        self.assertEqual(result["cost_unknown_kwh"],0)
+        self.assertAlmostEqual(result["cost_unknown_kwh"],0)
 
 
     def test_eos_fixed_feed_in_tariff_is_converted_from_eur_to_cent(self):
@@ -283,3 +283,35 @@ class EnergyAccountingRequirements(TestCase):
                     db.execute("INSERT OR REPLACE INTO meta VALUES ('settings',?)",(json.dumps({"pv_price_ct":price}),))
                 migrated=Accounting(self.directory,self.ledger.zone)
                 self.assertEqual(migrated.settings['pv_price_source'],expected)
+
+
+
+class TariffCostBasisRequirements(TestCase):
+    def test_fixed_eos_tariff_and_battery_losses_produce_real_per_kwh_prices(self):
+        from unittest.mock import patch
+        configuration={"feedintariff":{"provider":"FeedInTariffFixed","feedintarifffixed":{
+            "feed_in_tariff_amt_kwh":{"windows":[{"start_time":"00:00:00.000000",
+                "duration":"1 day","end_time":None,"day_of_week":None,"date":None,
+                "month":None,"locale":None,"value":.082}]}}}}
+        with patch("custom_components.eos_energiezentrale.energy.clients.request",return_value=configuration):
+            tariff=EOS("http://eos:8503").feedin_accounting(NOW)
+        self.assertAlmostEqual(tariff["constant_ct"],8.2)
+        with temporary_project_directory() as directory:
+            ledger=Accounting(directory,ZoneInfo("Europe/Berlin"))
+            ledger.configure({"pv_price_source":"eos","efficiency_source":"manual",
+                              "charge_efficiency":.95,"discharge_efficiency":.95})
+            ledger.pv_tariff=tariff
+            for source,input_price in (("pv",.082),("grid",.30)):
+                with self.subTest(source=source):
+                    ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}
+                    row=sample(solar=1000 if source=="pv" else 0,grid=1000 if source=="grid" else 0,
+                               battery_charge=1000,house_total=0,price=30)
+                    row["consumers"]={}
+                    ledger.allocate(row,.001,ledger.effective())
+                    out=sample(solar=0,grid=0,battery_charge=0,battery_discharge=902.5,house_total=902.5)
+                    out["consumers"]={"house":902.5}
+                    result=ledger.allocate(out,.001,ledger.effective())["house"]
+                    self.assertAlmostEqual(result["cost_eur"],input_price)
+                    self.assertAlmostEqual(result["kwh"],.9025)
+                    self.assertAlmostEqual(result["cost_eur"]/result["kwh"],input_price/(.95*.95))
+                    self.assertAlmostEqual(result["cost_unknown_kwh"],0)

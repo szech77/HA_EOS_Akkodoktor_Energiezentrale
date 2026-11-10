@@ -11,7 +11,9 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
-- Keine.
+- Beträge unter einem Cent werden mit bis zu vier Euro-Nachkommastellen dargestellt, damit kleine PV-Anteile nicht wie kostenlose Energie wirken.
+- Kostenaufteilung unterscheidet Gesamtbetrag in Euro und Preis pro kWh; unvollständige Kosten werden ausdrücklich als bekannter Anteil gekennzeichnet. Tageskosten ohne bekannte Anschaffungspreise erscheinen als unbekannt.
+- Screenshot-Simulation nutzt 8,2 ct/kWh PV-Kosten und eine nachvollziehbare Netzladungsbewertung des anfänglichen Akkuinhalts.
 
 ### Breaking Changes
 
