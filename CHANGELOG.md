@@ -7,6 +7,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Keine neuen Funktionen.
+
 ### Bugfixes
 
 - Beträge unter einem Cent werden mit bis zu vier Euro-Nachkommastellen dargestellt, damit kleine PV-Anteile nicht wie kostenlose Energie wirken.
