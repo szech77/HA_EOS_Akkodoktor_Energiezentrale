@@ -8,3 +8,5 @@ htmlcov/
 .test-*/
 release-notes.md
 .venv-before-repair-*/
+
+.security-results/

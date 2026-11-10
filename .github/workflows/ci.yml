@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "feature/**", "bug/**"]
+    branches: [main, "feature/**", "bug/**", "bugfix/**"]
   pull_request:
     branches: [main]
   merge_group:
@@ -44,7 +44,11 @@ jobs:
   security:
     name: Source security
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,17 +57,56 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install security tools
+        id: tools
         run: python -m pip install -r requirements-dev.txt
+      # Preserve scanner failures, but let every scanner and the SARIF upload run.
       - name: Python static security analysis
-        run: python -m bandit -r custom_components tools -ll
+        id: bandit
+        continue-on-error: true
+        run: python -m bandit -r custom_components tools -ll --format json --output "$RUNNER_TEMP/bandit.json"
       - name: Audit development and Home Assistant test dependencies
-        run: python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
+        id: audit
+        continue-on-error: true
+        run: python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict --format json --output "$RUNNER_TEMP/pip-audit.json"
       - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.76.2
           cache: true
       - name: Scan repository for secrets
-        run: trivy fs --scanners secret --exit-code 1 --skip-dirs .git,.venv .
+        id: secrets
+        continue-on-error: true
+        run: trivy fs --scanners secret --exit-code 1 --skip-dirs .git,.venv --format json --output "$RUNNER_TEMP/trivy-secrets.json" .
+      - name: Prepare redacted SARIF reports
+        id: reports
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: >-
+          python tools/security_sarif.py
+          --bandit "$RUNNER_TEMP/bandit.json"
+          --pip-audit "$RUNNER_TEMP/pip-audit.json"
+          --trivy "$RUNNER_TEMP/trivy-secrets.json"
+          --output-dir .security-results
+      - name: Publish findings to GitHub Code scanning
+        id: upload
+        if: ${{ !cancelled() && hashFiles('.security-results/*.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@5895b2c9be147bc7f1c75ce72c5cb577febb1907 # v4
+        with:
+          sarif_file: .security-results
+          category: source-security
+          wait-for-processing: true
+      - name: Enforce scanner and reporting results
+        if: ${{ !cancelled() }}
+        env:
+          BANDIT: ${{ steps.bandit.outcome }}
+          AUDIT: ${{ steps.audit.outcome }}
+          SECRETS: ${{ steps.secrets.outcome }}
+          REPORTS: ${{ steps.reports.outcome }}
+          UPLOAD: ${{ steps.upload.outcome }}
+        run: |
+          test "$BANDIT" = success
+          test "$AUDIT" = success
+          test "$SECRETS" = success
+          test "$REPORTS" = success
+          test "$UPLOAD" = success
 
   integration:
     name: Home Assistant and HACS metadata

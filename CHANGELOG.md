@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.3.2 - 2026-11-10
+
+### Features
+
+- Keine neuen Funktionen der Energieverwaltung.
+
+### Bugfixes
+
+- CI-Push-Prüfungen laufen auch für `bugfix/**`-Branches.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Bandit, pip-audit und Trivy veröffentlichen ihre Findings als SARIF in GitHub Code scanning.
+- Secret-Inhalte und Codeausschnitte werden nicht in die Security-Berichte übernommen.
+- Berichte werden auch bei Findings übertragen; Scanner- und Uploadfehler blockieren weiterhin die Pflichtprüfung.
+
 ## 0.3.1 - 2026-11-10
 
 ### Features
