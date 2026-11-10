@@ -358,6 +358,30 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         connection.send_error.assert_not_called()
         self.assertEqual(connection.send_result.call_args.args[1]["locale"], "de-DE")
 
+    async def test_websocket_waits_for_delayed_language_response(self):
+        from threading import Event
+        from custom_components.eos_energiezentrale.energy.localization import load_language
+
+        self.controller()
+        started, finish = Event(), Event()
+
+        def delayed_load(*args, **kwargs):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release language request")
+            return load_language(*args, **kwargs)
+
+        with patch("custom_components.eos_energiezentrale.frontend.load_language", side_effect=delayed_load):
+            request = asyncio.create_task(self.invoke({"action": "language", "language": "de"}))
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.assertFalse(request.done())
+            finally:
+                finish.set()
+            connection = await request
+        connection.send_error.assert_not_called()
+        self.assertEqual(connection.send_result.call_args.args[1]["locale"], "de-DE")
+
     async def test_first_setup_starts_without_control_permission(self):
         # Real config, SQLite cache and drivers, while external APIs remain offline.
         self.entry._async_set_state(self.hass, ConfigEntryState.SETUP_IN_PROGRESS, None)
@@ -418,9 +442,12 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             websocket_request(self.hass, connection, {"id": 1, "action": "control", "values": {"enabled": True}})
 
     async def invoke(self, msg):
+        answered = asyncio.Event()
         connection = Mock(user=SimpleNamespace(is_admin=True))
+        connection.send_result.side_effect = lambda *_: answered.set()
+        connection.send_error.side_effect = lambda *_: answered.set()
         websocket_request(self.hass, connection, {"id": 1, **msg})
-        await self.hass.async_block_till_done()
+        await asyncio.wait_for(answered.wait(), timeout=5)
         return connection
 
     async def test_websocket_control_rejects_ambiguous_payload(self):
