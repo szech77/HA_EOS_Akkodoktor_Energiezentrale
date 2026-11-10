@@ -181,20 +181,8 @@ function nextPlan(key) {
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
 
 function solarRemaining() {
-  const now = windowNow();
-  const today = localDay(now);
-  let wh = 0, covered = false;
-  for (const row of snapshot.forecast) {
-    const from = Math.max(now, Date.parse(row.time));
-    const end = Date.parse(row.end);
-    if (valid(row.solar) && end > from && localDay(from) === today) {
-      // EOS slots are expected to end on a local planning boundary.
-      if (localDay(end - 1) !== today) continue;
-      wh += row.solar * (end - from) / 3600000;
-      covered = true;
-    }
-  }
-  return covered ? `${decimal(wh / 1000)} ${t('unit.kwh')}` : null;
+  const energy = (snapshot.pv_daily_forecast ?? EosChartData.dailySolar(snapshot.forecast,windowNow(),snapshot.zone))[0]?.kwh;
+  return valid(energy) ? `${decimal(energy)} ${t('unit.kwh')}` : null;
 }
 
 function solarTodayEnergy() {
@@ -218,7 +206,7 @@ function solarToday() {
 }
 
 function solarForecastCards(now) {
-  const days=EosChartData.dailySolar(snapshot.forecast,now,snapshot.zone);
+  const days=snapshot.pv_daily_forecast ?? EosChartData.dailySolar(snapshot.forecast,now,snapshot.zone);
   const measured=solarTodayEnergy();
   return days.map((row,i)=>{
     const totalToday=i===0 && valid(measured) && valid(row.kwh);

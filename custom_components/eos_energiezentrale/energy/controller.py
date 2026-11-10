@@ -11,7 +11,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
-from .presentation import heat_utilization, power_references, weather_display
+from .presentation import daily_pv_forecast, heat_utilization, power_references, weather_display
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 
@@ -463,7 +463,7 @@ class Controller:
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "plugins": {"battery":describe(self.config.battery),"wallbox":describe(self.config.wallbox)},
                     "influx_configured": bool(self.config.influx.url),
-                    "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,
+                    "forecast": self.forecast if current else [], "pv_daily_forecast": daily_pv_forecast(self.forecast if current else [], now, opts["timezone"]), "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}
                                    for item in plan_series(self.plan_for(opts[resource],now), opts[resource])]
                              if self.order_for(opts[resource],now) is not None and (key != "car" or opts.get("wallbox_type") != "none") else [] for key, resource in (("battery", "battery_resource"),

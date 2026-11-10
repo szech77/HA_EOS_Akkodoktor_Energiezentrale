@@ -258,6 +258,7 @@ nutzbar. Im Dialog **InfluxDB-Verlauf** eintragen:
 | Datenbank / `influx_database` | `homeassistant` |
 | Benutzer / `influx_user` | Vorhandener DB-Benutzer, beispielsweise `homeassistant`; vorzugsweise ein eigener Lesebenutzer. |
 | Passwort / `influx_password` | Tatsächliches Passwort dieses Datenbankbenutzers. |
+| Passwort-Umgebungsvariable / `influx_password_env` | Optional: Name einer Umgebungsvariable im **Home-Assistant-Core-Prozess**. Anstelle des Passworts wird nur dieser Name in der Integration gespeichert. |
 
 Der Hostname ist ein Beispiel für die entsprechende HA-App. Verwende den Host
 deiner Installation; im HA-Core-Container muss dieser auflösbar und erreichbar sein.
@@ -796,3 +797,24 @@ Ohne Auswahl wird die alphabetisch erste verfügbare Wetterentität verwendet;
 ohne Wetterentität bleibt die Anzeige verborgen. Nicht verfügbare oder länger
 als eine Stunde nicht gemeldete Werte erscheinen als unbekannt, nicht als 0 °C.
 Die Wetteranzeige hat keinen Einfluss auf die Energieregelung oder EOS-Prognose.
+
+### Schutz der InfluxDB-Zugangsdaten
+
+Ohne Passwort-Umgebungsvariable speichert Home Assistant das eingegebene Passwort in
+seinem Konfigurationseintrag. Es wird beim späteren Öffnen des Formulars nicht
+wieder angezeigt; ein leeres, nicht übermitteltes Feld behält das Passwort bei.
+Vorhandene Backups und Logdateien werden durch die Migration nicht bereinigt.
+
+Alternativ stellt der Administrator das Passwort vor dem Start des
+**Home-Assistant-Core-Prozesses** über eine Umgebungsvariable bereit und trägt nur
+deren Namen ein. Die Bereitstellung ist installationsabhängig; eine Variable in
+einem separaten Add-on reicht nicht aus. Beim Umstellen wird das gespeicherte
+Passwort aus dem aktiven Eintrag entfernt. Ist die Variable nicht vorhanden, kann
+die Integration nicht mit diesem Zugang starten. Zugriff auf Prozessumgebung und
+Backups muss weiterhin geschützt werden. Ein externer Secret Manager oder eine
+TPM-gestützte Bereitstellung kann dafür verwendet werden, wird von dieser
+Integration aber nicht selbst eingerichtet oder garantiert.
+
+Für die InfluxDB-Verbindung TLS und ein Benutzerkonto mit möglichst geringen
+Leserechten verwenden. Ein Hash mit Salt und Pepper ersetzt dieses Passwort nicht:
+für die Anmeldung an InfluxDB benötigt der Client das ursprüngliche Geheimnis.

@@ -24,6 +24,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name="EOS Energiezentrale", config_entry=entry)
         self.entry, self.app = entry, app
         self.work_lock = asyncio.Lock()
+        self.influx_lock = asyncio.Lock()
         self.closing = False
         self.influx_at = -1000
         self.influx_rows = []
@@ -160,24 +161,31 @@ class EnergyCoordinator(DataUpdateCoordinator):
         return merge_reconstruction(result,deepcopy(historical))
 
     async def async_history(self):
-        async with self.work_lock:
+        # An unresponsive history database must not block control operations.
+        # Separate serialization prevents duplicate concurrent Influx requests.
+        async with self.influx_lock:
             if self.closing:
                 raise ValueError("Integration is stopping")
-            def read():
-                if monotonic() - self.influx_at >= 300:
-                    self.influx_at = monotonic()
-                    try:
-                        self.influx_rows = influx_series(self.app.config)
-                        self.influx_error = False
-                    except Exception:
-                        self.influx_error = True
-                now=datetime.now(timezone.utc)
-                result={"local": self.app.history.read(now),
-                        "influx": self.influx_rows, "influx_error": self.influx_error}
-                if callable(getattr(type(self.app),"vehicle_histories",None)):
-                    result["vehicles"]=self.app.vehicle_histories(now)
-                return result
-            return await self.hass.async_add_executor_job(read)
+            if monotonic() - self.influx_at >= 300:
+                self.influx_at = monotonic()
+                try:
+                    rows = await self.hass.async_add_executor_job(influx_series, self.app.config)
+                except Exception:
+                    self.influx_error = True
+                else:
+                    self.influx_rows = rows
+                    self.influx_error = False
+            async with self.work_lock:
+                if self.closing:
+                    raise ValueError("Integration is stopping")
+                def read():
+                    now = datetime.now(timezone.utc)
+                    result = {"local": self.app.history.read(now),
+                              "influx": self.influx_rows, "influx_error": self.influx_error}
+                    if callable(getattr(type(self.app), "vehicle_histories", None)):
+                        result["vehicles"] = self.app.vehicle_histories(now)
+                    return result
+                return await self.hass.async_add_executor_job(read)
 
     async def async_stop(self):
         # Mark shutdown before waiting for an in-flight tick, so a service

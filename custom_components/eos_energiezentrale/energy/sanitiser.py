@@ -13,10 +13,22 @@ def bounded(value, low, high):
     return float(value) if low <= value <= high and isfinite(value) else None
 
 
-def battery_reading(value):
-    if not isinstance(value,BatteryReading):
+def battery_reading(value, now=None):
+    if not isinstance(value, BatteryReading):
         raise PluginContractError("Battery plugin must return BatteryReading")
-    return BatteryReading(bounded(value.soc,0,100),bounded(value.charge,0,1000000),bounded(value.discharge,0,1000000))
+
+    def validated_sample(measurement, timestamp, maximum):
+        reading = bounded(measurement, 0, maximum)
+        if now is None:
+            return reading
+        if not isinstance(timestamp, datetime) or timestamp.utcoffset() is None:
+            return None
+        return reading if 0 <= (now - timestamp).total_seconds() < 120 else None
+
+    return replace(value,
+        soc=validated_sample(value.soc, value.soc_sample, 100),
+        charge=validated_sample(value.charge, value.charge_sample, 1000000),
+        discharge=validated_sample(value.discharge, value.discharge_sample, 1000000))
 
 
 def wallbox_reading(value, now=None):

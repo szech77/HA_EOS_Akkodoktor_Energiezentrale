@@ -35,7 +35,8 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'influx_url': '',
  'influx_database': 'homeassistant',
  'influx_user': '',
- 'influx_password': ''}
+ 'influx_password': '',
+ 'influx_password_env': ''}
 GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_resource'],
  'sensors': ['weather_entity', 'pv_entity',
              'house_entity',
@@ -60,4 +61,4 @@ GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_res
             'max_current_a',
             'phase_wait_s',
             'regulation_interval_s'],
- 'history': ['influx_url', 'influx_database', 'influx_user', 'influx_password']}
+ 'history': ['influx_url', 'influx_database', 'influx_user', 'influx_password', 'influx_password_env']}

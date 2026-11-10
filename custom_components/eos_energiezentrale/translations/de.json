@@ -62,7 +62,8 @@
           "influx_url": "InfluxDB-Adresse (leer = deaktiviert)",
           "influx_database": "InfluxDB-Datenbank",
           "influx_user": "InfluxDB-Lesebenutzer",
-          "influx_password": "InfluxDB-Passwort"
+          "influx_password": "InfluxDB-Passwort",
+          "influx_password_env": "Umgebungsvariable für InfluxDB-Passwort (optional)"
         }
       },
       "hardware_parameters": {
@@ -145,7 +146,8 @@
           "influx_url": "InfluxDB-Adresse (leer = deaktiviert)",
           "influx_database": "InfluxDB-Datenbank",
           "influx_user": "InfluxDB-Lesebenutzer",
-          "influx_password": "InfluxDB-Passwort"
+          "influx_password": "InfluxDB-Passwort",
+          "influx_password_env": "Umgebungsvariable für InfluxDB-Passwort (optional)"
         }
       },
       "init": {

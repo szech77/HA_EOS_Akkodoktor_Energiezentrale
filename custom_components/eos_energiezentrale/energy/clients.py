@@ -61,6 +61,12 @@ def reading(states, entity, now, kind, max_age=None):
     return value
 
 
+def report_time(states, entity):
+    """Return the reported observation timestamp, never the snapshot time."""
+    state = states.get(entity, {})
+    return instant(state.get("last_reported") or state.get("last_updated"))
+
+
 class EOS:
     def __init__(self, url):
         self.url = base_url(url)

@@ -2,7 +2,7 @@
 from math import floor
 
 from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginInfo, PluginField
-from ..clients import reading
+from ..clients import reading, report_time
 from ..domain import number
 from ..device_io import confirmed_state
 from ..plugin_parameters import parameters
@@ -40,7 +40,10 @@ class GenericBattery(BatteryDriver):
         if unit not in ({None,"1"} if self.soc_scale=="factor" else {None,"%"}): soc = None
         if soc is not None and self.soc_scale=="factor": soc *= 100
         return BatteryReading(soc,reading(states,self.ids["charge_power"],now,"power",120),
-                              reading(states,self.ids["discharge_power"],now,"power",120))
+                              reading(states,self.ids["discharge_power"],now,"power",120),
+                              report_time(states,self.ids["soc"]),
+                              report_time(states,self.ids["charge_power"]),
+                              report_time(states,self.ids["discharge_power"]))
 
     def _mode(self,mode):
         entity = self.ids["mode"]

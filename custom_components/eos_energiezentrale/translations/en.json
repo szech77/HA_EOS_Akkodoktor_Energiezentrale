@@ -62,7 +62,8 @@
           "influx_url": "InfluxDB URL (empty = disabled)",
           "influx_database": "InfluxDB database",
           "influx_user": "InfluxDB read-only user",
-          "influx_password": "InfluxDB password"
+          "influx_password": "InfluxDB password",
+          "influx_password_env": "InfluxDB password environment variable (optional)"
         }
       },
       "hardware_parameters": {
@@ -145,7 +146,8 @@
           "influx_url": "InfluxDB URL (empty = disabled)",
           "influx_database": "InfluxDB database",
           "influx_user": "InfluxDB read-only user",
-          "influx_password": "InfluxDB password"
+          "influx_password": "InfluxDB password",
+          "influx_password_env": "InfluxDB password environment variable (optional)"
         }
       },
       "init": {

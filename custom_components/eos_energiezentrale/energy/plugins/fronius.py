@@ -2,7 +2,7 @@
 from math import floor
 from time import monotonic
 from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginInfo, PluginField
-from ..clients import reading
+from ..clients import reading, report_time
 from ..domain import number
 from ..device_io import entities, confirmed_state, DeviceConfirmationError, DeviceNotReady
 
@@ -31,7 +31,10 @@ class Fronius(BatteryDriver):
     def _read(self, states, now):
         return BatteryReading(reading(states, self.ids["soc"], now, "soc", 120),
                               reading(states, self.ids["charge_power"], now, "power", 120),
-                              reading(states, self.ids["discharge_power"], now, "power", 120))
+                              reading(states, self.ids["discharge_power"], now, "power", 120),
+                              report_time(states, self.ids["soc"]),
+                              report_time(states, self.ids["charge_power"]),
+                              report_time(states, self.ids["discharge_power"]))
 
     def _release(self, states):
         self.pending_limits.clear()

@@ -60,6 +60,26 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.entry.runtime_data = EnergyCoordinator(self.hass, self.entry, app)
         return self.entry.runtime_data, app
 
+    async def test_slow_history_database_does_not_block_control_changes(self):
+        from threading import Event
+        coordinator, app = self.controller()
+        started, finish = Event(), Event()
+        def delayed_history(_config):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release history request")
+            return [{"solar": 123}]
+        app.history.read.return_value = []
+        with patch("custom_components.eos_energiezentrale.coordinator.influx_series", side_effect=delayed_history):
+            history = asyncio.create_task(coordinator.async_history())
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+                app.set_armed.assert_called_once_with(True)
+            finally:
+                finish.set()
+            self.assertEqual((await history)["influx"], [{"solar": 123}])
+
     async def test_reporting_storage_error_never_disables_device_control(self):
         coordinator, app = self.controller()
         app.armed = True
@@ -806,3 +826,53 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         renamed = EnergySensor(coordinator,"car")
         self.assertEqual(renamed.translation_placeholders["vehicle"],"Familienauto")
         self.assertEqual(before.unique_id,renamed.unique_id)
+
+
+class CredentialRetentionRequirements(unittest.TestCase):
+    def test_only_superseded_password_is_removed_and_other_data_is_preserved(self):
+        from custom_components.eos_energiezentrale import remove_superseded_password
+        hass=Mock()
+        entry=SimpleNamespace(data={'influx_password':'old','eos_url':'http://eos'},
+                              options={'influx_password':'new'})
+        remove_superseded_password(hass,entry)
+        hass.config_entries.async_update_entry.assert_called_once_with(entry,data={'eos_url':'http://eos'})
+
+    def test_original_password_is_not_removed_if_options_do_not_override_it(self):
+        from custom_components.eos_energiezentrale import remove_superseded_password
+        hass=Mock();entry=SimpleNamespace(data={'influx_password':'only'},options={})
+        remove_superseded_password(hass,entry)
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    def test_password_is_not_rendered_in_config_form_default(self):
+        import probatio
+        from homeassistant.helpers.config_validation import custom_serializer
+        from custom_components.eos_energiezentrale.config_flow import schema_for
+        fields=probatio.to_field_list(schema_for('history',{**DEFAULTS,'influx_password':'do-not-echo'}),
+                                      custom_serializer=custom_serializer)
+        self.assertNotIn('do-not-echo',json.dumps(fields))
+        password=next(field for field in fields if field['name']=='influx_password')
+        self.assertFalse(password['required'])
+
+
+class ExternalSecretRequirements(unittest.TestCase):
+    def test_external_secret_is_resolved_without_persisting_its_value(self):
+        from custom_components.eos_energiezentrale.energy.settings import influx_credential
+        options={**DEFAULTS,'influx_password':'','influx_password_env':'EOS_INFLUX_SECRET'}
+        self.assertEqual(influx_credential(options,{'EOS_INFLUX_SECRET':'private-value'}),'private-value')
+        self.assertNotIn('private-value',json.dumps(options))
+
+    def test_missing_external_secret_and_invalid_name_fail_closed_without_disclosing_it(self):
+        from custom_components.eos_energiezentrale.energy.settings import influx_credential
+        for name in ('MISSING_SECRET','INVALID SECRET'):
+            with self.subTest(name=name),self.assertRaises(ValueError) as error:
+                influx_credential({**DEFAULTS,'influx_password_env':name},{})
+            self.assertNotIn('private-value',str(error.exception))
+
+    def test_legacy_password_remains_usable_without_external_secret(self):
+        from custom_components.eos_energiezentrale.energy.settings import influx_credential
+        self.assertEqual(influx_credential({**DEFAULTS,'influx_password':'legacy'},{}),'legacy')
+
+    def test_config_does_not_accept_two_password_sources(self):
+        from custom_components.eos_energiezentrale.validation import validate_options
+        with self.assertRaises(ValueError):
+            validate_options({**DEFAULTS,'influx_password':'legacy','influx_password_env':'EOS_INFLUX_SECRET'})

@@ -54,3 +54,37 @@ def weather_display(states, options, now):
         temperature = None
     return {"condition": condition, "temperature": temperature,
             "unit": unit if unit in {"°C", "°F", "K"} else "°C"}
+
+
+def daily_pv_forecast(rows, now, zone):
+    """Integrate covered forecast slots over local calendar days, without overlaps."""
+    from datetime import datetime, time, timedelta, timezone
+    from zoneinfo import ZoneInfo
+
+    local_zone = ZoneInfo(zone)
+    today = now.astimezone(local_zone).date()
+    slots = []
+    for row in rows:
+        start, end = instant(row.get("time")), instant(row.get("end"))
+        power = number(row.get("solar"))
+        if start is not None and end is not None and power is not None and power >= 0 and end > start:
+            slots.append((start.astimezone(timezone.utc), end.astimezone(timezone.utc), power))
+    slots.sort(key=lambda item: item[0])
+    result = []
+    for offset in range(3):
+        day = today + timedelta(days=offset)
+        boundary = datetime.combine(day, time.min, local_zone).astimezone(timezone.utc)
+        end = datetime.combine(day + timedelta(days=1), time.min, local_zone).astimezone(timezone.utc)
+        start = max(now.astimezone(timezone.utc), boundary)
+        cursor, covered, watt_seconds = start, 0.0, 0.0
+        for slot_start, slot_end, power in slots:
+            first, last = max(start, cursor, slot_start), min(end, slot_end)
+            seconds = (last - first).total_seconds()
+            if seconds <= 0:
+                continue
+            covered += seconds
+            watt_seconds += power * seconds
+            cursor = last
+        result.append({"date": day.isoformat(), "kwh": watt_seconds / 3600000 if covered else None,
+                       "complete": covered >= (end-start).total_seconds(), "coveredMs": covered * 1000})
+    return result
