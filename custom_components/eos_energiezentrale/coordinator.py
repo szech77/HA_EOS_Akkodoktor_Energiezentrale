@@ -14,6 +14,7 @@ from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
 from .energy.controller import Controller
+from .energy.domain import next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import daily_settings
 
@@ -40,11 +41,15 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.battery_sync_revision = 0
         self.battery_sync_last = float("-inf")
         self.battery_sync_last_revision = -1
+        self.goal_sync_tasks = {}
+        self.goal_sync_last = {}
         if isinstance(app, Controller):
             app.external_eos_polling = True
             app.external_battery_sync = True
+            app.external_goal_sync = True
             for _, child, _ in getattr(app, "controllers", ()):
                 child.external_battery_sync = True
+                child.external_goal_sync = True
 
     def _tick(self):
         with self.app.lock:
@@ -102,7 +107,63 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 raise UpdateFailed("Local controller unavailable") from error
             self._schedule_accounting_refresh()
             self._schedule_battery_sync()
+            self._schedule_goal_sync()
             return result
+
+    def _vehicle_controllers(self):
+        if not isinstance(self.app, Controller):
+            return ()
+        return tuple(child for _, child, _ in self.app.controllers) if hasattr(self.app, "controllers") else (self.app,)
+
+    @staticmethod
+    def _desired_goal(app, now):
+        departure = next_departure(app.config.daily, now, app.config.zone)
+        return (app.config.daily["target_soc"], departure) if departure else None
+
+    def _schedule_goal_sync(self):
+        if not getattr(self.app, "armed", False):
+            return
+        for app in self._vehicle_controllers():
+            if (not app.goal_sync_ready or app.restore_pending
+                    or app.config.options.get("wallbox_type") == "none"):
+                continue
+            resource = app.config.options["vehicle_resource"]
+            task = self.goal_sync_tasks.get(resource)
+            if task and not task.done():
+                continue
+            desired = self._desired_goal(app, datetime.now(timezone.utc))
+            if desired == app.goal and app.goal_at is not None:
+                continue
+            previous = self.goal_sync_last.get(resource)
+            if (previous and previous[:2] == (desired, app.goal_sync_revision)
+                    and monotonic() - previous[2] < 30):
+                continue
+            revision = app.goal_sync_revision
+            self.goal_sync_last[resource] = (desired, revision, monotonic())
+            self.goal_sync_tasks[resource] = self.hass.async_create_background_task(
+                self._async_sync_goal(app, resource, desired, revision), "EOS vehicle goal sync")
+
+    async def _async_sync_goal(self, app, resource, desired, revision):
+        target, deadline = desired or (0, None)
+        error = None
+        try:
+            await self.hass.async_add_executor_job(app.config.eos.set_vehicle_goal, resource, target, deadline)
+        except Exception as caught:
+            error = caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            current = self._desired_goal(app, datetime.now(timezone.utc))
+            if revision == app.goal_sync_revision and desired == current:
+                if error is None:
+                    app.goal, app.goal_at = desired, datetime.now(timezone.utc)
+                    app.errors.pop("goal", None)
+                else:
+                    app.goal_at = None
+                    app.errors["goal"] = type(error).__name__
+            self.goal_sync_tasks.pop(resource, None)
+            if revision != app.goal_sync_revision or desired != current:
+                self._schedule_goal_sync()
 
     def _schedule_battery_sync(self):
         app = self.app
@@ -210,6 +271,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 raise ValueError("Integration is stopping")
             def change(settings=settings):
                 with self.app.lock:
+                    now = datetime.now(timezone.utc)
+                    previous_goals = [(vehicle, self._desired_goal(vehicle, now))
+                                      for vehicle in self._vehicle_controllers()]
                     if enabled is not None:
                         self.app.set_armed(enabled)
                     if settings is not None and "vehicle_id" in settings:
@@ -235,6 +299,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
                             self.app.persist_primary_settings()
                         if manage_limits:
                             self.app.sync_battery_limits(datetime.now(timezone.utc), monotonic(), force=True)
+                    for vehicle, previous in previous_goals:
+                        if previous != self._desired_goal(vehicle, now):
+                            vehicle.goal_sync_revision += 1
+                            vehicle.goal_at = None
                     return self.app.snapshot(datetime.now(timezone.utc))
             try:
                 result = await self.hass.async_add_executor_job(change)
@@ -245,6 +313,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self.async_set_updated_data(result)
                 raise
             self._schedule_battery_sync()
+            self._schedule_goal_sync()
             self.async_set_updated_data(result)
 
     def _accounting(self):
@@ -320,6 +389,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.closing = True
         if self.battery_sync_task and not self.battery_sync_task.done():
             self.battery_sync_task.cancel()
+        for task in self.goal_sync_tasks.values():
+            if not task.done():
+                task.cancel()
         for task in self.eos_poll_tasks.values():
             if not task.done():
                 task.cancel()

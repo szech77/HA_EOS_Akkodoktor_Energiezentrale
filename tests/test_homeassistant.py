@@ -806,6 +806,94 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(app.battery_limits_confirmed, (40, 100))
         self.assertTrue(coordinator.data["battery_limits"]["confirmed"])
 
+    async def test_slow_vehicle_goal_never_confirms_a_disabled_schedule(self):
+        from datetime import timedelta
+        from threading import Event
+        started, finish = Event(), Event()
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS), ha, self.directory)
+        config.eos = Mock()
+        departure = datetime.now(timezone.utc) + timedelta(hours=3)
+        config.update({**config.daily, "schedule": "once", "departure": departure.isoformat(), "target_soc": 70})
+        calls = []
+
+        def sync(resource, target, deadline):
+            calls.append((resource, target, deadline))
+            if len(calls) == 1:
+                started.set()
+                if not finish.wait(5):
+                    raise TimeoutError("test did not release EOS vehicle goal")
+
+        config.eos.set_vehicle_goal.side_effect = sync
+        app = Controller(ha, config)
+        app.armed, app.restore_pending, app.goal_sync_ready = True, False, True
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        try:
+            coordinator._schedule_goal_sync()
+            first = coordinator.goal_sync_tasks["ev1"]
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(settings={"schedule": "off"}), timeout=2)
+            self.assertIsNone(app.goal_at)
+            self.assertFalse(app.sync_goal(datetime.now(timezone.utc), 0, None))
+        finally:
+            finish.set()
+        await asyncio.wait_for(first, timeout=3)
+        if "ev1" in coordinator.goal_sync_tasks:
+            await asyncio.wait_for(coordinator.goal_sync_tasks["ev1"], timeout=3)
+        self.assertEqual(calls, [("ev1", 70, departure), ("ev1", 0, None)])
+        self.assertIsNone(app.goal)
+        self.assertFalse(app.sync_goal(datetime.now(timezone.utc), 0, None))
+
+    async def test_vehicle_goal_failure_does_not_confirm_charging_and_retries(self):
+        from datetime import timedelta
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS), ha, self.directory)
+        config.eos = Mock()
+        config.eos.set_vehicle_goal.side_effect = [OSError("offline"), None]
+        departure = datetime.now(timezone.utc) + timedelta(hours=3)
+        config.update({**config.daily, "schedule": "once", "departure": departure.isoformat(), "target_soc": 70})
+        app = Controller(ha, config)
+        app.armed, app.restore_pending, app.goal_sync_ready = True, False, True
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator._schedule_goal_sync()
+        await coordinator.goal_sync_tasks["ev1"]
+        self.assertFalse(app.sync_goal(datetime.now(timezone.utc), 0, departure))
+        self.assertIn("goal", app.errors)
+        coordinator._schedule_goal_sync()
+        self.assertEqual(config.eos.set_vehicle_goal.call_count, 1)
+        desired, revision, _ = coordinator.goal_sync_last["ev1"]
+        coordinator.goal_sync_last["ev1"] = (desired, revision, float("-inf"))
+        coordinator._schedule_goal_sync()
+        await coordinator.goal_sync_tasks["ev1"]
+        self.assertTrue(app.sync_goal(datetime.now(timezone.utc), 0, departure))
+        self.assertNotIn("goal", app.errors)
+
+    async def test_vehicle_goals_are_tracked_independently_in_fleet(self):
+        from datetime import timedelta
+        from custom_components.eos_energiezentrale.energy.fleet import create_controller
+        from test_fleet import definitions
+
+        options = {**DEFAULTS, "vehicles": json.dumps(definitions())}
+        app = create_controller(Mock(), options, self.directory)
+        departure = datetime.now(timezone.utc) + timedelta(hours=3)
+        for index, (_, vehicle, _) in enumerate(app.controllers):
+            vehicle.config.update({**vehicle.config.daily, "schedule": "once",
+                                   "departure": departure.isoformat(), "target_soc": 70 + 10 * index})
+            vehicle.config.eos = Mock()
+            vehicle.goal_sync_ready, vehicle.restore_pending = True, False
+        app.armed = True
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator._schedule_goal_sync()
+        tasks = tuple(coordinator.goal_sync_tasks.values())
+        self.assertEqual(len(tasks), 2)
+        await asyncio.gather(*tasks)
+        first, second = (item[1] for item in app.controllers)
+        first.config.eos.set_vehicle_goal.assert_called_once_with("ev1", 70, departure)
+        second.config.eos.set_vehicle_goal.assert_called_once_with("ev2", 80, departure)
+        self.assertEqual(first.goal, (70, departure))
+        self.assertEqual(second.goal, (80, departure))
+
     async def test_failed_local_save_does_not_write_eos_or_claim_changed_limits(self):
         ha = Mock()
         config = Configuration(dict(DEFAULTS),ha,self.directory)

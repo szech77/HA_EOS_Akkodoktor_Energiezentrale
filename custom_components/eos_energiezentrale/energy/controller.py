@@ -55,6 +55,9 @@ class Controller:
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
         self.external_eos_polling = False
         self.external_battery_sync = False
+        self.external_goal_sync = False
+        self.goal_sync_ready = False
+        self.goal_sync_revision = 0
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -254,6 +257,9 @@ class Controller:
     def sync_goal(self, now, clock, departure):
         daily = self.config.daily
         goal = (daily["target_soc"], departure) if departure else None
+        if self.external_goal_sync:
+            self.goal_sync_ready = True
+            return goal is not None and goal == self.goal and self.goal_at is not None
         if (goal != self.goal or self.goal_at is None) and clock - self.last_goal_attempt >= 30:
             self.last_goal_attempt = clock
             try:
