@@ -1,6 +1,6 @@
 # CI, Releases und Branchschutz
 
-`main` ist der Hauptbranch. Die CI läuft bei Pushes auf `feature/**`, `bug/**` und
+`main` ist der Hauptbranch. Die CI läuft bei Pushes auf `feature/**`, `bug/**`, `bugfix/**` und
 `main`, bei Pull Requests nach main sowie in einer Merge Queue.
 
 Verpflichtender Sammelstatus: **Required checks**. Er hängt ab von:
@@ -62,3 +62,42 @@ und verändert weder den Hauptbranch noch Branchschutzregeln. Die Apache-Lizenz
 kommt regulär mit dem Pull Request nach main; dafür ist kein direkter Push nötig.
 Eine automatische Änderung von GitHub-Repository-Einstellungen ist mit den
 normalen Leserechten dieses CI-Jobs nicht möglich.
+
+
+## Findings in GitHub Security / Code scanning
+
+Bandit, pip-audit und Trivy veröffentlichen ihre Befunde als SARIF unter
+**Repository → Security → Code scanning**. Die Tools behalten getrennte Namen:
+**Bandit**, **pip-audit**, **Trivy Secrets**. Die Action erzeugt keine Issues und
+keine PR-Kommentare. Ergebnisse eines Feature-Branches lassen sich über den
+Branchfilter auswählen; die Standardansicht zeigt Ergebnisse des Default-Branches.
+
+`tools/security_sarif.py` konvertiert die JSON-Reports, ordnet Fundstellen zu und
+schreibt auch bei einem erfolgreichen Scan ohne Findings einen leeren SARIF-Report,
+damit GitHub behobene Befunde schließen kann. Direkte Abhängigkeiten werden ihrer
+Requirements-Zeile zugeordnet; transitive Abhängigkeiten erscheinen am Anfang von
+`requirements-test.txt` und werden ausdrücklich als transitiv gekennzeichnet.
+pip-audit liefert keinen CVSS-Wert; die Konvertierung erfindet keine Schweregrade.
+
+Scanner dürfen nach Findings zunächst weiterlaufen, damit alle Berichte hochgeladen
+werden. Der abschließende Schritt prüft die ursprünglichen Scanner-Exitcodes und
+den Upload: Findings, unvollständige Scans, kaputte Reports oder Uploadfehler lassen
+**Source security** und damit **Required checks** weiterhin fehlschlagen.
+
+Nur der Security-Job erhält `security-events: write`; Checkout-Zugangsdaten werden
+nicht gespeichert. Es werden keine privilegierten `pull_request_target`-Workflows
+verwendet. Der Upload nutzt ausschließlich den kurzlebigen `GITHUB_TOKEN`.
+Rohberichte liegen außerhalb des Checkouts in `RUNNER_TEMP` und werden nicht als
+Artefakt hochgeladen. Bei möglichen Secrets enthalten SARIF-Berichte nur Regel und
+Fundstelle, keine gefundenen Werte oder Codeausschnitte. Trivy-Findings erscheinen
+als Code-Scanning-Befunde, nicht als native GitHub-Secret-Scanning-Alerts.
+
+Für öffentliche GitHub-Repositories ist Code scanning kostenlos verfügbar; es
+ist dafür kein kostenpflichtiges Advanced-Security-Abo erforderlich. Bei privaten
+Repositories muss GitHub Code Security freigeschaltet sein. Die erste erfolgreiche
+SARIF-Übertragung richtet die Analysen ein; es sind keine zusätzlichen persönlichen
+Tokens nötig. Falls GitHub den Upload wegen einer Repository-/Organisationsrichtlinie
+ablehnt, unter **Settings → Advanced Security / Code security** die Freigabe prüfen.
+Die Pipeline überspringt diesen Fehler nicht stillschweigend.
+
+Referenz: https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file
