@@ -54,6 +54,7 @@ class Controller:
         self.last_minute = None
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
         self.external_eos_polling = False
+        self.external_battery_sync = False
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -129,7 +130,7 @@ class Controller:
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
     def sync_battery_limits(self, now, clock, *, force=False):
-        if not getattr(self.config, "battery_limits_managed", False):
+        if self.external_battery_sync or not getattr(self.config, "battery_limits_managed", False):
             return
         desired = (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"])
         interval = 60 if self.battery_limits_confirmed == desired else 30

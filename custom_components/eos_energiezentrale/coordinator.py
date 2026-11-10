@@ -36,8 +36,15 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.accounting_revision = 0
         self.eos_poll_tasks = {}
         self.eos_poll_started = {"plan": float("-inf"), "solution": float("-inf")}
+        self.battery_sync_task = None
+        self.battery_sync_revision = 0
+        self.battery_sync_last = float("-inf")
+        self.battery_sync_last_revision = -1
         if isinstance(app, Controller):
             app.external_eos_polling = True
+            app.external_battery_sync = True
+            for _, child, _ in getattr(app, "controllers", ()):
+                child.external_battery_sync = True
 
     def _tick(self):
         with self.app.lock:
@@ -94,7 +101,50 @@ class EnergyCoordinator(DataUpdateCoordinator):
             except (OSError, ValueError) as error:
                 raise UpdateFailed("Local controller unavailable") from error
             self._schedule_accounting_refresh()
+            self._schedule_battery_sync()
             return result
+
+    def _schedule_battery_sync(self):
+        app = self.app
+        if (not isinstance(app, Controller) or not app.config.battery_limits_managed
+                or (self.battery_sync_task and not self.battery_sync_task.done())):
+            return
+        desired = (app.config.daily["battery_min_soc"], app.config.daily["battery_max_soc"])
+        interval = 60 if app.battery_limits_confirmed == desired else 30
+        if (self.battery_sync_last_revision == self.battery_sync_revision
+                and monotonic() - self.battery_sync_last < interval):
+            return
+        self.battery_sync_last = monotonic()
+        self.battery_sync_last_revision = self.battery_sync_revision
+        self.battery_sync_task = self.hass.async_create_background_task(
+            self._async_sync_battery(desired, self.battery_sync_revision), "EOS battery limits sync")
+
+    async def _async_sync_battery(self, desired, revision):
+        error = None
+        try:
+            await self.hass.async_add_executor_job(
+                self.app.config.eos.set_battery_limits,
+                self.app.config.options["battery_resource"], *desired)
+        except Exception as caught:
+            error = caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            current = (self.app.config.daily["battery_min_soc"], self.app.config.daily["battery_max_soc"])
+            if revision == self.battery_sync_revision and desired == current:
+                if error is None:
+                    self.app.battery_limits_confirmed = desired
+                    self.app.battery_limits_confirmed_at = datetime.now(timezone.utc)
+                    self.app.errors.pop("battery_limits", None)
+                else:
+                    self.app.battery_limits_confirmed = None
+                    self.app.battery_limits_confirmed_at = None
+                    self.app.errors["battery_limits"] = type(error).__name__
+                snapshot = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
+                self.async_set_updated_data({**(self.data or {}), **snapshot})
+            self.battery_sync_task = None
+            if revision != self.battery_sync_revision or desired != current:
+                self._schedule_battery_sync()
 
     def _schedule_eos_polling(self):
         if not isinstance(self.app, Controller):
@@ -167,12 +217,20 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         if not hasattr(self.app,"change_vehicle_settings"):
                             raise ValueError("No vehicle fleet configured")
                         self.app.change_vehicle_settings(identity,{key:value for key,value in settings.items() if key!="vehicle_id"})
+                        if settings.keys() & {"battery_min_soc", "battery_max_soc"}:
+                            self.battery_sync_revision += 1
+                            self.app.battery_limits_confirmed = None
+                            self.app.battery_limits_confirmed_at = None
                         settings=None
                     if settings is not None:
                         values = daily_settings({**self.app.config.daily, **settings},
                                                 self.app.config.options["regulation_interval_s"])
                         manage_limits = bool(settings.keys() & {"battery_min_soc", "battery_max_soc"})
                         self.app.config.update(values, manage_battery_limits=manage_limits)
+                        if manage_limits:
+                            self.battery_sync_revision += 1
+                            self.app.battery_limits_confirmed = None
+                            self.app.battery_limits_confirmed_at = None
                         if hasattr(self.app,"persist_primary_settings"):
                             self.app.persist_primary_settings()
                         if manage_limits:
@@ -186,6 +244,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 result = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
                 self.async_set_updated_data(result)
                 raise
+            self._schedule_battery_sync()
             self.async_set_updated_data(result)
 
     def _accounting(self):
@@ -259,6 +318,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         # Mark shutdown before waiting for an in-flight tick, so a service
         # disappearing during HA shutdown does not clear the saved user intent.
         self.closing = True
+        if self.battery_sync_task and not self.battery_sync_task.done():
+            self.battery_sync_task.cancel()
         for task in self.eos_poll_tasks.values():
             if not task.done():
                 task.cancel()

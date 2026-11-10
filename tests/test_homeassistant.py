@@ -747,8 +747,10 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator = EnergyCoordinator(self.hass,self.entry,app)
         coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
         await EnergyNumber(coordinator,"battery_min_soc").async_set_native_value(30)
+        await coordinator.battery_sync_task
         config.eos.set_battery_limits.assert_called_once_with("battery1",30,100)
         await EnergyNumber(coordinator,"battery_max_soc").async_set_native_value(90)
+        await coordinator.battery_sync_task
         config.eos.set_battery_limits.assert_called_with("battery1",30,90)
         self.assertFalse(app.armed)
         self.assertTrue(EnergyBinarySensor(coordinator,"battery_limits_confirmed").is_on)
@@ -763,10 +765,46 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator = EnergyCoordinator(self.hass,self.entry,app)
         coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
         await coordinator.async_change(settings={"battery_min_soc":30,"battery_max_soc":90})
+        await coordinator.battery_sync_task
         self.assertEqual(coordinator.data["settings"]["battery_min_soc"],30)
         self.assertFalse(EnergyBinarySensor(coordinator,"battery_limits_confirmed").is_on)
         self.assertTrue(EnergyBinarySensor(coordinator,"problem").is_on)
         self.assertTrue(Configuration(dict(DEFAULTS),ha,self.directory).battery_limits_managed)
+
+    async def test_slow_battery_sync_does_not_block_changes_and_newest_limits_win(self):
+        from threading import Event
+        started, finish = Event(), Event()
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS), ha, self.directory)
+        config.eos = Mock()
+        calls = []
+
+        def sync(_resource, minimum, maximum):
+            calls.append((minimum, maximum))
+            if len(calls) == 1:
+                started.set()
+                if not finish.wait(5):
+                    raise TimeoutError("test did not release first EOS update")
+
+        config.eos.set_battery_limits.side_effect = sync
+        app = Controller(ha, config)
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        try:
+            await coordinator.async_change(settings={"battery_min_soc": 30})
+            first = coordinator.battery_sync_task
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(settings={"battery_min_soc": 40}), timeout=2)
+            await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+            self.assertFalse(coordinator.data["battery_limits"]["confirmed"])
+        finally:
+            finish.set()
+        await asyncio.wait_for(first, timeout=3)
+        if coordinator.battery_sync_task is not None:
+            await asyncio.wait_for(coordinator.battery_sync_task, timeout=3)
+        self.assertEqual(calls, [(30, 100), (40, 100)])
+        self.assertEqual(app.battery_limits_confirmed, (40, 100))
+        self.assertTrue(coordinator.data["battery_limits"]["confirmed"])
 
     async def test_failed_local_save_does_not_write_eos_or_claim_changed_limits(self):
         ha = Mock()

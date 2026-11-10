@@ -16,6 +16,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Langsame InfluxDB-Historienabfragen blockieren keine Steuerungsänderungen mehr.
 - EOS-Abfragen für Einspeisetarif und Akku-Kostenparameter blockieren die Steuerung nicht mehr; bei zwischenzeitlich geänderten Kosteneinstellungen werden veraltete Antworten verworfen.
 - EOS-Plan und Prognose werden unabhängig vom Steuerungslauf abgerufen; geplante Stopps und die zeitlich begrenzte Nutzung des letzten gültigen Plans bleiben wirksam.
+- Akku-SoC-Grenzen werden im Hintergrund an EOS übertragen. Zwischenzeitlich geänderte Grenzen bleiben unbestätigt und werden anschließend erneut übertragen.
 - Parallele Konfigurationsänderungen derselben EOS-Instanz aus der Integration werden serialisiert, damit sich Geräteänderungen nicht gegenseitig überschreiben.
 - Ein bereits gespeichertes InfluxDB-Passwort wird nicht als Vorgabe im Konfigurationsformular ausgegeben.
 
