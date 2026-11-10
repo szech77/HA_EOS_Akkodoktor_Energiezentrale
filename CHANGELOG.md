@@ -14,6 +14,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 - Veraltete oder ungültig datierte Akkumesswerte werden nicht als aktuelle Werte für die Steuerung verwendet.
 - Langsame InfluxDB-Historienabfragen blockieren keine Steuerungsänderungen mehr.
+- EOS-Abfragen für Einspeisetarif und Akku-Kostenparameter blockieren die Steuerung nicht mehr; bei zwischenzeitlich geänderten Kosteneinstellungen werden veraltete Antworten verworfen.
 - Parallele Konfigurationsänderungen derselben EOS-Instanz aus der Integration werden serialisiert, damit sich Geräteänderungen nicht gegenseitig überschreiben.
 - Ein bereits gespeichertes InfluxDB-Passwort wird nicht als Vorgabe im Konfigurationsformular ausgegeben.
 

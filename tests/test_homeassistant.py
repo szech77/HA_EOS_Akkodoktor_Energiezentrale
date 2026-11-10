@@ -91,6 +91,75 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         app.release.assert_not_called()
         app.remember_control.assert_not_called()
 
+    async def test_slow_accounting_refresh_does_not_block_control_or_apply_stale_settings(self):
+        from threading import Event
+        from zoneinfo import ZoneInfo
+        from custom_components.eos_energiezentrale.energy.accounting import Accounting
+
+        coordinator, app = self.controller()
+        coordinator.accounting = Accounting(self.directory, ZoneInfo("Europe/Berlin"))
+        started, finish = Event(), Event()
+
+        def delayed_tariff(_now):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS accounting request")
+            return {"constant_ct": 8.2}
+
+        app.config.eos.feedin_accounting.side_effect = delayed_tariff
+        app.config.eos.battery_accounting.return_value = {
+            "capacity_wh": 11000, "charge_efficiency": .95, "discharge_efficiency": .95}
+        try:
+            await coordinator._async_update_data()
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+            await asyncio.wait_for(coordinator.async_accounting({"settings": {"pv_price_source": "manual", "pv_price_ct": 12}}), timeout=2)
+            self.assertEqual(coordinator.accounting.pv_price(), 12)
+        finally:
+            finish.set()
+        await asyncio.wait_for(coordinator.accounting_refresh_task, timeout=3)
+        self.assertIsNone(coordinator.accounting.pv_tariff)
+        self.assertEqual(coordinator.accounting.pv_price(), 12)
+
+    async def test_accounting_refresh_applies_valid_eos_results_after_control_tick(self):
+        from zoneinfo import ZoneInfo
+        from custom_components.eos_energiezentrale.energy.accounting import Accounting
+
+        coordinator, app = self.controller()
+        coordinator.accounting = Accounting(self.directory, ZoneInfo("Europe/Berlin"))
+        app.config.eos.feedin_accounting.return_value = {"constant_ct": 8.2}
+        app.config.eos.battery_accounting.return_value = {
+            "capacity_wh": 11000, "charge_efficiency": .95, "discharge_efficiency": .95}
+        await coordinator._async_update_data()
+        await asyncio.wait_for(coordinator.accounting_refresh_task, timeout=3)
+        self.assertEqual(coordinator.accounting.pv_price(), 8.2)
+        self.assertEqual(coordinator.accounting.effective()["capacity_wh"], 11000)
+
+    async def test_shutdown_does_not_wait_for_slow_accounting_request(self):
+        from threading import Event
+        from zoneinfo import ZoneInfo
+        from custom_components.eos_energiezentrale.energy.accounting import Accounting
+
+        coordinator, app = self.controller()
+        coordinator.accounting = Accounting(self.directory, ZoneInfo("Europe/Berlin"))
+        started, finish = Event(), Event()
+
+        def delayed_tariff(_now):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS request")
+            return {"constant_ct": 8.2}
+
+        app.config.eos.feedin_accounting.side_effect = delayed_tariff
+        try:
+            await coordinator._async_update_data()
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_stop(), timeout=2)
+            self.assertTrue(coordinator.closing)
+            self.assertIsNone(coordinator.accounting.pv_tariff)
+        finally:
+            finish.set()
+
     async def test_cost_settings_are_persisted_and_reported_via_authenticated_api(self):
         from zoneinfo import ZoneInfo
         coordinator, app = self.controller()

@@ -1,6 +1,6 @@
 """Serialize all controller work outside Home Assistant's event loop."""
 import asyncio
-from copy import deepcopy
+from copy import copy, deepcopy
 from datetime import datetime, timezone
 from functools import partial
 import logging
@@ -31,6 +31,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.influx_error = False
         self.accounting = None
         self.accounting_cache = {}
+        self.accounting_refresh_task = None
+        self.accounting_revision = 0
 
     def _tick(self):
         with self.app.lock:
@@ -67,7 +69,6 @@ class EnergyCoordinator(DataUpdateCoordinator):
             result = self.app.snapshot(now)
             try:
                 ledger = self._accounting()
-                ledger.refresh_eos(self.app.config.eos, self.app.config.options["battery_resource"], now)
                 ledger.observe(result["live"], result.get("vehicles", []))
                 result["accounting"] = ledger.report({"period":"day"}, now)
                 self.app.errors.pop("accounting", None)
@@ -83,9 +84,38 @@ class EnergyCoordinator(DataUpdateCoordinator):
             if self.closing:
                 return self.data
             try:
-                return await self.hass.async_add_executor_job(self._tick)
+                result = await self.hass.async_add_executor_job(self._tick)
             except (OSError, ValueError) as error:
                 raise UpdateFailed("Local controller unavailable") from error
+            self._schedule_accounting_refresh()
+            return result
+
+    def _schedule_accounting_refresh(self):
+        """Refresh accounting data without holding the device-control lock."""
+        ledger = self.accounting
+        if not isinstance(ledger, Accounting) or (self.accounting_refresh_task and not self.accounting_refresh_task.done()):
+            return
+        detached = copy(ledger)
+        detached.settings = deepcopy(ledger.settings)
+        settings = deepcopy(ledger.settings)
+        self.accounting_refresh_task = self.hass.async_create_background_task(
+            self._async_refresh_accounting(ledger, detached, settings, self.accounting_revision), "EOS accounting refresh")
+
+    async def _async_refresh_accounting(self, ledger, detached, settings, revision):
+        try:
+            await self.hass.async_add_executor_job(
+                detached.refresh_eos, self.app.config.eos,
+                self.app.config.options["battery_resource"], datetime.now(timezone.utc))
+        except Exception:
+            _LOGGER.exception("EOS accounting refresh failed")
+            return
+        async with self.work_lock:
+            if (self.closing or self.accounting is not ledger or ledger.settings != settings
+                    or self.accounting_revision != revision):
+                return
+            for key in ("last_eos_attempt", "eos_battery", "eos_error",
+                        "last_pv_attempt", "pv_tariff", "pv_error"):
+                setattr(ledger, key, getattr(detached, key))
 
     async def async_change(self, *, enabled=None, settings=None):
         async with self.work_lock:
@@ -136,6 +166,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     if values.keys() != {"settings"}:
                         raise ValueError("Unexpected settings fields")
                     ledger.configure(values["settings"])
+                    self.accounting_revision += 1
                     return {"ok":True}
                 return ledger.report(values, datetime.now(timezone.utc))
             result = await self.hass.async_add_executor_job(read)
@@ -191,5 +222,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         # Mark shutdown before waiting for an in-flight tick, so a service
         # disappearing during HA shutdown does not clear the saved user intent.
         self.closing = True
+        if self.accounting_refresh_task and not self.accounting_refresh_task.done():
+            self.accounting_refresh_task.cancel()
         async with self.work_lock:
             await self.hass.async_add_executor_job(partial(self.app.set_armed, False, persist=False))
