@@ -14,7 +14,6 @@ from custom_components.eos_energiezentrale.energy.contracts import UnsupportedFe
 from custom_components.eos_energiezentrale.energy.domain import BatteryCommand
 from custom_components.eos_energiezentrale.energy.drivers import BATTERY_DRIVERS
 from test_energy import NOW
-from test_plugins import row
 
 
 def receive(connection, count):
@@ -33,13 +32,24 @@ class Inverter(socketserver.TCPServer):
     def __init__(self, model_address):
         super().__init__(("127.0.0.1", 0), Request)
         self.registers = {40000: 0x5375, 40001: 0x6E53,
-                          40002: 1, 40003: model_address - 40004,
-                          model_address: 124, model_address + 1: 24}
+                          40002: 1, 40003: 65,
+                          40069: 160, 40070: 88,
+                          40159: 113, 40160: model_address - 40161,
+                          model_address: 124, model_address + 1: 24,
+                          model_address + 26: 65535, model_address + 27: 0}
+        self.mppt = 40069
         self.base = model_address + 2
         manufacturer = b"Fronius".ljust(32, b"\0")
         self.registers.update({40004 + index: value for index, value in enumerate(struct.unpack(">16H", manufacturer))})
         self.registers.update({self.base + index: 0 for index in range(24)})
-        self.registers.update({self.base: 5000, self.base + 23: 65534})
+        self.registers.update({self.base: 5000, self.base + 23: 65534,
+                               self.base + 6: 5500, self.base + 20: 65534})
+        self.registers.update({40071 + index: 0 for index in range(88)})
+        self.registers[40077] = 4
+        for index in range(4):
+            start = 40079 + index * 20
+            self.registers[start] = index + 1
+            self.registers[start + 11] = (900, 1100, 1500, 0)[index]
         self.writes = []
         self.reject = False
         self.ignore_writes = False
@@ -76,7 +86,6 @@ def inverter(address=40342, export=False):
         thread = Thread(target=server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
         thread.start()
         params = {"host": "127.0.0.1", "port": server.server_address[1],
-                  "soc": "sensor.soc", "charge_power": "sensor.charge", "discharge_power": "sensor.discharge",
                   "grid_discharge_supported": export}
         driver = BATTERY_DRIVERS["fronius_modbus"](None, params)
         try:
@@ -179,22 +188,102 @@ def test_rejected_and_unconfirmed_commands_are_failures():
         assert server.registers[server.base + 3] == 0
 
 
-def test_sensor_freshness_and_units_are_preserved_without_network_io():
-    with inverter() as (driver, server):
-        states = {"sensor.soc": row(55, "%"), "sensor.charge": row(1.5, "kW"),
-                  "sensor.discharge": row(0, "W")}
-        measured = driver.read(states, NOW)
+@pytest.mark.parametrize("address", [40342, 40352])
+def test_telemetry_is_read_directly_without_ha_entities(address):
+    with inverter(address) as (driver, server):
+        measured = driver.read({}, NOW)
         assert (measured.soc, measured.charge, measured.discharge) == (55, 1500, 0)
-        measured = driver.read(states, NOW + timedelta(seconds=120))
-        assert (measured.soc, measured.charge, measured.discharge) == (None, None, None)
-        assert driver.model is None and not server.writes
+        assert (measured.soc_sample, measured.charge_sample, measured.discharge_sample) == (NOW, NOW, NOW)
+        assert all(not identity for identity in driver.ids.values())
+        assert not server.writes
+
+
+def test_telemetry_reads_new_values_on_each_poll():
+    with inverter() as (driver, server):
+        measured = driver.read({}, NOW)
+        assert (measured.soc, measured.charge, measured.discharge) == (55, 1500, 0)
+        server.registers[server.base + 6] = 5700
+        server.registers[40130] = 0
+        server.registers[40150] = 2500
+        later = NOW + timedelta(seconds=120)
+        measured = driver.read({}, later)
+        assert (measured.soc, measured.charge, measured.discharge) == (57, 0, 2500)
+        assert measured.discharge_sample == later
+        server.reject = True
+        with pytest.raises(ModbusError):
+            driver.read({}, later + timedelta(seconds=20))
+
+
+@pytest.mark.parametrize("offset,value", [(6, 65535), (20, 32768), (6, 10001)])
+def test_invalid_soc_is_unknown_not_zero(offset, value):
+    with inverter() as (driver, server):
+        server.registers[server.base + offset] = value
+        measured = driver.read({}, NOW)
+        assert measured.soc is None and measured.soc_sample is None
+        assert measured.charge == 1500
+
+
+@pytest.mark.parametrize("register,value", [(40130, 65535), (40073, 32768), (40073, 5)])
+def test_invalid_power_and_scale_are_unknown(register, value):
+    with inverter() as (driver, server):
+        server.registers[register] = value
+        measured = driver.read({}, NOW)
+        assert measured.charge is None and measured.charge_sample is None
+
+
+def test_power_scaling_uses_unsigned_words_and_channel_ids():
+    with inverter() as (driver, server):
+        server.registers[40073] = 65535  # -1 power scale
+        server.registers[40119] = 4     # Swap storage channels: classify by ID.
+        server.registers[40139] = 3
+        server.registers[40130] = 40000  # uint16, not signed int16
+        server.registers[40150] = 15000
+        measured = driver.read({}, NOW)
+        assert (measured.charge, measured.discharge) == (1500, 4000)
+
+
+def test_missing_battery_channel_never_uses_pv_power():
+    with inverter() as (driver, server):
+        server.registers[40119] = 5  # No channel 3.
+        measured = driver.read({}, NOW)
+        assert measured.charge is None
+        assert measured.discharge == 0
+
+
+@pytest.mark.parametrize("raw,expected", [(0, 0), (10000, 100)])
+def test_soc_endpoints_and_idle_power_are_valid(raw, expected):
+    with inverter() as (driver, server):
+        server.registers[server.base + 6] = raw
+        server.registers[40130] = 0
+        measured = driver.read({}, NOW)
+        assert (measured.soc, measured.charge, measured.discharge) == (expected, 0, 0)
+        assert measured.soc_sample == NOW
+
+
+def test_missing_mppt_still_allows_returning_storage_control_to_auto():
+    with inverter() as (driver, server):
+        server.registers[40069] = 999  # No model 160.
+        server.registers[server.base + 3] = 3
+        with pytest.raises(ModbusError):
+            driver.read({}, NOW)
+        assert not server.writes
+        driver.release({})
+        assert server.registers[server.base + 3] == 0
+
+
+@pytest.mark.parametrize("register,value", [(40070, 89), (40077, 3), (40139, 3)])
+def test_inconsistent_mppt_layout_is_rejected(register, value):
+    with inverter() as (driver, server):
+        server.registers[register] = value
+        with pytest.raises(ModbusError):
+            driver.read({}, NOW)
+        assert not server.writes
 
 
 @pytest.mark.parametrize("override", [{"port": 0}, {"port": 502.5}, {"unit_id": 0}, {"unit_id": 248},
                                       {"host": "http://inverter"}, {"host": "host/path"}, {"host": "a\nb"}])
 def test_bad_connection_settings_fail_without_connecting(override):
-    params = {"host": "inverter.local", "soc": "sensor.soc", "charge_power": "sensor.charge",
-              "discharge_power": "sensor.discharge", **override}
+    params = {"host": "inverter.local", **override}
     with patch("socket.create_connection") as connect, pytest.raises(ValueError):
         BATTERY_DRIVERS["fronius_modbus"](None, params)
     connect.assert_not_called()

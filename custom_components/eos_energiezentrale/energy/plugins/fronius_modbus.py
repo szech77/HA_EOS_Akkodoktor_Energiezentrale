@@ -1,4 +1,4 @@
-"""Direct GEN24 SunSpec model 124 control; telemetry uses configured HA sensors.
+"""Direct GEN24 SunSpec model 124 control and model 124/160 telemetry.
 
 Register offsets follow https://github.com/sunspec/models/blob/master/json/model_124.json
 and https://manuals.fronius.com/html/4204102649/en-US.html .
@@ -8,7 +8,6 @@ from math import floor
 import re
 
 from .._modbus_tcp import ModbusTCP, ModbusError
-from ..clients import reading, report_time
 from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginField, PluginInfo
 from ..plugin_parameters import parameters
 
@@ -23,9 +22,6 @@ class FroniusModbus(BatteryDriver):
         PluginField("host", "Modbus host / IP", "text"),
         PluginField("port", "Modbus TCP port", "number", default=502),
         PluginField("unit_id", "Modbus unit ID", "number", default=1),
-        PluginField("soc", "Battery SoC", domains=("sensor",)),
-        PluginField("charge_power", "Battery charging power", domains=("sensor",)),
-        PluginField("discharge_power", "Battery discharging power", domains=("sensor",)),
         PluginField("grid_discharge_supported", "Allow forced grid export", "boolean", default=False),
     )
 
@@ -41,21 +37,52 @@ class FroniusModbus(BatteryDriver):
         for key, maximum in (("port", 65535), ("unit_id", 247)):
             if values[key] != int(values[key]) or not 1 <= values[key] <= maximum:
                 raise ValueError("Invalid Modbus " + key)
-        self.ids = {key: values[key] for key in ("soc", "charge_power", "discharge_power")}
-        self.ids["mode"] = ""  # No HA control entity: writes use the Modbus connection.
+        self.ids = {key: "" for key in ("soc", "charge_power", "discharge_power", "mode")}
         self.features = BatteryFeatures(grid_discharge=values["grid_discharge_supported"])
         self.client = ModbusTCP(host, int(values["port"]), int(values["unit_id"]))
         self.model = None
+        self.mppt = None
         self.original_grid = None
 
     def _read(self, states, now):
-        return BatteryReading(
-            reading(states, self.ids["soc"], now, "soc", 120),
-            reading(states, self.ids["charge_power"], now, "power", 120),
-            reading(states, self.ids["discharge_power"], now, "power", 120),
-            report_time(states, self.ids["soc"]),
-            report_time(states, self.ids["charge_power"]),
-            report_time(states, self.ids["discharge_power"]))
+        storage = self._storage()
+        soc = self._scaled(storage[6], storage[20], 100)
+        charge, discharge = self._powers()
+        # Timestamp a successful live poll, never a cached value. `now` is the
+        # acquisition start, so it remains conservative while requests complete.
+        return BatteryReading(soc, charge, discharge,
+                              now if soc is not None else None,
+                              now if charge is not None else None,
+                              now if discharge is not None else None)
+
+    @staticmethod
+    def _scaled(raw, scale, maximum):
+        factor = signed(scale)
+        if raw == 65535 or not -4 <= factor <= 4:
+            return None
+        value = raw * 10 ** factor
+        return value if 0 <= value <= maximum else None
+
+    def _powers(self):
+        if self.mppt is None:
+            raise ModbusError("SunSpec MPPT model 160 missing")
+        address, length = self.mppt
+        header = self.client.read(address, 10)
+        count = header[8]
+        if (header[:2] != [160, length] or not 1 <= count <= 16
+                or length != 8 + count * 20):
+            self.model = self.mppt = None
+            raise ModbusError("Invalid SunSpec MPPT model layout")
+        powers = {}
+        for index in range(count):
+            module = self.client.read(address + 10 + index * 20, 20)
+            identity = module[0]
+            # Fronius: MPP1/2 are PV, MPP3 storage charging, MPP4 discharging.
+            if identity in (3, 4):
+                if identity in powers:
+                    raise ModbusError("Duplicate SunSpec battery channel")
+                powers[identity] = self._scaled(module[11], header[4], 1000000)
+        return powers.get(3), powers.get(4)
 
     def _storage(self):
         # Fronius uses wire address 40000 for the SunSpec signature. Walk model
@@ -75,17 +102,20 @@ class FroniusModbus(BatteryDriver):
                     manufacturer = self.client.read(address + 2, 16)
                     name = b"".join(word.to_bytes(2, "big") for word in manufacturer).rstrip(b"\0 ")
                     fronius = name.lower() == b"fronius"
+                if identity == 160:
+                    self.mppt = (address, length)
                 if identity == 124:
                     if not fronius or length != 24:
                         raise ModbusError("Unsupported SunSpec storage model length")
                     self.model = address
+                if self.model is not None and self.mppt is not None:
                     break
                 address += 2 + length
             if self.model is None:
                 raise ModbusError("SunSpec storage model 124 missing")
         values = self.client.read(self.model, 26)
         if values[:2] != [124, 24]:
-            self.model = None
+            self.model = self.mppt = None
             raise ModbusError("SunSpec storage model changed; control refused")
         return values[2:]
 

@@ -142,8 +142,9 @@ eingetragen. **kW** bezeichnet Leistung, **kWh** eine Energiemenge.
 
 Alternativ zur Fronius-Steuerung über zusätzliche HA-Entitäten steht das neue
 Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`) zur Auswahl.
-Es steuert direkt den GEN24; SoC und Leistungsrückmeldungen kommen weiterhin aus
-HA-Sensoren. Einrichtung, Voraussetzungen und Rückgabe an die Automatik stehen in
+Es steuert direkt den GEN24 und liest SoC sowie Lade-/Entladeleistung ebenfalls
+über Modbus. Zusätzliche Speichersensoren sind nicht erforderlich. Einrichtung,
+DC-Leistungsdefinition und Rückgabe an die Automatik stehen in
 [Hardware-Plugins](PLUGINS.md#fronius-gen24-direkt-über-modbus-tcp).
 
 Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug

@@ -236,6 +236,19 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['data']['battery_type'],'generic')
         self.assertFalse(json.loads(result['data']['wallbox_parameters'])['phase_switching'])
 
+    async def test_direct_fronius_setup_needs_only_connection_settings_without_network_access(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
+        with patch('socket.create_connection') as connect:
+            selected=await flow.async_step_hardware({"battery_type":"fronius_modbus","wallbox_type":"none","vehicle_name":"E-Auto"})
+            schema={str(key):value for key,value in selected['data_schema'].schema.items()}
+            fields=schema['battery_parameters'].serialize()['selector']['object']['fields']
+            self.assertEqual(set(fields),{'host','port','unit_id','grid_discharge_supported'})
+            result=await flow.async_step_hardware_parameters({'battery_parameters':{'host':'inverter.local'}})
+            self.assertEqual(result['type'],'create_entry')
+            self.assertEqual(result['data']['battery_type'],'fronius_modbus')
+            self.assertEqual(json.loads(result['data']['battery_parameters'])['host'],'inverter.local')
+            connect.assert_not_called()
+
     async def test_common_battery_form_does_not_edit_hidden_wallboxes_in_a_fleet(self):
         from test_fleet import definitions
         self.hass.config_entries.async_update_entry(self.entry,options={"vehicles":json.dumps(definitions())})

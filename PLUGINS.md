@@ -28,7 +28,7 @@ nur die gemeinsame Speicherkonfiguration.
 ## Fronius GEN24 direkt über Modbus TCP
 
 Das zusätzliche Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`)
-schreibt direkt auf den Wechselrichter. Die bisherige Auswahl `fronius` für
+liest und schreibt direkt auf dem Wechselrichter. Die bisherige Auswahl `fronius` für
 `callifo/fronius_modbus` bleibt bestehen. Keine automatische Umstellung bestehender
 Installationen; die neue Auswahl bewusst in der Hardwarekonfiguration vornehmen.
 
@@ -36,7 +36,7 @@ Voraussetzungen am GEN24: Modbus TCP aktivieren (üblicherweise Port 502),
 **Wechselrichter-Steuerung über Modbus** zulassen und die Steuerprioritäten passend
 setzen. Für Netzladung zusätzlich **Batterieladung aus dem öffentlichen Netz** erlauben.
 Nur eine Anwendung darf den Speicher regeln; parallele EOS-/evcc-/HA-Regler deaktivieren.
-Es werden GEN24-Geräte mit SunSpec-Speichermodell 124 unterstützt, keine RTU-Verbindung
+Es werden GEN24-Geräte mit SunSpec-Modellen 124 und 160 unterstützt, keine RTU-Verbindung
 und keine ausschließliche 700er-Modellimplementierung.
 
 | Feld | Bedeutung |
@@ -44,8 +44,6 @@ und keine ausschließliche 700er-Modellimplementierung.
 | `host` | Lokale IP-Adresse oder Hostname des GEN24; keine URL. |
 | `port` | TCP-Port, Standard 502. |
 | `unit_id` | Unit-ID, Standard 1 (GEN24-Wechselrichter); keine Broadcast-ID 0. |
-| `soc` | HA-Sensor mit aktuellem SoC in %. |
-| `charge_power` / `discharge_power` | Separate HA-Sensoren mit nichtnegativen Leistungen in W/kW; Rückmeldungen müssen jünger als 120 Sekunden sein. |
 | `grid_discharge_supported` | Erzwungene Netzentladung ausdrücklich erlauben, Standard aus. Die globale Exportfreigabe gilt zusätzlich. |
 
 Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Felder):
@@ -55,18 +53,33 @@ Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Fel
   "host": "192.0.2.10",
   "port": 502,
   "unit_id": 1,
-  "soc": "sensor.speicher_soc",
-  "charge_power": "sensor.speicher_ladeleistung",
-  "discharge_power": "sensor.speicher_entladeleistung",
   "grid_discharge_supported": false
 }
 ```
 
-Die Sensoren können aus vorhandenen HA-Integrationen oder eigenen Templates stammen.
-Sie müssen echte Messungen liefern; bei einer vorzeichenbehafteten Speicherleistung
-sind daraus zwei getrennte nichtnegative Leistungswerte zu bilden. Das Plugin liest
-keine Leistungstelemetrie über Modbus und benötigt keine `select`-/`number`-Entitäten
-der zusätzlichen Fronius-Modbus-Integration. Keine neuen Python-Abhängigkeiten nötig.
+SoC (`ChaState`) wird einschließlich Skalierungsfaktor aus Modell 124 gelesen.
+Lade- und Entladeleistung stammen aus `DCW` der Batteriekanäle 3 und 4 in Modell 160;
+PV-Kanäle 1 und 2 werden nicht als Batterie ausgewertet. Modelladressen und
+Kanalanordnung werden erkannt. Alle drei Werte werden bei jedem Poll neu abgefragt,
+ohne gespeicherte Altwerte als aktuelle Messungen auszugeben. Fehlende Kanäle,
+nicht implementierte Register oder ungültige Skalierung bleiben unbekannt; echte
+Nullwerte bleiben gültig. Verbindungs- und Protokollfehler lösen den bestehenden
+Steuerfehlerpfad einschließlich Rückgabeversuch aus.
+
+Für dieses Plugin sind keine zusätzlichen HA-Sensoren, Templates oder
+`select`-/`number`-Steuerentitäten erforderlich. Die allgemeinen PV-, Netz- und
+Hausverbrauchssensoren der Energiezentrale bleiben unverändert. Keine neuen
+Python-Abhängigkeiten nötig. Ältere Entwicklungsversionen dieses Plugins mit
+Sensorparametern bei der Einrichtung erneut auswählen bzw. die veralteten
+`soc`-/`charge_power`-/`discharge_power`-Parameter entfernen.
+
+Fronius meldet die Batteriekanäle als **DC-Leistung**. Die Werte werden ohne
+unbelegte Umrechnung in W übernommen. In einer AC-basierten Hausbilanz können
+Umwandlungsverluste deshalb Abweichungen der Quellenzuordnung und Kostenbewertung
+verursachen; größere Bilanzabweichungen bleiben gemäß Bilanzmodell unbekannt.
+Ältere Influx-Historien der bisherigen externen Speichersensoren werden diesem
+Plugin ohne deren Entitätszuordnung nicht automatisch zugerechnet. Die interne
+Aufzeichnung der neuen Live-Messungen läuft regulär weiter.
 
 Der Treiber erkennt SunSpec-Modell 124 dynamisch und prüft den Hersteller. Er liest
 Referenzleistung und Skalierungsfaktoren vom Gerät. Lade-/Entladegrenzen werden
@@ -90,7 +103,8 @@ mit einem lokalen TCP-Geräteemulator getestet; ein Test am eigenen GEN24 inklus
 Verbindungsausfall und Automatik-Rückgabe ist vor unbeaufsichtigtem Betrieb erforderlich.
 
 Referenzen: [Fronius GEN24 Modbus-Handbuch](https://manuals.fronius.com/html/4204102649/en-US.html),
-[SunSpec-Modell 124](https://github.com/sunspec/models/blob/master/json/model_124.json).
+[SunSpec-Modell 124](https://github.com/sunspec/models/blob/master/json/model_124.json),
+[SunSpec-Modell 160](https://github.com/sunspec/models/blob/master/json/model_160.json).
 
 ## Generische HA-Wallbox
 
