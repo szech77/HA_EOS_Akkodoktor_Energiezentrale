@@ -74,6 +74,53 @@
           "battery_parameters": "Speicher / Wechselrichter",
           "wallbox_parameters": "Wallbox"
         }
+      },
+      "devices": {
+        "title": "Geräte und Plugins",
+        "description": "Jedes Gerät erhält ein eigenes Plugin. Wallboxen werden zusammen mit ihrem Fahrzeug konfiguriert.",
+        "menu_options": {
+          "device_add": "Gerät hinzufügen",
+          "device_edit": "Gerät bearbeiten",
+          "device_remove": "Gerät entfernen",
+          "device_done": "Weiter"
+        }
+      },
+      "device_add": {
+        "title": "Gerät hinzufügen",
+        "data": {
+          "kind": "Geräteart"
+        }
+      },
+      "device_edit": {
+        "title": "Gerät bearbeiten",
+        "data": {
+          "device_id": "Gerät"
+        }
+      },
+      "device_remove": {
+        "title": "Gerät entfernen",
+        "data": {
+          "device_id": "Gerät"
+        }
+      },
+      "device_plugin": {
+        "title": "Plugin für dieses Gerät auswählen",
+        "data": {
+          "plugin": "Plugin"
+        }
+      },
+      "device_parameters": {
+        "title": "Gerät konfigurieren",
+        "description": "Bei mehreren Speichern sind Kapazität und Leistungsgrenzen je Gerät erforderlich. Die Speichergruppe bleibt eine Näherung für EOS. Nur ein Gerät darf den gemeinsamen Netzzähler liefern. Für weitere Geräte den Dialog erneut öffnen. Eine neue ID beim Hinzufügen vergeben; beim Bearbeiten beibehalten.",
+        "data": {
+          "id": "Stabile Geräte-ID",
+          "name": "Gerätename",
+          "grid_source": "Dieses Gerät liefert den gemeinsamen Netzanschlusswert",
+          "capacity_wh": "Speicherkapazität (Wh; 0: unbekannt / nur Einzelspeicher)",
+          "charge_w": "Maximale Ladeleistung dieses Speichers (W)",
+          "discharge_w": "Maximale Entladeleistung dieses Speichers (W)",
+          "parameters": "Plugin-Einstellungen"
+        }
       }
     },
     "error": {
@@ -82,7 +129,9 @@
     },
     "abort": {
       "already_configured": "Bereits eingerichtet",
-      "invalid_plugin": "Plugin nicht verfügbar oder ungültig."
+      "invalid_plugin": "Plugin nicht verfügbar oder ungültig.",
+      "no_devices": "Keine Geräte eingerichtet.",
+      "use_device_manager": "Diese Anlage nutzt die Geräteliste. Bitte unter Geräte das gewünschte Gerät bearbeiten."
     }
   },
   "options": {
@@ -157,10 +206,11 @@
         "menu_options": {
           "connection": "EOS-Verbindung",
           "sensors": "Quellsensoren",
-          "hardware": "Hardware-Treiber",
+          "hardware": "Geräte und Plugins",
           "limits": "Technische Grenzen",
           "history": "InfluxDB-Verlauf (optional)",
-          "vehicles": "Fahrzeuge und Wallboxen"
+          "vehicles": "Fahrzeuge und Wallboxen",
+          "devices": "Geräte"
         }
       },
       "vehicles": {
@@ -266,6 +316,52 @@
           "wallbox_parameters": "Plugin-Einstellungen"
         },
         "description": "Jeder Ladepunkt benötigt eigene Entitäten und eine bereits in EOS angelegte Ressource. Die stabile ID beim Bearbeiten beibehalten."
+      },
+      "devices": {
+        "title": "Geräte und Plugins",
+        "description": "Jedes Gerät erhält ein eigenes Plugin. Wallboxen werden zusammen mit ihrem Fahrzeug konfiguriert.",
+        "menu_options": {
+          "device_add": "Gerät hinzufügen",
+          "device_edit": "Gerät bearbeiten",
+          "device_remove": "Gerät entfernen"
+        }
+      },
+      "device_add": {
+        "title": "Gerät hinzufügen",
+        "data": {
+          "kind": "Geräteart"
+        }
+      },
+      "device_edit": {
+        "title": "Gerät bearbeiten",
+        "data": {
+          "device_id": "Gerät"
+        }
+      },
+      "device_remove": {
+        "title": "Gerät entfernen",
+        "data": {
+          "device_id": "Gerät"
+        }
+      },
+      "device_plugin": {
+        "title": "Plugin für dieses Gerät auswählen",
+        "data": {
+          "plugin": "Plugin"
+        }
+      },
+      "device_parameters": {
+        "title": "Gerät konfigurieren",
+        "description": "Bei mehreren Speichern sind Kapazität und Leistungsgrenzen je Gerät erforderlich. Die Speichergruppe bleibt eine Näherung für EOS. Nur ein Gerät darf den gemeinsamen Netzzähler liefern. Für weitere Geräte den Dialog erneut öffnen. Eine neue ID beim Hinzufügen vergeben; beim Bearbeiten beibehalten.",
+        "data": {
+          "id": "Stabile Geräte-ID",
+          "name": "Gerätename",
+          "grid_source": "Dieses Gerät liefert den gemeinsamen Netzanschlusswert",
+          "capacity_wh": "Speicherkapazität (Wh; 0: unbekannt / nur Einzelspeicher)",
+          "charge_w": "Maximale Ladeleistung dieses Speichers (W)",
+          "discharge_w": "Maximale Entladeleistung dieses Speichers (W)",
+          "parameters": "Plugin-Einstellungen"
+        }
       }
     },
     "error": {
@@ -274,7 +370,9 @@
     },
     "abort": {
       "no_vehicles": "Kein Fahrzeug vorhanden",
-      "invalid_plugin": "Plugin nicht verfügbar oder ungültig."
+      "invalid_plugin": "Plugin nicht verfügbar oder ungültig.",
+      "no_devices": "Keine Geräte eingerichtet.",
+      "use_device_manager": "Diese Anlage nutzt die Geräteliste. Bitte unter Geräte das gewünschte Gerät bearbeiten."
     }
   },
   "entity": {
@@ -404,6 +502,15 @@
       },
       "battery_limits_confirmed": {
         "name": "EOS-Speichergrenzen bestätigt"
+      }
+    }
+  },
+  "selector": {
+    "device_kind": {
+      "options": {
+        "battery": "Speicher / Hybrid-Wechselrichter",
+        "inverter": "PV-Wechselrichter ohne Batterie",
+        "wallbox": "Wallbox mit Fahrzeug"
       }
     }
   }

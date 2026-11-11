@@ -862,9 +862,14 @@ dynamisch erkannte Plugins angebunden. Fronius und NRGkick sind eigene Plugins;
 zusätzlich gibt es für beide Gerätearten **Generic Home Assistant**. Plugin-Name,
 Fähigkeiten (z. B. Phasenumschaltung) und Konfigurationsfelder kommen vom Plugin.
 
-Bei der Hardwareeinrichtung zuerst das Plugin auswählen, anschließend dessen
-Entitäten und Parameter konfigurieren. Weitere Wallboxen werden unter
-**Konfigurieren → Fahrzeuge und Wallboxen → Hinzufügen** über denselben Ablauf angelegt.
+Unter **Konfigurieren → Geräte → Gerät hinzufügen** zuerst die Geräteart,
+dann das Plugin dieses Geräts auswählen und dessen Parameter konfigurieren.
+Jeder Speicher, PV-Wechselrichter und jede Wallbox kann ein anderes Plugin nutzen.
+Bearbeiten und Entfernen sind im selben Menü möglich; Wallboxen werden zusammen
+mit ihrem Fahrzeug eingerichtet. Bestehende Fronius-Untergeräte werden beim ersten
+Speichern in die allgemeine Geräteliste übernommen. Bis zu acht Speicher/PV-Geräte
+sind möglich. Die gemeinsame EOS-Planung mehrerer Batterien bleibt eine Näherung,
+die in der Verbindungsansicht gekennzeichnet ist.
 Die typisierten Felder erscheinen als native HA-Auswahlfelder; JSON für die gesamte
 Hardwarekonfiguration ist im normalen Ablauf nicht mehr erforderlich.
 

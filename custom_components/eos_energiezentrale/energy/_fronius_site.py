@@ -1,7 +1,7 @@
 """One metered Fronius site with read-only PV units and a storage pool."""
 from dataclasses import dataclass
 import ipaddress
-from math import floor, isfinite
+from math import floor
 import re
 from datetime import datetime, timezone
 
@@ -9,6 +9,7 @@ from .contracts import BatteryReading, Measurement
 from .domain import BatteryCommand
 from ._modbus_tcp import ModbusError
 from .sanitiser import bounded
+from .storage_pool import distribute, total
 
 
 def capacity(value, optional=False):
@@ -34,27 +35,6 @@ class Device:
     battery: bool
     capacity_wh: float | None
 
-
-def total(values):
-    return sum(values) if values and all(value is not None and isfinite(value) for value in values) else None
-
-
-def distribute(watts, caps, weights):
-    """Weighted water filling with hard per-device caps; never exceed a budget."""
-    result=[0.]*len(caps)
-    remaining=min(watts,sum(caps))
-    active={index for index in range(len(caps)) if caps[index]>0 and weights[index]>0}
-    while active and remaining>0:
-        weight=sum(weights[index] for index in active)
-        capped={index for index in active if remaining*weights[index]/weight>=caps[index]}
-        if not capped:
-            for index in active: result[index]=remaining*weights[index]/weight
-            break
-        for index in capped:
-            result[index]=caps[index]
-            remaining-=caps[index]
-        active-=capped
-    return result
 
 
 class FroniusSite:
@@ -90,7 +70,7 @@ class FroniusSite:
         if self.capacity_wh is not None and self.capacity_wh>1000000:
             raise ValueError('Combined battery capacity exceeds 1000000 Wh')
         self.summary={'inverter_count':len(self.devices),'battery_count':len(self.batteries),
-                      'capacity_wh':self.capacity_wh,'devices':[]}
+                      'capacity_wh':self.capacity_wh,'devices':[], 'approximate':len(self.batteries)>1}
         self.direction=None
         self.targets={}
         self.control_states={}

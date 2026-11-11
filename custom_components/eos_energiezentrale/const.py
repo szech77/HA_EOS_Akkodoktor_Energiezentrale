@@ -9,6 +9,7 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'battery_type': 'fronius',
  'wallbox_type': 'nrgkick',
  'battery_parameters': '{}',
+ 'devices': 'null',
  'wallbox_parameters': '{}',
  'pv_entity': 'sensor.fronius_symo_gen24_pv_power',
  'house_entity': 'sensor.solarnet_leistung_verbrauch',

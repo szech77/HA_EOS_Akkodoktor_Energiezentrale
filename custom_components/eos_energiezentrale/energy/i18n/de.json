@@ -1,8 +1,8 @@
 {
   "locale": "de-DE",
   "messages": {
-    "plugin.fronius_site": "Fronius-Wechselrichtergruppe",
-    "plugin.site_summary": "{inverters} Wechselrichter · {batteries} Batteriespeicher",
+    "plugin.fronius_site": "Anlagengeräte",
+    "plugin.site_summary": "{inverters} Geräte, {batteries} Speicher",
     "plugin.site_capacity": "Gemeinsame Speicherkapazität: {capacity}",
     "plugin.primary_inverter": "Hauptwechselrichter",
     "plugin.site_storage": "PV und Speicher",
@@ -339,6 +339,10 @@
     "measurement.battery_soc": "Speicher-SoC",
     "measurement.battery_charge": "Speicher-Ladeleistung",
     "measurement.battery_discharge": "Speicher-Entladeleistung",
-    "measurement.car": "Fahrzeug-Ladeleistung"
+    "measurement.car": "Fahrzeug-Ladeleistung",
+    "measurement.inverter_ac": "Wechselrichter AC-Leistung",
+    "plugin.pool_approximation": "Speichergruppe: angenäherte EOS-Planung",
+    "plugin.pool_limitations": "Unterschiedliche SoC-Stände und Gerätegrenzen können die geplante Gesamtleistung begrenzen.",
+    "plugin.no_storage": "Kein Speicher eingerichtet. Vor dem Aktivieren der Steuerung ein Speicher-Plugin hinzufügen."
   }
 }

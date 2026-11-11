@@ -11,6 +11,7 @@ from .validation import validate_options
 from .plugin_forms import PluginFormMixin, plugin_choices, plugin_object, configured
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
+from .device_forms import DeviceFormMixin
 
 
 class OptionalWeatherSelector(selector.EntitySelector):
@@ -64,11 +65,11 @@ async def check(hass, values, connection=False):
     return {}
 
 
-class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(DeviceFormMixin, PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self):
-        self.values = {**DEFAULTS, "wallbox_type":"none", "heat_entity":"", "car_soc_entity":""}
+        self.values = {**DEFAULTS, "devices":"[]", "wallbox_type":"none", "heat_entity":"", "car_soc_entity":""}
 
     async def async_step_user(self, user_input=None):
         await self.async_set_unique_id(DOMAIN)
@@ -101,6 +102,8 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         return await self._step("sensors", user_input)
 
     async def async_step_hardware(self, user_input=None):
+        if user_input is None:
+            return await self.async_step_devices()
         return await self._hardware_selection(user_input)
 
     async def async_step_limits(self, user_input=None):
@@ -115,9 +118,10 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         return OptionsFlow()
 
 
-class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
+class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=[*GROUPS,"vehicles"])
+        return self.async_show_menu(step_id="init", menu_options=[
+            'devices' if group=='hardware' else group for group in GROUPS]+['vehicles'])
 
     async def _step(self, group, user_input):
         if group == "sensors" and user_input is not None:
@@ -139,6 +143,8 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
         return await self._step("sensors", user_input)
 
     async def async_step_hardware(self, user_input=None):
+        if user_input is None:
+            return await self.async_step_devices()
         return await self._hardware_selection(user_input)
 
     async def async_step_limits(self, user_input=None):

@@ -610,7 +610,9 @@ function fillForm() {
 function batteryGroupDetails(group) {
   if(!group)return '';
   return `<dt>${th('plugin.fronius_site')}</dt><dd>${th('plugin.site_summary',{inverters:group.inverter_count,batteries:group.battery_count})}${valid(group.capacity_wh)?' · '+th('plugin.site_capacity',{capacity:decimal(group.capacity_wh/1000,2)+' '+t('unit.kwh')}):''}</dd>`+
-    (group.devices??[]).map(device=>`<dt>${html(device.name==='primary'?t('plugin.primary_inverter'):device.name)}</dt><dd>${th(device.battery?'plugin.site_storage':'plugin.site_pv')} · PV ${html(power(device.solar))} · AC ${valid(device.ac)&&device.ac<0?'− ':''}${html(power(device.ac))}${device.battery?' · SoC '+html(percent(device.soc)):''} · ${th(device.available?'plugin.site_available':'plugin.site_unavailable')}</dd>`).join('');
+    (group.devices??[]).map(device=>`<dt>${html(device.name==='primary'?t('plugin.primary_inverter'):device.name)}</dt><dd>${device.plugin?html(device.plugin.name)+' · ':''}${th(device.battery?'plugin.site_storage':'plugin.site_pv')} · PV ${html(power(device.solar))} · AC ${valid(device.ac)&&device.ac<0?'− ':''}${html(power(device.ac))}${device.battery?' · SoC '+html(percent(device.soc)):''} · ${th(device.available?'plugin.site_available':'plugin.site_unavailable')}</dd>`).join('')+
+    (group.approximate?`<dt>${th('plugin.pool_approximation')}</dt><dd>${th('plugin.pool_limitations')}</dd>`:'')+
+    (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');
 }
 
 function settings() {

@@ -28,3 +28,21 @@ test('missing measurements stay unknown and device names are escaped',()=>{
  assert.match(result,/&lt;device&gt;/);assert.doesNotMatch(result,/<device>/);
  assert.match(result,/SoC —/);assert.match(result,/Messwerte unvollständig/);
 });
+
+test('mixed plugin names are escaped and the pooled EOS approximation is visible',()=>{
+ for(const language of ['de','en']){
+  const ctx=fixture(language);
+  const result=ctx.batteryGroupDetails({inverter_count:2,battery_count:2,approximate:true,devices:[
+   {name:'storage',battery:true,plugin:{name:'<custom plugin>'},soc:55,available:true}]});
+  assert.match(result,/&lt;custom plugin&gt;/);assert.doesNotMatch(result,/<custom plugin>/);
+  assert.match(result,language==='de'?/angenäherte EOS-Planung/:/approximate EOS planning/);
+ }
+});
+
+test('removing the last battery shows a configuration hint',()=>{
+ for(const language of ['de','en']){
+  const ctx=fixture(language);
+  const result=ctx.batteryGroupDetails({inverter_count:0,battery_count:0,devices:[]});
+  assert.match(result,language==='de'?/Kein Speicher eingerichtet/:/No battery configured/);
+ }
+});

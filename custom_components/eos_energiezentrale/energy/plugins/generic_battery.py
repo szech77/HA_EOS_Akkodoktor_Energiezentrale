@@ -1,7 +1,7 @@
 """Generic battery: normalized mode and power helpers can trigger HA automations."""
 from math import floor
 
-from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginInfo, PluginField
+from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginInfo, PluginField, Measurement
 from ..clients import reading, report_time
 from ..domain import number
 from ..device_io import confirmed_state
@@ -18,6 +18,9 @@ class GenericBattery(BatteryDriver):
         PluginField("mode","Control mode",domains=("select","input_select")),
         PluginField("charge_limit","Charge power limit",domains=("number","input_number")),
         PluginField("discharge_limit","Discharge power limit",domains=("number","input_number")),
+        PluginField('solar','PV power (optional)',required=False,default='',domains=('sensor',)),
+        PluginField('inverter_ac','Signed inverter AC power (optional)',required=False,default='',domains=('sensor',)),
+        PluginField('grid','Signed grid power (optional)',required=False,default='',domains=('sensor',)),
         PluginField("grid_charge_supported","Supports forced grid charging","boolean",default=True),
         PluginField("grid_discharge_supported","Supports forced grid export","boolean",default=False),
         PluginField("mode_map","Mode mapping","json",default={"auto":"auto","limits":"limits","block_discharge":"block_discharge","grid_charge":"grid_charge","grid_discharge":"grid_discharge"}),
@@ -28,6 +31,8 @@ class GenericBattery(BatteryDriver):
         self.ha = ha
         self.ids = {key:values[key] for key in ("soc","charge_power","discharge_power","mode","discharge_limit")}
         self.ids.update(pv_limit=values["charge_limit"],grid_charge=values["charge_limit"],grid_discharge=values["discharge_limit"])
+        self.ids.update({key:values[key] for key in ('solar','inverter_ac','grid') if values[key]})
+        self.measurement_keys=BatteryDriver.measurement_keys+tuple(key for key in ('solar','inverter_ac','grid') if values[key])
         self.features = BatteryFeatures(grid_charge=values["grid_charge_supported"],grid_discharge=values["grid_discharge_supported"])
         self.soc_scale = values["soc_scale"]
         self.modes = values["mode_map"]
@@ -43,7 +48,20 @@ class GenericBattery(BatteryDriver):
                               reading(states,self.ids["discharge_power"],now,"power",120),
                               report_time(states,self.ids["soc"]),
                               report_time(states,self.ids["charge_power"]),
-                              report_time(states,self.ids["discharge_power"]))
+                              report_time(states,self.ids["discharge_power"]),
+                              {key:Measurement(reading(states,self.ids[key],now,'power',45),report_time(states,self.ids[key]))
+                               for key in ('solar','inverter_ac','grid') if key in self.ids})
+
+    def power_limits(self,states):
+        result=[]
+        for key in ('pv_limit','discharge_limit'):
+            attrs=self.ha.state(self.ids[key]).get('attributes',{})
+            scale={'W':1,'kW':1000}.get(attrs.get('unit_of_measurement'))
+            maximum=number(attrs.get('max'))
+            if scale is None or maximum is None or not 0<maximum*scale<=1000000:
+                raise ValueError('Battery hardware power limit unavailable')
+            result.append(maximum*scale)
+        return tuple(result)
 
     def _mode(self,mode):
         entity = self.ids["mode"]

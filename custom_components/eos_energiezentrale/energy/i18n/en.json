@@ -1,8 +1,8 @@
 {
   "locale": "en-GB",
   "messages": {
-    "plugin.fronius_site": "Fronius inverter group",
-    "plugin.site_summary": "{inverters} inverters · {batteries} batteries",
+    "plugin.fronius_site": "Site devices",
+    "plugin.site_summary": "{inverters} devices, {batteries} batteries",
     "plugin.site_capacity": "Combined battery capacity: {capacity}",
     "plugin.primary_inverter": "Primary inverter",
     "plugin.site_storage": "PV and battery",
@@ -339,6 +339,10 @@
     "measurement.battery_soc": "Battery SoC",
     "measurement.battery_charge": "Battery charging power",
     "measurement.battery_discharge": "Battery discharging power",
-    "measurement.car": "Vehicle charging power"
+    "measurement.car": "Vehicle charging power",
+    "measurement.inverter_ac": "Inverter AC power",
+    "plugin.pool_approximation": "Storage group: approximate EOS planning",
+    "plugin.pool_limitations": "Different states of charge and device limits may reduce the planned total power.",
+    "plugin.no_storage": "No battery configured. Add a battery plugin before enabling control."
   }
 }

@@ -28,7 +28,7 @@ def checked_host(host):
 
 
 class FroniusModbus(BatteryDriver):
-    measurement_keys = BatteryDriver.measurement_keys + ("solar", "grid", "house_total")
+    measurement_keys = BatteryDriver.measurement_keys + ("solar", "grid", "house_total", "inverter_ac")
     info = PluginInfo("fronius_modbus", "Fronius GEN24 direct Modbus TCP", "battery")
     configuration = (
         PluginField("host", "Modbus host / IP", "text"),
@@ -61,7 +61,7 @@ class FroniusModbus(BatteryDriver):
         self.grid_invert = values["grid_meter_invert"]
         self.grid_model = None
         if not values["grid_meter_enabled"]:
-            self.measurement_keys = BatteryDriver.measurement_keys + ("solar",)
+            self.measurement_keys = BatteryDriver.measurement_keys + ("solar", "inverter_ac")
         self.model = None
         self.mppt = None
         self.inverter_model = None
@@ -74,8 +74,21 @@ class FroniusModbus(BatteryDriver):
             self.site=FroniusSite(self,values['additional_inverters'],primary_capacity,type(self))
 
     @property
+    def device_key(self):
+        from .._fronius_site import endpoint
+        host,port,unit=endpoint(self)
+        return f'modbus:{host}:{port}:{unit}'
+
+    @property
     def requires_dispatch_context(self):
         return self.site is not None and len(self.site.batteries)>1
+
+    def power_limits(self, states):
+        data=self._storage()
+        reference=self._scaled(data[0],data[16],1000000)
+        if reference is None or reference<=0:
+            raise ModbusError('Storage power reference missing')
+        return reference,reference
 
     @property
     def site_summary(self):
@@ -94,6 +107,12 @@ class FroniusModbus(BatteryDriver):
         pv_channels = [powers[key] for key in (1, 2) if key in powers]
         solar = sum(pv_channels) if pv_channels and all(value is not None for value in pv_channels) else None
         extra = {"solar": Measurement(solar, now if solar is not None else None)}
+        try:
+            ac = self._ac_power()
+        except (OSError, ValueError):
+            self._invalidate()
+            ac = None
+        extra['inverter_ac'] = Measurement(ac, now if ac is not None else None)
         if include_grid and "grid" in self.measurement_keys:
             try:
                 grid = self._grid_power()
@@ -102,11 +121,6 @@ class FroniusModbus(BatteryDriver):
                 self.grid_model = None
                 grid = None
             extra["grid"] = Measurement(grid, now if grid is not None else None)
-            try:
-                ac = self._ac_power()
-            except (OSError, ValueError):
-                self.model = self.mppt = self.inverter_model = None
-                ac = None
             # AC output already includes PV, storage discharge and grid charging.
             # Do not mix DC battery/PV channels into this AC balance.
             house = ac + grid if ac is not None and grid is not None else None
