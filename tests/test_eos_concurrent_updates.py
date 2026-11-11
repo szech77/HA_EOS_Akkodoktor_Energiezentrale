@@ -130,3 +130,27 @@ def test_unconfirmed_socket_limit_is_rejected():
     with patch('custom_components.eos_energiezentrale.energy.clients.request',return_value={
             'devices':{'electric_vehicles':{'ev1':{'max_charge_power_w':11000}}}}),pytest.raises(ValueError):
         EOS('http://eos').set_vehicle_charging_limits('ev1',2300,1380,(0.,1.),True)
+
+
+@pytest.mark.parametrize('charge,discharge',[(8000,9000),(0,9000),(8000,0),(0,0)])
+def test_combined_storage_capacity_and_power_sync_preserves_other_resources_and_settings(charge,discharge):
+    config={'devices':{'batteries':{
+        'pool':{'capacity_wh':10000,'charging_efficiency':.95,'other':'preserved'},
+        'other':{'capacity_wh':5000}}}}
+    def request(_url,*,method='GET',payload=None):
+        if method=='PUT': config['devices']['batteries']=deepcopy(payload)
+        return deepcopy(config)
+    with patch('custom_components.eos_energiezentrale.energy.clients.request',side_effect=request):
+        EOS('http://eos').set_battery_limits('pool',20,90,30000,charge,discharge)
+    pool=config['devices']['batteries']['pool']
+    assert pool['capacity_wh']==30000
+    assert (pool['max_charge_power_w'],pool['max_discharge_power_w'])==(charge,discharge)
+    assert (pool['min_soc_percentage'],pool['max_soc_percentage'])==(20,90)
+    assert pool['charging_efficiency']==.95 and pool['other']=='preserved'
+    assert config['devices']['batteries']['other']=={'capacity_wh':5000}
+
+
+def test_unconfirmed_group_capacity_is_rejected():
+    configured={'devices':{'batteries':{'pool':{'capacity_wh':10000}}}}
+    with patch('custom_components.eos_energiezentrale.energy.clients.request',return_value=configured),pytest.raises(ValueError):
+        EOS('http://eos').set_battery_limits('pool',20,90,30000,8000,9000)

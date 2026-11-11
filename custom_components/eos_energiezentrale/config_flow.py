@@ -11,6 +11,8 @@ from .validation import validate_options
 from .plugin_forms import PluginFormMixin, plugin_choices, plugin_object, configured
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
+from .device_forms import DeviceFormMixin
+from .flow_menus import show_menu
 
 
 class OptionalWeatherSelector(selector.EntitySelector):
@@ -64,11 +66,11 @@ async def check(hass, values, connection=False):
     return {}
 
 
-class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(DeviceFormMixin, PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self):
-        self.values = {**DEFAULTS, "wallbox_type":"none", "heat_entity":"", "car_soc_entity":""}
+        self.values = {**DEFAULTS, "devices":"[]", "wallbox_type":"none", "heat_entity":"", "car_soc_entity":""}
 
     async def async_step_user(self, user_input=None):
         await self.async_set_unique_id(DOMAIN)
@@ -101,6 +103,8 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         return await self._step("sensors", user_input)
 
     async def async_step_hardware(self, user_input=None):
+        if user_input is None:
+            return await self.async_step_devices()
         return await self._hardware_selection(user_input)
 
     async def async_step_limits(self, user_input=None):
@@ -115,9 +119,10 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         return OptionsFlow()
 
 
-class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
+class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=[*GROUPS,"vehicles"])
+        return await show_menu(self,'options','init',[
+            'devices' if group=='hardware' else group for group in GROUPS]+['vehicles'])
 
     async def _step(self, group, user_input):
         if group == "sensors" and user_input is not None:
@@ -139,6 +144,8 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
         return await self._step("sensors", user_input)
 
     async def async_step_hardware(self, user_input=None):
+        if user_input is None:
+            return await self.async_step_devices()
         return await self._hardware_selection(user_input)
 
     async def async_step_limits(self, user_input=None):
@@ -164,7 +171,7 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
         return rows
 
     async def async_step_vehicles(self,user_input=None):
-        return self.async_show_menu(step_id="vehicles",menu_options=["vehicle_add","vehicle_edit","vehicle_remove"])
+        return await show_menu(self,'options','vehicles',["vehicle_add","vehicle_edit","vehicle_remove"])
 
     async def _choose_vehicle(self,step_id,user_input):
         rows=self._vehicle_rows()
@@ -191,6 +198,7 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
         return self.async_create_entry(title="",data=values)
 
     async def async_step_vehicle_add(self,user_input=None):
+        self._listed_device=None
         if user_input is not None and "id" in user_input:
             return await self._vehicle_form("vehicle_add",None,user_input)
         self._editing_vehicle = None
@@ -198,13 +206,19 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
 
     async def async_step_vehicle_plugin(self,user_input=None):
         if user_input is not None:
+            if user_input.get('remove_device') and getattr(self,'_listed_device',None):
+                return await self.async_step_device_delete()
             plugin = user_input.get("wallbox_type")
             if plugin not in WALLBOX_DRIVERS or plugin=="none":
                 return self.async_abort(reason="invalid_plugin")
             self._vehicle_plugin = plugin
             return await self.async_step_vehicle_parameters()
-        return self.async_show_form(step_id="vehicle_plugin",data_schema=vol.Schema({
-            vol.Required("wallbox_type"):selector.SelectSelector(selector.SelectSelectorConfig(options=plugin_choices(WALLBOX_DRIVERS,False)))}))
+        old=next((row for row in self._vehicle_rows() if row['id']==self._editing_vehicle),{})
+        marker=vol.Required('wallbox_type',**({'default':old['wallbox_type']} if old else {}))
+        fields={marker:selector.SelectSelector(selector.SelectSelectorConfig(options=plugin_choices(WALLBOX_DRIVERS,False)))}
+        if old and getattr(self,'_listed_device',None):
+            fields[vol.Optional('remove_device',default=False)]=selector.BooleanSelector()
+        return self.async_show_form(step_id='vehicle_plugin',data_schema=vol.Schema(fields))
 
     async def async_step_vehicle_parameters(self,user_input=None):
         return await self._vehicle_form("vehicle_parameters",self._editing_vehicle,user_input)
@@ -215,6 +229,7 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
             if not isinstance(selected,str):
                 return selected
             self._editing_vehicle=selected
+            self._listed_device='vehicle:'+selected
             return await self.async_step_vehicle_plugin()
         return await self._vehicle_form("vehicle_edit",self._editing_vehicle,user_input)
 

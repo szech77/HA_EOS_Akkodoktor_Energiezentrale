@@ -218,10 +218,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
 
     def _schedule_battery_sync(self):
         app = self.app
-        if (not isinstance(app, Controller) or not app.config.battery_limits_managed
+        if (not isinstance(app, Controller) or not app.battery_sync_managed()
                 or (self.battery_sync_task and not self.battery_sync_task.done())):
             return
-        desired = (app.config.daily["battery_min_soc"], app.config.daily["battery_max_soc"])
+        desired = app.battery_limits_request()
         interval = 60 if app.battery_limits_confirmed == desired else 30
         if (self.battery_sync_last_revision == self.battery_sync_revision
                 and monotonic() - self.battery_sync_last < interval):
@@ -242,7 +242,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         async with self.work_lock:
             if self.closing:
                 return
-            current = (self.app.config.daily["battery_min_soc"], self.app.config.daily["battery_max_soc"])
+            current = self.app.battery_limits_request()
             if revision == self.battery_sync_revision and desired == current:
                 if error is None:
                     self.app.battery_limits_confirmed = desired
@@ -370,6 +370,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
     def _accounting(self):
         if self.accounting is None:
             self.accounting = Accounting(self.app.config.directory, self.app.config.zone)
+        if isinstance(self.app,Controller):
+            self.accounting.capacity_override=self.app.battery_group_capacity()
         return self.accounting
 
     async def async_accounting(self, values):

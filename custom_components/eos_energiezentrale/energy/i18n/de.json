@@ -1,6 +1,14 @@
 {
   "locale": "de-DE",
   "messages": {
+    "plugin.fronius_site": "Anlagengeräte",
+    "plugin.site_summary": "{inverters} Geräte, {batteries} Speicher",
+    "plugin.site_capacity": "Gemeinsame Speicherkapazität: {capacity}",
+    "plugin.primary_inverter": "Hauptwechselrichter",
+    "plugin.site_storage": "PV und Speicher",
+    "plugin.site_pv": "Nur PV",
+    "plugin.site_available": "Messwerte verfügbar",
+    "plugin.site_unavailable": "Messwerte unvollständig",
     "settings.battery_pv_start": "PV-Ladestart bei geringem Überschuss aus dem Speicher unterstützen",
     "settings.battery_pv_min_soc": "Speicher-Untergrenze für den PV-Ladestart (%)",
     "settings.battery_pv_wait_s": "Anhaltender geringer Überschuss vor Ladestart (s)",
@@ -331,6 +339,10 @@
     "measurement.battery_soc": "Speicher-SoC",
     "measurement.battery_charge": "Speicher-Ladeleistung",
     "measurement.battery_discharge": "Speicher-Entladeleistung",
-    "measurement.car": "Fahrzeug-Ladeleistung"
+    "measurement.car": "Fahrzeug-Ladeleistung",
+    "measurement.inverter_ac": "Wechselrichter AC-Leistung",
+    "plugin.pool_approximation": "Speichergruppe: angenäherte EOS-Planung",
+    "plugin.pool_limitations": "Unterschiedliche SoC-Stände und Gerätegrenzen können die geplante Gesamtleistung begrenzen.",
+    "plugin.no_storage": "Kein Speicher eingerichtet. Vor dem Aktivieren der Steuerung ein Speicher-Plugin hinzufügen."
   }
 }

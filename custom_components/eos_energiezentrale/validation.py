@@ -53,7 +53,9 @@ def validate_options(options):
         value = number(options[key])
         if type(options[key]) is bool or value is None or not low <= value <= high:
             raise ValueError("Invalid technical limit")
-    for kind, registry in (("battery", BATTERY_DRIVERS), ("wallbox", WALLBOX_DRIVERS)):
+    from .energy.devices import battery_driver
+    battery_driver(options,None)
+    for kind, registry in (("wallbox", WALLBOX_DRIVERS),):
         if options[kind + "_type"] not in registry:
             raise ValueError("Unsupported hardware")
         registry[options[kind + "_type"]](None, json.loads(options[kind + "_parameters"]))

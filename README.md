@@ -140,6 +140,16 @@ eingetragen. **kW** bezeichnet Leistung, **kWh** eine Energiemenge.
 
 ### Hardware: Fronius-Speicher und NRGkick
 
+Das direkte Fronius-Modbus-Plugin unterstützt bis zu acht Wechselrichter mit
+eigenen IP-Adressen, Ports und Unit-IDs. An einem oder mehreren Geräten können
+Batterien hängen; reine PV-Wechselrichter werden nur gelesen. PV und AC-Leistung
+werden über alle Geräte summiert, der gemeinsame Netzanschlusszähler einmal
+ausgelesen. Mehrere Batterien erscheinen als gemeinsamer Speicher mit
+kapazitätsgewichtetem SoC und individuellen SoC-Grenzen bei der Steuerung.
+Die Gesamtkapazität und konfigurierten Gesamtleistungsbudgets werden an die
+vorhandene EOS-Speicherressource übergeben. Einrichtung und JSON-Beispiel stehen
+unter [Mehrere Wechselrichter und Batteriespeicher](PLUGINS.md#mehrere-wechselrichter-und-batteriespeicher).
+
 Für **NRGkick Gen2** steht das Plugin **NRGkick Gen2 local JSON API**
 (`nrgkick_local`) zur Verfügung. Es liest und steuert den NRGkick direkt über
 dessen lokale API. Zusätzliche HA-Wallbox-Sensoren oder Steuerentitäten sind dafür
@@ -170,9 +180,10 @@ Ein vorübergehender Ausfall einer eingerichteten Quelle wird separat angezeigt.
 
 Beim Plugin `fronius_modbus` können **PV-Leistung**, **Hausverbrauch** und
 **Netzleistung** gemeinsam leer bleiben. PV kommt aus den PV-Kanälen; Hausverbrauch
-wird aus GEN24-AC-Leistung und dem Netzanschlusszähler berechnet. Voraussetzung für
-die Hausbilanz: Der GEN24 erfasst alle Erzeuger an diesem Messpunkt. Bei weiteren
-Erzeugern einen eigenen Hausverbrauchssensor verwenden. Gemeint sind aktuelle
+wird aus der Summe der konfigurierten AC-Wechselrichterleistungen und dem
+Netzanschlusszähler berechnet. Weitere Fronius-Wechselrichter unter
+`additional_inverters` eintragen. Bei anderen, nicht erfassten Erzeugern einen
+eigenen Hausverbrauchssensor verwenden. Gemeint sind aktuelle
 Leistungen in W; ein kumulativer PV-Energiezähler in kWh ist hierfür nicht erforderlich.
 
 Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug
@@ -851,9 +862,16 @@ dynamisch erkannte Plugins angebunden. Fronius und NRGkick sind eigene Plugins;
 zusätzlich gibt es für beide Gerätearten **Generic Home Assistant**. Plugin-Name,
 Fähigkeiten (z. B. Phasenumschaltung) und Konfigurationsfelder kommen vom Plugin.
 
-Bei der Hardwareeinrichtung zuerst das Plugin auswählen, anschließend dessen
-Entitäten und Parameter konfigurieren. Weitere Wallboxen werden unter
-**Konfigurieren → Fahrzeuge und Wallboxen → Hinzufügen** über denselben Ablauf angelegt.
+Unter **Konfigurieren → Geräte → Gerät hinzufügen** zuerst die Geräteart,
+dann das Plugin dieses Geräts auswählen und dessen Parameter konfigurieren.
+Jeder Speicher, PV-Wechselrichter und jede Wallbox kann ein anderes Plugin nutzen.
+Vorhandene Geräte erscheinen dort direkt als Liste mit ihrem Namen. Einen Eintrag
+zum Bearbeiten auswählen; „Dieses Gerät entfernen“ in dessen Dialog löscht es nach
+Bestätigung. Neue Installationen beginnen mit leerer Liste. Wallboxen werden zusammen
+mit ihrem Fahrzeug eingerichtet. Bestehende Fronius-Untergeräte werden beim ersten
+Speichern in die allgemeine Geräteliste übernommen. Bis zu acht Speicher/PV-Geräte
+sind möglich. Die gemeinsame EOS-Planung mehrerer Batterien bleibt eine Näherung,
+die in der Verbindungsansicht gekennzeichnet ist.
 Die typisierten Felder erscheinen als native HA-Auswahlfelder; JSON für die gesamte
 Hardwarekonfiguration ist im normalen Ablauf nicht mehr erforderlich.
 

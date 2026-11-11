@@ -210,8 +210,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         flow=ConfigFlow();flow.hass=self.hass
         flow.values={**DEFAULTS,'wallbox_type':'none','heat_entity':'','car_soc_entity':''}
         result=await flow.async_step_sensors({key:flow.values[key] for key in ('pv_entity','house_entity','grid_entity','heat_entity','price_entity','car_soc_entity','car_soc_scale')})
-        self.assertEqual(result['step_id'],'hardware')
-        self.assertEqual({str(key) for key in result['data_schema'].schema},{'battery_type','wallbox_type','vehicle_name'})
+        self.assertEqual(result['step_id'],'devices')
         params=await flow.async_step_hardware({'battery_type':'fronius','wallbox_type':'none','vehicle_name':'E-Auto'})
         self.assertEqual(params['step_id'],'hardware_parameters')
         following=await flow.async_step_hardware_parameters({'battery_parameters':{}})
@@ -243,12 +242,37 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             schema={str(key):value for key,value in selected['data_schema'].schema.items()}
             fields=schema['battery_parameters'].serialize()['selector']['object']['fields']
             self.assertEqual(set(fields),{'host','port','unit_id','grid_discharge_supported',
-                                          'grid_meter_enabled','grid_meter_unit_id','grid_meter_invert'})
+                                          'grid_meter_enabled','grid_meter_unit_id','grid_meter_invert',
+                                          'battery_capacity_wh','additional_inverters','grid_meter_host','grid_meter_port'})
             result=await flow.async_step_hardware_parameters({'battery_parameters':{'host':'inverter.local'}})
             self.assertEqual(result['type'],'create_entry')
             self.assertEqual(result['data']['battery_type'],'fronius_modbus')
             self.assertEqual(json.loads(result['data']['battery_parameters'])['host'],'inverter.local')
             connect.assert_not_called()
+
+    async def test_multi_fronius_form_roundtrips_without_connecting_and_syncs_eos_group_capacity(self):
+        params={'host':'primary.local','battery_capacity_wh':10000,'additional_inverters':json.dumps({
+            'roof':{'host':'pv.local'},'garage':{'host':'battery.local','battery':True,'capacity_wh':20000}})}
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
+        with patch('socket.create_connection') as connect:
+            await flow.async_step_hardware({'battery_type':'fronius_modbus','wallbox_type':'none','vehicle_name':'E-Auto'})
+            result=await flow.async_step_hardware_parameters({'battery_parameters':params})
+            self.assertEqual(result['type'],'create_entry')
+            saved=json.loads(result['data']['battery_parameters'])
+            self.assertTrue(saved['additional_inverters']['garage']['battery'])
+            config=Configuration(result['data'],Mock(),self.directory)
+            connect.assert_not_called()
+        config.eos=Mock()
+        app=Controller(Mock(),config)
+        coordinator=EnergyCoordinator(self.hass,self.entry,app)
+        coordinator._schedule_battery_sync()
+        await coordinator.battery_sync_task
+        config.eos.set_battery_limits.assert_called_once_with('battery1',20,100,30000,
+            config.options['battery_charge_w'],config.options['battery_discharge_w'])
+        self.assertTrue(app.snapshot(datetime.now(timezone.utc))['battery_limits']['confirmed'])
+        ledger=coordinator._accounting()
+        ledger.eos_battery={'capacity_wh':10000,'charge_efficiency':.95,'discharge_efficiency':.95}
+        self.assertEqual(ledger.effective()['capacity_wh'],30000)
 
     async def test_general_source_fields_can_be_explicitly_cleared_for_plugin_sources(self):
         from custom_components.eos_energiezentrale.config_flow import schema_for
@@ -293,11 +317,190 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.hass.config_entries.async_update_entry(self.entry,options={"vehicles":json.dumps(definitions())})
         flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
         result=await flow.async_step_hardware()
+        self.assertEqual(result['step_id'],'devices')
+        result=await flow._hardware_selection()
         self.assertEqual({str(key) for key in result['data_schema'].schema},{'battery_type'})
         result=await flow.async_step_hardware({'battery_type':'fronius'})
         self.assertEqual({str(key) for key in result['data_schema'].schema},{'battery_parameters'})
         result=await flow.async_step_hardware_parameters({'battery_parameters':{}})
         self.assertEqual(json.loads(result['data']['vehicles']),definitions())
+
+    async def test_new_installation_device_list_starts_empty_and_returns_added_device_by_name(self):
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        empty=await flow.async_step_devices()
+        self.assertEqual(set(empty['menu_options']),{'device_add','device_done'})
+        await flow.async_step_device_add({'kind':'inverter'})
+        await flow.async_step_device_plugin({'plugin':'generic'})
+        result=await flow.async_step_device_parameters({'id':'roof','name':'Roof inverter','grid_source':False,
+            'parameters':{'solar':'sensor.pv','inverter_ac':'sensor.ac'}})
+        self.assertEqual(result['menu_options']['device_item_0'],'Roof inverter')
+        edit=await getattr(flow,'async_step_device_item_0')()
+        self.assertEqual(edit['step_id'],'device_plugin')
+        fields={str(key):value for key,value in edit['data_schema'].schema.items()}
+        self.assertIn('remove_device',fields)
+        result=await flow.async_step_device_plugin({'plugin':'generic','remove_device':True})
+        self.assertEqual(result['step_id'],'device_delete')
+        self.assertEqual(result['description_placeholders']['device'],'Roof inverter')
+        cancelled=await flow.async_step_device_delete({'confirm':False})
+        self.assertEqual(cancelled['menu_options']['device_item_0'],'Roof inverter')
+        await flow.async_step_device_item_0()
+        await flow.async_step_device_plugin({'plugin':'generic','remove_device':True})
+        removed=await flow.async_step_device_delete({'confirm':True})
+        self.assertEqual(set(removed['menu_options']),{'device_add','device_done'})
+        self.assertEqual(json.loads(flow.values['devices']),[])
+
+    async def test_native_options_flow_dispatches_device_list_and_confirmed_removal(self):
+        manager=self.hass.config_entries.options
+        with patch('homeassistant.config_entries._async_get_flow_handler',new=AsyncMock(return_value=ConfigFlow)), \
+                patch('socket.create_connection') as connect:
+            result=await manager.async_init(self.entry.entry_id)
+            flow_id=result['flow_id']
+            result=await manager.async_configure(flow_id,{'next_step_id':'devices'})
+            self.assertEqual(result['menu_options']['device_item_0'],'Primary')
+            self.assertIn('Wallbox',result['menu_options']['device_item_1'])
+            result=await manager.async_configure(flow_id,{'next_step_id':'device_item_0'})
+            self.assertEqual(result['step_id'],'device_plugin')
+            result=await manager.async_configure(flow_id,{'plugin':'fronius','remove_device':True})
+            self.assertEqual(result['step_id'],'device_delete')
+            result=await manager.async_configure(flow_id,{'confirm':True})
+            self.assertEqual(result['type'],'create_entry')
+            self.assertEqual(json.loads(self.entry.options['devices']),[])
+            self.assertEqual(self.entry.options['wallbox_type'],self.entry.data['wallbox_type'])
+            connect.assert_not_called()
+
+    async def test_listed_wallbox_can_be_removed_without_removing_storage(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+        flow.context={'entry_id':self.entry.entry_id}
+        menu=await flow.async_step_devices()
+        self.assertIn('device_item_1',menu['menu_options'])
+        edit=await flow.async_step_device_item_1()
+        self.assertEqual(edit['step_id'],'vehicle_plugin')
+        result=await flow.async_step_vehicle_plugin({'wallbox_type':'nrgkick','remove_device':True})
+        self.assertEqual(result['step_id'],'device_delete')
+        result=await flow.async_step_device_delete({'confirm':True})
+        self.assertEqual(result['data']['wallbox_type'],'none')
+        self.assertEqual(result['data']['battery_type'],self.entry.data['battery_type'])
+        self.assertEqual(result['data']['devices'],'null')
+
+    async def test_configuration_menus_send_visible_labels_without_frontend_translations(self):
+        for language,device,add,continue_label in (
+                ('de','Geräte','Gerät hinzufügen','Weiter'),('en','Devices','Add device','Continue')):
+            flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+            flow.context={'entry_id':self.entry.entry_id,'language':language}
+            init=await flow.async_step_init()
+            self.assertIsInstance(init['menu_options'],dict)
+            self.assertEqual(init['menu_options']['devices'],device)
+            menu=await flow.async_step_devices()
+            self.assertEqual(menu['menu_options']['device_add'],add)
+            self.assertEqual(set(menu['menu_options']),{'device_item_0','device_item_1','device_add'})
+            self.assertEqual(menu['menu_options']['device_item_0'],'Primary')
+            vehicles=await flow.async_step_vehicles()
+            self.assertTrue(all(vehicles['menu_options'].values()))
+            # Labels travel with the JSON response even if the browser still has
+            # translations from an older integration version.
+            payload=json.loads(json.dumps(menu['menu_options']))
+            self.assertEqual(payload['device_add'],add)
+            self.assertEqual(menu['data_schema']({'next_step_id':'device_add'}),{'next_step_id':'device_add'})
+            setup=ConfigFlow();setup.hass=self.hass;setup.context={'language':language}
+            after_save=await setup._save_devices([])
+            self.assertEqual(after_save['menu_options']['device_done'],continue_label)
+            self.assertTrue(all(after_save['menu_options'].values()))
+
+    async def test_menu_labels_use_ha_language_and_english_fallback_without_event_loop_io(self):
+        from threading import get_ident
+        from custom_components.eos_energiezentrale.flow_menus import _translations
+        _translations.cache_clear()
+        main_thread=get_ident();read=Path.read_text;threads=[]
+        def checked_read(path,*args,**kwargs):
+            threads.append(get_ident())
+            self.assertNotEqual(get_ident(),main_thread)
+            return read(path,*args,**kwargs)
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+        self.hass.config.language='de'
+        flow.context={'entry_id':self.entry.entry_id}
+        with patch.object(Path,'read_text',checked_read):
+            result=await flow.async_step_init()
+            self.assertEqual(result['menu_options']['devices'],'Geräte')
+            flow.context['language']='fr'
+            result=await flow.async_step_devices()
+            self.assertEqual(result['menu_options']['device_add'],'Add device')
+            flow.context['language']='de-DE'
+            result=await flow.async_step_devices()
+            self.assertEqual(result['menu_options']['device_add'],'Gerät hinzufügen')
+        self.assertTrue(threads)
+
+    async def test_device_manager_adds_edits_and_removes_plugins_independently(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
+        with patch('socket.create_connection') as connect:
+            menu=await flow.async_step_hardware()
+            self.assertEqual(menu['step_id'],'devices')
+            result=await flow.async_step_device_add({'kind':'inverter'})
+            self.assertEqual(result['step_id'],'device_plugin')
+            result=await flow.async_step_device_plugin({'plugin':'generic'})
+            self.assertEqual(result['step_id'],'device_parameters')
+            result=await flow.async_step_device_parameters({'id':'roof','name':'Roof','grid_source':False,
+                'parameters':{'solar':'sensor.roof_pv','inverter_ac':'sensor.roof_ac'}})
+            self.assertEqual(result['type'],'create_entry')
+            values=result['data'];rows=json.loads(values['devices'])
+            self.assertEqual([row['plugin'] for row in rows],['fronius','generic'])
+            self.assertEqual(values['wallbox_parameters'],self.entry.data['wallbox_parameters'])
+            self.hass.config_entries.async_update_entry(self.entry,options=values)
+            legacy=await flow.async_step_hardware({'battery_type':'fronius'})
+            self.assertEqual(legacy['reason'],'use_device_manager')
+            self.assertEqual(self.entry.options['devices'],values['devices'])
+            result=await flow.async_step_device_edit({'device_id':'roof'})
+            self.assertEqual(result['step_id'],'device_plugin')
+            result=await flow.async_step_device_plugin({'plugin':'fronius_modbus'})
+            control=next(value for key,value in result['data_schema'].schema.items() if str(key)=='parameters')
+            self.assertIn('host',control.config['fields'])
+            self.assertNotIn('solar',control.config['fields'])
+            result=await flow.async_step_device_parameters({'id':'roof','name':'Roof','grid_source':False,
+                'parameters':{'host':'roof.local'}})
+            values=result['data'];rows=json.loads(values['devices'])
+            self.assertEqual(rows[1]['plugin'],'fronius_modbus')
+            self.assertEqual(rows[1]['parameters']['host'],'roof.local')
+            self.hass.config_entries.async_update_entry(self.entry,options=values)
+            result=await flow.async_step_device_remove({'device_id':'roof'})
+            self.assertEqual([row['id'] for row in json.loads(result['data']['devices'])],['primary'])
+            self.assertEqual(result['data']['wallbox_parameters'],values['wallbox_parameters'])
+            connect.assert_not_called()
+
+    async def test_device_manager_rejects_duplicate_ids_without_replacing_an_existing_device(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
+        await flow.async_step_device_add({'kind':'inverter'})
+        await flow.async_step_device_plugin({'plugin':'generic'})
+        result=await flow.async_step_device_parameters({'id':'primary','name':'Duplicate','grid_source':False,
+            'parameters':{'solar':'sensor.pv','inverter_ac':'sensor.ac'}})
+        self.assertEqual(result['errors'],{'base':'invalid_config'})
+        self.assertNotIn('devices',self.entry.options)
+
+    async def test_first_setup_can_add_multiple_devices_before_continuing(self):
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'source':'user'}
+        with patch('socket.create_connection') as connect:
+            result=await flow.async_step_hardware()
+            self.assertEqual(result['step_id'],'devices')
+            await flow.async_step_device_add({'kind':'battery'})
+            await flow.async_step_device_plugin({'plugin':'fronius_modbus'})
+            result=await flow.async_step_device_parameters({'id':'main','name':'Main','grid_source':True,
+                'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,'parameters':{'host':'main.local'}})
+            self.assertEqual(result['step_id'],'devices')
+            await flow.async_step_device_add({'kind':'inverter'})
+            await flow.async_step_device_plugin({'plugin':'generic'})
+            await flow.async_step_device_parameters({'id':'roof','name':'Roof','grid_source':False,
+                'parameters':{'solar':'sensor.pv','inverter_ac':'sensor.ac'}})
+            result=await flow.async_step_device_done()
+            self.assertEqual(result['step_id'],'limits')
+            self.assertEqual(len(json.loads(flow.values['devices'])),2)
+            config=Configuration(flow.values,Mock(),self.directory)
+            self.assertEqual(len(config.battery.devices),2)
+            connect.assert_not_called()
+
+    async def test_device_manager_routes_each_wallbox_to_its_own_plugin(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
+        result=await flow.async_step_device_add({'kind':'wallbox'})
+        self.assertEqual(result['step_id'],'vehicle_plugin')
+        result=await flow.async_step_device_edit({'device_id':'vehicle:vehicle1'})
+        self.assertEqual(result['step_id'],'vehicle_plugin')
 
     async def test_wallbox_add_wizard_uses_selected_plugin_and_preserves_first_vehicle(self):
         flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}

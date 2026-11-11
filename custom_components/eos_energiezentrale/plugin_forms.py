@@ -52,6 +52,11 @@ class PluginFormMixin:
             if "battery_type" not in user_input:
                 return await self._step("hardware",user_input)
             selected = {**base,**user_input}
+            # Compatibility for existing clients submitting the single-device form.
+            # A legacy edit must never silently discard a configured device list.
+            if json.loads(base.get('devices','null')):
+                return self.async_abort(reason='use_device_manager')
+            selected['devices']='null'
             if selected["battery_type"] not in BATTERY_DRIVERS or selected["wallbox_type"] not in WALLBOX_DRIVERS:
                 return self.async_abort(reason="invalid_plugin")
             for kind in ("battery","wallbox"):
@@ -69,7 +74,7 @@ class PluginFormMixin:
         errors = {}
         if user_input is not None:
             try:
-                payload = {key:values[key] for key in ("battery_type","wallbox_type","vehicle_name")}
+                payload = {key:values[key] for key in ("battery_type","wallbox_type","vehicle_name","devices")}
                 for kind,registry in (("battery",BATTERY_DRIVERS),("wallbox",WALLBOX_DRIVERS)):
                     if kind=="wallbox" and self._fleet_configured():
                         payload[kind+"_parameters"] = values[kind+"_parameters"]

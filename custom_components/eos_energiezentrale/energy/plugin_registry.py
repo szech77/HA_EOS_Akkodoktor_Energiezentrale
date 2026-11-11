@@ -8,7 +8,7 @@ import pkgutil
 import re
 from types import MappingProxyType
 
-from .contracts import (API_VERSION, BatteryDriver, WallboxDriver, BatteryFeatures,
+from .contracts import (API_VERSION, BatteryDriver, WallboxDriver, InverterDriver, BatteryFeatures,
                         WallboxFeatures, PluginInfo, PluginField, PluginContractError)
 from .clients import ENTITY
 from .plugin_parameters import parameters
@@ -17,6 +17,7 @@ from .device_io import ScopedHardwareAdapter
 _LOGGER = logging.getLogger(__name__)
 IDENTIFIER = re.compile(r"[a-z][a-z0-9_]{0,47}\Z")
 METHODS = {"battery": {"_read":("self","states","now"),"_apply":("self","command","states"),"_release":("self","states")},
+           "inverter": {"_read":("self","states","now")},
            "wallbox": {"_read":("self","states","now"),"_pause":("self","state"),"_phase":("self","phases","state"),"_charge":("self","amps","state")}}
 
 
@@ -37,11 +38,11 @@ def validate_class(plugin):
             or not isinstance(info.kind,str) or info.kind not in METHODS or not isinstance(info.name,str)
             or not 1 <= len(info.name.strip()) <= 80 or any(ord(c)<32 or ord(c)==127 for c in info.name)):
         raise PluginContractError("Invalid plugin metadata/version")
-    base = BatteryDriver if info.kind=="battery" else WallboxDriver
+    base = {"battery":BatteryDriver,"wallbox":WallboxDriver,"inverter":InverterDriver}[info.kind]
     if not issubclass(plugin,base):
         raise PluginContractError("Plugin must implement the correct ABC")
     validate_measurement_keys(plugin)
-    for public in (("read","apply","release") if info.kind=="battery" else ("read","pause","phase","charge")):
+    for public in {"battery":("read","apply","release"),"wallbox":("read","pause","phase","charge"),"inverter":("read",)}[info.kind]:
         if getattr(plugin,public) is not getattr(base,public):
             raise PluginContractError("Plugins cannot bypass the sanitiser: "+public)
     for method,names in {"__init__":("self","ha","params"),**METHODS[info.kind]}.items():
@@ -74,10 +75,10 @@ def validate_instance(plugin):
         raise PluginContractError("Invalid direct device identity")
     info = plugin.info
     expected = BatteryFeatures if info.kind=="battery" else WallboxFeatures
-    if not isinstance(getattr(plugin,"features",None),expected) or any(type(getattr(plugin.features,field.name)) is not bool for field in fields(expected)):
+    if info.kind!='inverter' and (not isinstance(getattr(plugin,"features",None),expected) or any(type(getattr(plugin.features,field.name)) is not bool for field in fields(expected))):
         raise PluginContractError("Invalid plugin features")
     ids = getattr(plugin,"ids",None)
-    required = {"soc","charge_power","discharge_power","mode"} if info.kind=="battery" else {"power","status","enable","current","phases"}
+    required = {"battery":{"soc","charge_power","discharge_power","mode"},"wallbox":{"power","status","enable","current","phases"},"inverter":set()}[info.kind]
     if not isinstance(ids,Mapping) or not required.issubset(ids):
         if info.identifier=="none" and ids=={}:
             return plugin
@@ -102,9 +103,9 @@ class PluginFactory:
         return plugin
 
 
-def load_plugins(package_name=__package__+".plugins"):
+def load_plugins(package_name=__package__+".plugins", include_inverters=False):
     package = import_module(package_name)
-    registries = {"battery":{},"wallbox":{}}
+    registries = {"battery":{},"wallbox":{},"inverter":{}}
     errors = {}
     for module in sorted(pkgutil.iter_modules(package.__path__),key=lambda item:item.name):
         if module.name.startswith('_') or module.ispkg:
@@ -126,12 +127,13 @@ def load_plugins(package_name=__package__+".plugins"):
             # One broken optional plugin must not hide healthy installed devices.
             errors[module.name] = type(error).__name__
             _LOGGER.error("Rejected hardware plugin %s: %s",module.name,error)
-    return MappingProxyType(registries["battery"]),MappingProxyType(registries["wallbox"]),MappingProxyType(errors)
+    result=(MappingProxyType(registries["battery"]),MappingProxyType(registries["wallbox"]))
+    return result+((MappingProxyType(registries['inverter']),) if include_inverters else ())+ (MappingProxyType(errors),)
 
 
 def describe(plugin):
-    if not isinstance(plugin,(BatteryDriver,WallboxDriver)):
+    if not isinstance(plugin,(BatteryDriver,WallboxDriver,InverterDriver)):
         plugin = getattr(plugin,"driver",None)
-    if not isinstance(plugin,(BatteryDriver,WallboxDriver)):
+    if not isinstance(plugin,(BatteryDriver,WallboxDriver,InverterDriver)):
         return None
-    return {**asdict(plugin.info),"features":asdict(plugin.features), "measurements":list(plugin.measurement_keys)}
+    return {**asdict(plugin.info),"features":asdict(plugin.features) if hasattr(plugin,'features') else {}, "measurements":list(plugin.measurement_keys)}

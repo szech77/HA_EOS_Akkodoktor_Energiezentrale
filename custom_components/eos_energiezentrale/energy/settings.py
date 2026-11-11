@@ -92,7 +92,8 @@ class Configuration:
                 raise ValueError("Ungültiger technischer Parameter")
         if options["battery_type"] not in BATTERY_DRIVERS or options["wallbox_type"] not in WALLBOX_DRIVERS:
             raise ValueError("Unbekannter Hardwaretyp")
-        self.battery = BATTERY_DRIVERS[options["battery_type"]](ha, json.loads(options["battery_parameters"]))
+        from .devices import battery_driver
+        self.battery = battery_driver(options,ha)
         self.wallbox = WALLBOX_DRIVERS[options["wallbox_type"]](ha, json.loads(options["wallbox_parameters"]))
         self.eos = EOS(options["eos_url"])
         self.influx = Influx(options["influx_url"], options["influx_database"],

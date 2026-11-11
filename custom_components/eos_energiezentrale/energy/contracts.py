@@ -50,6 +50,29 @@ class Measurement:
 
 
 @dataclass(frozen=True)
+class InverterReading:
+    measurements: Mapping[str, Measurement] = field(default_factory=dict)
+
+
+class InverterDriver(ABC):
+    """Read-only generation device, with the same measurement safety boundary."""
+    measurement_keys: ClassVar[tuple[str, ...]] = ("solar", "inverter_ac")
+    info: ClassVar[PluginInfo]
+    configuration: ClassVar[tuple[PluginField, ...]]
+    ids: Mapping[str, str]
+
+    def read(self, states: dict, now: datetime) -> InverterReading:
+        from .measurement_sources import checked_measurements
+        value = self._read(states, now)
+        if not isinstance(value, InverterReading):
+            raise PluginContractError("Inverter plugin must return InverterReading")
+        return replace(value, measurements=checked_measurements(value.measurements, self.measurement_keys, now))
+
+    @abstractmethod
+    def _read(self, states: dict, now: datetime) -> InverterReading: ...
+
+
+@dataclass(frozen=True)
 class BatteryReading:
     soc: float | None
     charge: float | None
@@ -102,6 +125,10 @@ class BatteryDriver(ABC):
     configuration: ClassVar[tuple[PluginField, ...]]
     features: BatteryFeatures
     ids: Mapping[str, str]
+
+    def power_limits(self, states: dict) -> tuple[float, float] | None:
+        """Optional current hardware caps (charge W, discharge W), without writes."""
+        return None
 
     def read(self, states: dict, now: datetime) -> BatteryReading:
         from .sanitiser import battery_reading

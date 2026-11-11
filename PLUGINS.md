@@ -11,10 +11,59 @@ bleiben erhalten.
 
 Unter **Einstellungen → Geräte & Dienste → EOS Energiezentrale → Konfigurieren**:
 
-1. **Hardware:** Speicher-/Wechselrichter-Plugin und optionales Wallbox-Plugin auswählen.
-2. Im folgenden Schritt erscheinen die Felder des ausgewählten Plugins, einschließlich
-   Entitätsauswahl, Auswahllisten und Schaltern. Die Parameter werden nicht zentral hartcodiert.
-3. Speichern. Bereits konfigurierte Fronius-/NRGkick-Entitäten bleiben übernommen.
+1. **Geräte → Gerät hinzufügen:** Speicher/Hybrid-Wechselrichter, reinen
+   PV-Wechselrichter oder Wallbox auswählen.
+2. Für genau dieses Gerät ein installiertes Plugin wählen. Anschließend erscheinen
+   dessen eigene Felder, einschließlich Entitätsauswahl, Auswahllisten und Schaltern.
+3. Namen und stabile ID vergeben, Plugin konfigurieren und speichern. Die Seite
+   **Geräte** zeigt alle bereits eingerichteten Geräte mit ihrem Namen und einem
+   Pfeil zum Öffnen; neue Installationen starten mit leerer Liste. Unter der Liste
+   steht **Gerät hinzufügen**. Einen vorhandenen Eintrag auswählen, um ihn zu
+   bearbeiten. Die Bearbeitung erlaubt auch den Wechsel des Plugins;
+   die bisherigen Plugin-Parameter werden dabei nicht in das neue Plugin übernommen.
+   **Dieses Gerät entfernen** in der Plugin-Auswahl markieren und im folgenden
+   Dialog **Entfernen bestätigen** aktivieren. Dies entfernt nur das ausgewählte
+   Gerät aus der Integration. Ohne Bestätigung kehrt der Dialog zur Liste zurück.
+
+Beim ersten Einrichten können mehrere Speicher und PV-Wechselrichter nacheinander
+angelegt werden; **Weiter** führt zu den technischen Grenzen. Fahrzeuge/Wallboxen
+lassen sich danach in den Optionen hinzufügen. Bestehende einzelne Speicher und
+Fronius-Untergeräte erscheinen automatisch in der Liste; bis zur ersten gespeicherten
+Geräteänderung wird die bestehende Konfiguration weiterverwendet. Die bisherigen
+einzelnen Hardwarefelder bleiben für bestehende Konfigurationsclients kompatibel.
+
+Die Geräteliste ist herstellerunabhängig: Fronius-Modbus und generische
+HA-Speicher können gemeinsam betrieben werden. Für reine PV-Wechselrichter gibt es
+ein direktes Fronius-Modbus-Plugin sowie ein generisches HA-Plugin mit PV- und
+vorzeichenbehafteter AC-Leistung. Neue lokal installierte Plugins erscheinen in
+der passenden Geräteart automatisch. Ein Hybrid-Wechselrichter mit Batterie wird
+einmal als Speicher angelegt, um PV-/AC-Leistung nicht doppelt zu zählen.
+
+Genau ein Gerät darf als Quelle des gemeinsamen Netzanschlusswerts markiert sein.
+Die gewählte Plugin-Konfiguration muss diesen Wert anbieten. Bei Fronius steuert
+dieser Schalter die Abfrage des Gateway-Zählers; die anderen Fronius-Geräte lesen
+keinen weiteren Netzzähler. Alternativ bleibt der vorhandene allgemeine
+Netzsensor konfiguriert. Allgemeine Quellsensoren haben weiterhin Vorrang.
+PV-Leistungen werden summiert; Hausverbrauch wird nur bei vollständigen
+AC-Messungen aller Geräte plus Netzleistung abgeleitet. Ein generischer Speicher
+kann PV-, AC- und Netzleistung optional ebenfalls als Plugin-Messwerte liefern.
+Fehlende Quellen bleiben in der UI als fehlende Konfiguration erkennbar.
+
+Es sind bis zu acht Speicher/PV-Geräte möglich. Mehrere Batterien benötigen
+jeweils ihre Kapazität und maximale Lade-/Entladeleistung. Das gemeinsame Budget
+aus **Technische Grenzen** gilt zusätzlich. Meldet ein Speicher-Plugin aktuelle
+Leistungsgrenzen, begrenzen diese die Zuteilung ebenfalls. Bei gemischten Plugins
+werden vor jeder Verteilung zunächst neutrale Grenzen auf allen Speichern bestätigt;
+reine PV-Plugins besitzen keine Schreibmethoden. Bei Fehlern wird die Automatik-Rückgabe
+auf allen Speichern versucht. Die letzte Batterie kann entfernt werden; ohne
+Speicher bleibt die Speichersteuerung unbenutzbar und die Verbindungsansicht zeigt
+einen Konfigurationshinweis.
+
+**Planungsgrenze:** Mehrere Batterien werden weiterhin als gemeinsame
+EOS-Speicherressource modelliert. Unterschiedliche SoC-Stände und Leistungsgrenzen
+können dazu führen, dass eine geplante Gesamtleistung nicht erreichbar ist. Dies
+wird in den Verbindungen als Näherung gekennzeichnet. Die Geräteliste erzeugt
+keine unabhängigen EOS-Pläne pro Batterie.
 
 Für weitere Fahrzeuge/Wallboxen: **Fahrzeuge und Wallboxen → Hinzufügen → Plugin auswählen
 → Fahrzeugdaten und Plugin-Felder ausfüllen → bestätigen**. Für jede zusätzliche
@@ -48,6 +97,10 @@ und keine ausschließliche 700er-Modellimplementierung.
 | `grid_meter_unit_id` | Gateway-Unit-ID dieses Zählers, Standard 200. Dies ist nicht die Wechselrichter-ID 1. |
 | `grid_meter_invert` | Vorzeichen des Zählers umkehren, Standard aus; im Panel muss Bezug positiv und Einspeisung negativ sein. |
 | `grid_discharge_supported` | Erzwungene Netzentladung ausdrücklich erlauben, Standard aus. Die globale Exportfreigabe gilt zusätzlich. |
+| `grid_meter_host` | Optionaler Host des Zähler-Gateways; leer verwendet den Hauptwechselrichter. Kann auch ein anderer Wechselrichter der Anlage sein. |
+| `grid_meter_port` | Gateway-Port; Standard 0 übernimmt den Port des Hauptwechselrichters. |
+| `battery_capacity_wh` | Kapazität der Batterie am Hauptwechselrichter in Wh, passend zu ihrer SoC-Skala. Bei mehreren Batterien erforderlich; 0 bedeutet im Einzelbetrieb unverändert die Kapazität aus EOS verwenden. |
+| `additional_inverters` | JSON-Objekt mit bis zu sieben zusätzlichen Wechselrichtern. Standard `{}` erhält den Einzelbetrieb. Definition siehe unten. |
 
 Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Felder):
 
@@ -72,6 +125,90 @@ nicht implementierte Register oder ungültige Skalierung bleiben unbekannt; echt
 Nullwerte bleiben gültig. Verbindungs- und Protokollfehler lösen den bestehenden
 Steuerfehlerpfad einschließlich Rückgabeversuch aus.
 
+### Mehrere Wechselrichter und Batteriespeicher
+
+`host` bezeichnet weiterhin den **Hauptwechselrichter mit Batterie**. Unter
+`additional_inverters` werden weitere Geräte anhand eindeutiger Namen angegeben.
+Jedes Gerät besitzt einen eigenen `host`, optional `port` (Standard 502) und
+`unit_id` (Standard 1). `battery: false` ist der Standard für reine PV-Geräte;
+`battery: true` verlangt zusätzlich `capacity_wh`. Bei mehreren Batterien muss
+auch `battery_capacity_wh` des Hauptgeräts gesetzt sein. Maximal acht
+Wechselrichter einschließlich des Hauptgeräts sind erlaubt.
+
+Beispiel: drei Wechselrichter, davon zwei mit Batterie:
+
+```json
+{
+  "host": "192.0.2.10",
+  "battery_capacity_wh": 10000,
+  "grid_meter_enabled": true,
+  "grid_meter_unit_id": 200,
+  "additional_inverters": {
+    "dach": {"host": "192.0.2.11", "battery": false},
+    "garage": {"host": "192.0.2.12", "battery": true, "capacity_wh": 20000}
+  }
+}
+```
+
+`additional_inverters` bleibt als bisheriges JSON-Format lesbar. Neue Geräte
+werden stattdessen einzeln unter **Geräte → Gerät hinzufügen** eingerichtet;
+die allgemeine Liste erlaubt unterschiedliche Plugins pro Gerät. Beim Speichern
+wird nur die Konfiguration geprüft; es werden
+keine Verbindungen oder Steuerbefehle ausgelöst. Doppelte Kombinationen aus
+Host, Port und Unit-ID sind unzulässig. Unterschiedliche DNS-/IP-Aliase desselben
+physischen Geräts dürfen ebenfalls nicht mehrfach eingetragen werden.
+
+Reine PV-Wechselrichter werden ausschließlich gelesen und brauchen kein
+Speichermodell 124. Die PV-Leistung stammt aus MPP1/MPP2 in Modell 160 oder,
+wenn dieses fehlt, aus `DCW` des SunSpec-Wechselrichtermodells 101–103/111–113.
+Vorhandene, aber ungültige MPPT-Daten werden nicht durch andere Quellen ersetzt.
+Ein als PV-Gerät konfigurierter Wechselrichter mit erkennbarer Batterieaktivität
+wird als unvollständige Messquelle behandelt; seine Batterie muss konfiguriert werden.
+Es gelten die offiziellen [SunSpec-Invertermodelle](https://github.com/sunspec/models/tree/master/json)
+und die vorhandenen Fronius-Registerkonventionen; reine 700er-Modelle bleiben ausgeschlossen.
+
+Die gemeinsame PV-Leistung ist die Summe aller PV-Messungen. Der Hausverbrauch
+ist **Summe aller AC-Wechselrichterleistungen plus vorzeichenbehafteter Netzleistung**.
+Akkuentladung und Netzladung sind bereits in den AC-Leistungen enthalten. Der
+gemeinsame Zähler wird pro Poll einmal gelesen; mit `grid_meter_host` und
+`grid_meter_port` kann sein Gateway auf einem anderen Gerät liegen. Ein fehlender
+Teilwert macht die entsprechende Summe unbekannt. Ein ausgefallenes PV-Gerät
+wird nicht als 0 W bewertet; weiterhin gültige Speicherwerte bleiben verfügbar.
+
+Mehrere Batterien bilden **einen Speicherpool mit einer EOS-Ressource**. Ihr SoC
+ist nach den eingestellten Kapazitäten gewichtet; Lade- und Entladeleistung werden
+summiert. Im Beispiel ergeben 20 % von 10 kWh und 80 % von 20 kWh einen gemeinsamen
+SoC von 60 %. Die Gesamtleistungsgrenzen unter **Grenzen** sind Budgets für den
+gesamten Pool. Sie werden zusammen mit der Summenkapazität und den SoC-Grenzen
+auch bei ausgeschalteter Steuerfreigabe an die vorhandene EOS-Speicherressource
+übertragen und zurückgelesen. Die Ressource muss bereits in EOS existieren.
+Kapazität und Kostenerfassung verwenden dieselbe Gruppenkapazität; separate
+EOS-Speicherpläne oder Kostenbestände je physischer Batterie werden nicht angelegt.
+Die gemeinsamen Lade-/Entladewirkungsgrade bleiben aus EOS oder den manuellen
+Bilanzparametern einstellbar. Bei unterschiedlichen Batterien sind passende
+gemeinsame Wirkungsgrade als Näherung zu verwenden.
+
+Vor Gruppenbefehlen werden alle Batterien frisch gelesen. Ladeleistung wird nach
+freier Kapazität, Entladeleistung nach Energie oberhalb der SoC-Untergrenze verteilt,
+jeweils begrenzt durch die Gerätereferenzleistung. Die SoC-Grenzen gelten für jede
+Batterie einzeln, auch die höhere Grenze bei PV-Ladeunterstützung. Für normalen
+Eigenverbrauch wird eine gemeinsame Richtung und ein gemeinsames Leistungsbudget
+verwendet. Jede Hybridanlage muss für die passende Eigenverbrauchsregelung am
+gemeinsamen Netzanschlusspunkt eingerichtet sein. Unabhängige parallel schreibende
+Regler sind weiterhin unzulässig. Ein Ladestart mit Speicherunterstützung verlangt
+genügend freigegebene Gruppenleistung vor dem Einschalten des Fahrzeugs.
+
+Bei Richtungswechsel oder verändertem Steuerzustand werden zunächst neutrale
+Grenzen auf allen Batterien bestätigt. Bei Umverteilung werden Reduzierungen vor
+Erhöhungen geschrieben. Scheitert eine Gruppensteuerung, wird die Rückgabe an
+Automatik auf allen Speichergeräten versucht; Fehler werden weiterhin gemeldet.
+Ohne vollständigen Speicher-SoC oder Speichertelemetrie wird keine Teilgruppe als
+vollständiger Speicher gesteuert. Unter **Einstellungen → Verbindungen** erscheinen
+Anzahl, Kapazität und die Messwerte jedes Geräts. Die Mehrgeräte-Funktion ist mit
+lokalen Modbus-TCP-Geräteemulatoren geprüft; ein Test an realer Hardware steht aus.
+
+### Messwerte und Steuerung
+
 Für dieses Plugin sind keine zusätzlichen HA-Sensoren, Templates oder
 `select`-/`number`-Steuerentitäten erforderlich. Für den Netzanschlusswert unter
 **Quellsensoren** die Netzsensor-Auswahl leeren. Ein dort ausgewählter Sensor hat
@@ -90,14 +227,15 @@ Die drei allgemeinen Sensorfelder **PV-Leistung**, **Gesamter Hausverbrauch** un
 
 | Leeres Sensorfeld | Wert aus `fronius_modbus` |
 | --- | --- |
-| `pv_entity` | Summe der vorhandenen PV-Kanäle MPP1/MPP2 aus SunSpec 160; aktuelle DC-Leistung in W. Dies ist kein kumulativer kWh-Zähler. |
+| `pv_entity` | Summe der PV-Leistung aller konfigurierten Wechselrichter; MPP1/MPP2 aus SunSpec 160, bei reinen PV-Geräten alternativ DCW aus dem Wechselrichtermodell. Aktuelle DC-Leistung in W, kein kumulativer kWh-Zähler. |
 | `grid_entity` | AC-Wirkleistung des konfigurierten Primärzählers; Bezug positiv, Einspeisung negativ. |
-| `house_entity` | Gesamter Hausverbrauch einschließlich Fahrzeugen und Wärmepumpe: AC-Ausgangsleistung des GEN24 plus vorzeichenbehaftete Netzleistung. SunSpec 101–103 und 111–113 werden unterstützt. |
+| `house_entity` | Gesamter Hausverbrauch einschließlich Fahrzeugen und Wärmepumpe: Summe der AC-Leistungen aller konfigurierten Wechselrichter plus vorzeichenbehaftete Netzleistung. SunSpec 101–103 und 111–113 werden unterstützt. |
 
 Für Netz- und Hausleistung muss die Zählerabfrage aktiviert und der Primärzähler
 am Netzanschlusspunkt vorhanden sein. Die Hausbilanz setzt voraus, dass die
-AC-Leistung dieses GEN24 alle Erzeuger am Messpunkt erfasst. Bei weiteren, nicht
-erfassten Wechselrichtern oder Erzeugern einen eigenen Hausverbrauchssensor wählen;
+AC-Leistung aller konfigurierten Wechselrichter die Erzeuger am Messpunkt erfasst.
+Weitere Fronius-Geräte in `additional_inverters` eintragen. Bei anderen, nicht
+erfassten Erzeugern einen eigenen Hausverbrauchssensor wählen;
 dieser hat weiterhin Vorrang. Akkuentladung und Netzladung sind bereits in der
 AC-Leistung enthalten und werden nicht nochmals addiert oder subtrahiert.
 Fehlende Teilmessungen und negative, widersprüchliche Hausbilanzen bleiben unbekannt.
@@ -342,9 +480,9 @@ bleibt bei seiner bisherigen optionalen HA-Wetterquelle.
 Der Vertrag ist in `energy/contracts.py`, die zentrale Prüfung in `energy/sanitiser.py`,
 die Erkennung in `energy/plugin_registry.py` definiert. API-Version 2 verlangt:
 
-- Eine konkrete Unterklasse von `BatteryDriver` bzw. `WallboxDriver`.
+- Eine konkrete Unterklasse von `BatteryDriver`, `WallboxDriver` oder `InverterDriver`.
 - `info = PluginInfo(identifier, name, kind, api_version=2)` mit stabiler ID,
-  Anzeigename und Art `battery`/`wallbox`.
+  Anzeigename und Art `battery`/`wallbox`/`inverter`.
 - Typisierte `BatteryFeatures` bzw. `WallboxFeatures`. Fähigkeiten dürfen konfigurationsabhängig
   im Konstruktor gesetzt werden; es sind echte boolesche Werte erforderlich.
 - `configuration`: ein Tupel aus `PluginField`-Deskriptoren. Jeder beschreibt Schlüssel,
@@ -362,6 +500,31 @@ Die öffentlichen Methoden `read`, `apply`, `release`, `pause`, `phase`, `charge
 bleiben dem Vertrag vorbehalten und dürfen nicht überschrieben werden. Sie führen
 die zentrale Prüfung aus. `_phase` liefert ausschließlich `bool`, die anderen
 Schreiboperationen `None`. Asynchrone oder abweichende Signaturen werden abgewiesen.
+
+Reine PV-Wechselrichter verwenden `PluginInfo(..., kind="inverter")` und
+implementieren ausschließlich `_read(self, states, now) -> InverterReading`.
+`InverterReading.measurements` enthält deklarierte `Measurement`-Werte für `solar`,
+`inverter_ac` und optional `grid`. `inverter_ac` ist vorzeichenbehaftete AC-Leistung
+des einzelnen Wechselrichters, kein Hausverbrauch. Die öffentliche Methode `read`
+bleibt auch hier unverändert; Schreibmethoden sind nicht Teil dieses Vertrags.
+Die IDs der Plugins sind je Geräteart eindeutig; `fronius_modbus` und `generic`
+dürfen daher sowohl als Speicher- als auch als PV-Plugin vorkommen.
+
+Speicher können `power_limits(self, states)` implementieren und aktuelle
+Hardwaregrenzen als Tupel `(max_charge_w, max_discharge_w)` melden. `None` verwendet
+die je Gerät konfigurierten Grenzen. Das Lesen darf keine Steuerbefehle auslösen;
+ungültige Grenzen verhindern neue Gruppenbefehle. Fronius-Modbus und der generische
+HA-Speicher melden ihre Register- beziehungsweise Leistungsentitätsgrenzen.
+
+`BatteryCommand` enthält zusätzlich optionale Angaben für Speicherpools:
+`min_soc`, `max_soc`, `net_demand_w` und `required_discharge_w` (Standard 0).
+Die beiden SoC-Werte sind pro Gerät anzuwendende Entlade-/Ladegrenzen.
+`net_demand_w` beschreibt den gemeinsamen Bedarf vor Speicherunterstützung;
+positiv bedeutet Entladebedarf, negativ Ladeüberschuss. `required_discharge_w`
+verlangt eine vor dem PV-Ladestart verfügbare Gruppenleistung. Einzelgeräte können
+diese Angaben weiterhin ignorieren. Ein Plugin mit
+`requires_dispatch_context = True` erhält sie vom Controller; fehlender oder
+ungültiger Kontext darf keine ungesicherte Gruppensteuerung auslösen.
 
 `_read` liefert unveränderliche `BatteryReading`- bzw. `WallboxReading`-Werte.
 Einheiten sind Prozent, Watt, Ampere, Phasen 1/3 und zeitzonenbehaftete Zeitstempel.

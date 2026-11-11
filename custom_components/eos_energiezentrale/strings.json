@@ -74,6 +74,59 @@
           "battery_parameters": "Battery / inverter",
           "wallbox_parameters": "Wallbox"
         }
+      },
+      "devices": {
+        "title": "Devices and plugins",
+        "description": "Select a configured device to edit it, or add another device.",
+        "menu_options": {
+          "device_add": "Add device",
+          "device_done": "Continue"
+        }
+      },
+      "device_add": {
+        "title": "Add device",
+        "data": {
+          "kind": "Device kind"
+        }
+      },
+      "device_edit": {
+        "title": "Edit device",
+        "data": {
+          "device_id": "Device"
+        }
+      },
+      "device_remove": {
+        "title": "Remove device",
+        "data": {
+          "device_id": "Device"
+        }
+      },
+      "device_plugin": {
+        "title": "Edit device",
+        "data": {
+          "plugin": "Plugin",
+          "remove_device": "Remove this device"
+        }
+      },
+      "device_parameters": {
+        "title": "Configure device",
+        "description": "Multiple batteries require capacity and power limits per device. The storage group remains an approximation for EOS. Choose only one device as the shared grid meter source. Reopen this dialog to add further devices. Use a new ID when adding; preserve it when editing.",
+        "data": {
+          "id": "Stable device ID",
+          "name": "Device name",
+          "grid_source": "Use this device as the shared grid meter source",
+          "capacity_wh": "Battery capacity (Wh; 0: unknown / single battery only)",
+          "charge_w": "This battery's maximum charge power (W)",
+          "discharge_w": "This battery's maximum discharge power (W)",
+          "parameters": "Plugin settings"
+        }
+      },
+      "device_delete": {
+        "title": "Remove device",
+        "description": "Remove {device} from the configuration?",
+        "data": {
+          "confirm": "Confirm removal"
+        }
       }
     },
     "error": {
@@ -82,7 +135,9 @@
     },
     "abort": {
       "already_configured": "Already configured",
-      "invalid_plugin": "Plugin unavailable or invalid."
+      "invalid_plugin": "Plugin unavailable or invalid.",
+      "no_devices": "No devices configured.",
+      "use_device_manager": "This site uses the device list. Edit the selected device under Devices."
     }
   },
   "options": {
@@ -157,10 +212,11 @@
         "menu_options": {
           "connection": "EOS connection",
           "sensors": "Source sensors",
-          "hardware": "Hardware drivers",
+          "hardware": "Devices and plugins",
           "limits": "Technical limits",
           "history": "InfluxDB history (optional)",
-          "vehicles": "Vehicles and chargers"
+          "vehicles": "Vehicles and chargers",
+          "devices": "Devices"
         }
       },
       "vehicles": {
@@ -243,7 +299,8 @@
       "vehicle_plugin": {
         "title": "Select wallbox plugin",
         "data": {
-          "wallbox_type": "Wallbox-Plugin"
+          "wallbox_type": "Wallbox-Plugin",
+          "remove_device": "Remove this device"
         }
       },
       "vehicle_parameters": {
@@ -266,6 +323,58 @@
           "wallbox_parameters": "Plugin settings"
         },
         "description": "Each charger needs distinct entities and a resource already configured in EOS. Keep the stable ID when editing."
+      },
+      "devices": {
+        "title": "Devices and plugins",
+        "description": "Select a configured device to edit it, or add another device.",
+        "menu_options": {
+          "device_add": "Add device"
+        }
+      },
+      "device_add": {
+        "title": "Add device",
+        "data": {
+          "kind": "Device kind"
+        }
+      },
+      "device_edit": {
+        "title": "Edit device",
+        "data": {
+          "device_id": "Device"
+        }
+      },
+      "device_remove": {
+        "title": "Remove device",
+        "data": {
+          "device_id": "Device"
+        }
+      },
+      "device_plugin": {
+        "title": "Edit device",
+        "data": {
+          "plugin": "Plugin",
+          "remove_device": "Remove this device"
+        }
+      },
+      "device_parameters": {
+        "title": "Configure device",
+        "description": "Multiple batteries require capacity and power limits per device. The storage group remains an approximation for EOS. Choose only one device as the shared grid meter source. Reopen this dialog to add further devices. Use a new ID when adding; preserve it when editing.",
+        "data": {
+          "id": "Stable device ID",
+          "name": "Device name",
+          "grid_source": "Use this device as the shared grid meter source",
+          "capacity_wh": "Battery capacity (Wh; 0: unknown / single battery only)",
+          "charge_w": "This battery's maximum charge power (W)",
+          "discharge_w": "This battery's maximum discharge power (W)",
+          "parameters": "Plugin settings"
+        }
+      },
+      "device_delete": {
+        "title": "Remove device",
+        "description": "Remove {device} from the configuration?",
+        "data": {
+          "confirm": "Confirm removal"
+        }
       }
     },
     "error": {
@@ -274,7 +383,9 @@
     },
     "abort": {
       "no_vehicles": "No vehicle configured",
-      "invalid_plugin": "Plugin unavailable or invalid."
+      "invalid_plugin": "Plugin unavailable or invalid.",
+      "no_devices": "No devices configured.",
+      "use_device_manager": "This site uses the device list. Edit the selected device under Devices."
     }
   },
   "entity": {
@@ -404,6 +515,15 @@
       },
       "battery_limits_confirmed": {
         "name": "EOS battery limits confirmed"
+      }
+    }
+  },
+  "selector": {
+    "device_kind": {
+      "options": {
+        "battery": "Battery / hybrid inverter",
+        "inverter": "PV inverter without battery",
+        "wallbox": "Charger with vehicle"
       }
     }
   }

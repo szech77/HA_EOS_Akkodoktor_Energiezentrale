@@ -3,6 +3,29 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.8.0 - 2026-11-11
+
+### Features
+
+- Unter Inbetriebnahme → Geräte alle bereits eingerichteten Speicher, Wechselrichter und Wallboxen mit ihrem Namen direkt als auswählbare Liste anzeigen. Neue Installationen starten ohne Geräte. „Gerät hinzufügen“ steht unter der Liste; bestehende Einträge öffnen ihre Bearbeitung und können dort mit Bestätigung entfernt werden.
+- Allgemeine Geräteverwaltung mit Hinzufügen, Bearbeiten und Entfernen. Jeder Speicher und reine PV-Wechselrichter erhält ein eigenes Plugin mit eigenem Formular; Wallboxen sind über denselben Gerätedialog erreichbar und behalten die Plugin-Auswahl je Fahrzeug. Bestehende Fronius-Untergeräte werden beim Bearbeiten in eigenständige Geräte übernommen. Gemischte Speicher-Plugins, ein eigener Nur-Lese-Vertrag für PV-Wechselrichter sowie direkte Fronius- und generische HA-Wechselrichter werden unterstützt.
+- Genau eine Gerätequelle für den gemeinsamen Netzzähler auswählen. PV-Leistung und vollständige AC-Hausbilanzen aus den Plugin-Messwerten bilden; vorhandene HA-Quellsensoren behalten Vorrang. Die Anzeige kennzeichnet die gemeinsame EOS-Speicherplanung bei mehreren Batterien als Näherung.
+- Fronius-Modbus-Plugin um bis zu acht Wechselrichter mit eigenen IP-Adressen, Ports und Unit-IDs erweitern. Zusätzliche Geräte können reine PV-Wechselrichter oder weitere Batteriespeicher sein. PV-Leistung wird vollständig summiert; Hausverbrauch entsteht aus der gesamten AC-Leistung und genau einem gemeinsamen Netzanschlusszähler, dessen Gateway separat konfigurierbar ist.
+- Mehrere Batterien als gemeinsame EOS-Speicherressource: kapazitätsgewichteter SoC, summierte Lade-/Entladeleistung und Verteilung des gemeinsamen Leistungsbudgets nach verfügbarem Energieinhalt beziehungsweise freier Kapazität. SoC-Grenzen gelten je Batterie; Richtungswechsel und geänderte Gerätesteuerungen werden vor einer neuen Verteilung neutralisiert. PV-Ladestart prüft die tatsächlich verfügbare Gruppenleistung vor der Fahrzeugfreigabe.
+- Gesamtkapazität, konfigurierte Gesamtleistungsgrenzen und SoC-Grenzen der Speichergruppe mit Rückbestätigung an EOS übertragen. Die Kostenbilanz verwendet die konfigurierte Gesamtkapazität bereits vor der EOS-Bestätigung. Einstellungen zeigen Messwerte und Verfügbarkeit jedes Wechselrichters.
+
+### Bugfixes
+
+- Beschriftungen der Konfigurationsmenüs direkt mit der HA-Menüantwort ausgeben. Geräte-, Inbetriebnahme- und Fahrzeugmenüs zeigen damit auch ohne neu geladene Frontend-Übersetzungen lesbare Einträge; Deutsch und Englisch einschließlich Sprachrückfall bleiben unterstützt.
+
+### Breaking Changes
+
+- Keine. Bestehende Einzelwechselrichter-Konfigurationen bleiben gültig. Der Plugin-Vertrag wird um optionale Angaben für die Verteilung von Speicherbefehlen ergänzt.
+
+### Security
+
+- Reine PV-Geräte erhalten keine Schreibbefehle. Ungültige oder doppelte Gerätekonfigurationen werden ohne Netzwerkzugriff abgelehnt; unvollständige Messungen werden nicht als Nullleistung oder vollständige Anlagensumme ausgegeben.
+
 ## 0.7.4 - 2026-11-11
 
 ### Features
