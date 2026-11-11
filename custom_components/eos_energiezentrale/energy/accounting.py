@@ -57,6 +57,7 @@ class Accounting:
         self.previous = None
         self.last_eos_attempt = None
         self.eos_battery = None
+        self.capacity_override = None
         self.eos_error = None
         self.pv_tariff = None
         self.pv_error = None
@@ -136,9 +137,10 @@ class Accounting:
         return None
 
     def effective(self):
-        if self.settings["efficiency_source"] == "eos":
-            return self.eos_battery
-        return self.settings
+        values=self.eos_battery if self.settings['efficiency_source']=='eos' else self.settings
+        if values is not None and self.capacity_override is not None:
+            return {**values,'capacity_wh':self.capacity_override}
+        return values
 
     def observe(self, live, vehicles=()):
         now = instant(live.get("time"))

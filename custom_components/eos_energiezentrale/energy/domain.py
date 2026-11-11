@@ -90,6 +90,10 @@ class BatteryCommand:
     mode: str
     charge_w: float = 0
     discharge_w: float = 0
+    min_soc: float | None = None
+    max_soc: float | None = None
+    net_demand_w: float | None = None
+    required_discharge_w: float = 0
 
 
 def battery_command(order, soc, settings, pv_car, grid, discharge, charge):

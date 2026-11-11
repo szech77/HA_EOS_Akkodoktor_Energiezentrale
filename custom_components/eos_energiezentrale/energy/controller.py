@@ -1,5 +1,6 @@
 """Single-writer controller with persistent explicit control intent."""
 from copy import deepcopy
+from dataclasses import replace
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from math import isclose
@@ -153,10 +154,24 @@ class Controller:
                         pass  # Persistence failure is exposed in errors.
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
+    def battery_group_capacity(self):
+        driver=getattr(self.config.battery,'driver',self.config.battery)
+        if getattr(driver,'requires_dispatch_context',False) is True:
+            return driver.site_summary['capacity_wh']
+        return None
+
+    def battery_sync_managed(self):
+        return bool(getattr(self.config,'battery_limits_managed',False) or self.battery_group_capacity() is not None)
+
+    def battery_limits_request(self):
+        limits=(self.config.daily['battery_min_soc'],self.config.daily['battery_max_soc'])
+        capacity=self.battery_group_capacity()
+        return limits+(capacity,self.config.options['battery_charge_w'],self.config.options['battery_discharge_w']) if capacity is not None else limits
+
     def sync_battery_limits(self, now, clock, *, force=False):
-        if self.external_battery_sync or not getattr(self.config, "battery_limits_managed", False):
+        if self.external_battery_sync or not self.battery_sync_managed():
             return
-        desired = (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"])
+        desired = self.battery_limits_request()
         interval = 60 if self.battery_limits_confirmed == desired else 30
         if not force and clock - self.last_battery_limits_attempt < interval:
             return
@@ -516,6 +531,8 @@ class Controller:
         if command is None:
             self.config.battery.release(states)
         else:
+            minimum=max(daily['battery_min_soc'],daily['battery_pv_min_soc']) if self.pv_support.active else None
+            command = self.battery_dispatch(command, live, minimum)
             self.config.battery.apply(command, states)
         live["battery_control"] = command.mode if command else "auto"
 
@@ -559,7 +576,8 @@ class Controller:
             # enabling the EV. Never force discharge/export into the grid.
             self.control_step = 'battery_support'
             try:
-                battery_driver.apply(BatteryCommand('limits',0,opts['battery_discharge_w']),states)
+                battery_driver.apply(self.battery_dispatch(
+                    BatteryCommand('limits',0,opts['battery_discharge_w']),live,support_floor),states)
             except Exception:
                 self.pv_support.reset()
                 live['car_battery_support'] = False
@@ -668,6 +686,21 @@ class Controller:
         self.pv_session = solar_only
         live["car_control"] = 'pv_battery' if supported else "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"
 
+    def battery_dispatch(self, command, live, minimum=None):
+        # Single-device plugins can ignore this optional context; grouped storage
+        # needs individual SoC guards and one common charge/discharge direction.
+        driver=getattr(self.config.battery,'driver',self.config.battery)
+        if getattr(driver,'requires_dispatch_context',False) is not True:
+            return command
+        values = [live.get(key) for key in ('grid','battery_discharge','battery_charge')]
+        demand = values[0]+values[1]-values[2] if all(value is not None for value in values) else None
+        required=self.pv_support.required_w if self.pv_support.active else 0
+        if demand is not None and required:
+            demand=max(demand,required)
+        return replace(command, min_soc=self.config.daily['battery_min_soc'] if minimum is None else minimum,
+                       max_soc=self.config.daily['battery_max_soc'], net_demand_w=demand,
+                       required_discharge_w=required)
+
     def snapshot(self, now):
         with self.lock:
             # A pending background retry must not delay the warning threshold.
@@ -676,9 +709,12 @@ class Controller:
             plan = self.plan_for(opts["battery_resource"],now)
             generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
             current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
+            driver=getattr(self.config.battery,'driver',self.config.battery)
+            group=getattr(driver,'site_summary',None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
             return {"source_configuration":deepcopy(self.source_configuration),
+                    "battery_group":deepcopy(group) if isinstance(group,dict) else None,
                     "pv_battery_support": {"active":self.pv_support.active,
                         "session":self.pv_support.session,
                         "required_w":self.pv_support.required_w},
@@ -687,9 +723,8 @@ class Controller:
                     "power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
                     "heat_load_configured":bool(opts.get("heat_load_entity")), "live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {
-                        "managed": getattr(self.config, "battery_limits_managed", False),
-                        "confirmed": self.battery_limits_confirmed ==
-                            (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"]),
+                        "managed": self.battery_sync_managed(),
+                        "confirmed": self.battery_limits_confirmed == self.battery_limits_request(),
                         "confirmed_at": self.battery_limits_confirmed_at.isoformat()
                             if self.battery_limits_confirmed_at else None},
                     "control_waiting": self.armed and self.restore_pending,

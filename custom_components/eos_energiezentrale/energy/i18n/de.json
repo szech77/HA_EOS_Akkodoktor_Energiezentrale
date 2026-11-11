@@ -1,6 +1,14 @@
 {
   "locale": "de-DE",
   "messages": {
+    "plugin.fronius_site": "Fronius-Wechselrichtergruppe",
+    "plugin.site_summary": "{inverters} Wechselrichter · {batteries} Batteriespeicher",
+    "plugin.site_capacity": "Gemeinsame Speicherkapazität: {capacity}",
+    "plugin.primary_inverter": "Hauptwechselrichter",
+    "plugin.site_storage": "PV und Speicher",
+    "plugin.site_pv": "Nur PV",
+    "plugin.site_available": "Messwerte verfügbar",
+    "plugin.site_unavailable": "Messwerte unvollständig",
     "settings.battery_pv_start": "PV-Ladestart bei geringem Überschuss aus dem Speicher unterstützen",
     "settings.battery_pv_min_soc": "Speicher-Untergrenze für den PV-Ladestart (%)",
     "settings.battery_pv_wait_s": "Anhaltender geringer Überschuss vor Ladestart (s)",

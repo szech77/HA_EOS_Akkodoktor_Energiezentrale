@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.8.0 - 2026-11-11
+
+### Features
+
+- Fronius-Modbus-Plugin um bis zu acht Wechselrichter mit eigenen IP-Adressen, Ports und Unit-IDs erweitern. Zusätzliche Geräte können reine PV-Wechselrichter oder weitere Batteriespeicher sein. PV-Leistung wird vollständig summiert; Hausverbrauch entsteht aus der gesamten AC-Leistung und genau einem gemeinsamen Netzanschlusszähler, dessen Gateway separat konfigurierbar ist.
+- Mehrere Batterien als gemeinsame EOS-Speicherressource: kapazitätsgewichteter SoC, summierte Lade-/Entladeleistung und Verteilung des gemeinsamen Leistungsbudgets nach verfügbarem Energieinhalt beziehungsweise freier Kapazität. SoC-Grenzen gelten je Batterie; Richtungswechsel und geänderte Gerätesteuerungen werden vor einer neuen Verteilung neutralisiert. PV-Ladestart prüft die tatsächlich verfügbare Gruppenleistung vor der Fahrzeugfreigabe.
+- Gesamtkapazität, konfigurierte Gesamtleistungsgrenzen und SoC-Grenzen der Speichergruppe mit Rückbestätigung an EOS übertragen. Die Kostenbilanz verwendet die konfigurierte Gesamtkapazität bereits vor der EOS-Bestätigung. Einstellungen zeigen Messwerte und Verfügbarkeit jedes Wechselrichters.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine. Bestehende Einzelwechselrichter-Konfigurationen bleiben gültig. Der Plugin-Vertrag wird um optionale Angaben für die Verteilung von Speicherbefehlen ergänzt.
+
+### Security
+
+- Reine PV-Geräte erhalten keine Schreibbefehle. Ungültige oder doppelte Gerätekonfigurationen werden ohne Netzwerkzugriff abgelehnt; unvollständige Messungen werden nicht als Nullleistung oder vollständige Anlagensumme ausgegeben.
+
 ## 0.7.4 - 2026-11-11
 
 ### Features

@@ -160,6 +160,8 @@ function initializeBilling() {
     try {
       const data=await api('accounting',{period:'day'});
       for(const [key,value] of Object.entries(data.settings))if(form.elements[key])form.elements[key].value=value??'';
+      form.elements.capacity_wh.disabled=snapshot.battery_group?.battery_count>1;
+      if(form.elements.capacity_wh.disabled)form.elements.capacity_wh.value=snapshot.battery_group.capacity_wh;
       form.elements.pv_price_source.value=data.settings.pv_price_source??'eos';
       form.elements.pv_price_ct.disabled=form.elements.pv_price_source.value==='eos';
       if(form.elements.pv_price_ct.disabled)form.elements.pv_price_ct.value=valid(data.pv_price_ct)?Number(data.pv_price_ct.toFixed(6)):'';

@@ -243,12 +243,37 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             schema={str(key):value for key,value in selected['data_schema'].schema.items()}
             fields=schema['battery_parameters'].serialize()['selector']['object']['fields']
             self.assertEqual(set(fields),{'host','port','unit_id','grid_discharge_supported',
-                                          'grid_meter_enabled','grid_meter_unit_id','grid_meter_invert'})
+                                          'grid_meter_enabled','grid_meter_unit_id','grid_meter_invert',
+                                          'battery_capacity_wh','additional_inverters','grid_meter_host','grid_meter_port'})
             result=await flow.async_step_hardware_parameters({'battery_parameters':{'host':'inverter.local'}})
             self.assertEqual(result['type'],'create_entry')
             self.assertEqual(result['data']['battery_type'],'fronius_modbus')
             self.assertEqual(json.loads(result['data']['battery_parameters'])['host'],'inverter.local')
             connect.assert_not_called()
+
+    async def test_multi_fronius_form_roundtrips_without_connecting_and_syncs_eos_group_capacity(self):
+        params={'host':'primary.local','battery_capacity_wh':10000,'additional_inverters':json.dumps({
+            'roof':{'host':'pv.local'},'garage':{'host':'battery.local','battery':True,'capacity_wh':20000}})}
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
+        with patch('socket.create_connection') as connect:
+            await flow.async_step_hardware({'battery_type':'fronius_modbus','wallbox_type':'none','vehicle_name':'E-Auto'})
+            result=await flow.async_step_hardware_parameters({'battery_parameters':params})
+            self.assertEqual(result['type'],'create_entry')
+            saved=json.loads(result['data']['battery_parameters'])
+            self.assertTrue(saved['additional_inverters']['garage']['battery'])
+            config=Configuration(result['data'],Mock(),self.directory)
+            connect.assert_not_called()
+        config.eos=Mock()
+        app=Controller(Mock(),config)
+        coordinator=EnergyCoordinator(self.hass,self.entry,app)
+        coordinator._schedule_battery_sync()
+        await coordinator.battery_sync_task
+        config.eos.set_battery_limits.assert_called_once_with('battery1',20,100,30000,
+            config.options['battery_charge_w'],config.options['battery_discharge_w'])
+        self.assertTrue(app.snapshot(datetime.now(timezone.utc))['battery_limits']['confirmed'])
+        ledger=coordinator._accounting()
+        ledger.eos_battery={'capacity_wh':10000,'charge_efficiency':.95,'discharge_efficiency':.95}
+        self.assertEqual(ledger.effective()['capacity_wh'],30000)
 
     async def test_general_source_fields_can_be_explicitly_cleared_for_plugin_sources(self):
         from custom_components.eos_energiezentrale.config_flow import schema_for

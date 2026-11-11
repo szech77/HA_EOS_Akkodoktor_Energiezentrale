@@ -59,6 +59,7 @@ class Inverter(socketserver.TCPServer):
         self.meters = {200: {40000:0x5375,40001:0x6E53,40002:1,40003:65,
                             40069:203,40070:105,40087:1000,40091:0}}
         self.read_units = []
+        self.requests = []
 
 
 class Request(socketserver.BaseRequestHandler):
@@ -68,6 +69,7 @@ class Request(socketserver.BaseRequestHandler):
         request = receive(self.request, length - 1)
         function = request[0]
         address, count = struct.unpack(">HH", request[1:5])
+        self.server.requests.append((function,unit,address,count))
         self.server.read_units.append(unit)
         registers = self.server.registers if unit == 1 else self.server.meters.get(unit, {})
         if self.server.reject:

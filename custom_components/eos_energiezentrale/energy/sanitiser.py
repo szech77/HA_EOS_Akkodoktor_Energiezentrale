@@ -63,7 +63,14 @@ def battery_command(value):
     charge,discharge = bounded(value.charge_w,0,1000000),bounded(value.discharge_w,0,1000000)
     if charge is None or discharge is None:
         raise PluginContractError("Invalid battery power")
-    return BatteryCommand(value.mode,charge,discharge)
+    minimum = bounded(value.min_soc,0,100) if value.min_soc is not None else None
+    maximum = bounded(value.max_soc,0,100) if value.max_soc is not None else None
+    demand = bounded(value.net_demand_w,-1000000,1000000) if value.net_demand_w is not None else None
+    required = bounded(value.required_discharge_w,0,1000000)
+    if ((value.min_soc is not None and minimum is None) or (value.max_soc is not None and maximum is None)
+            or (value.net_demand_w is not None and demand is None) or required is None or required>discharge):
+        raise PluginContractError('Invalid battery dispatch context')
+    return BatteryCommand(value.mode,charge,discharge,minimum,maximum,demand,required)
 
 
 def charging_current(value,state):

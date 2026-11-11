@@ -141,20 +141,30 @@ class EOS:
             raise ValueError("Battery capacity/efficiencies missing")
         return dict(zip(("capacity_wh", "charge_efficiency", "discharge_efficiency"), values))
 
-    def set_battery_limits(self, resource, minimum, maximum):
+    def set_battery_limits(self, resource, minimum, maximum, capacity_wh=None, charge_w=None, discharge_w=None):
         if (type(minimum) is not int or type(maximum) is not int
                 or not 0 <= minimum < maximum <= 100):
             raise ValueError("Invalid stationary battery SoC limits")
+        if capacity_wh is not None and (not isinstance(capacity_wh,(int,float))
+                                       or number(capacity_wh) is None or not 100<=capacity_wh<=1000000):
+            raise ValueError('Invalid stationary battery capacity')
+        for power in (charge_w,discharge_w):
+            if power is not None and (not isinstance(power,(float,int)) or number(power) is None or not 0<=power<=1000000):
+                raise ValueError('Invalid stationary battery power limit')
         with self._configuration_lock:
-            self._set_battery_limits(resource, minimum, maximum)
+            self._set_battery_limits(resource, minimum, maximum, capacity_wh, charge_w, discharge_w)
 
-    def _set_battery_limits(self, resource, minimum, maximum):
+    def _set_battery_limits(self, resource, minimum, maximum, capacity_wh=None, charge_w=None, discharge_w=None):
         configuration = request(self.url + "/v1/config")
         batteries = configuration.get("devices", {}).get("batteries")
         if (not isinstance(batteries, dict) or resource not in batteries
                 or not isinstance(batteries[resource], dict)):
             raise ValueError("Configured stationary battery is missing in EOS")
         desired = {"min_soc_percentage": minimum, "max_soc_percentage": maximum}
+        if capacity_wh is not None:
+            desired['capacity_wh']=capacity_wh
+        if charge_w is not None: desired['max_charge_power_w']=charge_w
+        if discharge_w is not None: desired['max_discharge_power_w']=discharge_w
         if all(batteries[resource].get(key) == value for key, value in desired.items()):
             return
         updated = {**batteries, resource: {**batteries[resource], **desired}}

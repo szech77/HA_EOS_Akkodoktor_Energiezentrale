@@ -1,5 +1,6 @@
 """Multiple independently planned vehicles sharing one metered grid connection."""
 from copy import deepcopy
+from dataclasses import replace
 import json
 import re
 
@@ -296,6 +297,12 @@ class FleetController(Controller):
         if command is None:
             self.battery_driver.release(rows)
         else:
+            minimum=max((app.config.daily['battery_pv_min_soc'] for _,app,_ in self.controllers
+                         if app.pv_support.active),default=self.config.daily['battery_min_soc'])
+            command=self.battery_dispatch(command,self.live,max(self.config.daily['battery_min_soc'],minimum))
+            required=max((app.pv_support.required_w for _,app,_ in self.controllers if app.pv_support.active),default=0)
+            if command.net_demand_w is not None and required:
+                command=replace(command,net_demand_w=max(command.net_demand_w,required),required_discharge_w=required)
             self.battery_driver.apply(command,rows)
 
     def release(self,states,now):
