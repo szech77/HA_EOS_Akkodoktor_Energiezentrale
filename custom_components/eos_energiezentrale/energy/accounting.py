@@ -74,6 +74,7 @@ class Accounting:
         self.stock = json.loads(rows.get("stock", "null"))
         self.started = rows.get("started")
         self.reconcile = self.stock is not None
+        self.initial_pv_valued = rows.get("initial_pv_valued") == "true"
 
     def connect(self):
         return sqlite3.connect(self.path)
@@ -181,6 +182,16 @@ class Accounting:
             price = self.settings["initial_price_ct"]
             self.stock = {"kwh": energy, "cost": energy * (price or 0) / 100,
                           "unknown": energy if price is None else 0}
+            self.initial_pv_valued = price is not None
+        if not self.initial_pv_valued and self.stock is not None and effective is not None:
+            # One-time estimate of initial/legacy stock; later telemetry gaps
+            # must not silently acquire an assumed purchase price.
+            price = self.pv_price(previous[0])
+            if self.stock["unknown"] == 0 or price is not None:
+                if self.stock["unknown"] > 0:
+                    self.stock["cost"] += self.stock["unknown"] / effective["charge_efficiency"] * price / 100
+                    self.stock["unknown"] = 0.
+                self.initial_pv_valued = True
         # Split at UTC hours and local midnight, preserving DST days (23/25 hours).
         cursor = previous[0]
         with closing(self.connect()) as db, db:
@@ -201,6 +212,7 @@ class Accounting:
             if self.started is None:
                 self.started = previous[0].isoformat()
             db.execute("INSERT OR REPLACE INTO meta VALUES ('stock',?)", (json.dumps(self.stock),))
+            db.execute("INSERT OR REPLACE INTO meta VALUES ('initial_pv_valued',?)", (json.dumps(self.initial_pv_valued),))
             db.execute("INSERT OR REPLACE INTO meta VALUES ('started',?)", (self.started,))
 
     def allocate(self, row, hours_per_thousand, effective):

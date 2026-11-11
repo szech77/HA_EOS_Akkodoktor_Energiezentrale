@@ -3,8 +3,10 @@ import base64
 import json
 import re
 from datetime import timedelta
+from threading import Lock, RLock
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from weakref import WeakValueDictionary
 
 from .domain import instant, number
 
@@ -17,6 +19,21 @@ class NoRedirect(HTTPRedirectHandler):
 OPENER = build_opener(NoRedirect())
 MAX_RESPONSE = 8_000_000
 ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+\Z")
+_configuration_locks = WeakValueDictionary()
+_configuration_locks_guard = Lock()
+
+
+def configuration_lock(url):
+    """Share a lock between clients addressing the same EOS instance."""
+    parsed = urlsplit(url)
+    port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
+    key = (parsed.scheme.lower(), parsed.hostname.lower(), port)
+    with _configuration_locks_guard:
+        lock = _configuration_locks.get(key)
+        if lock is None:
+            lock = RLock()
+            _configuration_locks[key] = lock
+        return lock
 
 
 def base_url(value):
@@ -61,9 +78,16 @@ def reading(states, entity, now, kind, max_age=None):
     return value
 
 
+def report_time(states, entity):
+    """Return the reported observation timestamp, never the snapshot time."""
+    state = states.get(entity, {})
+    return instant(state.get("last_reported") or state.get("last_updated"))
+
+
 class EOS:
     def __init__(self, url):
         self.url = base_url(url)
+        self._configuration_lock = configuration_lock(self.url)
 
     def plan(self):
         return request(self.url + "/v1/energy-management/plan")
@@ -121,6 +145,10 @@ class EOS:
         if (type(minimum) is not int or type(maximum) is not int
                 or not 0 <= minimum < maximum <= 100):
             raise ValueError("Invalid stationary battery SoC limits")
+        with self._configuration_lock:
+            self._set_battery_limits(resource, minimum, maximum)
+
+    def _set_battery_limits(self, resource, minimum, maximum):
         configuration = request(self.url + "/v1/config")
         batteries = configuration.get("devices", {}).get("batteries")
         if (not isinstance(batteries, dict) or resource not in batteries
@@ -137,6 +165,10 @@ class EOS:
             raise ValueError("EOS did not confirm stationary battery limits")
 
     def set_vehicle_goal(self, resource, target, departure):
+        with self._configuration_lock:
+            self._set_vehicle_goal(resource, target, departure)
+
+    def _set_vehicle_goal(self, resource, target, departure):
         configuration = request(self.url + "/v1/config")
         vehicles = configuration["devices"]["electric_vehicles"]
         if resource not in vehicles or not isinstance(vehicles[resource], dict):

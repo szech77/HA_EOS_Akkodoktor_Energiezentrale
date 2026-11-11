@@ -1,5 +1,6 @@
 """EOS Energiezentrale custom integration."""
 from pathlib import Path
+import logging
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import callback
@@ -14,13 +15,25 @@ from .energy.fleet import create_controller
 from .frontend import async_register_frontend, async_remove_panel
 from .validation import validate_options
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH,
              Platform.NUMBER, Platform.SELECT, Platform.TEXT]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
+def remove_superseded_password(hass, entry):
+    """Remove the obsolete original only when an overriding value is persisted."""
+    if "influx_password" in entry.data and "influx_password" in entry.options:
+        data = {key: value for key, value in entry.data.items() if key != "influx_password"}
+        hass.config_entries.async_update_entry(entry, data=data)
+
+
 async def async_setup_entry(hass, entry):
+    remove_superseded_password(hass, entry)
     options = {**DEFAULTS, **entry.data, **entry.options, "timezone": hass.config.time_zone}
+    if options.get("influx_user") and (options.get("influx_password") or options.get("influx_password_env")) and options.get("influx_url", "").startswith("http://"):
+        _LOGGER.warning("InfluxDB credentials use unencrypted HTTP; configure HTTPS where supported")
     adapter = HomeAssistantAdapter(hass)
     directory = Path(hass.config.path(".storage", DOMAIN, entry.entry_id))
 

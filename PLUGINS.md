@@ -84,10 +84,10 @@ Es werden keine beliebigen HA-Dienste aus Konfigurationstext ausgeführt.
 ## Eigenes Plugin entwickeln
 
 Der Vertrag ist in `energy/contracts.py`, die zentrale Prüfung in `energy/sanitiser.py`,
-die Erkennung in `energy/plugin_registry.py` definiert. API-Version 1 verlangt:
+die Erkennung in `energy/plugin_registry.py` definiert. API-Version 2 verlangt:
 
 - Eine konkrete Unterklasse von `BatteryDriver` bzw. `WallboxDriver`.
-- `info = PluginInfo(identifier, name, kind, api_version=1)` mit stabiler ID,
+- `info = PluginInfo(identifier, name, kind, api_version=2)` mit stabiler ID,
   Anzeigename und Art `battery`/`wallbox`.
 - Typisierte `BatteryFeatures` bzw. `WallboxFeatures`. Fähigkeiten dürfen konfigurationsabhängig
   im Konstruktor gesetzt werden; es sind echte boolesche Werte erforderlich.
@@ -111,6 +111,10 @@ Schreiboperationen `None`. Asynchrone oder abweichende Signaturen werden abgewie
 Einheiten sind Prozent, Watt, Ampere, Phasen 1/3 und zeitzonenbehaftete Zeitstempel.
 Ungültige, negative oder nicht endliche Messwerte werden als fehlend behandelt,
 nicht auf 0 geklemmt. Nicht vertragsgemäße Datentypen führen zu einem Vertragsfehler.
+Akkutreiber müssen für jeden vorhandenen Wert den zugehörigen zeitzonenbehafteten
+Messzeitpunkt in `BatteryReading.soc_sample`, `charge_sample` bzw. `discharge_sample`
+liefern. Fehlende, zukünftige oder 120 Sekunden alte Messwerte werden verworfen;
+der Messzeitpunkt darf nicht durch den Zeitpunkt des Leseaufrufs ersetzt werden.
 Wallbox-Leistungsmessungen ohne aktuelle Zeitmarke werden nicht zur Regelung verwendet.
 Nicht unterstützte Befehle und ungültige Strom-/Leistungsvorgaben werden vor dem
 Hardwareaufruf abgewiesen.
@@ -121,3 +125,8 @@ Module oder doppelte IDs werden abgewiesen und in den Integrationsdiagnosen unte
 werden nicht als Python-Importpfade interpretiert. Es wird nur vertrauenswürdiger,
 lokal installierter Python-Code aus dem Plugin-Paket geladen. Ein Plugin läuft im
 HA-Prozess; der Sanitiser ist eine Daten-/Vertragsgrenze und keine Sandbox für fremden Code.
+
+Der bereitgestellte Hardwareadapter erlaubt ausschließlich Entitäten, die das Plugin
+über sein validiertes `ids`-Mapping zugeordnet hat. Während des Konstruktors ist noch
+kein Entitätszugriff möglich. Dies schützt vor versehentlichen Zugriffen, stellt
+aber keine Sicherheits-Sandbox für bösartigen Python-Code dar.

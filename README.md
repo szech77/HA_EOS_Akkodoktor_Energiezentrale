@@ -258,6 +258,7 @@ nutzbar. Im Dialog **InfluxDB-Verlauf** eintragen:
 | Datenbank / `influx_database` | `homeassistant` |
 | Benutzer / `influx_user` | Vorhandener DB-Benutzer, beispielsweise `homeassistant`; vorzugsweise ein eigener Lesebenutzer. |
 | Passwort / `influx_password` | Tatsächliches Passwort dieses Datenbankbenutzers. |
+| Passwort-Umgebungsvariable / `influx_password_env` | Optional: Name einer Umgebungsvariable im **Home-Assistant-Core-Prozess**. Anstelle des Passworts wird nur dieser Name in der Integration gespeichert. |
 
 Der Hostname ist ein Beispiel für die entsprechende HA-App. Verwende den Host
 deiner Installation; im HA-Core-Container muss dieser auflösbar und erreichbar sein.
@@ -678,7 +679,7 @@ Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
 | Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
-| Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer bedeutet unbekannt. Keine nachträgliche Umbewertung. |
+| Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer: Schätzung als PV-Ladung zum aktuellen PV-Kostenansatz einschließlich Ladeverlusten. |
 
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
 und `discharging_efficiency` gelesen. Dies verändert keine EOS-Konfiguration. Fehlen diese
@@ -700,6 +701,15 @@ ausgebucht. Energie und Kosten werden mit gewichtetem Durchschnitt entnommen.
 Der Kostenbestand bleibt über Neustarts erhalten; nicht beobachtete Bestandszunahmen
 werden beim Abgleich mit dem SoC als unbekannt behandelt. Es werden keine Grundgebühren
 oder Einspeiseerlöse des übrigen Hauses verrechnet. Negative Arbeitspreise sind zulässig.
+
+Ohne ausdrücklich angegebenen Anfangspreis wird der anfängliche Akkuinhalt als
+PV-Ladung geschätzt: gespeicherte kWh geteilt durch den Ladewirkungsgrad, bewertet
+zum aktuellen PV-Kostenansatz (standardmäßig EOS-Einspeisevergütung). Bei der
+Entladung kommen die Entladeverluste hinzu. Auch der noch unbekannte Rest eines
+bisherigen Kostenbestands wird einmalig so bewertet; bekannte Kosten bleiben erhalten.
+Fehlt der Tarif, wartet diese Schätzung auf einen gültigen Wert. Spätere Datenlücken
+bleiben unbekannt. Die Annahme ist eine Näherung; bereits erfasste Auswertungen
+werden dadurch nicht rückwirkend geändert.
 
 Bei nur teilweise bekannten Kosten zeigt die UI die bekannte Teilsumme mit `≈` an;
 bei vollständig unbekannten Kosten steht `—`. Unbekannte Energie wird nicht als kostenlos bewertet.
@@ -796,3 +806,24 @@ Ohne Auswahl wird die alphabetisch erste verfügbare Wetterentität verwendet;
 ohne Wetterentität bleibt die Anzeige verborgen. Nicht verfügbare oder länger
 als eine Stunde nicht gemeldete Werte erscheinen als unbekannt, nicht als 0 °C.
 Die Wetteranzeige hat keinen Einfluss auf die Energieregelung oder EOS-Prognose.
+
+### Schutz der InfluxDB-Zugangsdaten
+
+Ohne Passwort-Umgebungsvariable speichert Home Assistant das eingegebene Passwort in
+seinem Konfigurationseintrag. Es wird beim späteren Öffnen des Formulars nicht
+wieder angezeigt; ein leeres, nicht übermitteltes Feld behält das Passwort bei.
+Vorhandene Backups und Logdateien werden durch die Migration nicht bereinigt.
+
+Alternativ stellt der Administrator das Passwort vor dem Start des
+**Home-Assistant-Core-Prozesses** über eine Umgebungsvariable bereit und trägt nur
+deren Namen ein. Die Bereitstellung ist installationsabhängig; eine Variable in
+einem separaten Add-on reicht nicht aus. Beim Umstellen wird das gespeicherte
+Passwort aus dem aktiven Eintrag entfernt. Ist die Variable nicht vorhanden, kann
+die Integration nicht mit diesem Zugang starten. Zugriff auf Prozessumgebung und
+Backups muss weiterhin geschützt werden. Ein externer Secret Manager oder eine
+TPM-gestützte Bereitstellung kann dafür verwendet werden, wird von dieser
+Integration aber nicht selbst eingerichtet oder garantiert.
+
+Für die InfluxDB-Verbindung TLS und ein Benutzerkonto mit möglichst geringen
+Leserechten verwenden. Ein Hash mit Salt und Pepper ersetzt dieses Passwort nicht:
+für die Anmeldung an InfluxDB benötigt der Client das ursprüngliche Geheimnis.

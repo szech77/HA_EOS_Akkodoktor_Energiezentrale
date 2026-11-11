@@ -3,6 +3,34 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.4.0 - 2026-11-11
+
+### Features
+
+- Anfänglicher Akkuinhalt ohne Anschaffungspreis wird als PV-Ladung zur Einspeisevergütung bzw. zum manuellen PV-Kostenansatz einschließlich Ladeverlusten geschätzt. Unbekannter Restbestand bestehender Installationen wird einmalig bewertet, bekannte Kosten und vergangene Auswertungen bleiben erhalten.
+- PV-Tagesprognosen werden zentral im Backend berechnet, einschließlich lokaler Tagesgrenzen und Zeitumstellung.
+- Optional kann das InfluxDB-Passwort aus einer Umgebungsvariable des Home-Assistant-Prozesses bezogen werden.
+
+### Bugfixes
+
+- Veraltete oder ungültig datierte Akkumesswerte werden nicht als aktuelle Werte für die Steuerung verwendet.
+- Langsame InfluxDB-Historienabfragen blockieren keine Steuerungsänderungen mehr.
+- EOS-Abfragen für Einspeisetarif und Akku-Kostenparameter blockieren die Steuerung nicht mehr; bei zwischenzeitlich geänderten Kosteneinstellungen werden veraltete Antworten verworfen.
+- EOS-Plan und Prognose werden unabhängig vom Steuerungslauf abgerufen; geplante Stopps und die zeitlich begrenzte Nutzung des letzten gültigen Plans bleiben wirksam.
+- Akku-SoC-Grenzen werden im Hintergrund an EOS übertragen. Zwischenzeitlich geänderte Grenzen bleiben unbestätigt und werden anschließend erneut übertragen.
+- E-Auto-Ladeziele werden pro Fahrzeug im Hintergrund übertragen. Überholte Bestätigungen geben keine planbasierte Ladung frei; Änderungen und deaktivierte Planungen werden erneut an EOS gesendet.
+- Parallele Konfigurationsänderungen derselben EOS-Instanz aus der Integration werden serialisiert, damit sich Geräteänderungen nicht gegenseitig überschreiben.
+- Ein bereits gespeichertes InfluxDB-Passwort wird nicht als Vorgabe im Konfigurationsformular ausgegeben.
+
+### Breaking Changes
+
+- Hardware-Plugin-API 2: Drittanbieter-Plugins müssen die API-Version aktualisieren; Akkutreiber müssen die Zeitstempel ihrer einzelnen Messwerte liefern. Siehe PLUGINS.md.
+
+### Security
+
+- Der Hardwareadapter beschränkt Pluginzugriffe auf die zugeordneten Entitäten. Plugins bleiben vertrauenswürdiger Python-Code und laufen im Home-Assistant-Prozess.
+- Für passwortgeschützte InfluxDB-Verbindungen über HTTP wird eine Warnung ausgegeben. Eine durch eine neuere Option überholte Passwortkopie wird bei der Einrichtung entfernt.
+
 ## 0.3.3 - 2026-11-11
 
 ### Features

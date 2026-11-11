@@ -2,6 +2,35 @@
 from time import monotonic, sleep
 from .clients import ENTITY
 
+class ScopedHardwareAdapter:
+    """Expose only the configured entity IDs to a trusted hardware plugin.
+
+    This restricts accidental device writes, not arbitrary Python code execution.
+    The adapter is bound only after plugin configuration has been validated.
+    """
+
+    def __init__(self, adapter):
+        self._adapter = adapter
+        self._allowed = frozenset()
+
+    def bind(self, identities):
+        self._allowed = frozenset(entity for entity in identities if entity)
+
+    def _check(self, entity):
+        if entity not in self._allowed:
+            raise PermissionError("Entity is not assigned to this hardware plugin")
+        if self._adapter is None:
+            raise RuntimeError("Hardware adapter is not connected")
+
+    def state(self, entity):
+        self._check(entity)
+        return self._adapter.state(entity)
+
+    def set(self, entity, value):
+        self._check(entity)
+        return self._adapter.set(entity, value)
+
+
 def entities(defaults, supplied):
     if not isinstance(supplied, dict) or supplied.keys() - defaults.keys():
         raise ValueError("Unbekannte Treiberparameter")

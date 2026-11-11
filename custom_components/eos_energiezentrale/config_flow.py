@@ -39,8 +39,10 @@ def schema_for(group, values):
                 type=selector.TextSelectorType.PASSWORD if key == "influx_password"
                 else selector.TextSelectorType.TEXT, multiline=key.endswith("_parameters") or key == "vehicles"))
         optional_source = key in {"heat_entity", "car_soc_entity", "heat_load_entity", "weather_entity"}
-        marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password"} else vol.Required
-        fields[marker(key, **({} if optional_source and not default else {"default":default}))] = field
+        marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password", "influx_password_env"} else vol.Required
+        # Password fields must not send the saved credential back as a form default.
+        omit_default = key == "influx_password" or (optional_source and not default)
+        fields[marker(key, **({} if omit_default else {"default": default}))] = field
     return vol.Schema(fields)
 
 
@@ -72,6 +74,8 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if group == "sensors":
                 user_input = {"heat_entity":"", "car_soc_entity":"", "heat_load_entity":"", "weather_entity":"", **user_input}
+            if group == "history" and user_input.get("influx_password_env") and not user_input.get("influx_password"):
+                user_input = {**user_input, "influx_password": ""}
             values = {**self.values, **user_input}
             errors = await check(self.hass, values, group == "connection")
             if not errors:
@@ -112,6 +116,8 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
     async def _step(self, group, user_input):
         if group == "sensors" and user_input is not None:
             user_input = {"heat_entity":"", "car_soc_entity":"", "heat_load_entity":"", "weather_entity":"", **user_input}
+        if group == "history" and user_input and user_input.get("influx_password_env") and not user_input.get("influx_password"):
+            user_input = {**user_input, "influx_password": ""}
         values = {**DEFAULTS, **self.config_entry.data, **self.config_entry.options, **(user_input or {})}
         errors = {}
         if user_input is not None:

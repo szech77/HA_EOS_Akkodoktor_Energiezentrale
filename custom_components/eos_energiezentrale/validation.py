@@ -16,6 +16,11 @@ def validate_options(options):
     weather = options.get("weather_entity", "")
     if not isinstance(weather, str) or (weather and (not ENTITY.fullmatch(weather) or not weather.startswith("weather."))):
         raise ValueError("Invalid weather entity")
+    env_name = options.get("influx_password_env", "")
+    if not isinstance(env_name, str) or (env_name and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", env_name)):
+        raise ValueError("Invalid external secret name")
+    if env_name and options.get("influx_password"):
+        raise ValueError("Choose either a password or an external secret")
     ZoneInfo(options["timezone"])
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])

@@ -1,6 +1,6 @@
 """Serialize all controller work outside Home Assistant's event loop."""
 import asyncio
-from copy import deepcopy
+from copy import copy, deepcopy
 from datetime import datetime, timezone
 from functools import partial
 import logging
@@ -13,6 +13,8 @@ from .energy.history import influx_series
 from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
+from .energy.controller import Controller
+from .energy.domain import next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import daily_settings
 
@@ -24,12 +26,30 @@ class EnergyCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name="EOS Energiezentrale", config_entry=entry)
         self.entry, self.app = entry, app
         self.work_lock = asyncio.Lock()
+        self.influx_lock = asyncio.Lock()
         self.closing = False
         self.influx_at = -1000
         self.influx_rows = []
         self.influx_error = False
         self.accounting = None
         self.accounting_cache = {}
+        self.accounting_refresh_task = None
+        self.accounting_revision = 0
+        self.eos_poll_tasks = {}
+        self.eos_poll_started = {"plan": float("-inf"), "solution": float("-inf")}
+        self.battery_sync_task = None
+        self.battery_sync_revision = 0
+        self.battery_sync_last = float("-inf")
+        self.battery_sync_last_revision = -1
+        self.goal_sync_tasks = {}
+        self.goal_sync_last = {}
+        if isinstance(app, Controller):
+            app.external_eos_polling = True
+            app.external_battery_sync = True
+            app.external_goal_sync = True
+            for _, child, _ in getattr(app, "controllers", ()):
+                child.external_battery_sync = True
+                child.external_goal_sync = True
 
     def _tick(self):
         with self.app.lock:
@@ -66,7 +86,6 @@ class EnergyCoordinator(DataUpdateCoordinator):
             result = self.app.snapshot(now)
             try:
                 ledger = self._accounting()
-                ledger.refresh_eos(self.app.config.eos, self.app.config.options["battery_resource"], now)
                 ledger.observe(result["live"], result.get("vehicles", []))
                 result["accounting"] = ledger.report({"period":"day"}, now)
                 self.app.errors.pop("accounting", None)
@@ -81,10 +100,170 @@ class EnergyCoordinator(DataUpdateCoordinator):
         async with self.work_lock:
             if self.closing:
                 return self.data
+            self._schedule_eos_polling()
             try:
-                return await self.hass.async_add_executor_job(self._tick)
+                result = await self.hass.async_add_executor_job(self._tick)
             except (OSError, ValueError) as error:
                 raise UpdateFailed("Local controller unavailable") from error
+            self._schedule_accounting_refresh()
+            self._schedule_battery_sync()
+            self._schedule_goal_sync()
+            return result
+
+    def _vehicle_controllers(self):
+        if not isinstance(self.app, Controller):
+            return ()
+        return tuple(child for _, child, _ in self.app.controllers) if hasattr(self.app, "controllers") else (self.app,)
+
+    @staticmethod
+    def _desired_goal(app, now):
+        departure = next_departure(app.config.daily, now, app.config.zone)
+        return (app.config.daily["target_soc"], departure) if departure else None
+
+    def _schedule_goal_sync(self):
+        if not getattr(self.app, "armed", False):
+            return
+        for app in self._vehicle_controllers():
+            if (not app.goal_sync_ready or app.restore_pending
+                    or app.config.options.get("wallbox_type") == "none"):
+                continue
+            resource = app.config.options["vehicle_resource"]
+            task = self.goal_sync_tasks.get(resource)
+            if task and not task.done():
+                continue
+            desired = self._desired_goal(app, datetime.now(timezone.utc))
+            if desired == app.goal and app.goal_at is not None:
+                continue
+            previous = self.goal_sync_last.get(resource)
+            if (previous and previous[:2] == (desired, app.goal_sync_revision)
+                    and monotonic() - previous[2] < 30):
+                continue
+            revision = app.goal_sync_revision
+            self.goal_sync_last[resource] = (desired, revision, monotonic())
+            self.goal_sync_tasks[resource] = self.hass.async_create_background_task(
+                self._async_sync_goal(app, resource, desired, revision), "EOS vehicle goal sync")
+
+    async def _async_sync_goal(self, app, resource, desired, revision):
+        target, deadline = desired or (0, None)
+        error = None
+        try:
+            await self.hass.async_add_executor_job(app.config.eos.set_vehicle_goal, resource, target, deadline)
+        except Exception as caught:
+            error = caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            current = self._desired_goal(app, datetime.now(timezone.utc))
+            if revision == app.goal_sync_revision and desired == current:
+                if error is None:
+                    app.goal, app.goal_at = desired, datetime.now(timezone.utc)
+                    app.errors.pop("goal", None)
+                else:
+                    app.goal_at = None
+                    app.errors["goal"] = type(error).__name__
+            self.goal_sync_tasks.pop(resource, None)
+            if revision != app.goal_sync_revision or desired != current:
+                self._schedule_goal_sync()
+
+    def _schedule_battery_sync(self):
+        app = self.app
+        if (not isinstance(app, Controller) or not app.config.battery_limits_managed
+                or (self.battery_sync_task and not self.battery_sync_task.done())):
+            return
+        desired = (app.config.daily["battery_min_soc"], app.config.daily["battery_max_soc"])
+        interval = 60 if app.battery_limits_confirmed == desired else 30
+        if (self.battery_sync_last_revision == self.battery_sync_revision
+                and monotonic() - self.battery_sync_last < interval):
+            return
+        self.battery_sync_last = monotonic()
+        self.battery_sync_last_revision = self.battery_sync_revision
+        self.battery_sync_task = self.hass.async_create_background_task(
+            self._async_sync_battery(desired, self.battery_sync_revision), "EOS battery limits sync")
+
+    async def _async_sync_battery(self, desired, revision):
+        error = None
+        try:
+            await self.hass.async_add_executor_job(
+                self.app.config.eos.set_battery_limits,
+                self.app.config.options["battery_resource"], *desired)
+        except Exception as caught:
+            error = caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            current = (self.app.config.daily["battery_min_soc"], self.app.config.daily["battery_max_soc"])
+            if revision == self.battery_sync_revision and desired == current:
+                if error is None:
+                    self.app.battery_limits_confirmed = desired
+                    self.app.battery_limits_confirmed_at = datetime.now(timezone.utc)
+                    self.app.errors.pop("battery_limits", None)
+                else:
+                    self.app.battery_limits_confirmed = None
+                    self.app.battery_limits_confirmed_at = None
+                    self.app.errors["battery_limits"] = type(error).__name__
+                snapshot = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
+                self.async_set_updated_data({**(self.data or {}), **snapshot})
+            self.battery_sync_task = None
+            if revision != self.battery_sync_revision or desired != current:
+                self._schedule_battery_sync()
+
+    def _schedule_eos_polling(self):
+        if not isinstance(self.app, Controller):
+            return
+        now = monotonic()
+        for kind, interval in (("plan", 15), ("solution", 60)):
+            task = self.eos_poll_tasks.get(kind)
+            if (task and not task.done()) or now - self.eos_poll_started[kind] < interval:
+                continue
+            self.eos_poll_started[kind] = now
+            self.eos_poll_tasks[kind] = self.hass.async_create_background_task(
+                self._async_poll_eos(kind), "EOS " + kind + " polling")
+
+    async def _async_poll_eos(self, kind):
+        started = datetime.now(timezone.utc)
+        try:
+            result = await self.hass.async_add_executor_job(getattr(self.app.config.eos, kind))
+            error = None
+        except Exception as caught:
+            result, error = None, caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            def apply():
+                with self.app.lock:
+                    now = started if error is not None else datetime.now(timezone.utc)
+                    if kind == "plan":
+                        self.app.apply_eos_plan(result, now, error)
+                    else:
+                        self.app.apply_eos_forecast(result, now, error)
+            await self.hass.async_add_executor_job(apply)
+
+    def _schedule_accounting_refresh(self):
+        """Refresh accounting data without holding the device-control lock."""
+        ledger = self.accounting
+        if not isinstance(ledger, Accounting) or (self.accounting_refresh_task and not self.accounting_refresh_task.done()):
+            return
+        detached = copy(ledger)
+        detached.settings = deepcopy(ledger.settings)
+        settings = deepcopy(ledger.settings)
+        self.accounting_refresh_task = self.hass.async_create_background_task(
+            self._async_refresh_accounting(ledger, detached, settings, self.accounting_revision), "EOS accounting refresh")
+
+    async def _async_refresh_accounting(self, ledger, detached, settings, revision):
+        try:
+            await self.hass.async_add_executor_job(
+                detached.refresh_eos, self.app.config.eos,
+                self.app.config.options["battery_resource"], datetime.now(timezone.utc))
+        except Exception:
+            _LOGGER.exception("EOS accounting refresh failed")
+            return
+        async with self.work_lock:
+            if (self.closing or self.accounting is not ledger or ledger.settings != settings
+                    or self.accounting_revision != revision):
+                return
+            for key in ("last_eos_attempt", "eos_battery", "eos_error",
+                        "last_pv_attempt", "pv_tariff", "pv_error"):
+                setattr(ledger, key, getattr(detached, key))
 
     async def async_change(self, *, enabled=None, settings=None):
         async with self.work_lock:
@@ -92,6 +271,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 raise ValueError("Integration is stopping")
             def change(settings=settings):
                 with self.app.lock:
+                    now = datetime.now(timezone.utc)
+                    previous_goals = [(vehicle, self._desired_goal(vehicle, now))
+                                      for vehicle in self._vehicle_controllers()]
                     if enabled is not None:
                         self.app.set_armed(enabled)
                     if settings is not None and "vehicle_id" in settings:
@@ -99,16 +281,28 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         if not hasattr(self.app,"change_vehicle_settings"):
                             raise ValueError("No vehicle fleet configured")
                         self.app.change_vehicle_settings(identity,{key:value for key,value in settings.items() if key!="vehicle_id"})
+                        if settings.keys() & {"battery_min_soc", "battery_max_soc"}:
+                            self.battery_sync_revision += 1
+                            self.app.battery_limits_confirmed = None
+                            self.app.battery_limits_confirmed_at = None
                         settings=None
                     if settings is not None:
                         values = daily_settings({**self.app.config.daily, **settings},
                                                 self.app.config.options["regulation_interval_s"])
                         manage_limits = bool(settings.keys() & {"battery_min_soc", "battery_max_soc"})
                         self.app.config.update(values, manage_battery_limits=manage_limits)
+                        if manage_limits:
+                            self.battery_sync_revision += 1
+                            self.app.battery_limits_confirmed = None
+                            self.app.battery_limits_confirmed_at = None
                         if hasattr(self.app,"persist_primary_settings"):
                             self.app.persist_primary_settings()
                         if manage_limits:
                             self.app.sync_battery_limits(datetime.now(timezone.utc), monotonic(), force=True)
+                    for vehicle, previous in previous_goals:
+                        if previous != self._desired_goal(vehicle, now):
+                            vehicle.goal_sync_revision += 1
+                            vehicle.goal_at = None
                     return self.app.snapshot(datetime.now(timezone.utc))
             try:
                 result = await self.hass.async_add_executor_job(change)
@@ -118,6 +312,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 result = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
                 self.async_set_updated_data(result)
                 raise
+            self._schedule_battery_sync()
+            self._schedule_goal_sync()
             self.async_set_updated_data(result)
 
     def _accounting(self):
@@ -135,6 +331,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     if values.keys() != {"settings"}:
                         raise ValueError("Unexpected settings fields")
                     ledger.configure(values["settings"])
+                    self.accounting_revision += 1
                     return {"ok":True}
                 return ledger.report(values, datetime.now(timezone.utc))
             result = await self.hass.async_add_executor_job(read)
@@ -160,28 +357,45 @@ class EnergyCoordinator(DataUpdateCoordinator):
         return merge_reconstruction(result,deepcopy(historical))
 
     async def async_history(self):
-        async with self.work_lock:
+        # An unresponsive history database must not block control operations.
+        # Separate serialization prevents duplicate concurrent Influx requests.
+        async with self.influx_lock:
             if self.closing:
                 raise ValueError("Integration is stopping")
-            def read():
-                if monotonic() - self.influx_at >= 300:
-                    self.influx_at = monotonic()
-                    try:
-                        self.influx_rows = influx_series(self.app.config)
-                        self.influx_error = False
-                    except Exception:
-                        self.influx_error = True
-                now=datetime.now(timezone.utc)
-                result={"local": self.app.history.read(now),
-                        "influx": self.influx_rows, "influx_error": self.influx_error}
-                if callable(getattr(type(self.app),"vehicle_histories",None)):
-                    result["vehicles"]=self.app.vehicle_histories(now)
-                return result
-            return await self.hass.async_add_executor_job(read)
+            if monotonic() - self.influx_at >= 300:
+                self.influx_at = monotonic()
+                try:
+                    rows = await self.hass.async_add_executor_job(influx_series, self.app.config)
+                except Exception:
+                    self.influx_error = True
+                else:
+                    self.influx_rows = rows
+                    self.influx_error = False
+            async with self.work_lock:
+                if self.closing:
+                    raise ValueError("Integration is stopping")
+                def read():
+                    now = datetime.now(timezone.utc)
+                    result = {"local": self.app.history.read(now),
+                              "influx": self.influx_rows, "influx_error": self.influx_error}
+                    if callable(getattr(type(self.app), "vehicle_histories", None)):
+                        result["vehicles"] = self.app.vehicle_histories(now)
+                    return result
+                return await self.hass.async_add_executor_job(read)
 
     async def async_stop(self):
         # Mark shutdown before waiting for an in-flight tick, so a service
         # disappearing during HA shutdown does not clear the saved user intent.
         self.closing = True
+        if self.battery_sync_task and not self.battery_sync_task.done():
+            self.battery_sync_task.cancel()
+        for task in self.goal_sync_tasks.values():
+            if not task.done():
+                task.cancel()
+        for task in self.eos_poll_tasks.values():
+            if not task.done():
+                task.cancel()
+        if self.accounting_refresh_task and not self.accounting_refresh_task.done():
+            self.accounting_refresh_task.cancel()
         async with self.work_lock:
             await self.hass.async_add_executor_job(partial(self.app.set_armed, False, persist=False))

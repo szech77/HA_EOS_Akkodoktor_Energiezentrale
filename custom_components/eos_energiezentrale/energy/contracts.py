@@ -6,7 +6,7 @@ from typing import ClassVar, Mapping
 
 from .domain import BatteryCommand
 
-API_VERSION = 1
+API_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,9 @@ class BatteryReading:
     soc: float | None
     charge: float | None
     discharge: float | None
+    soc_sample: datetime | None = None
+    charge_sample: datetime | None = None
+    discharge_sample: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -84,7 +87,7 @@ class BatteryDriver(ABC):
 
     def read(self, states: dict, now: datetime) -> BatteryReading:
         from .sanitiser import battery_reading
-        return battery_reading(self._read(states,now))
+        return battery_reading(self._read(states,now),now)
 
     def apply(self, command: BatteryCommand, states: dict) -> None:
         from .sanitiser import battery_command

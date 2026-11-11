@@ -1,5 +1,6 @@
 """Validated controller configuration and durable daily settings."""
 import json
+import os
 import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -51,6 +52,20 @@ def save(path, value):
     pending.replace(path)
 
 
+def influx_credential(options, environment=None):
+    """Resolve the external secret only at runtime, without persisting its value."""
+    env_name = options.get("influx_password_env", "")
+    if not env_name:
+        return options["influx_password"]
+    if not isinstance(env_name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", env_name):
+        raise ValueError("Invalid external secret name")
+    source = os.environ if environment is None else environment
+    value = source.get(env_name)
+    if not isinstance(value, str) or not value:
+        raise ValueError("External InfluxDB secret is unavailable")
+    return value
+
+
 class Configuration:
     def __init__(self, options, ha, directory):
         self.options = options
@@ -77,7 +92,7 @@ class Configuration:
         self.wallbox = WALLBOX_DRIVERS[options["wallbox_type"]](ha, json.loads(options["wallbox_parameters"]))
         self.eos = EOS(options["eos_url"])
         self.influx = Influx(options["influx_url"], options["influx_database"],
-                             options["influx_user"], options["influx_password"])
+                             options["influx_user"], influx_credential(options))
         self.directory = Path(directory)
         self.control_file = self.directory / "control.json"
         control = json.loads(self.control_file.read_text(encoding="utf-8")) if self.control_file.exists() else {"enabled": False}

@@ -11,7 +11,7 @@ from .domain import (battery_command, current_for_power, current_instruction, es
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
-from .presentation import heat_utilization, power_references, weather_display
+from .presentation import daily_pv_forecast, heat_utilization, power_references, weather_display
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 
@@ -53,6 +53,11 @@ class Controller:
         self.pv_session = False
         self.last_minute = None
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
+        self.external_eos_polling = False
+        self.external_battery_sync = False
+        self.external_goal_sync = False
+        self.goal_sync_ready = False
+        self.goal_sync_revision = 0
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -128,7 +133,7 @@ class Controller:
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
     def sync_battery_limits(self, now, clock, *, force=False):
-        if not getattr(self.config, "battery_limits_managed", False):
+        if self.external_battery_sync or not getattr(self.config, "battery_limits_managed", False):
             return
         desired = (self.config.daily["battery_min_soc"], self.config.daily["battery_max_soc"])
         interval = 60 if self.battery_limits_confirmed == desired else 30
@@ -171,44 +176,63 @@ class Controller:
     def update_eos(self, now, clock):
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
-            resources=self.eos_resources()
             try:
                 candidate = self.config.eos.plan()
-                if (not isinstance(candidate, dict)
-                        or instant(candidate.get("generated_at")) is None
-                        or not isinstance(candidate.get("instructions"), list)):
-                    raise ValueError("EOS plan is not ready")
-                candidate=deepcopy(candidate)
-                accepted=False
-                incomplete=False
-                for resource in resources:
-                    previous=self.resource_plans.get(resource)
-                    newer=previous is None or instant(candidate["generated_at"])>=instant(previous["generated_at"])
-                    if newer and current_instruction(candidate,resource,now) is not None:
-                        self.resource_plans[resource]=candidate
-                        self.eos_failure_since.pop(resource,None)
-                        accepted=True
-                    else:
-                        self.eos_failure_since.setdefault(resource,now)
-                        incomplete=True
-                if accepted:
-                    self.plan = candidate
-                if incomplete:
-                    self.errors["eos"]="PlanIncomplete"
-                else:
-                    self.errors.pop("eos", None)
             except Exception as error:
-                for resource in resources:
-                    self.eos_failure_since.setdefault(resource,now)
-                self.errors["eos"] = type(error).__name__
+                self.apply_eos_plan(None, now, error)
+            else:
+                self.apply_eos_plan(candidate, now)
         if clock - self.last_forecast_fetch >= 60:
             self.last_forecast_fetch = clock
             try:
-                self.forecast = forecast_rows(self.config.eos.solution(), now)
-                self.errors.pop("forecast", None)
+                solution = self.config.eos.solution()
             except Exception as error:
-                self.forecast = []
-                self.errors["forecast"] = type(error).__name__
+                self.apply_eos_forecast(None, now, error)
+            else:
+                self.apply_eos_forecast(solution, now)
+
+    def apply_eos_plan(self, candidate, now, error=None):
+        resources = self.eos_resources()
+        try:
+            if error is not None:
+                raise error
+            if (not isinstance(candidate, dict)
+                    or instant(candidate.get("generated_at")) is None
+                    or not isinstance(candidate.get("instructions"), list)):
+                raise ValueError("EOS plan is not ready")
+            candidate = deepcopy(candidate)
+            accepted = False
+            incomplete = False
+            for resource in resources:
+                previous = self.resource_plans.get(resource)
+                newer = previous is None or instant(candidate["generated_at"]) >= instant(previous["generated_at"])
+                if newer and current_instruction(candidate, resource, now) is not None:
+                    self.resource_plans[resource] = candidate
+                    self.eos_failure_since.pop(resource, None)
+                    accepted = True
+                else:
+                    self.eos_failure_since.setdefault(resource, now)
+                    incomplete = True
+            if accepted:
+                self.plan = candidate
+            if incomplete:
+                self.errors["eos"] = "PlanIncomplete"
+            else:
+                self.errors.pop("eos", None)
+        except Exception as error:
+            for resource in resources:
+                self.eos_failure_since.setdefault(resource,now)
+            self.errors["eos"] = type(error).__name__
+
+    def apply_eos_forecast(self, solution, now, error=None):
+        try:
+            if error is not None:
+                raise error
+            self.forecast = forecast_rows(solution, now)
+            self.errors.pop("forecast", None)
+        except Exception as error:
+            self.forecast = []
+            self.errors["forecast"] = type(error).__name__
 
     def update_soc(self, states, box, now):
         if self.config.options.get("wallbox_type") == "none":
@@ -233,6 +257,9 @@ class Controller:
     def sync_goal(self, now, clock, departure):
         daily = self.config.daily
         goal = (daily["target_soc"], departure) if departure else None
+        if self.external_goal_sync:
+            self.goal_sync_ready = True
+            return goal is not None and goal == self.goal and self.goal_at is not None
         if (goal != self.goal or self.goal_at is None) and clock - self.last_goal_attempt >= 30:
             self.last_goal_attempt = clock
             try:
@@ -248,7 +275,8 @@ class Controller:
     def tick(self, now, clock):
         self.control_step = "read_inputs"
         self.sync_battery_limits(now, clock)
-        self.update_eos(now, clock)
+        if not self.external_eos_polling:
+            self.update_eos(now, clock)
         states = self.ha.states()
         captured=getattr(states,"captured_at",None)
         if captured is not None and isinstance(captured,datetime) and captured.utcoffset() is not None:
@@ -463,7 +491,7 @@ class Controller:
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "plugins": {"battery":describe(self.config.battery),"wallbox":describe(self.config.wallbox)},
                     "influx_configured": bool(self.config.influx.url),
-                    "forecast": self.forecast if current else [], "plan_end": plan_end.isoformat() if plan_end else None,
+                    "forecast": self.forecast if current else [], "pv_daily_forecast": daily_pv_forecast(self.forecast if current else [], now, opts["timezone"]), "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}
                                    for item in plan_series(self.plan_for(opts[resource],now), opts[resource])]
                              if self.order_for(opts[resource],now) is not None and (key != "car" or opts.get("wallbox_type") != "none") else [] for key, resource in (("battery", "battery_resource"),

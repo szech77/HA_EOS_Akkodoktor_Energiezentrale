@@ -156,7 +156,8 @@ class PluginRequirements(unittest.TestCase):
             'input_number.charge':row(0,'kW',min=0,max=10,step=.01),
             'input_number.discharge':row(0,'W',min=0,max=10000,step=10)})
         battery=BATTERY_DRIVERS['generic'](ha,params)
-        self.assertEqual(battery.read(ha.rows,NOW),BatteryReading(60,1000,0))
+        sample=battery.read(ha.rows,NOW)
+        self.assertEqual((sample.soc,sample.charge,sample.discharge),(60,1000,0))
         battery.apply(BatteryCommand('limits',4760,1000),ha.rows)
         self.assertAlmostEqual(float(ha.rows['input_number.charge']['state']),4.76)
         self.assertEqual(ha.rows['input_select.battery_mode']['state'],'limits')
@@ -179,3 +180,45 @@ class CapabilityRegulation(unittest.TestCase):
             self.assertGreaterEqual(amps,6)
             self.assertLessEqual(amps*3*230,5000)
         finally:fixture.doCleanups()
+
+
+class BatteryFreshnessRequirements(unittest.TestCase):
+    def test_individual_battery_values_require_their_own_fresh_timestamp(self):
+        from custom_components.eos_energiezentrale.energy.sanitiser import battery_reading
+        from datetime import timedelta
+        value=BatteryReading(70,1000,500,NOW,NOW-timedelta(seconds=120),NOW+timedelta(seconds=1))
+        result=battery_reading(value,NOW)
+        self.assertEqual(result.soc,70)
+        self.assertIsNone(result.charge)
+        self.assertIsNone(result.discharge)
+
+    def test_missing_or_naive_battery_timestamps_fail_closed_at_plugin_boundary(self):
+        from custom_components.eos_energiezentrale.energy.sanitiser import battery_reading
+        value=BatteryReading(70,1000,500,None,NOW.replace(tzinfo=None),None)
+        result=battery_reading(value,NOW)
+        self.assertEqual((result.soc,result.charge,result.discharge),(None,None,None))
+
+    def test_plugin_api_version_one_is_rejected(self):
+        class OldPlugin(NRGkick):
+            info=PluginInfo('legacy','Old plugin','wallbox',1)
+        with self.assertRaises(PluginContractError):
+            validate_class(OldPlugin)
+
+
+class ScopedHardwareRequirements(unittest.TestCase):
+    def test_plugin_can_only_access_its_configured_entities(self):
+        params,ha=generic_wallbox()
+        plugin=WALLBOX_DRIVERS['generic'](ha,params)
+        self.assertEqual(plugin.ha.state('sensor.ev_w')['state'],'0')
+        for entity in ('input_boolean.other','sensor.other',''):
+            with self.subTest(entity=entity),self.assertRaises(PermissionError):
+                plugin.ha.set(entity,True)
+        self.assertEqual(ha.commands,[])
+        plugin.charge(6.2,plugin.read(ha.rows,NOW))
+        self.assertEqual(ha.commands,[('input_number.ev_current',6.2),('input_boolean.ev_enable',True)])
+
+    def test_unbound_adapter_cannot_access_any_entity(self):
+        from custom_components.eos_energiezentrale.energy.device_io import ScopedHardwareAdapter
+        adapter=ScopedHardwareAdapter(Mock())
+        with self.assertRaises(PermissionError):
+            adapter.state('sensor.anything')

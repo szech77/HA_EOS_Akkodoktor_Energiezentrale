@@ -12,6 +12,7 @@ from .contracts import (API_VERSION, BatteryDriver, WallboxDriver, BatteryFeatur
                         WallboxFeatures, PluginInfo, PluginField, PluginContractError)
 from .clients import ENTITY
 from .plugin_parameters import parameters
+from .device_io import ScopedHardwareAdapter
 
 _LOGGER = logging.getLogger(__name__)
 IDENTIFIER = re.compile(r"[a-z][a-z0-9_]{0,47}\Z")
@@ -80,8 +81,11 @@ class PluginFactory:
         self.info = plugin.info
         self.configuration = plugin.configuration
 
-    def __call__(self,ha,params):
-        return validate_instance(self.plugin_class(ha,parameters(self.configuration,params)))
+    def __call__(self, ha, params):
+        scoped_adapter = ScopedHardwareAdapter(ha)
+        plugin = validate_instance(self.plugin_class(scoped_adapter, parameters(self.configuration, params)))
+        scoped_adapter.bind(plugin.ids.values())
+        return plugin
 
 
 def load_plugins(package_name=__package__+".plugins"):

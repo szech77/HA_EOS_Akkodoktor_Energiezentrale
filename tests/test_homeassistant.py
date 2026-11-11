@@ -60,6 +60,57 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.entry.runtime_data = EnergyCoordinator(self.hass, self.entry, app)
         return self.entry.runtime_data, app
 
+    async def test_slow_history_database_does_not_block_control_changes(self):
+        from threading import Event
+        coordinator, app = self.controller()
+        started, finish = Event(), Event()
+        def delayed_history(_config):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release history request")
+            return [{"solar": 123}]
+        app.history.read.return_value = []
+        with patch("custom_components.eos_energiezentrale.coordinator.influx_series", side_effect=delayed_history):
+            history = asyncio.create_task(coordinator.async_history())
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+                app.set_armed.assert_called_once_with(True)
+            finally:
+                finish.set()
+            self.assertEqual((await history)["influx"], [{"solar": 123}])
+
+    async def test_slow_eos_plan_does_not_block_control_or_local_measurements(self):
+        from threading import Event
+        started, finish = Event(), Event()
+        adapter = Mock()
+        adapter.states.return_value = {}
+        config = Configuration({**DEFAULTS, "wallbox_type": "none"}, adapter, self.directory)
+        config.eos = Mock()
+        config.eos.solution.return_value = {}
+
+        def delayed_plan():
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS plan request")
+            raise OSError("offline")
+
+        config.eos.plan.side_effect = delayed_plan
+        app = Controller(adapter, config)
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        try:
+            result = await asyncio.wait_for(coordinator._async_update_data(), timeout=2)
+            self.assertIn("time", result["live"])
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+            self.assertTrue(app.armed)
+            self.assertTrue(app.restore_pending)
+            self.assertIsNone(app.order_for("battery1", datetime.now(timezone.utc)))
+        finally:
+            finish.set()
+        await asyncio.wait_for(coordinator.eos_poll_tasks["plan"], timeout=3)
+        self.assertIn("eos", app.errors)
+
     async def test_reporting_storage_error_never_disables_device_control(self):
         coordinator, app = self.controller()
         app.armed = True
@@ -70,6 +121,75 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertIn("accounting",result["errors"])
         app.release.assert_not_called()
         app.remember_control.assert_not_called()
+
+    async def test_slow_accounting_refresh_does_not_block_control_or_apply_stale_settings(self):
+        from threading import Event
+        from zoneinfo import ZoneInfo
+        from custom_components.eos_energiezentrale.energy.accounting import Accounting
+
+        coordinator, app = self.controller()
+        coordinator.accounting = Accounting(self.directory, ZoneInfo("Europe/Berlin"))
+        started, finish = Event(), Event()
+
+        def delayed_tariff(_now):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS accounting request")
+            return {"constant_ct": 8.2}
+
+        app.config.eos.feedin_accounting.side_effect = delayed_tariff
+        app.config.eos.battery_accounting.return_value = {
+            "capacity_wh": 11000, "charge_efficiency": .95, "discharge_efficiency": .95}
+        try:
+            await coordinator._async_update_data()
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+            await asyncio.wait_for(coordinator.async_accounting({"settings": {"pv_price_source": "manual", "pv_price_ct": 12}}), timeout=2)
+            self.assertEqual(coordinator.accounting.pv_price(), 12)
+        finally:
+            finish.set()
+        await asyncio.wait_for(coordinator.accounting_refresh_task, timeout=3)
+        self.assertIsNone(coordinator.accounting.pv_tariff)
+        self.assertEqual(coordinator.accounting.pv_price(), 12)
+
+    async def test_accounting_refresh_applies_valid_eos_results_after_control_tick(self):
+        from zoneinfo import ZoneInfo
+        from custom_components.eos_energiezentrale.energy.accounting import Accounting
+
+        coordinator, app = self.controller()
+        coordinator.accounting = Accounting(self.directory, ZoneInfo("Europe/Berlin"))
+        app.config.eos.feedin_accounting.return_value = {"constant_ct": 8.2}
+        app.config.eos.battery_accounting.return_value = {
+            "capacity_wh": 11000, "charge_efficiency": .95, "discharge_efficiency": .95}
+        await coordinator._async_update_data()
+        await asyncio.wait_for(coordinator.accounting_refresh_task, timeout=3)
+        self.assertEqual(coordinator.accounting.pv_price(), 8.2)
+        self.assertEqual(coordinator.accounting.effective()["capacity_wh"], 11000)
+
+    async def test_shutdown_does_not_wait_for_slow_accounting_request(self):
+        from threading import Event
+        from zoneinfo import ZoneInfo
+        from custom_components.eos_energiezentrale.energy.accounting import Accounting
+
+        coordinator, app = self.controller()
+        coordinator.accounting = Accounting(self.directory, ZoneInfo("Europe/Berlin"))
+        started, finish = Event(), Event()
+
+        def delayed_tariff(_now):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS request")
+            return {"constant_ct": 8.2}
+
+        app.config.eos.feedin_accounting.side_effect = delayed_tariff
+        try:
+            await coordinator._async_update_data()
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_stop(), timeout=2)
+            self.assertTrue(coordinator.closing)
+            self.assertIsNone(coordinator.accounting.pv_tariff)
+        finally:
+            finish.set()
 
     async def test_cost_settings_are_persisted_and_reported_via_authenticated_api(self):
         from zoneinfo import ZoneInfo
@@ -338,6 +458,30 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         connection.send_error.assert_not_called()
         self.assertEqual(connection.send_result.call_args.args[1]["locale"], "de-DE")
 
+    async def test_websocket_waits_for_delayed_language_response(self):
+        from threading import Event
+        from custom_components.eos_energiezentrale.energy.localization import load_language
+
+        self.controller()
+        started, finish = Event(), Event()
+
+        def delayed_load(*args, **kwargs):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release language request")
+            return load_language(*args, **kwargs)
+
+        with patch("custom_components.eos_energiezentrale.frontend.load_language", side_effect=delayed_load):
+            request = asyncio.create_task(self.invoke({"action": "language", "language": "de"}))
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.assertFalse(request.done())
+            finally:
+                finish.set()
+            connection = await request
+        connection.send_error.assert_not_called()
+        self.assertEqual(connection.send_result.call_args.args[1]["locale"], "de-DE")
+
     async def test_first_setup_starts_without_control_permission(self):
         # Real config, SQLite cache and drivers, while external APIs remain offline.
         self.entry._async_set_state(self.hass, ConfigEntryState.SETUP_IN_PROGRESS, None)
@@ -345,6 +489,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
               patch.object(self.hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
               patch("custom_components.eos_energiezentrale.async_register_frontend", new_callable=AsyncMock)):
             self.assertTrue(await async_setup_entry(self.hass, self.entry))
+            coordinator = self.entry.runtime_data
+            await asyncio.gather(*coordinator.eos_poll_tasks.values())
+            coordinator.async_set_updated_data(await coordinator._async_update_data())
         coordinator = self.entry.runtime_data
         self.assertFalse(coordinator.app.armed)
         self.assertFalse(coordinator.app.owned)
@@ -398,9 +545,12 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             websocket_request(self.hass, connection, {"id": 1, "action": "control", "values": {"enabled": True}})
 
     async def invoke(self, msg):
+        answered = asyncio.Event()
         connection = Mock(user=SimpleNamespace(is_admin=True))
+        connection.send_result.side_effect = lambda *_: answered.set()
+        connection.send_error.side_effect = lambda *_: answered.set()
         websocket_request(self.hass, connection, {"id": 1, **msg})
-        await self.hass.async_block_till_done()
+        await asyncio.wait_for(answered.wait(), timeout=5)
         return connection
 
     async def test_websocket_control_rejects_ambiguous_payload(self):
@@ -597,8 +747,10 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator = EnergyCoordinator(self.hass,self.entry,app)
         coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
         await EnergyNumber(coordinator,"battery_min_soc").async_set_native_value(30)
+        await coordinator.battery_sync_task
         config.eos.set_battery_limits.assert_called_once_with("battery1",30,100)
         await EnergyNumber(coordinator,"battery_max_soc").async_set_native_value(90)
+        await coordinator.battery_sync_task
         config.eos.set_battery_limits.assert_called_with("battery1",30,90)
         self.assertFalse(app.armed)
         self.assertTrue(EnergyBinarySensor(coordinator,"battery_limits_confirmed").is_on)
@@ -613,10 +765,134 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator = EnergyCoordinator(self.hass,self.entry,app)
         coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
         await coordinator.async_change(settings={"battery_min_soc":30,"battery_max_soc":90})
+        await coordinator.battery_sync_task
         self.assertEqual(coordinator.data["settings"]["battery_min_soc"],30)
         self.assertFalse(EnergyBinarySensor(coordinator,"battery_limits_confirmed").is_on)
         self.assertTrue(EnergyBinarySensor(coordinator,"problem").is_on)
         self.assertTrue(Configuration(dict(DEFAULTS),ha,self.directory).battery_limits_managed)
+
+    async def test_slow_battery_sync_does_not_block_changes_and_newest_limits_win(self):
+        from threading import Event
+        started, finish = Event(), Event()
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS), ha, self.directory)
+        config.eos = Mock()
+        calls = []
+
+        def sync(_resource, minimum, maximum):
+            calls.append((minimum, maximum))
+            if len(calls) == 1:
+                started.set()
+                if not finish.wait(5):
+                    raise TimeoutError("test did not release first EOS update")
+
+        config.eos.set_battery_limits.side_effect = sync
+        app = Controller(ha, config)
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        try:
+            await coordinator.async_change(settings={"battery_min_soc": 30})
+            first = coordinator.battery_sync_task
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(settings={"battery_min_soc": 40}), timeout=2)
+            await asyncio.wait_for(coordinator.async_change(enabled=True), timeout=2)
+            self.assertFalse(coordinator.data["battery_limits"]["confirmed"])
+        finally:
+            finish.set()
+        await asyncio.wait_for(first, timeout=3)
+        if coordinator.battery_sync_task is not None:
+            await asyncio.wait_for(coordinator.battery_sync_task, timeout=3)
+        self.assertEqual(calls, [(30, 100), (40, 100)])
+        self.assertEqual(app.battery_limits_confirmed, (40, 100))
+        self.assertTrue(coordinator.data["battery_limits"]["confirmed"])
+
+    async def test_slow_vehicle_goal_never_confirms_a_disabled_schedule(self):
+        from datetime import timedelta
+        from threading import Event
+        started, finish = Event(), Event()
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS), ha, self.directory)
+        config.eos = Mock()
+        departure = datetime.now(timezone.utc) + timedelta(hours=3)
+        config.update({**config.daily, "schedule": "once", "departure": departure.isoformat(), "target_soc": 70})
+        calls = []
+
+        def sync(resource, target, deadline):
+            calls.append((resource, target, deadline))
+            if len(calls) == 1:
+                started.set()
+                if not finish.wait(5):
+                    raise TimeoutError("test did not release EOS vehicle goal")
+
+        config.eos.set_vehicle_goal.side_effect = sync
+        app = Controller(ha, config)
+        app.armed, app.restore_pending, app.goal_sync_ready = True, False, True
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        try:
+            coordinator._schedule_goal_sync()
+            first = coordinator.goal_sync_tasks["ev1"]
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(settings={"schedule": "off"}), timeout=2)
+            self.assertIsNone(app.goal_at)
+            self.assertFalse(app.sync_goal(datetime.now(timezone.utc), 0, None))
+        finally:
+            finish.set()
+        await asyncio.wait_for(first, timeout=3)
+        if "ev1" in coordinator.goal_sync_tasks:
+            await asyncio.wait_for(coordinator.goal_sync_tasks["ev1"], timeout=3)
+        self.assertEqual(calls, [("ev1", 70, departure), ("ev1", 0, None)])
+        self.assertIsNone(app.goal)
+        self.assertFalse(app.sync_goal(datetime.now(timezone.utc), 0, None))
+
+    async def test_vehicle_goal_failure_does_not_confirm_charging_and_retries(self):
+        from datetime import timedelta
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS), ha, self.directory)
+        config.eos = Mock()
+        config.eos.set_vehicle_goal.side_effect = [OSError("offline"), None]
+        departure = datetime.now(timezone.utc) + timedelta(hours=3)
+        config.update({**config.daily, "schedule": "once", "departure": departure.isoformat(), "target_soc": 70})
+        app = Controller(ha, config)
+        app.armed, app.restore_pending, app.goal_sync_ready = True, False, True
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator._schedule_goal_sync()
+        await coordinator.goal_sync_tasks["ev1"]
+        self.assertFalse(app.sync_goal(datetime.now(timezone.utc), 0, departure))
+        self.assertIn("goal", app.errors)
+        coordinator._schedule_goal_sync()
+        self.assertEqual(config.eos.set_vehicle_goal.call_count, 1)
+        desired, revision, _ = coordinator.goal_sync_last["ev1"]
+        coordinator.goal_sync_last["ev1"] = (desired, revision, float("-inf"))
+        coordinator._schedule_goal_sync()
+        await coordinator.goal_sync_tasks["ev1"]
+        self.assertTrue(app.sync_goal(datetime.now(timezone.utc), 0, departure))
+        self.assertNotIn("goal", app.errors)
+
+    async def test_vehicle_goals_are_tracked_independently_in_fleet(self):
+        from datetime import timedelta
+        from custom_components.eos_energiezentrale.energy.fleet import create_controller
+        from test_fleet import definitions
+
+        options = {**DEFAULTS, "vehicles": json.dumps(definitions())}
+        app = create_controller(Mock(), options, self.directory)
+        departure = datetime.now(timezone.utc) + timedelta(hours=3)
+        for index, (_, vehicle, _) in enumerate(app.controllers):
+            vehicle.config.update({**vehicle.config.daily, "schedule": "once",
+                                   "departure": departure.isoformat(), "target_soc": 70 + 10 * index})
+            vehicle.config.eos = Mock()
+            vehicle.goal_sync_ready, vehicle.restore_pending = True, False
+        app.armed = True
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator._schedule_goal_sync()
+        tasks = tuple(coordinator.goal_sync_tasks.values())
+        self.assertEqual(len(tasks), 2)
+        await asyncio.gather(*tasks)
+        first, second = (item[1] for item in app.controllers)
+        first.config.eos.set_vehicle_goal.assert_called_once_with("ev1", 70, departure)
+        second.config.eos.set_vehicle_goal.assert_called_once_with("ev2", 80, departure)
+        self.assertEqual(first.goal, (70, departure))
+        self.assertEqual(second.goal, (80, departure))
 
     async def test_failed_local_save_does_not_write_eos_or_claim_changed_limits(self):
         ha = Mock()
@@ -726,9 +1002,11 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
               patch.object(config.wallbox,'pause') as pause):
             for response in (TimeoutError("offline"), HTTPError("http://eos",503,"not ready",{},None),
                              ValueError("invalid JSON"), None, {"detail":"still planning"}):
-                app.last_plan_fetch = app.last_forecast_fetch = -1000
+                coordinator.eos_poll_started = {"plan": -1000, "solution": -1000}
                 config.eos.plan.side_effect = response if isinstance(response,Exception) else None
                 config.eos.plan.return_value = response
+                await coordinator._async_update_data()
+                await asyncio.gather(*coordinator.eos_poll_tasks.values())
                 result = await coordinator._async_update_data()
                 self.assertTrue(result["armed"])
                 self.assertTrue(result["control_waiting"])
@@ -742,7 +1020,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             config.eos.plan.return_value = {"generated_at":now.isoformat(),"instructions":[instruction(now-timedelta(seconds=1),"NON_EXPORT"),{**instruction(now-timedelta(seconds=1),"IDLE"),"resource_id":"ev1"}]}
             config.eos.solution.side_effect = None
             config.eos.solution.return_value = {}
-            app.last_plan_fetch = app.last_forecast_fetch = -1000
+            coordinator.eos_poll_started = {"plan": -1000, "solution": -1000}
+            await coordinator._async_update_data()
+            await asyncio.gather(*coordinator.eos_poll_tasks.values())
             result = await coordinator._async_update_data()
             self.assertTrue(result["armed"])
             self.assertFalse(result["control_waiting"])
@@ -806,3 +1086,53 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         renamed = EnergySensor(coordinator,"car")
         self.assertEqual(renamed.translation_placeholders["vehicle"],"Familienauto")
         self.assertEqual(before.unique_id,renamed.unique_id)
+
+
+class CredentialRetentionRequirements(unittest.TestCase):
+    def test_only_superseded_password_is_removed_and_other_data_is_preserved(self):
+        from custom_components.eos_energiezentrale import remove_superseded_password
+        hass=Mock()
+        entry=SimpleNamespace(data={'influx_password':'old','eos_url':'http://eos'},
+                              options={'influx_password':'new'})
+        remove_superseded_password(hass,entry)
+        hass.config_entries.async_update_entry.assert_called_once_with(entry,data={'eos_url':'http://eos'})
+
+    def test_original_password_is_not_removed_if_options_do_not_override_it(self):
+        from custom_components.eos_energiezentrale import remove_superseded_password
+        hass=Mock();entry=SimpleNamespace(data={'influx_password':'only'},options={})
+        remove_superseded_password(hass,entry)
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    def test_password_is_not_rendered_in_config_form_default(self):
+        import probatio
+        from homeassistant.helpers.config_validation import custom_serializer
+        from custom_components.eos_energiezentrale.config_flow import schema_for
+        fields=probatio.to_field_list(schema_for('history',{**DEFAULTS,'influx_password':'do-not-echo'}),
+                                      custom_serializer=custom_serializer)
+        self.assertNotIn('do-not-echo',json.dumps(fields))
+        password=next(field for field in fields if field['name']=='influx_password')
+        self.assertFalse(password['required'])
+
+
+class ExternalSecretRequirements(unittest.TestCase):
+    def test_external_secret_is_resolved_without_persisting_its_value(self):
+        from custom_components.eos_energiezentrale.energy.settings import influx_credential
+        options={**DEFAULTS,'influx_password':'','influx_password_env':'EOS_INFLUX_SECRET'}
+        self.assertEqual(influx_credential(options,{'EOS_INFLUX_SECRET':'private-value'}),'private-value')
+        self.assertNotIn('private-value',json.dumps(options))
+
+    def test_missing_external_secret_and_invalid_name_fail_closed_without_disclosing_it(self):
+        from custom_components.eos_energiezentrale.energy.settings import influx_credential
+        for name in ('MISSING_SECRET','INVALID SECRET'):
+            with self.subTest(name=name),self.assertRaises(ValueError) as error:
+                influx_credential({**DEFAULTS,'influx_password_env':name},{})
+            self.assertNotIn('private-value',str(error.exception))
+
+    def test_legacy_password_remains_usable_without_external_secret(self):
+        from custom_components.eos_energiezentrale.energy.settings import influx_credential
+        self.assertEqual(influx_credential({**DEFAULTS,'influx_password':'legacy'},{}),'legacy')
+
+    def test_config_does_not_accept_two_password_sources(self):
+        from custom_components.eos_energiezentrale.validation import validate_options
+        with self.assertRaises(ValueError):
+            validate_options({**DEFAULTS,'influx_password':'legacy','influx_password_env':'EOS_INFLUX_SECRET'})
