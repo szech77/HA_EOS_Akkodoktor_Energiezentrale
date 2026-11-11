@@ -1,0 +1,60 @@
+# ESP32-WROOM development board + 3.3 V RS485 transceiver.
+# Wiring and commissioning: ../docs/deye-esphome-gateway.md
+# Copy the corresponding secret values into your own secrets.yaml.
+esphome:
+  name: deye-modbus-gateway
+  friendly_name: Deye Modbus Gateway
+  min_version: 2026.10.2
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  baud_rate: 0
+
+# No native HA API or MQTT connection is required by the Deye plugin.
+ota:
+  - platform: esphome
+    password: !secret deye_bridge_ota_password
+
+wifi:
+  ssid: !secret deye_bridge_wifi_ssid
+  password: !secret deye_bridge_wifi_password
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/rosenrot00/esphome_modbus_bridge
+      ref: 9119ba5b036af146eb8fb1e4a59aef29d4f63089  # 2026.10.2
+    components: [modbus_bridge]
+
+uart:
+  id: deye_rs485
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  rx_buffer_size: 512
+
+modbus_bridge:
+  id: deye_bridge
+  uart_id: deye_rs485
+  tcp_port: 502
+  tcp_poll_interval: 10
+  tcp_client_timeout: 60000
+  tcp_allowed_clients: 2
+  rtu_response_timeout: 1000
+  # For a transceiver whose DE and /RE are wired together to GPIO18.
+  # With automatic direction control, remove BOTH pin settings below.
+  de_pin: GPIO18
+  re_pin: GPIO18
+  crc_bytes_swapped: false
+  trusted_networks:
+    - !secret deye_bridge_ha_client_cidr
+  reject_untrusted_clients: true
+  protect_reads_for_untrusted_clients: true
+  protect_writes_for_untrusted_clients: true

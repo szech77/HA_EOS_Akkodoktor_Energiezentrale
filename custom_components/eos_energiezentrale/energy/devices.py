@@ -88,6 +88,7 @@ class DeviceSite(BatteryDriver):
             self.devices.append((row,driver))
         self.batteries=[(row,driver) for row,driver in self.devices if row['kind']=='battery']
         self.requires_dispatch_context=len(self.batteries)>1
+        self.uses_dispatch_context=any(driver.uses_dispatch_context for _,driver in self.batteries)
         sizes=[row['capacity_wh'] or None for row,_ in self.batteries]
         size=total(sizes)
         if self.requires_dispatch_context and size is None or size is not None and size>1000000:
@@ -192,8 +193,8 @@ class DeviceSite(BatteryDriver):
             # Confirm a neutral state everywhere before assigning a new budget.
             for _,driver in self.batteries: driver.apply(BatteryCommand('limits'),states)
             for index,(_,driver) in enumerate(self.batteries):
-                driver.apply(BatteryCommand(command.mode if incoming[index] or outgoing[index] else 'limits',
-                    incoming[index],outgoing[index]),states)
+                driver.apply(replace(command,mode=command.mode if incoming[index] or outgoing[index] else 'limits',
+                    charge_w=incoming[index],discharge_w=outgoing[index],required_discharge_w=0),states)
         except Exception:
             try: self._release(states)
             except (OSError,ValueError,RuntimeError): pass

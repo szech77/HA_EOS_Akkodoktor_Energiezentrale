@@ -690,7 +690,8 @@ class Controller:
         # Single-device plugins can ignore this optional context; grouped storage
         # needs individual SoC guards and one common charge/discharge direction.
         driver=getattr(self.config.battery,'driver',self.config.battery)
-        if getattr(driver,'requires_dispatch_context',False) is not True:
+        if (getattr(driver,'requires_dispatch_context',False) is not True
+                and getattr(driver,'uses_dispatch_context',False) is not True):
             return command
         values = [live.get(key) for key in ('grid','battery_discharge','battery_charge')]
         demand = values[0]+values[1]-values[2] if all(value is not None for value in values) else None

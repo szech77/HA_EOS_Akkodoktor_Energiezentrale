@@ -3,28 +3,16 @@
 Register offsets follow https://github.com/sunspec/models/blob/master/json/model_124.json
 and https://manuals.fronius.com/html/4204102649/en-US.html .
 """
-import ipaddress
 from math import floor, isfinite
-import re
 import struct
 
-from .._modbus_tcp import ModbusTCP, ModbusError
+from .._modbus_tcp import ModbusTCP, ModbusError, checked_host
 from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginField, PluginInfo, Measurement
 from ..plugin_parameters import parameters
 
 
 def signed(value):
     return value - 65536 if value >= 32768 else value
-
-
-def checked_host(host):
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        if (len(host)>253 or not all(re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?',label)
-                                    for label in host.split('.'))):
-            raise ValueError('Modbus host must be an IP address or hostname') from None
-    return host
 
 
 class FroniusModbus(BatteryDriver):
