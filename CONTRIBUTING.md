@@ -5,6 +5,9 @@ Mit einem Beitrag bestätigst du, dass du die erforderlichen Rechte besitzt.
 
 ## Arbeitsweise
 
+Für Coding-Agents gelten ergänzend die [Arbeitsanweisungen in AGENTS.md](AGENTS.md),
+einschließlich der Nachbearbeitung von Dependabot-PRs.
+
 1. Branch unter `feature/` oder `bug/` anlegen.
 2. Änderungen klein und fachlich nachvollziehbar halten.
 3. Verhalten und relevante Fehlerfälle testen. Keine Tests schreiben, die nur die
