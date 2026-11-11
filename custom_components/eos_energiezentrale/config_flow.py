@@ -12,6 +12,7 @@ from .plugin_forms import PluginFormMixin, plugin_choices, plugin_object, config
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
 from .device_forms import DeviceFormMixin
+from .flow_menus import show_menu
 
 
 class OptionalWeatherSelector(selector.EntitySelector):
@@ -120,7 +121,7 @@ class ConfigFlow(DeviceFormMixin, PluginFormMixin, config_entries.ConfigFlow, do
 
 class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=[
+        return await show_menu(self,'options','init',[
             'devices' if group=='hardware' else group for group in GROUPS]+['vehicles'])
 
     async def _step(self, group, user_input):
@@ -170,7 +171,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         return rows
 
     async def async_step_vehicles(self,user_input=None):
-        return self.async_show_menu(step_id="vehicles",menu_options=["vehicle_add","vehicle_edit","vehicle_remove"])
+        return await show_menu(self,'options','vehicles',["vehicle_add","vehicle_edit","vehicle_remove"])
 
     async def _choose_vehicle(self,step_id,user_input):
         rows=self._vehicle_rows()

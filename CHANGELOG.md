@@ -15,7 +15,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
-- Keine.
+- Beschriftungen der Konfigurationsmenüs direkt mit der HA-Menüantwort ausgeben. Geräte-, Inbetriebnahme- und Fahrzeugmenüs zeigen damit auch ohne neu geladene Frontend-Übersetzungen lesbare Einträge; Deutsch und Englisch einschließlich Sprachrückfall bleiben unterstützt.
 
 ### Breaking Changes
 

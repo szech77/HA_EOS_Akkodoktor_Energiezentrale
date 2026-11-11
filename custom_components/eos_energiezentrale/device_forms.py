@@ -5,6 +5,7 @@ from homeassistant.helpers import selector
 
 from .energy.devices import DeviceSite, REGISTRIES, device_rows
 from .plugin_forms import configured, plugin_choices, plugin_object
+from .flow_menus import show_menu
 
 
 def choice(options):
@@ -15,11 +16,11 @@ class DeviceFormMixin:
     def _device_values(self):
         return self.values if hasattr(self,'values') else self._vehicle_values()
 
-    def _save_devices(self,rows):
+    async def _save_devices(self,rows):
         values={**self._device_values(),'devices':json.dumps(rows)}
         if hasattr(self,'values'):
             self.values=values
-            return self.async_show_menu(step_id='devices',menu_options=['device_add','device_edit','device_remove','device_done'])
+            return await self.async_step_devices()
         return self.async_create_entry(title='',data=values)
 
     async def async_step_device_done(self,user_input=None):
@@ -27,8 +28,9 @@ class DeviceFormMixin:
         return await self._step('hardware',{'devices':self.values['devices']})
 
     async def async_step_devices(self,user_input=None):
-        return self.async_show_menu(step_id='devices',menu_options=['device_add','device_edit','device_remove']+
-                                   (['device_done'] if hasattr(self,'values') else []))
+        return await show_menu(self,'config' if hasattr(self,'values') else 'options','devices',
+                               ['device_add','device_edit','device_remove']+
+                               (['device_done'] if hasattr(self,'values') else []))
 
     async def async_step_device_add(self,user_input=None):
         if user_input is not None:
@@ -78,7 +80,7 @@ class DeviceFormMixin:
             return self.async_show_form(step_id='device_remove',data_schema=vol.Schema({
                 vol.Required('device_id'):choice([{'value':row['id'],'label':row['name']} for row in device_rows(values)])}),
                 errors={'base':'invalid_config'})
-        return self._save_devices(rows)
+        return await self._save_devices(rows)
 
     async def async_step_device_plugin(self,user_input=None):
         registry=REGISTRIES[self._device_kind]
@@ -116,7 +118,7 @@ class DeviceFormMixin:
                     row.update({key:user_input[key] for key in ('capacity_wh','charge_w','discharge_w')})
                 updated=[row if item['id']==identity else item for item in rows]+([] if identity else [row])
                 DeviceSite(None,updated)
-                return self._save_devices(updated)
+                return await self._save_devices(updated)
             except (ValueError,TypeError,KeyError): errors={'base':'invalid_config'}
         displayed={**defaults,**(user_input or {})}
         fields={vol.Required(key,default=displayed[key]):str for key in ('id','name')}

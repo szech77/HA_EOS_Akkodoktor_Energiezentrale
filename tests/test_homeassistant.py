@@ -325,6 +325,52 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         result=await flow.async_step_hardware_parameters({'battery_parameters':{}})
         self.assertEqual(json.loads(result['data']['vehicles']),definitions())
 
+    async def test_configuration_menus_send_visible_labels_without_frontend_translations(self):
+        for language,device,add,continue_label in (
+                ('de','Geräte','Gerät hinzufügen','Weiter'),('en','Devices','Add device','Continue')):
+            flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+            flow.context={'entry_id':self.entry.entry_id,'language':language}
+            init=await flow.async_step_init()
+            self.assertIsInstance(init['menu_options'],dict)
+            self.assertEqual(init['menu_options']['devices'],device)
+            menu=await flow.async_step_devices()
+            self.assertEqual(menu['menu_options']['device_add'],add)
+            self.assertEqual(set(menu['menu_options']),{'device_add','device_edit','device_remove'})
+            vehicles=await flow.async_step_vehicles()
+            self.assertTrue(all(vehicles['menu_options'].values()))
+            # Labels travel with the JSON response even if the browser still has
+            # translations from an older integration version.
+            payload=json.loads(json.dumps(menu['menu_options']))
+            self.assertEqual(payload['device_add'],add)
+            self.assertEqual(menu['data_schema']({'next_step_id':'device_add'}),{'next_step_id':'device_add'})
+            setup=ConfigFlow();setup.hass=self.hass;setup.context={'language':language}
+            after_save=await setup._save_devices([])
+            self.assertEqual(after_save['menu_options']['device_done'],continue_label)
+            self.assertTrue(all(after_save['menu_options'].values()))
+
+    async def test_menu_labels_use_ha_language_and_english_fallback_without_event_loop_io(self):
+        from threading import get_ident
+        from custom_components.eos_energiezentrale.flow_menus import _translations
+        _translations.cache_clear()
+        main_thread=get_ident();read=Path.read_text;threads=[]
+        def checked_read(path,*args,**kwargs):
+            threads.append(get_ident())
+            self.assertNotEqual(get_ident(),main_thread)
+            return read(path,*args,**kwargs)
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+        self.hass.config.language='de'
+        flow.context={'entry_id':self.entry.entry_id}
+        with patch.object(Path,'read_text',checked_read):
+            result=await flow.async_step_init()
+            self.assertEqual(result['menu_options']['devices'],'Geräte')
+            flow.context['language']='fr'
+            result=await flow.async_step_devices()
+            self.assertEqual(result['menu_options']['device_add'],'Add device')
+            flow.context['language']='de-DE'
+            result=await flow.async_step_devices()
+            self.assertEqual(result['menu_options']['device_add'],'Gerät hinzufügen')
+        self.assertTrue(threads)
+
     async def test_device_manager_adds_edits_and_removes_plugins_independently(self):
         flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
         with patch('socket.create_connection') as connect:
