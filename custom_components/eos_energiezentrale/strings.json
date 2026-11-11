@@ -346,6 +346,9 @@
       }
     },
     "number": {
+      "battery_pv_surplus_w": {
+        "name": "PV charging assistance surplus and deficit threshold"
+      },
       "battery_pv_min_soc": {
         "name": "Battery minimum SoC for PV charging assistance"
       },

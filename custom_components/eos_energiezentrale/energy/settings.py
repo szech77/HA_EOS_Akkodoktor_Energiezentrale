@@ -14,7 +14,8 @@ DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "reserve_w": 0, "pv": False, "fast": False, "battery_pv_support": True,
          "phase_auto": True, "regulation_interval_s": None,
          "battery_min_soc": 20, "battery_max_soc": 100,
-         "battery_pv_start": False, "battery_pv_min_soc": 50, "battery_pv_wait_s": 60}
+         "battery_pv_start": False, "battery_pv_min_soc": 50, "battery_pv_wait_s": 60,
+         "battery_pv_surplus_w": 150}
 
 
 def daily_settings(raw, interval):
@@ -27,7 +28,8 @@ def daily_settings(raw, interval):
     for key, low, high in (("target_soc", 1, 100), ("pv_target_soc", 1, 100),
                            ("reserve_w", 0, 500), ("regulation_interval_s", 5, 120),
                            ("battery_min_soc", 0, 99), ("battery_max_soc", 1, 100),
-                           ("battery_pv_min_soc", 0, 98), ("battery_pv_wait_s", 10, 600)):
+                           ("battery_pv_min_soc", 0, 98), ("battery_pv_wait_s", 10, 600),
+                           ("battery_pv_surplus_w", 1, 5000)):
         if type(values[key]) is not int or not low <= values[key] <= high:
             raise ValueError(f"Ungültiger Bereich: {key}")
     if values["battery_min_soc"] >= values["battery_max_soc"]:

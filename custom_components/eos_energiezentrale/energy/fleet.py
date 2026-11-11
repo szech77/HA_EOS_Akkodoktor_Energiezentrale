@@ -14,7 +14,7 @@ from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
 
 SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
-                           'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s'}
+                           'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w'}
 
 
 def vehicle_options(options):

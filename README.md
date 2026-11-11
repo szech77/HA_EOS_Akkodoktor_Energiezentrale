@@ -328,6 +328,7 @@ Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entität
 | Speichergestützter PV-Ladestart | Eigener Schalter, standardmäßig aus; ermöglicht den Start bei kleinem Überschuss unterhalb der Fahrzeug-Mindestleistung. Benötigt zusätzlich Speicherunterstützung und aktives PV-Laden. |
 | Speicher-Untergrenze für PV-Ladestart | Standard 50 %, einstellbar 0–98 %. Wirksam ist die höhere Grenze aus diesem Wert und dem allgemeinen Speicher-Mindest-SoC. Start ab zwei Prozentpunkten darüber, Ende der Unterstützung an der Grenze. |
 | Überschusswartezeit | Standard 60 s, einstellbar 10–600 s. Unterbrechungen, fehlende Messwerte oder zu niedriger SoC starten die Wartezeit neu. |
+| PV-Überschuss- und Defizitschwelle | Standard 150 W, einstellbar 1–5.000 W. Mindestens dieser Überschuss wird zum Start benötigt. Nach dem Start beendet ein durchgängiges PV-Defizit ab dieser Schwelle über 60 s die Unterstützung. |
 | Abfahrtsplanung | Aus, einmalig mit Datum/Uhrzeit oder wöchentlich mit einzelnen Wochentagen. |
 
 Beispiel: Bei 500 W PV-Überschuss und einphasiger Mindestladung von 1.380 W
@@ -340,13 +341,30 @@ Vor der Ladefreigabe wird die Speicherladung gesperrt und Entladung zur
 Eigenverbrauchsdeckung bestätigt. Es wird keine erzwungene Netzentladung
 verwendet. Während dieser lokalen PV-Unterstützung hat die Deckung der
 Fahrzeug-Mindestleistung Vorrang vor dem EOS-Speicherauftrag. Bei ausreichend
-PV-Leistung geht die Regelung in normales PV-Laden über. Beim Ausschalten des
+PV-Leistung geht die Regelung in normales PV-Laden über; ein späterer Rückgang
+aktiviert die Unterstützung innerhalb derselben Ladung ohne erneute Startwartezeit.
+Beim Ausschalten des
 Features oder bei fehlenden Voraussetzungen endet die Unterstützung; reicht
 der reine PV-Überschuss nicht, wird das Fahrzeug pausiert.
 
+Zum Start muss der PV-Überschuss nach Abzug der Einspeisereserve mindestens die
+Schwelle (Standard 150 W) während der gesamten Startwartezeit erreichen. Nach dem
+Start ist fehlender Überschuss allein kein Stoppgrund: Erst wenn die PV-Leistung
+für durchgehend 60 Sekunden um mindestens die Schwelle unter dem Bedarf aller
+übrigen Verbraucher liegt, wird pausiert. Das gerade ladende Auto, Speicherladung,
+Speicherentladung und die Einspeisereserve werden bei dieser Defizitprüfung
+herausgerechnet. Eine Erholung über die Defizitschwelle setzt die Stoppwartezeit
+zurück. Beispielsweise wird ein Defizit von 149 W bei der Standardschwelle
+weiterhin überbrückt; bei 150 W Defizit startet der 60-Sekunden-Timer. Die
+SoC-Untergrenze bleibt ein sofortiger Stoppgrund, soweit Speicherunterstützung
+benötigt wird. Ein neuer Ladestart nach einem Stopp benötigt wieder die volle
+Startwartezeit und den SoC-Puffer.
+
 Ziel ist eine Netzleistung von 0 W. Mess- und Stellverzögerungen können kurzzeitig
 Netzbezug verursachen. Mehr als 100 W Netzbezug über 10 Sekunden stoppt die
-Unterstützung; ein neuer Versuch benötigt erneut die volle Überschusswartezeit.
+Unterstützung als Sicherheitsstopp. Fehlende Messwerte, nicht bestätigte
+Gerätebefehle oder unzureichende Speicherleistung werden ebenfalls nicht durch
+die PV-Defizitwartezeit überbrückt.
 Ein Speicher ohne bestätigbare Lade- und Entladebegrenzung kann den unterstützten
 Start nicht freigeben. Die Funktion arbeitet auch bei mehreren Fahrzeugen mit
 gemeinsamen Speichergrenzen und konservativer Netzleistungsreservierung.

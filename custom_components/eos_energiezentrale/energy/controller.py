@@ -491,8 +491,9 @@ class Controller:
                  and box.step is not None and box.maximum is not None
                  and (not optional_charger(driver) or
                       self.vehicle_profile is not None and self.vehicle_profile[-1]))
-        balance = (box.watts - live['grid'] - live['battery_discharge']
-                   + live['battery_charge'] - daily['reserve_w']) if valid else None
+        pv_balance = (box.watts - live['grid'] - live['battery_discharge']
+                      + live['battery_charge']) if valid else None
+        balance = pv_balance - daily['reserve_w'] if valid else None
         surplus = min(max(0, live['solar']), balance) if valid else None
         battery_driver = getattr(self, 'support_driver', getattr(self.config,'battery',None))
         features = getattr(battery_driver, 'features', None)
@@ -500,7 +501,7 @@ class Controller:
         floor_stop = (daily['battery_pv_start'] and pv and planned == 0 and box.enabled
                       and (live.get('battery_soc') is None or live['battery_soc'] <= support_floor)
                       and (balance is None or balance < box.watts))
-        was_supported = self.pv_support.active
+        was_supported = self.pv_support.session
         supported = self.pv_support.update(
             enabled=daily['battery_pv_start'] and daily['battery_pv_support'],
             eligible=bool(pv and planned == 0 and valid and
@@ -509,7 +510,9 @@ class Controller:
             soc=live.get('battery_soc'), floor=support_floor,
             wait=daily['battery_pv_wait_s'], clock=clock, surplus=surplus,
             minimum=support_minimum, required=support_minimum-balance if valid else 0,
-            capacity=opts.get('battery_discharge_w',0), grid=live.get('grid'))
+            capacity=opts.get('battery_discharge_w',0), grid=live.get('grid'),
+            threshold=daily['battery_pv_surplus_w'], pv_balance=pv_balance,
+            running=box.charging and self.pv_session)
         live['car_battery_support'] = supported
         if supported:
             # Confirm self-consumption discharge and block battery charging before
@@ -563,6 +566,8 @@ class Controller:
                     driver.pause(box)
                     self.commanded_car_w = 0
                     self.pv_session=False
+                    self.pv_support.reset()
+                    live['car_battery_support'] = False
                 live["car_control"]="waiting_measurements"
                 return
 
@@ -633,6 +638,7 @@ class Controller:
                         + timedelta(hours=24)) if current else None
             return {"source_configuration":deepcopy(self.source_configuration),
                     "pv_battery_support": {"active":self.pv_support.active,
+                        "session":self.pv_support.session,
                         "required_w":self.pv_support.required_w},
                     "vehicle_limits": {"profile":self.vehicle_profile,
                         "confirmed":self.vehicle_profile is not None and self.vehicle_profile == self.vehicle_profile_confirmed},

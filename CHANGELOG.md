@@ -7,8 +7,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
-- Abschaltbarer, standardmäßig deaktivierter speichergestützter PV-Ladestart bei Überschuss unterhalb der minimalen Fahrzeugladeleistung. Speicher-Untergrenze (Standard 50 %) und durchgängige Überschussdauer (Standard 60 s) sind im Panel und als HA-Entitäten einstellbar. Start mit zwei Prozentpunkten Hysterese; die allgemeine Speicher-Untergrenze bleibt wirksam.
-- Vor dem Ladestart bestätigte Sperre der Speicherladung und Freigabe der Eigenverbrauchsentladung. Die Regelung berücksichtigt ein- und dreiphasige Mindestleistung, verfügbare Entladeleistung und gemeinsame Netzleistungsreservierungen mehrerer Fahrzeuge. Fehlende Messwerte, SoC-Untergrenze oder anhaltender Netzbezug beenden die Unterstützung.
+- Abschaltbarer, standardmäßig deaktivierter speichergestützter PV-Ladestart bei Überschuss unterhalb der minimalen Fahrzeugladeleistung. Speicher-Untergrenze (Standard 50 %), durchgängige Überschussdauer (Standard 60 s) und Überschuss-/Defizitschwelle (Standard 150 W) sind im Panel und als HA-Entitäten einstellbar. Start mit zwei Prozentpunkten SoC-Hysterese; die allgemeine Speicher-Untergrenze bleibt wirksam.
+- Vor dem Ladestart bestätigte Sperre der Speicherladung und Freigabe der Eigenverbrauchsentladung. Die Regelung berücksichtigt ein- und dreiphasige Mindestleistung, verfügbare Entladeleistung und gemeinsame Netzleistungsreservierungen mehrerer Fahrzeuge. PV-Schwankungen während einer laufenden Ladung werden überbrückt: Stopp nach 60 Sekunden durchgehendem PV-Defizit ab der eingestellten Schwelle gegenüber allen übrigen Verbrauchern ohne dieses Auto. Erholung setzt die Stoppwartezeit zurück; Erreichen der SoC-Untergrenze und Sicherheitsfehler stoppen sofort.
 
 ### Bugfixes
 

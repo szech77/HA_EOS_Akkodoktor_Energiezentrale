@@ -1,5 +1,6 @@
 """Battery-assisted PV starts, hysteresis, safety and unchanged opt-out behavior."""
 from datetime import timedelta
+from dataclasses import replace
 from unittest.mock import Mock
 
 import pytest
@@ -29,6 +30,9 @@ def sample(control, seconds, *, soc=53, grid=-500, watts=0, discharge=0, charge=
            enabled=False, phases=1, amps=6):
     now=NOW+timedelta(seconds=seconds)
     control.ha.states.return_value=control.states(grid=grid,when=now)
+    if all(value is not None for value in (grid,discharge,charge)):
+        # Total house demand includes this EV; keep simulated AC flows balanced.
+        control.ha.states.return_value['sensor.house']['state']=str(7000+grid+discharge-charge)
     control.battery.read.return_value=BatteryReading(soc,charge,discharge)
     control.box.read.return_value=WallboxReading(watts,'charging' if enabled else 'connected',
                                                 enabled,phases,amps,.1,16,now)
@@ -88,6 +92,114 @@ def test_interruption_resets_the_surplus_wait(control):
     assert control.app.pv_support.active
 
 
+@pytest.mark.parametrize('surplus,expected',[(149,False),(150,True),(200,True)])
+def test_start_requires_at_least_the_default_150_w_surplus(control,surplus,expected):
+    for second in (0,20,40,60): sample(control,second,grid=-surplus)
+    assert control.app.pv_support.active is expected
+    assert control.box.charge.called is expected
+
+
+def test_configured_threshold_and_interrupted_start_wait_are_respected(control):
+    control.config.daily['battery_pv_surplus_w']=250
+    for second in (0,20): sample(control,second,grid=-250)
+    sample(control,40,grid=-249)
+    for second in (60,80,100): sample(control,second,grid=-250)
+    control.box.charge.assert_not_called()
+    sample(control,120,grid=-250)
+    assert control.app.pv_support.active
+
+
+def test_pv_deficit_must_last_60_seconds_and_ev_power_is_excluded(control):
+    start(control)
+    control.box.pause.reset_mock()
+    # The inverter covers this 150 W house deficit plus the 1380 W EV.
+    # Thus grid power remains zero, but the PV balance is still -150 W.
+    for second in (65,85,105,124):
+        sample(control,second,grid=0,watts=1380,discharge=1530,enabled=True)
+        assert control.app.pv_support.active
+        control.box.pause.assert_not_called()
+    sample(control,125,grid=0,watts=1380,discharge=1530,enabled=True)
+    assert not control.app.pv_support.session
+    control.box.pause.assert_called_once()
+    assert control.app.commanded_car_w==0
+
+
+def test_recovery_resets_the_pv_deficit_timer(control):
+    start(control)
+    control.box.pause.reset_mock()
+    for second in (65,85,105):
+        sample(control,second,grid=0,watts=1380,discharge=1530,enabled=True)
+    sample(control,110,grid=0,watts=1380,discharge=1529,enabled=True)
+    for second in (115,135,155,174):
+        sample(control,second,grid=0,watts=1380,discharge=1530,enabled=True)
+        control.box.pause.assert_not_called()
+    sample(control,175,grid=0,watts=1380,discharge=1530,enabled=True)
+    control.box.pause.assert_called_once()
+
+
+@pytest.mark.parametrize('balance',[0,100,-149])
+def test_no_early_stop_in_the_band_between_start_and_deficit_thresholds(control,balance):
+    start(control)
+    control.box.pause.reset_mock()
+    for second in range(65,206,20):
+        sample(control,second,grid=0,watts=1380,discharge=1380-balance,enabled=True)
+        assert control.app.pv_support.active
+    control.box.pause.assert_not_called()
+
+
+def test_soc_floor_stops_immediately_during_pv_deficit_grace_period(control):
+    start(control)
+    sample(control,65,grid=0,watts=1380,discharge=1530,enabled=True)
+    control.box.pause.reset_mock()
+    sample(control,70,soc=50,grid=0,watts=1380,discharge=1530,enabled=True)
+    control.box.pause.assert_called_once()
+    assert not control.app.pv_support.active
+
+
+def test_export_reserve_does_not_count_as_a_household_pv_deficit(control):
+    control.config.daily['reserve_w']=200
+    start(control)
+    control.box.pause.reset_mock()
+    for second in range(65,206,20):
+        sample(control,second,grid=0,watts=1380,discharge=1380,enabled=True)
+    assert control.app.pv_support.active
+    control.box.pause.assert_not_called()
+
+
+def test_a_high_pv_interval_preserves_the_session_for_a_later_drop(control):
+    start(control)
+    sample(control,85,grid=-620,watts=1380,enabled=True)
+    assert not control.app.pv_support.active and control.app.pv_support.session
+    control.box.pause.reset_mock()
+    sample(control,105,grid=0,watts=1380,discharge=1380,enabled=True)
+    assert control.app.pv_support.active
+    control.box.pause.assert_not_called()
+
+
+def test_an_existing_local_pv_charge_is_kept_running_when_surplus_drops(control):
+    for second in (0,20,40,60): sample(control,second,grid=-2000)
+    assert control.app.pv_session
+    control.box.pause.reset_mock()
+    sample(control,80,grid=0,watts=1380,discharge=1380,enabled=True)
+    assert control.app.pv_support.active
+    control.box.pause.assert_not_called()
+
+
+def test_configured_power_threshold_also_applies_to_the_stop_timer(control):
+    control.config.daily['battery_pv_surplus_w']=250
+    start(control)
+    control.box.pause.reset_mock()
+    for second in range(65,146,20):
+        sample(control,second,grid=0,watts=1380,discharge=1580,enabled=True)
+    assert control.app.pv_support.active
+    control.box.pause.assert_not_called()
+    for second in (150,170,190,209):
+        sample(control,second,grid=0,watts=1380,discharge=1630,enabled=True)
+        control.box.pause.assert_not_called()
+    sample(control,210,grid=0,watts=1380,discharge=1630,enabled=True)
+    control.box.pause.assert_called_once()
+
+
 @pytest.mark.parametrize('reason',['off','missing','soc','capacity','unsupported','unplugged','gap'])
 def test_loss_of_conditions_stops_assistance_without_waiting_for_regulation_interval(control,reason):
     start(control)
@@ -115,6 +227,20 @@ def test_sustained_grid_import_stops_a_battery_that_does_not_deliver(control):
     sample(control,75,grid=880,watts=1380,enabled=True)
     assert not control.app.pv_support.active
     control.box.pause.assert_called_once()
+
+
+def test_feedback_timeout_clears_the_session_instead_of_immediately_resuming(control):
+    start(control)
+    control.box.pause.reset_mock()
+    control.box.read.side_effect=lambda *_args:replace(control.box.read.return_value,
+                                                      sample=NOW+timedelta(seconds=60))
+    for second in (80,100):
+        sample(control,second,grid=0,watts=1380,discharge=880,enabled=True)
+        control.box.pause.assert_not_called()
+    sample(control,120,grid=0,watts=1380,discharge=880,enabled=True)
+    control.box.pause.assert_called_once()
+    assert not control.app.pv_support.session
+    assert not control.app.live['car_battery_support']
 
 
 def test_no_start_without_surplus_or_sufficient_battery_power(control):
@@ -203,6 +329,8 @@ def test_shared_battery_budget_does_not_start_two_cars_on_the_same_small_surplus
 def test_assistance_defaults_and_invalid_values():
     assert daily_settings({},20)['battery_pv_start'] is False
     assert daily_settings({},20)['battery_pv_wait_s']==60
+    assert daily_settings({},20)['battery_pv_surplus_w']==150
     for values in ({'battery_pv_start':1},{'battery_pv_min_soc':99},
-                   {'battery_pv_min_soc':-1},{'battery_pv_wait_s':9},{'battery_pv_wait_s':True}):
+                   {'battery_pv_min_soc':-1},{'battery_pv_wait_s':9},{'battery_pv_wait_s':True},
+                   {'battery_pv_surplus_w':0},{'battery_pv_surplus_w':True},{'battery_pv_surplus_w':5001}):
         with pytest.raises(ValueError): daily_settings(values,20)

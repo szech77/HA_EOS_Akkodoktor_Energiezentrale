@@ -589,7 +589,7 @@ function scheduleFields() {
 function fillForm() {
   const vehicle=snapshot.vehicles?.find(item=>item.id===byId("vehicle-selector").value);
   const selected={...(vehicle?.settings ?? snapshot.settings),battery_min_soc:snapshot.settings.battery_min_soc,battery_max_soc:snapshot.settings.battery_max_soc,battery_pv_support:snapshot.settings.battery_pv_support};
-  for (const key of ['battery_pv_start','battery_pv_min_soc','battery_pv_wait_s']) selected[key]=snapshot.settings[key];
+  for (const key of ['battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) selected[key]=snapshot.settings[key];
   for (const [key,value] of Object.entries(selected)) {
     const input = form.elements.namedItem(key);
     if (!input) continue;
@@ -688,7 +688,7 @@ form.elements.schedule.addEventListener('change',scheduleFields);
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const values = {};
-  for (const name of ['target_soc','pv_target_soc','reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s']) values[name] = Number(form.elements[name].value);
+  for (const name of ['target_soc','pv_target_soc','reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
   if (values.battery_min_soc >= values.battery_max_soc) {
     byId('saved').textContent = t('settings.battery_limits_invalid');
     return;
