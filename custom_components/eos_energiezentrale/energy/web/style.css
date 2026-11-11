@@ -137,12 +137,13 @@
 #eos-energy-design .orb svg .battery-bar {fill:currentColor;stroke:none;opacity:.16;transition:opacity .2s ease;}
 #eos-energy-design .orb svg .battery-bar.filled {opacity:1;}
 #eos-energy-design .node.battery-low .orb {color:light-dark(#b42318,#ff7979);}
-@media(prefers-reduced-motion:reduce) {#eos-energy-design .orb svg .battery-bar {transition:none;}}
 
 #eos-energy-design .vehicle-heading {display:flex;align-items:center;gap:10px;}
 #eos-energy-design .vehicle-soc-icon {width:32px;height:32px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--car);}
-#eos-energy-design svg .car-soc-track {fill:currentColor;stroke:none;opacity:.18;}
-#eos-energy-design svg .car-soc-fill {fill:currentColor;stroke:none;}
+#eos-energy-design .node.car .orb > svg:not(.power-ring) {width:34px;height:34px;}
+#eos-energy-design svg .car-soc-bar {fill:currentColor;stroke:none;opacity:.16;transition:opacity .2s ease;}
+#eos-energy-design svg .car-soc-bar.filled {opacity:1;}
+@media(prefers-reduced-motion:reduce) {#eos-energy-design .orb svg .battery-bar, #eos-energy-design svg .car-soc-bar {transition:none;}}
 
 /* Energy/cost reports: common scales, readable mobile cards and touch targets. */
 #eos-energy-design .balance-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}

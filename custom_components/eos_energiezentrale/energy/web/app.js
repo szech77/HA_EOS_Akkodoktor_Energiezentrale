@@ -228,9 +228,14 @@ function vehicleStatus(vehicle) {
   return t(vehicle.live?.car_available === false ? 'vehicle.unavailable' : 'vehicle.disconnected');
 }
 
+function socBarCount(soc) {
+  return valid(soc) && soc>=0 && soc<=100 ? Math.ceil(soc/20) : null;
+}
+
 function carIcon(soc) {
-  const known=valid(soc) && soc>=0 && soc<=100;
-  return `<svg class="vehicle-soc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 1.5-4h11L19 9M4 17v3m16-3v3"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 13h2m8 0h2"/>${known ? `<rect class="car-soc-track" x="7.5" y="6.2" width="9" height="1.8" rx=".4"/><rect class="car-soc-fill" x="7.5" y="6.2" width="${(9*soc/100).toFixed(3)}" height="1.8" rx=".4"/>` : ''}</svg>`;
+  const filled=socBarCount(soc);
+  const bars=Array.from({length:5},(_,index)=>`<rect class="car-soc-bar${filled!==null && index<filled ? ' filled' : ''}" x="${(6.4+index*2.2).toFixed(1)}" y="10.8" width="1.5" height="4.4" rx=".35"/>`).join('');
+  return `<svg class="vehicle-soc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18H2v-6l3-2 2.5-5h6.8L18 10l3 1.5a1.5 1.5 0 0 1 1 1.4V18h-2M8 18h8M5 10h13M11.5 5v5"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><g class="car-soc"${filled===null ? ' hidden' : ''}>${bars}</g></svg>`;
 }
 
 function vehicleCards() {
@@ -315,9 +320,9 @@ function overview() {
     const value = inactiveCar ? null : stale ? retained.value : live[key];
     const soc = key === 'car' && snapshot.vehicles?.length ? undefined : displayed(key + '_soc');
     if (key === 'car') {
-      const knownSoc=valid(soc) && soc>=0 && soc<=100;
-      node.querySelector('.car-soc')?.toggleAttribute('hidden',!knownSoc);
-      node.querySelector('.car-soc-fill')?.setAttribute('width',knownSoc ? String(9*soc/100) : '0');
+      const filled=socBarCount(soc);
+      node.querySelector('.car-soc')?.toggleAttribute('hidden',filled===null);
+      node.querySelectorAll('.car-soc-bar').forEach((bar,index)=>bar.classList.toggle('filled',filled!==null && index<filled));
     }
     if (key === 'battery') {
       const knownSoc=valid(soc) && soc>=0 && soc<=100;
