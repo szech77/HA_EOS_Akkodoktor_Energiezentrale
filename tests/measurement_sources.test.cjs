@@ -26,3 +26,17 @@ test('healthy sources and older snapshots show no configuration warning',()=>{
  assert.equal(notice(undefined,translate('en')),'');
  assert.equal(notice({missing:[],unavailable:[]},translate('de')),'');
 });
+test('a missing SoC on another vehicle names that vehicle without duplicating shared sources',()=>{
+ const text=context.vehicleSocNotices([
+  {name:'First',source_configuration:{unavailable:['car_soc']}},
+  {name:'Second',source_configuration:{unavailable:['car_soc','grid']}}
+ ],translate('en'));
+ assert.match(text,/Second:.*Vehicle SoC/);
+ assert.doesNotMatch(text,/First|Grid connection power/);
+});
+test('SoC grace periods and available unchanged values have no vehicle notice',()=>{
+ assert.equal(context.vehicleSocNotices(undefined,translate('de')),'');
+ assert.equal(context.vehicleSocNotices([{},
+  {name:'Second',source_configuration:{sources:{car_soc:{available:false}},missing:[],unavailable:[]}}
+ ],translate('de')),'');
+});

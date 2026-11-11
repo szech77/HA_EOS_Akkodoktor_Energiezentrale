@@ -49,6 +49,11 @@ class Controller:
         self.battery_limits_confirmed_at = None
         self.last_battery_limits_attempt = -1000
         self.soc = self.soc_report = self.soc_time = None
+        self.soc_missing_since = None
+        # The first poll starts the grace period if no usable vehicle SoC exists.
+        for status in ('missing', 'unavailable'):
+            self.source_configuration[status] = [key for key in self.source_configuration[status]
+                                                  if key != 'car_soc']
         self.soc_w = 0
         self.last_soc_publish = None
         self.last_write = None
@@ -261,6 +266,7 @@ class Controller:
         if raw is not None:
             raw *= 100 if options["car_soc_scale"] == "factor" else 1
             raw = raw if 0 <= raw <= 100 else None
+        self.report_soc_availability(raw, now)
         report = states.get(entity, {}).get("last_updated") if raw is not None else None
         watts = box.watts or 0
         elapsed = (now - self.soc_time).total_seconds() if self.soc_time else 0
@@ -271,6 +277,24 @@ class Controller:
         self.soc_report = report or self.soc_report
         self.soc_time, self.soc_w = now, watts if box.charging else 0
         return raw is not None and isclose(raw, self.soc if self.soc is not None else -1, abs_tol=0.001)
+
+    def report_soc_availability(self, raw, now):
+        # Vehicles may retain the same valid SoC for hours. Warn about an absent
+        # value, not the age of last_updated/last_reported used for power sensors.
+        if raw is not None:
+            self.soc_missing_since = None
+        elif self.soc_missing_since is None or now < self.soc_missing_since:
+            self.soc_missing_since = now
+        report = self.source_configuration
+        source = report['sources'].get('car_soc')
+        if source is None:
+            return
+        source['available'] = raw is not None
+        for status in ('missing', 'unavailable'):
+            report[status] = [key for key in report[status] if key != 'car_soc']
+        if self.soc_missing_since is not None and (now-self.soc_missing_since).total_seconds() > 300:
+            status = 'missing' if source['source'] is None else 'unavailable'
+            report[status] = sorted([*report[status], 'car_soc'])
 
     def sync_goal(self, now, clock, departure):
         daily = self.config.daily

@@ -500,6 +500,13 @@ Wenn dein vorhandener Sensor bereits 0–1 liefert, direkt auswählen und
 `car_soc_scale: factor` im Dialog wählen. Für einen Prozentsensor genügt stattdessen
 `percent`; eine zusätzliche Umrechnung ist für die Energiezentrale nicht nötig.
 
+Ein vorhandener gültiger Fahrzeug-SoC darf unverändert bleiben, auch wenn der
+Sensor längere Zeit keine Aktualisierung meldet. Eine SoC-Warnung erscheint erst,
+wenn mehr als fünf Minuten durchgehend kein gültiger Wert vorhanden ist. Sobald
+wieder ein gültiger Wert vorliegt, verschwindet die Warnung und eine spätere
+Unterbrechung erhält erneut die volle Frist. Im Mehrfahrzeugbetrieb gilt dies
+für jedes Fahrzeug separat. Die Altersprüfungen anderer Messquellen bleiben bestehen.
+
 Falls ein anderer Verbraucher einen Faktor benötigt, ist folgendes Template
 möglich. `sensor.mein_fahrzeug_soc_prozent` ist ein Platzhalter und muss ersetzt
 werden. Dieser Sensor darf nicht wieder auf sich selbst verweisen.
