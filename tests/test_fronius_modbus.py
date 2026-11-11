@@ -4,6 +4,7 @@ from datetime import timedelta
 import socket
 import socketserver
 import struct
+import json
 from threading import Thread
 from unittest.mock import Mock, patch
 
@@ -34,7 +35,8 @@ class Inverter(socketserver.TCPServer):
         self.registers = {40000: 0x5375, 40001: 0x6E53,
                           40002: 1, 40003: 65,
                           40069: 160, 40070: 88,
-                          40159: 113, 40160: model_address - 40161,
+                          40159: 113, 40160: 60,
+                          40221: 999, 40222: model_address - 40223,
                           model_address: 124, model_address + 1: 24,
                           model_address + 26: 65535, model_address + 27: 0}
         self.mppt = 40069
@@ -46,6 +48,7 @@ class Inverter(socketserver.TCPServer):
                                self.base + 6: 5500, self.base + 20: 65534})
         self.registers.update({40071 + index: 0 for index in range(88)})
         self.registers[40077] = 4
+        self.registers[40181], self.registers[40182] = struct.unpack('>HH', struct.pack('>f', 500.))
         for index in range(4):
             start = 40079 + index * 20
             self.registers[start] = index + 1
@@ -370,5 +373,107 @@ def test_meter_sign_override_and_disabling_the_meter():
         disabled=BATTERY_DRIVERS['fronius_modbus'](None,params)
         server.read_units.clear()
         assert 'grid' not in disabled.measurement_keys
-        assert not disabled.read({},NOW).measurements
+        values=disabled.read({},NOW).measurements
+        assert 'grid' not in values and 'house_total' not in values
+        assert values['solar'].value==2000
         assert 200 not in server.read_units
+
+
+@pytest.mark.parametrize('identity,ac,grid,house',[
+    (103,500,1000,1500), (113,500,1000,1500),
+    (103,2000,-1500,500), (113,2000,-1500,500),
+    (103,-1000,1500,500), (113,-1000,1500,500),
+    (103,0,0,0), (113,0,0,0),
+])
+def test_pv_and_house_are_available_from_modbus_with_correct_ac_balance(identity,ac,grid,house):
+    with inverter() as (driver,server):
+        server.registers[40159]=identity
+        if identity==103:
+            server.registers[40160]=50
+            server.registers[40211],server.registers[40212]=999,server.base-2-40213
+            server.registers[40173]=int(ac*10)&65535
+            server.registers[40174]=65535  # -1 scale
+        else:
+            server.registers[40181],server.registers[40182]=struct.unpack('>HH',struct.pack('>f',ac))
+        server.meters[200][40087]=grid&65535
+        measured=driver.read({},NOW)
+        assert measured.measurements['solar'].value==2000
+        assert measured.measurements['house_total'].value==house
+        assert measured.measurements['grid'].value==grid
+        assert not server.writes
+
+
+@pytest.mark.parametrize('register,value',[(40159,999),(40181,32704)])
+def test_missing_or_invalid_ac_power_keeps_house_unknown_but_pv_and_grid_available(register,value):
+    with inverter() as (driver,server):
+        # Float high word 0x7FC0 represents NaN.
+        server.registers[register]=value
+        values=driver.read({},NOW).measurements
+        assert values['house_total'].value is None
+        assert values['solar'].value==2000 and values['grid'].value==1000
+        server.registers[40159]=113
+        server.registers[40181],server.registers[40182]=struct.unpack('>HH',struct.pack('>f',500.))
+        assert driver.read({},NOW+timedelta(seconds=20)).measurements['house_total'].value==1500
+
+
+def test_inconsistent_negative_house_balance_is_unknown_not_clamped_to_zero():
+    with inverter() as (driver,server):
+        server.meters[200][40087]=(-1000)&65535
+        assert driver.read({},NOW).measurements['house_total'].value is None
+
+
+def test_invalid_pv_channel_is_not_a_partial_or_zero_pv_total():
+    with inverter() as (driver,server):
+        server.registers[40090]=65535  # MPP1 power unavailable.
+        values=driver.read({},NOW).measurements
+        assert values['solar'].value is None
+        assert values['house_total'].value==1500  # AC balance is independent.
+
+
+def test_missing_grid_meter_keeps_house_unknown_and_pv_available():
+    with inverter() as (driver,server):
+        server.meters.clear()
+        values=driver.read({},NOW).measurements
+        assert values['grid'].value is None and values['house_total'].value is None
+        assert values['solar'].value==2000
+
+
+def test_three_empty_sensor_fields_use_the_real_plugin_in_controller_and_accounting():
+    import test_requirements as requirements
+    from custom_components.eos_energiezentrale.energy.accounting import Accounting
+    from custom_components.eos_energiezentrale.const import DEFAULTS
+    from custom_components.eos_energiezentrale.energy.settings import Configuration
+    from custom_components.eos_energiezentrale.validation import validate_options
+    fixture=requirements.ControllerRequirements();fixture.setUp()
+    try:
+        with inverter() as (driver,server):
+            options={**DEFAULTS,**fixture.config.options,'pv_entity':'','house_entity':'','grid_entity':'',
+                     'wallbox_type':'none','battery_type':'fronius_modbus',
+                     'battery_parameters':json.dumps({'host':'127.0.0.1','port':server.server_address[1]})}
+            validate_options(options)
+            fixture.app.config=Configuration(options,fixture.ha,fixture.directory)
+            fixture.app.config.eos=fixture.eos
+            ledger=Accounting(fixture.directory,fixture.config.zone)
+            ledger.configure({'efficiency_source':'manual','pv_price_source':'manual','pv_price_ct':8.2})
+            for seconds in (0,60):
+                now=NOW+timedelta(seconds=seconds)
+                # Keep the other, explicitly configured sensors fresh.
+                fixture.ha.states.return_value=fixture.states(when=now)
+                fixture.app.tick(now,seconds)
+                ledger.observe(fixture.app.live)
+            assert fixture.app.live['solar']==2000
+            assert fixture.app.live['grid']==1000
+            assert fixture.app.live['house_total']==1500
+            sources=fixture.app.snapshot(now)['source_configuration']
+            for key in ('solar','grid','house_total'):
+                assert sources['sources'][key]['source']['type']=='plugin'
+                assert sources['sources'][key]['available']
+                assert key not in sources['missing']
+            report=ledger.report({'period':'day'},now)
+            amount=report['consumers']['house']['total']
+            assert amount['kwh']==pytest.approx(500/60000)
+            assert amount['cost_unknown_kwh']==0
+            assert amount['cost_eur']>0
+            assert not server.writes
+    finally:
+        fixture.doCleanups()

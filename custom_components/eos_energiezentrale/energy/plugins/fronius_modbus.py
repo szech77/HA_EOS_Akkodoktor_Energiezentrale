@@ -18,7 +18,7 @@ def signed(value):
 
 
 class FroniusModbus(BatteryDriver):
-    measurement_keys = BatteryDriver.measurement_keys + ("grid",)
+    measurement_keys = BatteryDriver.measurement_keys + ("solar", "grid", "house_total")
     info = PluginInfo("fronius_modbus", "Fronius GEN24 direct Modbus TCP", "battery")
     configuration = (
         PluginField("host", "Modbus host / IP", "text"),
@@ -49,16 +49,20 @@ class FroniusModbus(BatteryDriver):
         self.grid_invert = values["grid_meter_invert"]
         self.grid_model = None
         if not values["grid_meter_enabled"]:
-            self.measurement_keys = BatteryDriver.measurement_keys
+            self.measurement_keys = BatteryDriver.measurement_keys + ("solar",)
         self.model = None
         self.mppt = None
+        self.inverter_model = None
         self.original_grid = None
 
     def _read(self, states, now):
         storage = self._storage()
         soc = self._scaled(storage[6], storage[20], 100)
-        charge, discharge = self._powers()
-        extra = {}
+        powers = self._powers()
+        charge, discharge = powers.get(3), powers.get(4)
+        pv_channels = [powers[key] for key in (1, 2) if key in powers]
+        solar = sum(pv_channels) if pv_channels and all(value is not None for value in pv_channels) else None
+        extra = {"solar": Measurement(solar, now if solar is not None else None)}
         if "grid" in self.measurement_keys:
             try:
                 grid = self._grid_power()
@@ -67,12 +71,40 @@ class FroniusModbus(BatteryDriver):
                 self.grid_model = None
                 grid = None
             extra["grid"] = Measurement(grid, now if grid is not None else None)
+            try:
+                ac = self._ac_power()
+            except (OSError, ValueError):
+                self.model = self.mppt = self.inverter_model = None
+                ac = None
+            # AC output already includes PV, storage discharge and grid charging.
+            # Do not mix DC battery/PV channels into this AC balance.
+            house = ac + grid if ac is not None and grid is not None else None
+            if house is not None and not 0 <= house <= 1000000:
+                house = None
+            extra["house_total"] = Measurement(house, now if house is not None else None)
         # Timestamp a successful live poll, never a cached value. `now` is the
         # acquisition start, so it remains conservative while requests complete.
         return BatteryReading(soc, charge, discharge,
                               now if soc is not None else None,
                               now if charge is not None else None,
                               now if discharge is not None else None, extra)
+
+    def _ac_power(self):
+        if self.inverter_model is None:
+            return None
+        address, identity, length = self.inverter_model
+        if self.client.read(address, 2) != [identity, length]:
+            raise ModbusError("Inverter measurement model changed")
+        if identity < 110:
+            if length < 14: raise ModbusError("Incomplete integer inverter model")
+            raw, scale = self.client.read(address + 14, 2)
+            factor = signed(scale)
+            value = signed(raw) * 10 ** factor if raw != 32768 and -4 <= factor <= 4 else None
+        else:
+            if length < 22: raise ModbusError("Incomplete float inverter model")
+            raw = self.client.read(address + 22, 2)
+            value = struct.unpack(">f", struct.pack(">HH", *raw))[0]
+        return value if value is not None and isfinite(value) and abs(value) <= 1000000 else None
 
     def _grid_power(self):
         if self.grid_model is None:
@@ -123,23 +155,24 @@ class FroniusModbus(BatteryDriver):
         count = header[8]
         if (header[:2] != [160, length] or not 1 <= count <= 16
                 or length != 8 + count * 20):
-            self.model = self.mppt = None
+            self.model = self.mppt = self.inverter_model = None
             raise ModbusError("Invalid SunSpec MPPT model layout")
         powers = {}
         for index in range(count):
             module = self.client.read(address + 10 + index * 20, 20)
             identity = module[0]
             # Fronius: MPP1/2 are PV, MPP3 storage charging, MPP4 discharging.
-            if identity in (3, 4):
+            if identity in (1, 2, 3, 4):
                 if identity in powers:
-                    raise ModbusError("Duplicate SunSpec battery channel")
+                    raise ModbusError("Duplicate SunSpec measurement channel")
                 powers[identity] = self._scaled(module[11], header[4], 1000000)
-        return powers.get(3), powers.get(4)
+        return powers
 
     def _storage(self):
         # Fronius uses wire address 40000 for the SunSpec signature. Walk model
         # lengths rather than assuming an int/float-dependent absolute address.
-        if self.model is None:
+        if self.model is None or ("house_total" in self.measurement_keys and self.inverter_model is None):
+            self.model = self.mppt = self.inverter_model = None
             if self.client.read(40000, 2) != [0x5375, 0x6E53]:
                 raise ModbusError("SunSpec signature missing")
             address = 40002
@@ -156,6 +189,8 @@ class FroniusModbus(BatteryDriver):
                     fronius = name.lower() == b"fronius"
                 if identity == 160:
                     self.mppt = (address, length)
+                if identity in (101, 102, 103, 111, 112, 113):
+                    self.inverter_model = (address, identity, length)
                 if identity == 124:
                     if not fronius or length != 24:
                         raise ModbusError("Unsupported SunSpec storage model length")
@@ -167,7 +202,7 @@ class FroniusModbus(BatteryDriver):
                 raise ModbusError("SunSpec storage model 124 missing")
         values = self.client.read(self.model, 26)
         if values[:2] != [124, 24]:
-            self.model = self.mppt = None
+            self.model = self.mppt = self.inverter_model = None
             raise ModbusError("SunSpec storage model changed; control refused")
         return values[2:]
 

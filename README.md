@@ -154,6 +154,13 @@ gewählter Sensor hat Vorrang; ohne Sensor kann ein Plugin mit entsprechender
 Messfähigkeit einspringen. Fehlt beides, nennt das Panel die fehlende Konfiguration.
 Ein vorübergehender Ausfall einer eingerichteten Quelle wird separat angezeigt.
 
+Beim Plugin `fronius_modbus` können **PV-Leistung**, **Hausverbrauch** und
+**Netzleistung** gemeinsam leer bleiben. PV kommt aus den PV-Kanälen; Hausverbrauch
+wird aus GEN24-AC-Leistung und dem Netzanschlusszähler berechnet. Voraussetzung für
+die Hausbilanz: Der GEN24 erfasst alle Erzeuger an diesem Messpunkt. Bei weiteren
+Erzeugern einen eigenen Hausverbrauchssensor verwenden. Gemeint sind aktuelle
+Leistungen in W; ein kumulativer PV-Energiezähler in kWh ist hierfür nicht erforderlich.
+
 Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug
 benennen, beispielsweise `Mein ID.4`. Der Standard ist **E-Auto**. Der Name erscheint
 im Stromfluss, auf der Fahrzeug-Detailseite, in der Modus-Zeitlinie und in den

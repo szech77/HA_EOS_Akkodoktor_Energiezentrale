@@ -79,16 +79,34 @@ weiterhin Vorrang. Der am GEN24 angebundene Netzanschlusszähler wird über sein
 Gateway-Unit-ID gelesen; SunSpec 201–203 und 211–213 werden erkannt. Fehlt der Zähler
 oder ist er unerreichbar, bleibt der Netzwert unbekannt, während die verfügbaren
 Speichermesswerte weiter angezeigt werden. Bei deaktivierter Zählerabfrage meldet
-das Plugin die Netzleistung nicht als Fähigkeit. PV und Hausverbrauch benötigen
-weiterhin Sensoren oder einen anderen passenden Plugin-Anbieter. Keine neuen
+das Plugin Netzleistung und abgeleiteten Hausverbrauch nicht als Fähigkeiten.
+Die PV-Leistung wird unabhängig davon direkt gelesen. Keine neuen
 Python-Abhängigkeiten nötig. Ältere Entwicklungsversionen dieses Plugins mit
 Sensorparametern bei der Einrichtung erneut auswählen bzw. die veralteten
 `soc`-/`charge_power`-/`discharge_power`-Parameter entfernen.
 
-Fronius meldet die Batteriekanäle als **DC-Leistung**. Die Werte werden ohne
+Die drei allgemeinen Sensorfelder **PV-Leistung**, **Gesamter Hausverbrauch** und
+**Netzleistung** können bei diesem Plugin gemeinsam leer bleiben:
+
+| Leeres Sensorfeld | Wert aus `fronius_modbus` |
+| --- | --- |
+| `pv_entity` | Summe der vorhandenen PV-Kanäle MPP1/MPP2 aus SunSpec 160; aktuelle DC-Leistung in W. Dies ist kein kumulativer kWh-Zähler. |
+| `grid_entity` | AC-Wirkleistung des konfigurierten Primärzählers; Bezug positiv, Einspeisung negativ. |
+| `house_entity` | Gesamter Hausverbrauch einschließlich Fahrzeugen und Wärmepumpe: AC-Ausgangsleistung des GEN24 plus vorzeichenbehaftete Netzleistung. SunSpec 101–103 und 111–113 werden unterstützt. |
+
+Für Netz- und Hausleistung muss die Zählerabfrage aktiviert und der Primärzähler
+am Netzanschlusspunkt vorhanden sein. Die Hausbilanz setzt voraus, dass die
+AC-Leistung dieses GEN24 alle Erzeuger am Messpunkt erfasst. Bei weiteren, nicht
+erfassten Wechselrichtern oder Erzeugern einen eigenen Hausverbrauchssensor wählen;
+dieser hat weiterhin Vorrang. Akkuentladung und Netzladung sind bereits in der
+AC-Leistung enthalten und werden nicht nochmals addiert oder subtrahiert.
+Fehlende Teilmessungen und negative, widersprüchliche Hausbilanzen bleiben unbekannt.
+
+Fronius meldet PV- und Batteriekanäle als **DC-Leistung**. Die Werte werden ohne
 unbelegte Umrechnung in W übernommen. In einer AC-basierten Hausbilanz können
 Umwandlungsverluste deshalb Abweichungen der Quellenzuordnung und Kostenbewertung
 verursachen; größere Bilanzabweichungen bleiben gemäß Bilanzmodell unbekannt.
+Der Hausverbrauch selbst wird aus den AC-Messwerten berechnet.
 Ältere Influx-Historien der bisherigen externen Speichersensoren werden diesem
 Plugin ohne deren Entitätszuordnung nicht automatisch zugerechnet. Die interne
 Aufzeichnung der neuen Live-Messungen läuft regulär weiter.

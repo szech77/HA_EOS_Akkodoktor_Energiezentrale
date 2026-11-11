@@ -43,7 +43,12 @@ def schema_for(group, values):
         marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password", "influx_password_env"} else vol.Required
         # Password fields must not send the saved credential back as a form default.
         omit_default = key == "influx_password" or (optional_source and not default)
-        fields[marker(key, **({} if omit_default else {"default": default}))] = field
+        if key in SENSOR_OPTIONS:
+            # Suggested values remain visible, but clearing an optional picker
+            # must not reinsert the old entity through schema defaults.
+            fields[vol.Optional(key, description={"suggested_value": default} if default else {})] = field
+        else:
+            fields[marker(key, **({} if omit_default else {"default": default}))] = field
     return vol.Schema(fields)
 
 
