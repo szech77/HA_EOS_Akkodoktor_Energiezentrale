@@ -77,11 +77,9 @@
       },
       "devices": {
         "title": "Devices and plugins",
-        "description": "Each device has its own plugin. Chargers are configured together with their vehicle.",
+        "description": "Select a configured device to edit it, or add another device.",
         "menu_options": {
           "device_add": "Add device",
-          "device_edit": "Edit device",
-          "device_remove": "Remove device",
           "device_done": "Continue"
         }
       },
@@ -104,9 +102,10 @@
         }
       },
       "device_plugin": {
-        "title": "Choose this device's plugin",
+        "title": "Edit device",
         "data": {
-          "plugin": "Plugin"
+          "plugin": "Plugin",
+          "remove_device": "Remove this device"
         }
       },
       "device_parameters": {
@@ -120,6 +119,13 @@
           "charge_w": "This battery's maximum charge power (W)",
           "discharge_w": "This battery's maximum discharge power (W)",
           "parameters": "Plugin settings"
+        }
+      },
+      "device_delete": {
+        "title": "Remove device",
+        "description": "Remove {device} from the configuration?",
+        "data": {
+          "confirm": "Confirm removal"
         }
       }
     },
@@ -293,7 +299,8 @@
       "vehicle_plugin": {
         "title": "Select wallbox plugin",
         "data": {
-          "wallbox_type": "Wallbox-Plugin"
+          "wallbox_type": "Wallbox-Plugin",
+          "remove_device": "Remove this device"
         }
       },
       "vehicle_parameters": {
@@ -319,11 +326,9 @@
       },
       "devices": {
         "title": "Devices and plugins",
-        "description": "Each device has its own plugin. Chargers are configured together with their vehicle.",
+        "description": "Select a configured device to edit it, or add another device.",
         "menu_options": {
-          "device_add": "Add device",
-          "device_edit": "Edit device",
-          "device_remove": "Remove device"
+          "device_add": "Add device"
         }
       },
       "device_add": {
@@ -345,9 +350,10 @@
         }
       },
       "device_plugin": {
-        "title": "Choose this device's plugin",
+        "title": "Edit device",
         "data": {
-          "plugin": "Plugin"
+          "plugin": "Plugin",
+          "remove_device": "Remove this device"
         }
       },
       "device_parameters": {
@@ -361,6 +367,13 @@
           "charge_w": "This battery's maximum charge power (W)",
           "discharge_w": "This battery's maximum discharge power (W)",
           "parameters": "Plugin settings"
+        }
+      },
+      "device_delete": {
+        "title": "Remove device",
+        "description": "Remove {device} from the configuration?",
+        "data": {
+          "confirm": "Confirm removal"
         }
       }
     },

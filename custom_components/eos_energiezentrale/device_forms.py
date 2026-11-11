@@ -1,5 +1,6 @@
 """Native HA device management: choose a device, then its own plugin schema."""
 import json
+from functools import partial
 import probatio as vol
 from homeassistant.helpers import selector
 
@@ -28,11 +29,31 @@ class DeviceFormMixin:
         return await self._step('hardware',{'devices':self.values['devices']})
 
     async def async_step_devices(self,user_input=None):
-        return await show_menu(self,'config' if hasattr(self,'values') else 'options','devices',
-                               ['device_add','device_edit','device_remove']+
-                               (['device_done'] if hasattr(self,'values') else []))
+        self._listed_device=None
+        for handler in getattr(self,'_device_handlers',()): delattr(self,handler)
+        self._device_handlers=[]
+        rows=device_rows(self._device_values())
+        entries=[(row['id'],row['name']) for row in rows]
+        if not hasattr(self,'values'):
+            entries.extend(('vehicle:'+row['id'],row.get('name',row['id'])+' (Wallbox)')
+                           for row in self._vehicle_rows())
+        options={}
+        for index,(identity,name) in enumerate(entries):
+            step=f'device_item_{index}'
+            handler='async_step_'+step
+            setattr(self,handler,partial(self._open_device,identity))
+            self._device_handlers.append(handler)
+            options[step]=name
+        section='config' if hasattr(self,'values') else 'options'
+        options['device_add']=None
+        if hasattr(self,'values'): options['device_done']=None
+        return await show_menu(self,section,'devices',options)
+
+    async def _open_device(self,identity,user_input=None):
+        return await self.async_step_device_edit({'device_id':identity})
 
     async def async_step_device_add(self,user_input=None):
+        self._listed_device=None
         if user_input is not None:
             kind=user_input.get('kind')
             if kind=='wallbox' and not hasattr(self,'values'): return await self.async_step_vehicle_add()
@@ -61,12 +82,30 @@ class DeviceFormMixin:
     async def async_step_device_edit(self,user_input=None):
         selected=await self._choose_device('device_edit',user_input)
         if not isinstance(selected,str): return selected
+        self._listed_device=selected
         if selected.startswith('vehicle:'):
             return await self.async_step_vehicle_edit({'vehicle_id':selected[8:]})
         old=next(row for row in device_rows(self._device_values()) if row['id']==selected)
         self._editing_device=selected
         self._device_kind=old['kind']
         return await self.async_step_device_plugin()
+
+    async def async_step_device_delete(self,user_input=None):
+        identity=getattr(self,'_listed_device',None)
+        if not identity: return self.async_abort(reason='no_devices')
+        rows=device_rows(self._device_values())
+        if identity.startswith('vehicle:'):
+            row=next((item for item in self._vehicle_rows() if 'vehicle:'+item['id']==identity),None)
+        else:
+            row=next((item for item in rows if item['id']==identity),None)
+        if row is None: return self.async_abort(reason='no_devices')
+        if user_input is not None:
+            if user_input.get('confirm') is True:
+                return await self.async_step_device_remove({'device_id':identity})
+            return await self.async_step_devices()
+        return self.async_show_form(step_id='device_delete',data_schema=vol.Schema({
+            vol.Required('confirm',default=False):selector.BooleanSelector()}),
+            description_placeholders={'device':row.get('name',row['id'])})
 
     async def async_step_device_remove(self,user_input=None):
         selected=await self._choose_device('device_remove',user_input)
@@ -86,13 +125,17 @@ class DeviceFormMixin:
         registry=REGISTRIES[self._device_kind]
         old=next((row for row in device_rows(self._device_values()) if row['id']==self._editing_device),{})
         if user_input is not None:
+            if user_input.get('remove_device') and self._editing_device:
+                return await self.async_step_device_delete()
             plugin=user_input.get('plugin')
             if plugin not in registry: return self.async_abort(reason='invalid_plugin')
             self._device_plugin=plugin
             return await self.async_step_device_parameters()
         default=old.get('plugin',next(iter(registry)))
-        return self.async_show_form(step_id='device_plugin',data_schema=vol.Schema({
-            vol.Required('plugin',default=default):choice(plugin_choices(registry))}))
+        fields={vol.Required('plugin',default=default):choice(plugin_choices(registry))}
+        if self._editing_device:
+            fields[vol.Optional('remove_device',default=False)]=selector.BooleanSelector()
+        return self.async_show_form(step_id='device_plugin',data_schema=vol.Schema(fields))
 
     async def async_step_device_parameters(self,user_input=None):
         values=self._device_values();rows=device_rows(values)

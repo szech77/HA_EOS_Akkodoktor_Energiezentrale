@@ -24,4 +24,5 @@ async def show_menu(flow,section,step,options):
     language=language.split('-',1)[0].lower()
     if language not in {'de','en'}: language='en'
     labels=await flow.hass.async_add_executor_job(_labels,language,section,step,tuple(options))
+    if isinstance(options,dict): labels.update({key:value for key,value in options.items() if value is not None})
     return flow.async_show_menu(step_id=step,menu_options=labels)

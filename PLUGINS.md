@@ -15,10 +15,15 @@ Unter **Einstellungen → Geräte & Dienste → EOS Energiezentrale → Konfigur
    PV-Wechselrichter oder Wallbox auswählen.
 2. Für genau dieses Gerät ein installiertes Plugin wählen. Anschließend erscheinen
    dessen eigene Felder, einschließlich Entitätsauswahl, Auswahllisten und Schaltern.
-3. Namen und stabile ID vergeben, Plugin konfigurieren und speichern. Für weitere
-   Geräte wiederholen. **Gerät bearbeiten** erlaubt auch den Wechsel des Plugins;
+3. Namen und stabile ID vergeben, Plugin konfigurieren und speichern. Die Seite
+   **Geräte** zeigt alle bereits eingerichteten Geräte mit ihrem Namen und einem
+   Pfeil zum Öffnen; neue Installationen starten mit leerer Liste. Unter der Liste
+   steht **Gerät hinzufügen**. Einen vorhandenen Eintrag auswählen, um ihn zu
+   bearbeiten. Die Bearbeitung erlaubt auch den Wechsel des Plugins;
    die bisherigen Plugin-Parameter werden dabei nicht in das neue Plugin übernommen.
-   **Gerät entfernen** entfernt nur das ausgewählte Gerät aus der Integration.
+   **Dieses Gerät entfernen** in der Plugin-Auswahl markieren und im folgenden
+   Dialog **Entfernen bestätigen** aktivieren. Dies entfernt nur das ausgewählte
+   Gerät aus der Integration. Ohne Bestätigung kehrt der Dialog zur Liste zurück.
 
 Beim ersten Einrichten können mehrere Speicher und PV-Wechselrichter nacheinander
 angelegt werden; **Weiter** führt zu den technischen Grenzen. Fahrzeuge/Wallboxen

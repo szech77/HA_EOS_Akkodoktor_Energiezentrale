@@ -325,6 +325,63 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         result=await flow.async_step_hardware_parameters({'battery_parameters':{}})
         self.assertEqual(json.loads(result['data']['vehicles']),definitions())
 
+    async def test_new_installation_device_list_starts_empty_and_returns_added_device_by_name(self):
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        empty=await flow.async_step_devices()
+        self.assertEqual(set(empty['menu_options']),{'device_add','device_done'})
+        await flow.async_step_device_add({'kind':'inverter'})
+        await flow.async_step_device_plugin({'plugin':'generic'})
+        result=await flow.async_step_device_parameters({'id':'roof','name':'Roof inverter','grid_source':False,
+            'parameters':{'solar':'sensor.pv','inverter_ac':'sensor.ac'}})
+        self.assertEqual(result['menu_options']['device_item_0'],'Roof inverter')
+        edit=await getattr(flow,'async_step_device_item_0')()
+        self.assertEqual(edit['step_id'],'device_plugin')
+        fields={str(key):value for key,value in edit['data_schema'].schema.items()}
+        self.assertIn('remove_device',fields)
+        result=await flow.async_step_device_plugin({'plugin':'generic','remove_device':True})
+        self.assertEqual(result['step_id'],'device_delete')
+        self.assertEqual(result['description_placeholders']['device'],'Roof inverter')
+        cancelled=await flow.async_step_device_delete({'confirm':False})
+        self.assertEqual(cancelled['menu_options']['device_item_0'],'Roof inverter')
+        await flow.async_step_device_item_0()
+        await flow.async_step_device_plugin({'plugin':'generic','remove_device':True})
+        removed=await flow.async_step_device_delete({'confirm':True})
+        self.assertEqual(set(removed['menu_options']),{'device_add','device_done'})
+        self.assertEqual(json.loads(flow.values['devices']),[])
+
+    async def test_native_options_flow_dispatches_device_list_and_confirmed_removal(self):
+        manager=self.hass.config_entries.options
+        with patch('homeassistant.config_entries._async_get_flow_handler',new=AsyncMock(return_value=ConfigFlow)), \
+                patch('socket.create_connection') as connect:
+            result=await manager.async_init(self.entry.entry_id)
+            flow_id=result['flow_id']
+            result=await manager.async_configure(flow_id,{'next_step_id':'devices'})
+            self.assertEqual(result['menu_options']['device_item_0'],'Primary')
+            self.assertIn('Wallbox',result['menu_options']['device_item_1'])
+            result=await manager.async_configure(flow_id,{'next_step_id':'device_item_0'})
+            self.assertEqual(result['step_id'],'device_plugin')
+            result=await manager.async_configure(flow_id,{'plugin':'fronius','remove_device':True})
+            self.assertEqual(result['step_id'],'device_delete')
+            result=await manager.async_configure(flow_id,{'confirm':True})
+            self.assertEqual(result['type'],'create_entry')
+            self.assertEqual(json.loads(self.entry.options['devices']),[])
+            self.assertEqual(self.entry.options['wallbox_type'],self.entry.data['wallbox_type'])
+            connect.assert_not_called()
+
+    async def test_listed_wallbox_can_be_removed_without_removing_storage(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+        flow.context={'entry_id':self.entry.entry_id}
+        menu=await flow.async_step_devices()
+        self.assertIn('device_item_1',menu['menu_options'])
+        edit=await flow.async_step_device_item_1()
+        self.assertEqual(edit['step_id'],'vehicle_plugin')
+        result=await flow.async_step_vehicle_plugin({'wallbox_type':'nrgkick','remove_device':True})
+        self.assertEqual(result['step_id'],'device_delete')
+        result=await flow.async_step_device_delete({'confirm':True})
+        self.assertEqual(result['data']['wallbox_type'],'none')
+        self.assertEqual(result['data']['battery_type'],self.entry.data['battery_type'])
+        self.assertEqual(result['data']['devices'],'null')
+
     async def test_configuration_menus_send_visible_labels_without_frontend_translations(self):
         for language,device,add,continue_label in (
                 ('de','Geräte','Gerät hinzufügen','Weiter'),('en','Devices','Add device','Continue')):
@@ -335,7 +392,8 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(init['menu_options']['devices'],device)
             menu=await flow.async_step_devices()
             self.assertEqual(menu['menu_options']['device_add'],add)
-            self.assertEqual(set(menu['menu_options']),{'device_add','device_edit','device_remove'})
+            self.assertEqual(set(menu['menu_options']),{'device_item_0','device_item_1','device_add'})
+            self.assertEqual(menu['menu_options']['device_item_0'],'Primary')
             vehicles=await flow.async_step_vehicles()
             self.assertTrue(all(vehicles['menu_options'].values()))
             # Labels travel with the JSON response even if the browser still has

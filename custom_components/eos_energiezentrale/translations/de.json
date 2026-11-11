@@ -77,11 +77,9 @@
       },
       "devices": {
         "title": "Geräte und Plugins",
-        "description": "Jedes Gerät erhält ein eigenes Plugin. Wallboxen werden zusammen mit ihrem Fahrzeug konfiguriert.",
+        "description": "Vorhandene Geräte zum Bearbeiten auswählen oder ein weiteres Gerät hinzufügen.",
         "menu_options": {
           "device_add": "Gerät hinzufügen",
-          "device_edit": "Gerät bearbeiten",
-          "device_remove": "Gerät entfernen",
           "device_done": "Weiter"
         }
       },
@@ -104,9 +102,10 @@
         }
       },
       "device_plugin": {
-        "title": "Plugin für dieses Gerät auswählen",
+        "title": "Gerät bearbeiten",
         "data": {
-          "plugin": "Plugin"
+          "plugin": "Plugin",
+          "remove_device": "Dieses Gerät entfernen"
         }
       },
       "device_parameters": {
@@ -120,6 +119,13 @@
           "charge_w": "Maximale Ladeleistung dieses Speichers (W)",
           "discharge_w": "Maximale Entladeleistung dieses Speichers (W)",
           "parameters": "Plugin-Einstellungen"
+        }
+      },
+      "device_delete": {
+        "title": "Gerät entfernen",
+        "description": "Soll {device} aus der Konfiguration entfernt werden?",
+        "data": {
+          "confirm": "Entfernen bestätigen"
         }
       }
     },
@@ -293,7 +299,8 @@
       "vehicle_plugin": {
         "title": "Wallbox-Plugin auswählen",
         "data": {
-          "wallbox_type": "Wallbox-Plugin"
+          "wallbox_type": "Wallbox-Plugin",
+          "remove_device": "Dieses Gerät entfernen"
         }
       },
       "vehicle_parameters": {
@@ -319,11 +326,9 @@
       },
       "devices": {
         "title": "Geräte und Plugins",
-        "description": "Jedes Gerät erhält ein eigenes Plugin. Wallboxen werden zusammen mit ihrem Fahrzeug konfiguriert.",
+        "description": "Vorhandene Geräte zum Bearbeiten auswählen oder ein weiteres Gerät hinzufügen.",
         "menu_options": {
-          "device_add": "Gerät hinzufügen",
-          "device_edit": "Gerät bearbeiten",
-          "device_remove": "Gerät entfernen"
+          "device_add": "Gerät hinzufügen"
         }
       },
       "device_add": {
@@ -345,9 +350,10 @@
         }
       },
       "device_plugin": {
-        "title": "Plugin für dieses Gerät auswählen",
+        "title": "Gerät bearbeiten",
         "data": {
-          "plugin": "Plugin"
+          "plugin": "Plugin",
+          "remove_device": "Dieses Gerät entfernen"
         }
       },
       "device_parameters": {
@@ -361,6 +367,13 @@
           "charge_w": "Maximale Ladeleistung dieses Speichers (W)",
           "discharge_w": "Maximale Entladeleistung dieses Speichers (W)",
           "parameters": "Plugin-Einstellungen"
+        }
+      },
+      "device_delete": {
+        "title": "Gerät entfernen",
+        "description": "Soll {device} aus der Konfiguration entfernt werden?",
+        "data": {
+          "confirm": "Entfernen bestätigen"
         }
       }
     },

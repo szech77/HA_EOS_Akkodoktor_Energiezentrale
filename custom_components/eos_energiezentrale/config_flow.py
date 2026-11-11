@@ -198,6 +198,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         return self.async_create_entry(title="",data=values)
 
     async def async_step_vehicle_add(self,user_input=None):
+        self._listed_device=None
         if user_input is not None and "id" in user_input:
             return await self._vehicle_form("vehicle_add",None,user_input)
         self._editing_vehicle = None
@@ -205,13 +206,19 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
 
     async def async_step_vehicle_plugin(self,user_input=None):
         if user_input is not None:
+            if user_input.get('remove_device') and getattr(self,'_listed_device',None):
+                return await self.async_step_device_delete()
             plugin = user_input.get("wallbox_type")
             if plugin not in WALLBOX_DRIVERS or plugin=="none":
                 return self.async_abort(reason="invalid_plugin")
             self._vehicle_plugin = plugin
             return await self.async_step_vehicle_parameters()
-        return self.async_show_form(step_id="vehicle_plugin",data_schema=vol.Schema({
-            vol.Required("wallbox_type"):selector.SelectSelector(selector.SelectSelectorConfig(options=plugin_choices(WALLBOX_DRIVERS,False)))}))
+        old=next((row for row in self._vehicle_rows() if row['id']==self._editing_vehicle),{})
+        marker=vol.Required('wallbox_type',**({'default':old['wallbox_type']} if old else {}))
+        fields={marker:selector.SelectSelector(selector.SelectSelectorConfig(options=plugin_choices(WALLBOX_DRIVERS,False)))}
+        if old and getattr(self,'_listed_device',None):
+            fields[vol.Optional('remove_device',default=False)]=selector.BooleanSelector()
+        return self.async_show_form(step_id='vehicle_plugin',data_schema=vol.Schema(fields))
 
     async def async_step_vehicle_parameters(self,user_input=None):
         return await self._vehicle_form("vehicle_parameters",self._editing_vehicle,user_input)
@@ -222,6 +229,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
             if not isinstance(selected,str):
                 return selected
             self._editing_vehicle=selected
+            self._listed_device='vehicle:'+selected
             return await self.async_step_vehicle_plugin()
         return await self._vehicle_form("vehicle_edit",self._editing_vehicle,user_input)
 

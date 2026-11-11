@@ -865,7 +865,9 @@ Fähigkeiten (z. B. Phasenumschaltung) und Konfigurationsfelder kommen vom Plugi
 Unter **Konfigurieren → Geräte → Gerät hinzufügen** zuerst die Geräteart,
 dann das Plugin dieses Geräts auswählen und dessen Parameter konfigurieren.
 Jeder Speicher, PV-Wechselrichter und jede Wallbox kann ein anderes Plugin nutzen.
-Bearbeiten und Entfernen sind im selben Menü möglich; Wallboxen werden zusammen
+Vorhandene Geräte erscheinen dort direkt als Liste mit ihrem Namen. Einen Eintrag
+zum Bearbeiten auswählen; „Dieses Gerät entfernen“ in dessen Dialog löscht es nach
+Bestätigung. Neue Installationen beginnen mit leerer Liste. Wallboxen werden zusammen
 mit ihrem Fahrzeug eingerichtet. Bestehende Fronius-Untergeräte werden beim ersten
 Speichern in die allgemeine Geräteliste übernommen. Bis zu acht Speicher/PV-Geräte
 sind möglich. Die gemeinsame EOS-Planung mehrerer Batterien bleibt eine Näherung,
