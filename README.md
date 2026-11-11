@@ -857,6 +857,12 @@ gespeicherte Bilanzintervalle und den bisherigen Akku-Kostenbestand nicht rückw
 
 ## Dynamische Hardware-Plugins
 
+Für den **Deye SUN-12K-SG04LP3-EU** ist eine lokale Anbindung über ein
+Modbus-TCP↔RTU-Gateway verfügbar. Messwerte benötigen keine zusätzliche
+HA-Sensorintegration; kompatible Firmware kann optional über den Remote-Modus
+mit Watchdog gesteuert werden. Der Monitoring-Anschluss muss zur Hardwareversion
+passen. [Anschluss, Einrichtung und Grenzen](PLUGINS.md#deye-sun-12k-sg04lp3-eu-direkt-über-modbus).
+
 Speicher-/Wechselrichter und Wallboxen werden über versionierte Interfaces und lokale,
 dynamisch erkannte Plugins angebunden. Fronius und NRGkick sind eigene Plugins;
 zusätzlich gibt es für beide Gerätearten **Generic Home Assistant**. Plugin-Name,

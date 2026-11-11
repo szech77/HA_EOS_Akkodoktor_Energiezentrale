@@ -1,11 +1,23 @@
 """Bounded synchronous Modbus TCP transport (FC03/FC16), used in the HA executor."""
 import socket
 import struct
+import ipaddress
+import re
 from time import monotonic
 
 
 class ModbusError(OSError):
     """Transport, protocol or device confirmation failed."""
+
+
+def checked_host(host):
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if (len(host)>253 or not all(re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?',label)
+                                    for label in host.split('.'))):
+            raise ValueError('Modbus host must be an IP address or hostname') from None
+    return host
 
 
 class ModbusTCP:

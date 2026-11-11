@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.9.0 - 2026-11-11
+
+### Features
+
+- Deye SUN-12K-SG04LP3-EU direkt über ein Modbus-TCP↔RTU-Gateway anbinden: SoC, Lade-/Entladeleistung, PV-Leistung, Netzanschlussleistung, AC-Leistung und nativen Hausverbrauch ohne zusätzliche HA-Sensorintegration lesen. Als Speicher oder ausschließlich lesenden Wechselrichter in der Geräteliste einrichten, auch gemeinsam mit Fronius und anderen Plugins.
+- Optionalen Deye-Remote-Modus für kompatible Firmware mit bestätigten Leistungsvorgaben und 300-Sekunden-Watchdog unterstützen. Normale Eigenverbrauchsregelung, Entladesperre, Netzladung und ausdrücklich freigegebene Batterieeinspeisung berücksichtigen Geräte-/BMS-Stromgrenzen und frische individuelle SoC-Grenzen. Remote-Steuerung bleibt bei der Einrichtung zunächst ausgeschaltet.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine. Der Plugin-Vertrag erhält die optionale Kennzeichnung `uses_dispatch_context`, damit auch einzelne Speicher die aktuellen SoC-Grenzen und den Bedarf zur PV-Ladeunterstützung erhalten können.
+
+### Security
+
+- Deye-Schreibzugriffe auf das geprüfte dreiphasige 12-kW-Niedervoltprofil und die Remote-Register begrenzen. Keine laufenden Schreibzugriffe auf Batterie-Grundeinstellungen oder Ladezeitpläne. Unbestätigte Vorgaben, fremde Remote-Steuerung und nicht unterstützte Firmware bleiben Fehler; reine PV-Plugins besitzen keine Schreibmethoden.
+
 ## 0.8.0 - 2026-11-11
 
 ### Features

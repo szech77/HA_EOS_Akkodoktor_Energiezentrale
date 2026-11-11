@@ -120,6 +120,7 @@ class UnsupportedFeature(PluginContractError):
 
 
 class BatteryDriver(ABC):
+    uses_dispatch_context: ClassVar[bool] = False
     measurement_keys: ClassVar[tuple[str, ...]] = ("battery_soc", "battery_charge", "battery_discharge")
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]

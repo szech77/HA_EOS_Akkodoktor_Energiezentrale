@@ -325,6 +325,25 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         result=await flow.async_step_hardware_parameters({'battery_parameters':{}})
         self.assertEqual(json.loads(result['data']['vehicles']),definitions())
 
+    async def test_deye_plugin_form_needs_no_ha_entities_and_opens_no_connections(self):
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        with patch('socket.create_connection') as connect:
+            await flow.async_step_device_add({'kind':'battery'})
+            form=await flow.async_step_device_plugin({'plugin':'deye_modbus'})
+            control=next(value for key,value in form['data_schema'].schema.items() if str(key)=='parameters')
+            self.assertIn('remote_control',control.config['fields'])
+            self.assertNotIn('soc',control.config['fields'])
+            result=await flow.async_step_device_parameters({'id':'deye','name':'Deye','grid_source':True,
+                'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,'parameters':{'host':'gateway.local'}})
+            self.assertEqual(result['step_id'],'devices')
+            validate_options(flow.values)
+            config=Configuration(flow.values,Mock(),self.directory)
+            driver=config.battery.batteries[0][1]
+            self.assertEqual(driver.info.identifier,'deye_modbus')
+            self.assertFalse(driver.features.grid_charge)
+            self.assertTrue(config.battery.uses_dispatch_context)
+            connect.assert_not_called()
+
     async def test_new_installation_device_list_starts_empty_and_returns_added_device_by_name(self):
         flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
         empty=await flow.async_step_devices()

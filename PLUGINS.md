@@ -274,6 +274,83 @@ Referenzen: [Fronius GEN24 Modbus-Handbuch](https://manuals.fronius.com/html/420
 [SunSpec-Modell 124](https://github.com/sunspec/models/blob/master/json/model_124.json),
 [SunSpec-Modell 160](https://github.com/sunspec/models/blob/master/json/model_160.json).
 
+## Deye SUN-12K-SG04LP3-EU direkt über Modbus
+
+Das Plugin **Deye SUN-12K-SG04LP3-EU / Modbus TCP gateway** (`deye_modbus`)
+liest den dreiphasigen 12-kW-Niedervolt-Wechselrichter lokal. Eine zusätzliche
+Home-Assistant-Integration oder HA-Mess-/Steuerentitäten sind nicht erforderlich.
+Benötigt wird ein **echtes Modbus-TCP↔Modbus-RTU-Gateway** zum passenden seriellen
+Monitoring-Anschluss des Wechselrichters. Das Protokoll nennt 9600 Baud, 8 Datenbits,
+keine Parität, 1 Stoppbit; die Gateway-Einstellung und die Geräteadresse müssen
+zur tatsächlichen Wechselrichtereinstellung passen.
+
+Die RJ45-Buchse mit Aufschrift „Modbus“ ist kein Ethernet-Anschluss. Das aktuelle
+Deye-Handbuch bezeichnet sie als reserviert; ältere Handbuchstände zeigen eine
+RS485-Belegung mit dem Hinweis, dass der Anschluss bei manchen Hardwareversionen
+nicht nutzbar ist. Vor Beschaffung/Verdrahtung des Gateways den für die konkrete
+Hardwareversion freigegebenen Monitoring-Anschluss bei Deye bestätigen lassen.
+BMS-, Meter- und Parallel-Anschlüsse nicht als gleichwertige Netzwerkbuchsen behandeln.
+Ein transparenter TCP-Serialserver mit unveränderten RTU-Frames ist für dieses
+Plugin ebenso wenig geeignet wie ein ausschließlich Solarman-V5-fähiger Logger
+auf Port 8899. Dieses Plugin implementiert standardisiertes Modbus TCP mit MBAP.
+Cloud-API, Solarman-V5 und direkt angeschlossene USB-Serielladapter sind nicht enthalten.
+
+Einrichtung: **Inbetriebnahme → Geräte → Gerät hinzufügen → Speicher /
+Hybrid-Wechselrichter → Deye ...**. Für einen Deye ohne Batterie die gleichnamige
+ausschließlich lesende Variante unter **PV-Wechselrichter ohne Batterie** wählen.
+
+| Parameter | Bedeutung |
+| --- | --- |
+| `host` | Lokale IP / Hostname des TCP↔RTU-Gateways, nicht die Cloud-Adresse. |
+| `port` | Standard-Modbus-TCP-Port, Vorgabe 502. |
+| `unit_id` | Eingestellte Modbus-Adresse des Deye, Vorgabe 1. |
+| `grid_meter_enabled` | Netz-/Hauswerte bereitstellen. In der Geräteliste bestimmt dies die Auswahl der gemeinsamen Netzzählerquelle. |
+| `grid_meter_invert` | Vorzeichen der Netzleistung bei abweichender Messrichtung umkehren; kanonisch ist Bezug positiv. |
+| `remote_control` | Speichersteuerung für nachweislich kompatible Remote-Firmware freischalten; Vorgabe **aus**, Messwerterfassung funktioniert unabhängig davon. |
+| `grid_discharge_supported` | Erzwungene Batterieeinspeisung ausdrücklich erlauben, Vorgabe aus. |
+| `minimum_soc`, `maximum_soc` | Zusätzliche individuelle SoC-Grenzen, Vorgabe 10 / 100 %. Die aktuellen Grenzen der Energiezentrale gelten zusätzlich, ebenso die höhere PV-Ladeuntergrenze. |
+
+Die allgemeinen Sensorfelder für PV, Netz und Haus können leer bleiben. Ein
+weiterhin ausgewählter HA-Sensor hat Vorrang. Gelesen werden SoC 588,
+vorzeichenbehaftete DC-Batterieleistung 590, PV1/PV2 672/673 und die
+32-Bit-Leistungen für Netz 625/690, Wechselrichter-AC 636/694 und nativen
+Hausverbrauch 653/659 (jeweils Low-/High-Word). Batterieentladung ist positiv;
+negative Batterieleistung wird als Ladung ausgegeben. Messwerte werden nicht aus
+fehlenden Registern als 0 erfunden. Die Identifikation verlangt LV-Dreiphasentyp,
+12000 W Nennleistung, zwei MPPT und höchstens einen Batterieeingang. Andere
+Deye-Typen, insbesondere HP3 oder einphasige Geräte, benötigen ein eigenes Profil.
+
+**Remote-Steuerung:** Die Firmware muss Register 1100/1101 sowie 1104/1105/1109
+gemäß dem verlinkten V105-Protokoll unterstützen. Bei freigeschalteter Steuerung
+wird ein 300-Sekunden-Watchdog bestätigt, Batterie-Leistungsregelung gewählt und
+der Remote-Modus zuletzt aktiviert. Jeder Befehl erneuert den Watchdog.
+Leistung wird mit 0,1 % der geprüften 12 kW quantisiert (12 W je Schritt), stets
+zum kleineren Betrag. Negative Sollleistung lädt, positive entlädt. PV läuft bei
+der gewählten Batterieseitenregelung weiter. Normale Eigenverbrauchsregelung
+passt den Batteriesollwert pro Regelzyklus anhand der aktuellen Netz- und
+Batterieleistung an; sofortige, unterbrechungsfreie Nullbezugsregelung ist damit
+nicht garantiert. Ohne eigene Netzzählerquelle wird der gemeinsame frische Bedarf
+der Energiezentrale verwendet. Netzladung/-einspeisung verwenden explizite Sollwerte.
+
+Lade-/Entladeleistung wird durch die konfigurierten Budgets, Register 108/109
+und bei Lithiumkonfiguration die BMS-Stromfreigaben 212/213 begrenzt.
+Fehlende Batterietelemetrie verhindert neue Speicherbefehle. Ohne erfolgreiche
+Rückbestätigung wird kein Erfolg gemeldet. Eine fremde aktive Remote-Regelung
+wird nicht übernommen. Nach einem Prozessabbruch kann deshalb bis zum Ablauf des
+Watchdogs eine aktive alte Remote-Regelung gemeldet werden. Die normale Rückgabe
+bestätigt Remote-Modus 0; fehlgeschlagene Rückgaben bleiben sichtbar.
+Es werden keine ToU-Zeitpläne, Netzstandards oder Batterie-Grundparameter geändert.
+Bei älterer oder abweichender Firmware bleiben die Messwerte nutzbar, während
+Remote-Schreibbefehle abgewiesen werden. Kein automatischer EEPROM-Fallback.
+
+Die Implementierung ist mit einem lokalen Modbus-TCP-Geräteemulator, einschließlich
+gemischter Deye-/Fronius-Anlagen, geprüft. Ein Test am konkreten Deye und seiner
+Firmware steht aus; vor Freigabe der Remote-Steuerung sind Richtung, Skalierung,
+SoC-Verhalten, Watchdog und Rückgabe am Gerät zu bestätigen.
+
+Quellen: [Deye-Betriebshandbuch V3.3](https://www.deyeinverter.com/deyeinverter/2026/03/19/BManualSUN-5-12K-SG04LP3-EU20260319en.pdf),
+[Deye-Dreiphasenprotokoll V105.4, insbesondere S. 3–5, 33–38 und 41](https://github.com/user-attachments/files/22990113/MODBUS.RTU.V105.4-20240814.pdf).
+
 ## NRGkick Gen2 direkt über die lokale JSON-API
 
 Das Wallbox-Plugin **NRGkick Gen2 local JSON API** (`nrgkick_local`) benötigt keine
@@ -525,6 +602,9 @@ verlangt eine vor dem PV-Ladestart verfügbare Gruppenleistung. Einzelgeräte k�
 diese Angaben weiterhin ignorieren. Ein Plugin mit
 `requires_dispatch_context = True` erhält sie vom Controller; fehlender oder
 ungültiger Kontext darf keine ungesicherte Gruppensteuerung auslösen.
+Ein einzelnes Speicher-Plugin kann mit `uses_dispatch_context = True` dieselben
+Angaben anfordern, ohne eine Speichergruppe oder Kapazitätssynchronisation zu melden.
+Die allgemeine Geräteliste reicht diese Angaben auch an einzelne Speicher weiter.
 
 `_read` liefert unveränderliche `BatteryReading`- bzw. `WallboxReading`-Werte.
 Einheiten sind Prozent, Watt, Ampere, Phasen 1/3 und zeitzonenbehaftete Zeitstempel.
