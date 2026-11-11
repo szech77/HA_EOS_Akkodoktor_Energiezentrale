@@ -4,11 +4,12 @@ Register offsets follow https://github.com/sunspec/models/blob/master/json/model
 and https://manuals.fronius.com/html/4204102649/en-US.html .
 """
 import ipaddress
-from math import floor
+from math import floor, isfinite
 import re
+import struct
 
 from .._modbus_tcp import ModbusTCP, ModbusError
-from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginField, PluginInfo
+from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginField, PluginInfo, Measurement
 from ..plugin_parameters import parameters
 
 
@@ -17,11 +18,15 @@ def signed(value):
 
 
 class FroniusModbus(BatteryDriver):
+    measurement_keys = BatteryDriver.measurement_keys + ("grid",)
     info = PluginInfo("fronius_modbus", "Fronius GEN24 direct Modbus TCP", "battery")
     configuration = (
         PluginField("host", "Modbus host / IP", "text"),
         PluginField("port", "Modbus TCP port", "number", default=502),
         PluginField("unit_id", "Modbus unit ID", "number", default=1),
+        PluginField("grid_meter_enabled", "Read grid connection meter", "boolean", default=True),
+        PluginField("grid_meter_unit_id", "Grid meter unit ID", "number", default=200),
+        PluginField("grid_meter_invert", "Invert grid meter sign", "boolean", default=False),
         PluginField("grid_discharge_supported", "Allow forced grid export", "boolean", default=False),
     )
 
@@ -34,12 +39,17 @@ class FroniusModbus(BatteryDriver):
             if (len(host) > 253 or not all(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
                                           for label in host.split("."))):
                 raise ValueError("Modbus host must be an IP address or hostname") from None
-        for key, maximum in (("port", 65535), ("unit_id", 247)):
+        for key, maximum in (("port", 65535), ("unit_id", 247), ("grid_meter_unit_id", 247)):
             if values[key] != int(values[key]) or not 1 <= values[key] <= maximum:
                 raise ValueError("Invalid Modbus " + key)
         self.ids = {key: "" for key in ("soc", "charge_power", "discharge_power", "mode")}
         self.features = BatteryFeatures(grid_discharge=values["grid_discharge_supported"])
         self.client = ModbusTCP(host, int(values["port"]), int(values["unit_id"]))
+        self.grid_client = ModbusTCP(host, int(values["port"]), int(values["grid_meter_unit_id"]))
+        self.grid_invert = values["grid_meter_invert"]
+        self.grid_model = None
+        if not values["grid_meter_enabled"]:
+            self.measurement_keys = BatteryDriver.measurement_keys
         self.model = None
         self.mppt = None
         self.original_grid = None
@@ -48,12 +58,54 @@ class FroniusModbus(BatteryDriver):
         storage = self._storage()
         soc = self._scaled(storage[6], storage[20], 100)
         charge, discharge = self._powers()
+        extra = {}
+        if "grid" in self.measurement_keys:
+            try:
+                grid = self._grid_power()
+            except (OSError, ValueError):
+                # A missing gateway meter must not hide healthy battery data.
+                self.grid_model = None
+                grid = None
+            extra["grid"] = Measurement(grid, now if grid is not None else None)
         # Timestamp a successful live poll, never a cached value. `now` is the
         # acquisition start, so it remains conservative while requests complete.
         return BatteryReading(soc, charge, discharge,
                               now if soc is not None else None,
                               now if charge is not None else None,
-                              now if discharge is not None else None)
+                              now if discharge is not None else None, extra)
+
+    def _grid_power(self):
+        if self.grid_model is None:
+            if self.grid_client.read(40000, 2) != [0x5375, 0x6E53]:
+                raise ModbusError("Grid meter SunSpec signature missing")
+            address = 40002
+            for _ in range(128):
+                identity, length = self.grid_client.read(address, 2)
+                if identity == 65535:
+                    break
+                if not 1 <= length <= 4096 or address + length + 2 > 65535:
+                    raise ModbusError("Invalid grid meter model length")
+                if identity in (201, 202, 203, 211, 212, 213):
+                    self.grid_model = (address, identity, length)
+                    break
+                address += length + 2
+            if self.grid_model is None:
+                raise ModbusError("SunSpec grid meter model missing")
+        address, identity, length = self.grid_model
+        if self.grid_client.read(address, 2) != [identity, length]:
+            raise ModbusError("Grid meter model changed")
+        if identity < 210:
+            if length < 21: raise ModbusError("Incomplete integer grid meter")
+            values = self.grid_client.read(address + 18, 5)
+            scale = signed(values[4])
+            value = signed(values[0]) * 10 ** scale if values[0] != 32768 and -4 <= scale <= 4 else None
+        else:
+            if length < 28: raise ModbusError("Incomplete float grid meter")
+            values = self.grid_client.read(address + 28, 2)
+            value = struct.unpack(">f", struct.pack(">HH", *values))[0]
+        if value is None or not isfinite(value) or abs(value) > 1000000:
+            return None
+        return -value if self.grid_invert else value
 
     @staticmethod
     def _scaled(raw, scale, maximum):

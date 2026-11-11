@@ -90,6 +90,12 @@ class MeterOnlyBattery:
         self.driver,self.ids=driver,driver.ids
     def read(self,*args):
         return self.driver.read(*args)
+    @property
+    def measurement_keys(self):
+        return self.driver.measurement_keys
+    @property
+    def info(self):
+        return self.driver.info
     def apply(self,*args):
         pass
     def release(self,*args):
@@ -163,6 +169,12 @@ class FleetController(Controller):
     def tick(self,now,clock):
         rows=self.real_ha.states()
         opts=self.config.options
+        from .measurement_sources import resolve_sources
+        battery=self.battery_driver.read(rows,now)
+        primary_box=self.config.wallbox.read(rows,now)
+        shared_keys=("solar","grid","house_total","heat","price","heat_load")
+        opts,rows,shared_sources=resolve_sources(opts,rows,
+            ((self.battery_driver,battery),(self.config.wallbox,primary_box)),now,keys=shared_keys)
         grid=reading(rows,opts["grid_entity"],now,"power",45)
         actual={key:app.config.wallbox.read(rows,now).watts for key,app,_ in self.controllers}
         complete=all(value is not None for value in actual.values())
@@ -178,7 +190,9 @@ class FleetController(Controller):
                 proxy.rows[opts["grid_entity"]]={**rows[opts["grid_entity"]],"state":str(effective),
                     "attributes":{**rows[opts["grid_entity"]].get("attributes",{}),"unit_of_measurement":"W"}}
             elif not complete:
-                proxy.rows.pop(opts["grid_entity"],None)
+                # Retain an explicit unavailable row. Removing an internal
+                # plugin row would let source resolution reinsert raw headroom.
+                proxy.rows[opts["grid_entity"]]={"state":None,"attributes":{"unit_of_measurement":"W"}}
             if app is not self:
                 app.armed=self.armed
                 if self.restore_pending:
@@ -239,6 +253,12 @@ class FleetController(Controller):
             expected_car_w=expected,command_at=max(commands) if commands else None)
         for payload in snapshots:
             payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
+        # Diagnostics describe the actual shared meter, rather than temporary
+        # headroom suppression when a charger measurement is missing.
+        for report in [self.source_configuration]+[payload['source_configuration'] for payload in snapshots]:
+            report['sources'].update(shared_sources['sources'])
+            for status in ('missing','unavailable'):
+                report[status]=sorted((set(report[status])-set(shared_keys))|set(shared_sources[status]))
         self.history.write(now,self.live)
         if not self.armed or not any(app.owned for _,app,_ in self.controllers):
             return

@@ -242,12 +242,23 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             selected=await flow.async_step_hardware({"battery_type":"fronius_modbus","wallbox_type":"none","vehicle_name":"E-Auto"})
             schema={str(key):value for key,value in selected['data_schema'].schema.items()}
             fields=schema['battery_parameters'].serialize()['selector']['object']['fields']
-            self.assertEqual(set(fields),{'host','port','unit_id','grid_discharge_supported'})
+            self.assertEqual(set(fields),{'host','port','unit_id','grid_discharge_supported',
+                                          'grid_meter_enabled','grid_meter_unit_id','grid_meter_invert'})
             result=await flow.async_step_hardware_parameters({'battery_parameters':{'host':'inverter.local'}})
             self.assertEqual(result['type'],'create_entry')
             self.assertEqual(result['data']['battery_type'],'fronius_modbus')
             self.assertEqual(json.loads(result['data']['battery_parameters'])['host'],'inverter.local')
             connect.assert_not_called()
+
+    async def test_general_source_fields_can_be_explicitly_cleared_for_plugin_sources(self):
+        from custom_components.eos_energiezentrale.config_flow import schema_for
+        cleared={key:'' for key in ('pv_entity','grid_entity','house_entity','price_entity')}
+        checked=schema_for('sensors',DEFAULTS)(cleared)
+        self.assertTrue(all(checked[key]=='' for key in cleared))
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
+        result=await flow.async_step_sensors(cleared)
+        self.assertEqual(result['type'],'create_entry')
+        self.assertTrue(all(result['data'][key]=='' for key in cleared))
 
     async def test_common_battery_form_does_not_edit_hidden_wallboxes_in_a_fleet(self):
         from test_fleet import definitions

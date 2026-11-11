@@ -147,6 +147,13 @@ Es steuert direkt den GEN24 und liest SoC sowie Lade-/Entladeleistung ebenfalls
 DC-Leistungsdefinition und Rückgabe an die Automatik stehen in
 [Hardware-Plugins](PLUGINS.md#fronius-gen24-direkt-über-modbus-tcp).
 
+Auch die Netzanschlussleistung kann dieses Plugin über den am GEN24 angebundenen
+Primärzähler liefern (Gateway-Unit-ID üblicherweise 200). Dafür den Netzsensor unter
+**Konfigurieren → Quellsensoren** leeren. Allgemein gilt für Messwerte: Ein explizit
+gewählter Sensor hat Vorrang; ohne Sensor kann ein Plugin mit entsprechender
+Messfähigkeit einspringen. Fehlt beides, nennt das Panel die fehlende Konfiguration.
+Ein vorübergehender Ausfall einer eingerichteten Quelle wird separat angezeigt.
+
 Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug
 benennen, beispielsweise `Mein ID.4`. Der Standard ist **E-Auto**. Der Name erscheint
 im Stromfluss, auf der Fahrzeug-Detailseite, in der Modus-Zeitlinie und in den

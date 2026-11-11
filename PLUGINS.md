@@ -44,6 +44,9 @@ und keine ausschließliche 700er-Modellimplementierung.
 | `host` | Lokale IP-Adresse oder Hostname des GEN24; keine URL. |
 | `port` | TCP-Port, Standard 502. |
 | `unit_id` | Unit-ID, Standard 1 (GEN24-Wechselrichter); keine Broadcast-ID 0. |
+| `grid_meter_enabled` | Netzanschlusszähler über den GEN24 lesen, Standard an. Nur für einen tatsächlich am Netzanschlusspunkt installierten Primärzähler verwenden. |
+| `grid_meter_unit_id` | Gateway-Unit-ID dieses Zählers, Standard 200. Dies ist nicht die Wechselrichter-ID 1. |
+| `grid_meter_invert` | Vorzeichen des Zählers umkehren, Standard aus; im Panel muss Bezug positiv und Einspeisung negativ sein. |
 | `grid_discharge_supported` | Erzwungene Netzentladung ausdrücklich erlauben, Standard aus. Die globale Exportfreigabe gilt zusätzlich. |
 
 Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Felder):
@@ -53,6 +56,9 @@ Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Fel
   "host": "192.0.2.10",
   "port": 502,
   "unit_id": 1,
+  "grid_meter_enabled": true,
+  "grid_meter_unit_id": 200,
+  "grid_meter_invert": false,
   "grid_discharge_supported": false
 }
 ```
@@ -67,8 +73,14 @@ Nullwerte bleiben gültig. Verbindungs- und Protokollfehler lösen den bestehend
 Steuerfehlerpfad einschließlich Rückgabeversuch aus.
 
 Für dieses Plugin sind keine zusätzlichen HA-Sensoren, Templates oder
-`select`-/`number`-Steuerentitäten erforderlich. Die allgemeinen PV-, Netz- und
-Hausverbrauchssensoren der Energiezentrale bleiben unverändert. Keine neuen
+`select`-/`number`-Steuerentitäten erforderlich. Für den Netzanschlusswert unter
+**Quellsensoren** die Netzsensor-Auswahl leeren. Ein dort ausgewählter Sensor hat
+weiterhin Vorrang. Der am GEN24 angebundene Netzanschlusszähler wird über seine
+Gateway-Unit-ID gelesen; SunSpec 201–203 und 211–213 werden erkannt. Fehlt der Zähler
+oder ist er unerreichbar, bleibt der Netzwert unbekannt, während die verfügbaren
+Speichermesswerte weiter angezeigt werden. Bei deaktivierter Zählerabfrage meldet
+das Plugin die Netzleistung nicht als Fähigkeit. PV und Hausverbrauch benötigen
+weiterhin Sensoren oder einen anderen passenden Plugin-Anbieter. Keine neuen
 Python-Abhängigkeiten nötig. Ältere Entwicklungsversionen dieses Plugins mit
 Sensorparametern bei der Einrichtung erneut auswählen bzw. die veralteten
 `soc`-/`charge_power`-/`discharge_power`-Parameter entfernen.
@@ -163,6 +175,45 @@ das Entladelimit auf 0 gesetzt. Bei `grid_discharge` wird das Ladelimit auf 0 ge
 Es werden keine beliebigen HA-Dienste aus Konfigurationstext ausgeführt.
 
 ## Eigenes Plugin entwickeln
+
+### Zusätzliche Messwerte als Sensoralternative
+
+Die Plugin-API 2 erhält eine additive, optionale Erweiterung. Vorhandene Plugins
+bleiben kompatibel. `measurement_keys` deklariert als Tupel die vom eingerichteten
+Plugin bereitgestellten Werte; nach der Parameterprüfung darf das Tupel von den
+tatsächlich aktivierten Fähigkeiten abhängen. Im Panel werden neben den
+Steuerfähigkeiten auch diese Messfähigkeiten angezeigt.
+
+Zusätzliche Werte stehen im Feld `measurements` von `BatteryReading` bzw.
+`WallboxReading`, jeweils als `Measurement(value, sample)`. `sample` ist ein
+zeitzonenbehafteter Beobachtungszeitpunkt. Werte sind in W, SoCs/Auslastung in %
+und Preise in ct/kWh zu liefern. Netzleistung ist positiv bei Bezug und negativ
+bei Einspeisung. Die Basis-`read()`-Methode prüft deklarierte Schlüssel, Datentypen,
+Wertebereiche und Messwertalter. Fehlende oder veraltete Werte werden niemals 0.
+Die bisherigen festen Felder für Speicher und Wallbox bleiben bestehen.
+
+```python
+measurement_keys = BatteryDriver.measurement_keys + ("grid",)
+# Im Ergebnis von _read(), zusätzlich zu den normalen Speicherfeldern:
+extra = {"grid": Measurement(grid_watts, grid_observed_at)}
+result = BatteryReading(soc, charge, discharge,
+                        soc_at, charge_at, discharge_at, measurements=extra)
+```
+
+Für die allgemeinen Quellsensoren unterstützt die Auflösung `solar`, `grid`,
+`house_total`, `heat`, `price`, `car_soc` und `heat_load`. Explizit konfigurierte
+HA-Sensoren haben Vorrang, auch bei einem Ausfall; es gibt dabei keinen stillen
+Wechsel auf einen anderen Messpunkt. Ohne Sensor wird zuerst das Speicher-,
+anschließend das Wallbox-Plugin berücksichtigt. Die Auswahl wird je Poll für
+Regelung, Anzeige, Live-Verlauf und Kostenbilanz gemeinsam angewendet. In der
+Mehrfahrzeugregelung bleiben bereits reservierte Netzleistungen berücksichtigt.
+
+Ohne Quelle zeigt das Panel die konkret fehlende Konfiguration. Eine konfigurierte
+Quelle ohne gültigen Messwert erhält einen separaten Verfügbarkeitshinweis.
+Deaktivierte optionale Verbraucher benötigen keine Messquelle. Preise und
+Fahrzeug-SoC bleiben bei fehlenden Werten unbekannt; die Hinweise ersetzen keine
+Messwerte und heben keine Sicherheitsbedingungen der Regelung auf. Das Wetter
+bleibt bei seiner bisherigen optionalen HA-Wetterquelle.
 
 Der Vertrag ist in `energy/contracts.py`, die zentrale Prüfung in `energy/sanitiser.py`,
 die Erkennung in `energy/plugin_registry.py` definiert. API-Version 2 verlangt:

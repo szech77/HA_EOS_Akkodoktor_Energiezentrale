@@ -20,6 +20,14 @@ METHODS = {"battery": {"_read":("self","states","now"),"_apply":("self","command
            "wallbox": {"_read":("self","states","now"),"_pause":("self","state"),"_phase":("self","phases","state"),"_charge":("self","amps","state")}}
 
 
+def validate_measurement_keys(plugin):
+    from .measurement_sources import MEASUREMENT_KEYS
+    keys = plugin.measurement_keys
+    if (not isinstance(keys, tuple) or any(not isinstance(key, str) or key not in MEASUREMENT_KEYS for key in keys)
+            or len(set(keys)) != len(keys)):
+        raise PluginContractError("Invalid measurement capabilities")
+
+
 def validate_class(plugin):
     if not inspect.isclass(plugin) or inspect.isabstract(plugin):
         raise PluginContractError("Plugin must be a concrete class")
@@ -32,6 +40,7 @@ def validate_class(plugin):
     base = BatteryDriver if info.kind=="battery" else WallboxDriver
     if not issubclass(plugin,base):
         raise PluginContractError("Plugin must implement the correct ABC")
+    validate_measurement_keys(plugin)
     for public in (("read","apply","release") if info.kind=="battery" else ("read","pause","phase","charge")):
         if getattr(plugin,public) is not getattr(base,public):
             raise PluginContractError("Plugins cannot bypass the sanitiser: "+public)
@@ -58,6 +67,7 @@ def validate_class(plugin):
 
 
 def validate_instance(plugin):
+    validate_measurement_keys(plugin)
     info = plugin.info
     expected = BatteryFeatures if info.kind=="battery" else WallboxFeatures
     if not isinstance(getattr(plugin,"features",None),expected) or any(type(getattr(plugin.features,field.name)) is not bool for field in fields(expected)):
@@ -120,4 +130,4 @@ def describe(plugin):
         plugin = getattr(plugin,"driver",None)
     if not isinstance(plugin,(BatteryDriver,WallboxDriver)):
         return None
-    return {**asdict(plugin.info),"features":asdict(plugin.features)}
+    return {**asdict(plugin.info),"features":asdict(plugin.features), "measurements":list(plugin.measurement_keys)}

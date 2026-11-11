@@ -24,7 +24,8 @@
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
           "heat_load_scale": "Skalierung der Auslastung",
           "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
-        }
+        },
+        "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Ohne beide Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
       },
       "hardware": {
         "title": "Hardware-Treiber",
@@ -108,7 +109,8 @@
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
           "heat_load_scale": "Skalierung der Auslastung",
           "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
-        }
+        },
+        "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Ohne beide Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
       },
       "hardware": {
         "title": "Hardware-Treiber",

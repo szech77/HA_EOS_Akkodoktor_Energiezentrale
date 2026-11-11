@@ -53,6 +53,9 @@ class Inverter(socketserver.TCPServer):
         self.writes = []
         self.reject = False
         self.ignore_writes = False
+        self.meters = {200: {40000:0x5375,40001:0x6E53,40002:1,40003:65,
+                            40069:203,40070:105,40087:1000,40091:0}}
+        self.read_units = []
 
 
 class Request(socketserver.BaseRequestHandler):
@@ -62,10 +65,12 @@ class Request(socketserver.BaseRequestHandler):
         request = receive(self.request, length - 1)
         function = request[0]
         address, count = struct.unpack(">HH", request[1:5])
+        self.server.read_units.append(unit)
+        registers = self.server.registers if unit == 1 else self.server.meters.get(unit, {})
         if self.server.reject:
             pdu = bytes([function | 128, 3])
         elif function == 3:
-            words = [self.server.registers.get(address + offset, 0) for offset in range(count)]
+            words = [registers.get(address + offset, 0) for offset in range(count)]
             pdu = bytes([3, count * 2]) + struct.pack(">" + "H" * count, *words)
         else:
             assert function == 16 and request[5] == count * 2
@@ -317,3 +322,53 @@ def test_invalid_transport_responses_fail_closed(header, pdu):
 def test_transport_timeout_propagates_without_retrying_writes():
     with patch("socket.create_connection", side_effect=socket.timeout), pytest.raises(TimeoutError):
         ModbusTCP("inverter.local", 502, 1).write(40345, [3])
+
+
+@pytest.mark.parametrize("identity,value,expected", [(203,1234,123.4),(203,65536-1234,-123.4),
+                                                   (203,0,0),(213,1234.5,1234.5),(213,-456.5,-456.5)])
+def test_grid_meter_uses_gateway_unit_and_signed_integer_or_float_model(identity,value,expected):
+    with inverter() as (driver, server):
+        meter=server.meters[200]
+        meter[40069]=identity
+        meter[40070]=105 if identity==203 else 124
+        if identity==203:
+            meter[40087]=value
+            meter[40091]=65535  # -1 scaling, read each time.
+        else:
+            meter[40097],meter[40098]=struct.unpack('>HH',struct.pack('>f',value))
+        measured=driver.read({},NOW)
+        assert measured.measurements['grid'].value==expected
+        assert measured.measurements['grid'].sample==NOW
+        assert 200 in server.read_units and not server.writes
+
+
+def test_grid_meter_failure_keeps_battery_data_and_never_reuses_a_value():
+    with inverter() as (driver,server):
+        assert driver.read({},NOW).measurements['grid'].value==1000
+        server.meters.clear()
+        measured=driver.read({},NOW+timedelta(seconds=20))
+        assert measured.measurements['grid'].value is None
+        assert (measured.soc,measured.charge,measured.discharge)==(55,1500,0)
+
+
+@pytest.mark.parametrize("identity,value", [(203,32768),(213,float('nan')),(213,float('inf'))])
+def test_invalid_grid_meter_values_are_unknown(identity,value):
+    with inverter() as (driver,server):
+        meter=server.meters[200]
+        meter[40069]=identity
+        meter[40070]=105 if identity==203 else 124
+        if identity==203: meter[40087]=value
+        else: meter[40097],meter[40098]=struct.unpack('>HH',struct.pack('>f',value))
+        assert driver.read({},NOW).measurements['grid'].value is None
+
+
+def test_meter_sign_override_and_disabling_the_meter():
+    with inverter() as (driver,server):
+        driver.grid_invert=True
+        assert driver.read({},NOW).measurements['grid'].value==-1000
+        params={'host':'127.0.0.1','port':server.server_address[1],'grid_meter_enabled':False}
+        disabled=BATTERY_DRIVERS['fronius_modbus'](None,params)
+        server.read_units.clear()
+        assert 'grid' not in disabled.measurement_keys
+        assert not disabled.read({},NOW).measurements
+        assert 200 not in server.read_units

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from .energy.clients import ENTITY, EOS, Influx
 from .energy.domain import number
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
+from .energy.measurement_sources import SENSOR_OPTIONS
 
 
 def validate_options(options):
@@ -25,7 +26,7 @@ def validate_options(options):
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])
     for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity", "heat_load_entity"):
-        if key in {"heat_entity", "car_soc_entity", "heat_load_entity"} and options.get(key, "") == "":
+        if key in SENSOR_OPTIONS and options.get(key, "") == "":
             continue
         if not isinstance(options[key], str) or not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):
             raise ValueError("Invalid source entity")

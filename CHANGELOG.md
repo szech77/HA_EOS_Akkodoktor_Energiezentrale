@@ -7,6 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Netzanschlussleistung über den Fronius-Smart-Meter-Gateway des GEN24, mit konfigurierbarer Unit-ID und Integer-/Float-SunSpec-Zählermodellen. Optionale Quellsensoren haben Vorrang vor deklarierten Plugin-Messwerten; fehlende Konfiguration und vorübergehend ungültige Quellen werden im Panel getrennt angezeigt. Gemeinsame Netzleistungsreservierung mehrerer Fahrzeuge nutzt dieselbe Quellenwahl.
 - Eigenes Speicher-Plugin `fronius_modbus` für direkte Fronius-GEN24-Steuerung über Modbus TCP/SunSpec 124: Lade-/Entladelimits, Entladesperre, erzwungene Ladung und optional Netzentladung sowie Rückgabe an die Automatik. SoC und DC-Lade-/Entladeleistung werden aus SunSpec 124/160 direkt gelesen; zusätzliche HA-Speichersensoren und Steuerentitäten entfallen.
 - Automatische SunSpec-Modellerkennung für int+SF und float sowie skalierte, atomar geschriebene Leistungsfenster mit Register-Rückbestätigung und 300 Sekunden Gültigkeit.
 

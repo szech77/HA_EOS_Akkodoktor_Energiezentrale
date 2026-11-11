@@ -304,6 +304,19 @@
     "weather.unknown": "Weather unavailable",
     "billing.known_portion": "known portion",
     "billing.known_costs": "Known costs",
-    "billing.missing_costs_for": "Costs missing for {energy}"
+    "billing.missing_costs_for": "Costs missing for {energy}",
+    "notice.sources_missing": "Missing configuration: {values}. Choose a sensor under Configure ? Source sensors or configure a plugin providing this measurement.",
+    "notice.sources_unavailable": "No valid measurements for: {values}. Check the configured sources.",
+    "measurement.solar": "PV power",
+    "measurement.grid": "Grid connection power",
+    "measurement.house_total": "House consumption",
+    "measurement.heat": "Heat pump power",
+    "measurement.price": "Electricity price",
+    "measurement.car_soc": "Vehicle SoC",
+    "measurement.heat_load": "Heat pump utilization",
+    "measurement.battery_soc": "Battery SoC",
+    "measurement.battery_charge": "Battery charging power",
+    "measurement.battery_discharge": "Battery discharging power",
+    "measurement.car": "Vehicle charging power"
   }
 }
