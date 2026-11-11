@@ -228,6 +228,8 @@
     "billing.variable": "Variable energy costs · excludes fixed fees",
     "billing.pv_share": "Direct PV share",
     "billing.average": "Average energy cost",
+    "billing.average_unit_price": "Avg {price}",
+    "billing.estimated_average_note": "An estimated average price (≈) is based on the portion with known costs.",
     "billing.direct_pv": "Direct solar energy, excluding storage",
     "billing.energy_chart": "Consumption by source",
     "billing.cost_chart": "Costs by source",
