@@ -722,6 +722,13 @@ damit nach Erholung automatisch fortgesetzt werden kann. Lokale Sicherheitsgrenz
 und die Frische der HA-Messwerte werden weiterhin geprüft. Pro Fahrzeug wird ein
 eigener Plan gepuffert. Die Diagnose zeigt den aktiven Puffer und seine Restzeit.
 
+Die Panel-Meldung **Daten oder Steuerung prüfen · Prognose** erscheint erst,
+wenn der EOS-Prognoseabruf fünf Minuten durchgehend fehlschlägt. Die Frist beginnt
+beim ersten Fehlversuch und wird durch weitere Fehler nicht verlängert. Eine
+erfolgreiche Prognoseantwort entfernt die Warnung sofort und setzt die Frist
+zurück. Fehlerhafte Prognosedaten werden während dieser Wartezeit bereits aus
+der Anzeige entfernt; die Live-Messwerte bleiben verfügbar.
+
 
 ## Verbrauch, Energiequellen und Kosten
 

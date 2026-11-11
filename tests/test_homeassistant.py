@@ -723,6 +723,22 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(json.loads(result["data"]["vehicles"]),[])
         self.assertEqual(result["data"]["wallbox_type"],"none")
 
+    async def test_background_forecast_poll_uses_warning_grace_and_clears_on_recovery(self):
+        from datetime import timedelta
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.eos = Mock()
+        app.config.eos.solution.side_effect = TimeoutError()
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        await coordinator._async_poll_eos('solution')
+        failed = app.forecast_failure_since
+        self.assertIsNotNone(failed)
+        self.assertNotIn('forecast',app.snapshot(failed+timedelta(seconds=299))['errors'])
+        self.assertIn('forecast',app.snapshot(failed+timedelta(seconds=300))['errors'])
+        app.config.eos.solution.side_effect = None
+        app.config.eos.solution.return_value = {}
+        await coordinator._async_poll_eos('solution')
+        self.assertNotIn('forecast',app.snapshot(datetime.now(timezone.utc))['errors'])
+
     async def test_individual_vehicle_sensors_use_distinct_values_and_stable_identity(self):
         from custom_components.eos_energiezentrale.sensor import VehicleSensor
         coordinator,_=self.controller()
