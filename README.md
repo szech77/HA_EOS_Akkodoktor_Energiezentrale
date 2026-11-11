@@ -737,6 +737,17 @@ für Haus, Wärmepumpe und E-Auto. Der Hausverbrauch enthält weder Wärmepumpe 
 Optionale Verbraucher werden ausgeblendet. Bei mehreren Fahrzeugen enthält die Übersicht
 deren Summe; die Einzelauswertungen sind über die jeweilige Fahrzeug-Detailseite erreichbar.
 
+Bei den Kostensummen steht zusätzlich der berechnete Durchschnittspreis in ct/kWh,
+beispielsweise **1,00 € · Ø 25 ct/kWh** bei 4 kWh Verbrauch. Dieser Preis wird aus
+der gesamten Kostensumme und der zugehörigen Energiemenge berechnet, auch über
+mehrere Energiequellen oder zusammengeführte Live- und historische Daten hinweg.
+Er steht in den Tageskarten und der Gesamtsumme, unter der Kosten-Kennzahl der
+Verbraucher-Detailseiten sowie in den Diagramm-Hinweisen für jeden Zeitraum und
+jede Quelle. Die Quellentabelle zeigt ihn in der eigenen Spalte **ct/kWh**.
+Bei teilweise oder vollständig unbekannten Kosten sowie ohne Verbrauch wird der
+Durchschnittspreis als **— ct/kWh** dargestellt. Bekannte Teilkosten bleiben als
+solche gekennzeichnet; ein tatsächlich kostenloser Verbrauch zeigt **0 ct/kWh**.
+
 Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** eine eigene Auswertung:
 
 - **Tag:** stündliche Werte; **Monat:** Tageswerte; **Jahr:** Monatswerte.

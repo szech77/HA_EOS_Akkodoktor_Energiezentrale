@@ -228,6 +228,7 @@
     "billing.variable": "Variable Energiekosten · ohne Grundgebühren",
     "billing.pv_share": "Direkter PV-Anteil",
     "billing.average": "Durchschnittliche Energiekosten",
+    "billing.average_unit_price": "Ø {price}",
     "billing.direct_pv": "Direkte PV-Energie, ohne Speicher",
     "billing.energy_chart": "Verbrauch nach Energiequelle",
     "billing.cost_chart": "Kosten nach Energiequelle",
