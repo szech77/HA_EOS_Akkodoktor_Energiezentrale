@@ -358,6 +358,83 @@ SoC-Verhalten, Watchdog und Rückgabe am Gerät zu bestätigen.
 Quellen: [Deye-Betriebshandbuch V3.3](https://www.deyeinverter.com/deyeinverter/2026/03/19/BManualSUN-5-12K-SG04LP3-EU20260319en.pdf),
 [Deye-Dreiphasenprotokoll V105.4, insbesondere S. 3–5, 33–38 und 41](https://github.com/user-attachments/files/22990113/MODBUS.RTU.V105.4-20240814.pdf).
 
+## go-e Charger direkt über die lokale HTTP-API v2
+
+Das Plugin **go-e Charger – lokale HTTP-API v2** (`goe_http_v2`) steuert einen
+lokal erreichbaren go-e Charger über `/api/status` und `/api/set`. Die API-Version
+steht ausdrücklich im auswählbaren Namen. Benötigt werden die in der go-e-App
+freigeschaltete **lokale HTTP-API v2** und Firmware **051.4 oder neuer** für das
+verwendete CSV-Statusfilterformat. Ältere Geräte mit ausschließlich HTTP-API v1
+benötigen ein anderes Plugin. Cloud-API und Cloud-Token werden nicht verwendet.
+
+Einrichtung: **Inbetriebnahme → Geräte → Gerät hinzufügen → Wallbox mit
+Fahrzeug → go-e Charger – lokale HTTP-API v2**. Danach Fahrzeugdaten und
+Plugin-Felder ausfüllen. Mehrere go-e Charger können als getrennte Fahrzeuge mit
+eigenen URLs und EOS-Ressourcen angelegt werden.
+
+| Parameter | Bedeutung |
+| --- | --- |
+| `url` | Lokale Basisadresse, z. B. `http://192.168.1.50`, ohne `/api`, Pfad, Zugangsdaten oder Cloud-Token. |
+| `phase_switching` | 1-/3-Phasenumschaltung für unterstützte Hardware ausdrücklich freigeben; Vorgabe aus. Verfügbarkeit wird zusätzlich aus API-Messungen und Phasensteuerung geprüft. |
+| `nominal_voltage` | Nennspannung zwischen Phase und Neutralleiter für die EOS-Leistungsrechnung, Vorgabe 230 V. Keine schwankenden Momentanwerte als neue Gerätenennleistung synchronisieren. |
+
+Eine separate go-e-Integration und Sensoren/Steuerentitäten für Ladeleistung,
+Strom, Ladefreigabe und Phasen sind nicht erforderlich. Der Fahrzeug-SoC wird
+von diesen Basis-API-Feldern nicht geliefert und muss bei Bedarf aus einer eigenen
+Fahrzeugquelle kommen. Die bestehende UI zeigt eine fehlende SoC-Quelle an.
+
+`nrg[11]` wird gemäß API-v2-Format als **Watt** gelesen; es erfolgt keine
+API-v1-Skalierung. `car` unterscheidet kein Fahrzeug, verbunden/wartend,
+ladend und Fehler. Ein abgeschlossenes Laden (`car=4`) bedeutet weiterhin ein
+angeschlossenes Fahrzeug. `err` wird zusätzlich ausgewertet. Fehlende oder ungültige
+Messwerte bleiben unbekannt, insbesondere wird ein ausgefallener Charger nicht
+als 0 W verbucht. Als optionaler Ladepunkt wird er bei Ausfall oder fehlendem Auto
+für die EOS-Ladeplanung inaktiv behandelt.
+
+Maximalstrom entsteht konservativ aus `var` (11 kW / 16 A oder 22 kW / 32 A),
+`ama`, angeschlossenem Typ-2-Kabel `cbl` und Adapterkennung `adi`.
+Phasenverfügbarkeit wird aus `pha` beziehungsweise den vorhandenen Spannungen
+bestimmt; `psm`, `pnp` und gegebenenfalls `fsp` liefern Phasenmodus/-rückmeldung.
+Ohne zuverlässige Grenzen wird kein Ladeprofil erfunden. Die gemeinsame Regelung
+arbeitet mit **6 A Mindeststrom**; `mca` muss deshalb 6 melden. Bei fehlendem oder
+abweichendem Mindeststrom bleiben Messwerte sichtbar, der Ladestart wird blockiert.
+Die zusätzliche Maximalstromgrenze des Fahrzeugs in der Energiezentrale gilt weiter.
+Diese Daten beschreiben die Ladestation, nicht automatisch die maximale Ladeleistung
+des fahrzeugeigenen Ladegeräts.
+
+Steuerung erfolgt ausschließlich über `amp` (ganze Ampere), `frc=1` (Pause),
+`frc=2` (Freigabe) und bei aktivierter Phasenumschaltung `psm=1`/`2` (1-/3-phasig).
+Schreiben verlangt sowohl eine positive API-Antwort als auch passende zurückgelesene
+Werte. Die go-e-Ladelogik aktualisiert ihre Ergebnisse etwa einmal pro Sekunde;
+das Plugin wartet begrenzt auf die Bestätigung. Vor dem Einschalten werden
+Kabel-/Adaptergrenzen, Fahrzeuganwesenheit und Phasen erneut geprüft. Strom wird
+vor Freigabe gesetzt. Eine fehlgeschlagene Vorgabe löst einen bestätigten
+Pauseversuch aus; nicht bestätigte Pausen bleiben Steuerfehler.
+
+Die Phasenumschaltung pausiert zuerst, verlangt danach zwei frische stromfreie
+Messungen mit mindestens drei Sekunden Abstand und prüft neben höchstens 30 W
+auch maximal 0,2 A je Phase. Anschließend wird die Einstellung geschrieben und
+auf die Phasenrückmeldung gewartet, bevor wieder geladen werden darf. Eine offene
+Umschaltung blockiert den Ladestart; fehlende Bestätigung wird nach 45 Sekunden als
+Fehler gemeldet. Ein zweiphasiger Netzanschluss wird vom 1-/3-Phasenmodell nicht
+als vollständige Ladequelle behandelt. Bei deaktivierter automatischer Umschaltung
+einen passenden festen Phasenmodus in der go-e-App einstellen.
+
+Die Energiezentrale verwendet eine erzwungene Freigabe (`frc=2`), die native
+Ladezeitpläne übersteuern kann. Für denselben Ladepunkt nur einen schreibenden
+Energieregler verwenden. Die lokale API im geschützten LAN betreiben;
+keine Internet-Portweiterleitung einrichten. Das Plugin verändert keine WLAN-,
+RFID-, Cloud- oder Sicherheitskonfiguration und umgeht keine elektrischen
+Schutzfunktionen der Wallbox.
+
+Getestet mit lokalem HTTP-Geräteemulator und den nativen HA-Konfigurationsformularen.
+Ein Test mit realem go-e Charger und konkreter Firmware steht aus.
+
+Quellen: [Hersteller: lokale HTTP-API v2](https://github.com/goecharger/go-eCharger-API-v2/blob/main/http-en.md),
+[API-Felder](https://github.com/goecharger/go-eCharger-API-v2/blob/main/API_KEYS_FIRMWARE/apikeys-en.md),
+[Phasensteuerung `psm`](https://github.com/goecharger/go-eCharger-API-v2/blob/main/modbus-en.md),
+[Aktualisierung der Ladelogik](https://github.com/goecharger/go-eCharger-API-v2/blob/main/introduction-en.md).
+
 ## NRGkick Gen2 direkt über die lokale JSON-API
 
 Das Wallbox-Plugin **NRGkick Gen2 local JSON API** (`nrgkick_local`) benötigt keine

@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.10.0 - 2026-11-11
+
+### Features
+
+- Neues Wallbox-Plugin „go-e Charger – lokale HTTP-API v2“ (`goe_http_v2`) für die direkte lokale Anbindung ohne zusätzliche HA-Mess- und Steuerentitäten. API-Version im auswählbaren Namen kennzeichnen; Ladestatus, Leistung und Strom-/Phasengrenzen aus gefilterten API-v2-Abfragen lesen und an EOS weitergeben. Gerätevariante, eingestellte Maximalstromgrenze, Typ-2-Kabel und 16-A-Adapter berücksichtigen.
+- Bestätigte Ladestromvorgabe, Ladefreigabe und Pause sowie optional freigegebene 1-/3-Phasenumschaltung mit stromfreiem Zwischenzustand unterstützen. Nicht angeschlossenes Fahrzeug und nicht erreichbarer Charger deaktivieren den optionalen Ladepunkt, ohne unbekannte Leistungen als 0 zu melden.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine. go-e HTTP-API v1 und Cloud-API sind nicht Teil dieses zusätzlichen Plugins.
+
+### Security
+
+- Schreibbefehle auf `amp`, `frc` und `psm` begrenzen, API-Annahme und zurückgelesene Einstellungen prüfen. Vor dem Ladestart aktuelle Grenzen erneut lesen. Umleitungen und System-HTTP-Proxys deaktivieren; Rohantworten und Netzwerkadressen nicht in Fehlermeldungen ausgeben.
+
 ## 0.9.0 - 2026-11-11
 
 ### Features

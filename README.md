@@ -857,6 +857,11 @@ gespeicherte Bilanzintervalle und den bisherigen Akku-Kostenbestand nicht rückw
 
 ## Dynamische Hardware-Plugins
 
+**go-e Charger – lokale HTTP-API v2** bindet neuere go-e Charger direkt über ihre
+lokale API an. Ladeleistung, Freigabe, Stromgrenzen und optional die Phasenumschaltung
+benötigen keine zusätzliche HA-Wallboxintegration. Die API-Version steht im
+Plugin-Namen. [Einrichtung und Voraussetzungen](PLUGINS.md#go-e-charger-direkt-über-die-lokale-http-api-v2).
+
 Für den **Deye SUN-12K-SG04LP3-EU** ist eine lokale Anbindung über ein
 Modbus-TCP↔RTU-Gateway verfügbar. Messwerte benötigen keine zusätzliche
 HA-Sensorintegration; kompatible Firmware kann optional über den Remote-Modus

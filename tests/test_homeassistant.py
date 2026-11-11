@@ -325,6 +325,25 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         result=await flow.async_step_hardware_parameters({'battery_parameters':{}})
         self.assertEqual(json.loads(result['data']['vehicles']),definitions())
 
+    async def test_goe_api_v2_is_named_in_wallbox_selector_and_needs_no_entities(self):
+        from custom_components.eos_energiezentrale.plugin_forms import plugin_choices
+        from custom_components.eos_energiezentrale.energy.drivers import WALLBOX_DRIVERS
+        self.assertIn('v2',next(row['label'] for row in plugin_choices(WALLBOX_DRIVERS) if row['value']=='goe_http_v2'))
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={'entry_id':self.entry.entry_id}
+        with patch('socket.create_connection') as connect:
+            await flow.async_step_device_add({'kind':'wallbox'})
+            result=await flow.async_step_vehicle_plugin({'wallbox_type':'goe_http_v2'})
+            control=next(value for key,value in result['data_schema'].schema.items() if str(key)=='wallbox_parameters')
+            self.assertIn('url',control.config['fields'])
+            self.assertNotIn('power',control.config['fields'])
+            result=await flow.async_step_vehicle_parameters({'id':'goe','name':'go-e car','resource':'ev2',
+                'soc_entity':'','soc_scale':'percent','capacity_wh':60000,'charging_efficiency':.9,
+                'max_current_a':32,'wallbox_parameters':{'url':'http://charger.local'}})
+            self.assertEqual(result['type'],'create_entry')
+            rows=json.loads(result['data']['vehicles'])
+            self.assertEqual(rows[-1]['wallbox_type'],'goe_http_v2')
+            connect.assert_not_called()
+
     async def test_deye_plugin_form_needs_no_ha_entities_and_opens_no_connections(self):
         flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
         with patch('socket.create_connection') as connect:
