@@ -679,7 +679,7 @@ Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
 | Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
-| Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer bedeutet unbekannt. Keine nachträgliche Umbewertung. |
+| Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer: Schätzung als PV-Ladung zum aktuellen PV-Kostenansatz einschließlich Ladeverlusten. |
 
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
 und `discharging_efficiency` gelesen. Dies verändert keine EOS-Konfiguration. Fehlen diese
@@ -701,6 +701,15 @@ ausgebucht. Energie und Kosten werden mit gewichtetem Durchschnitt entnommen.
 Der Kostenbestand bleibt über Neustarts erhalten; nicht beobachtete Bestandszunahmen
 werden beim Abgleich mit dem SoC als unbekannt behandelt. Es werden keine Grundgebühren
 oder Einspeiseerlöse des übrigen Hauses verrechnet. Negative Arbeitspreise sind zulässig.
+
+Ohne ausdrücklich angegebenen Anfangspreis wird der anfängliche Akkuinhalt als
+PV-Ladung geschätzt: gespeicherte kWh geteilt durch den Ladewirkungsgrad, bewertet
+zum aktuellen PV-Kostenansatz (standardmäßig EOS-Einspeisevergütung). Bei der
+Entladung kommen die Entladeverluste hinzu. Auch der noch unbekannte Rest eines
+bisherigen Kostenbestands wird einmalig so bewertet; bekannte Kosten bleiben erhalten.
+Fehlt der Tarif, wartet diese Schätzung auf einen gültigen Wert. Spätere Datenlücken
+bleiben unbekannt. Die Annahme ist eine Näherung; bereits erfasste Auswertungen
+werden dadurch nicht rückwirkend geändert.
 
 Bei nur teilweise bekannten Kosten zeigt die UI die bekannte Teilsumme mit `≈` an;
 bei vollständig unbekannten Kosten steht `—`. Unbekannte Energie wird nicht als kostenlos bewertet.

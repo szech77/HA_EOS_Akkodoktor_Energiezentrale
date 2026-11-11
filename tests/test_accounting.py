@@ -64,6 +64,7 @@ class EnergyAccountingRequirements(TestCase):
         self.assertAlmostEqual(result["cost_eur"],3.)
 
     def test_missing_price_and_initial_storage_do_not_become_free_energy(self):
+        self.ledger.configure({"pv_price_source":"eos"})
         result=self.report_minute(solar=0,grid=1800,battery_discharge=1800,battery_soc=50,price=None)
         for key in result:
             amount=result[key]["total"]
@@ -78,6 +79,44 @@ class EnergyAccountingRequirements(TestCase):
                 self.assertEqual(amount["kwh"],3.6)
                 self.assertEqual(amount["sources"]["unknown"]["kwh"],3.6)
                 self.assertEqual(amount["cost_unknown_kwh"],3.6)
+
+    def test_initial_stock_is_estimated_as_pv_including_both_losses(self):
+        self.ledger.configure({"pv_price_ct":8.1,"discharge_efficiency":.9})
+        report=self.report_minute(solar=0,grid=0,battery_discharge=3600,battery_soc=50)
+        for entry in report.values():
+            amount=entry["total"]
+            self.assertAlmostEqual(amount["cost_eur"]/amount["kwh"],.1)
+            self.assertEqual(amount["cost_unknown_kwh"],0)
+
+    def test_legacy_unknown_stock_is_valued_once_preserving_known_cost(self):
+        self.ledger.stock={"kwh":5.,"cost":.6,"unknown":2.}
+        self.ledger.configure({"pv_price_ct":9})
+        self.report_minute(battery_soc=50)
+        self.assertAlmostEqual(self.ledger.stock["cost"],.8)
+        restarted=Accounting(self.directory,self.ledger.zone)
+        self.assertTrue(restarted.initial_pv_valued)
+        restarted.configure({"pv_price_ct":30})
+        restarted.observe(sample(NOW+timedelta(minutes=2),battery_soc=50))
+        restarted.observe(sample(NOW+timedelta(minutes=3),battery_soc=50))
+        self.assertAlmostEqual(restarted.stock["cost"],.8)
+        # Subsequent measurement gaps remain unknown, even after a restart.
+        restarted.observe(sample(NOW+timedelta(minutes=10),battery_soc=50))
+        restarted.observe(sample(NOW+timedelta(minutes=11),battery_soc=50))
+        self.assertEqual(restarted.stock["unknown"],5.)
+
+    def test_initial_estimate_waits_for_tariff_and_accepts_zero_and_negative(self):
+        for price in (0,-9,9):
+            with self.subTest(price=price):
+                self.ledger.stock=None
+                self.ledger.previous=None
+                self.ledger.configure({"pv_price_source":"eos"})
+                self.ledger.pv_tariff=None
+                self.report_minute(battery_soc=50)
+                self.assertEqual(self.ledger.stock["unknown"],5.)
+                self.ledger.pv_tariff={"constant_ct":price}
+                self.ledger.observe(sample(NOW+timedelta(minutes=2),battery_soc=50))
+                self.assertEqual(self.ledger.stock["unknown"],0.)
+                self.assertAlmostEqual(self.ledger.stock["cost"],5/.9*price/100)
 
     def test_negative_tariffs_and_future_settings_do_not_rewrite_history(self):
         self.report_minute(solar=0,grid=3600,price=-10)

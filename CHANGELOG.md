@@ -7,6 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
+- Anfänglicher Akkuinhalt ohne Anschaffungspreis wird als PV-Ladung zur Einspeisevergütung bzw. zum manuellen PV-Kostenansatz einschließlich Ladeverlusten geschätzt. Unbekannter Restbestand bestehender Installationen wird einmalig bewertet, bekannte Kosten und vergangene Auswertungen bleiben erhalten.
 - PV-Tagesprognosen werden zentral im Backend berechnet, einschließlich lokaler Tagesgrenzen und Zeitumstellung.
 - Optional kann das InfluxDB-Passwort aus einer Umgebungsvariable des Home-Assistant-Prozesses bezogen werden.
 
