@@ -7,7 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
-- Berechneten Durchschnittspreis in ct/kWh direkt bei den Kostensummen anzeigen: Tagesübersicht mit Gesamtsumme und Verbraucherkarten, Kosten-Kennzahl auf den Detailseiten sowie Diagramm-Hinweise je Zeitraum und Energiequelle. Quellentabellen behalten ihre eigene Preisspalte. Der Preis ergibt sich aus Kostensumme geteilt durch die zugehörige Energiemenge; unbekannte Kosten oder fehlender Verbrauch bleiben als unbekannter Preis erkennbar.
+- Berechneten Durchschnittspreis in ct/kWh direkt bei den Kostensummen anzeigen: Tagesübersicht mit Gesamtsumme und Verbraucherkarten, Kosten-Kennzahl auf den Detailseiten sowie Diagramm-Hinweise je Zeitraum und Energiequelle. Quellentabellen behalten ihre eigene Preisspalte. Bei teilweise bekannten Kosten wird der Preis aus dem bewerteten Energieanteil geschätzt und mit ≈ gekennzeichnet; ohne bewertete Energiemenge oder Verbrauch bleibt er unbekannt. Bekannte Kostenteilsummen werden nicht als Kosten für die gesamte Energiemenge ausgegeben.
 
 ### Bugfixes
 

@@ -744,9 +744,16 @@ mehrere Energiequellen oder zusammengeführte Live- und historische Daten hinweg
 Er steht in den Tageskarten und der Gesamtsumme, unter der Kosten-Kennzahl der
 Verbraucher-Detailseiten sowie in den Diagramm-Hinweisen für jeden Zeitraum und
 jede Quelle. Die Quellentabelle zeigt ihn in der eigenen Spalte **ct/kWh**.
-Bei teilweise oder vollständig unbekannten Kosten sowie ohne Verbrauch wird der
-Durchschnittspreis als **— ct/kWh** dargestellt. Bekannte Teilkosten bleiben als
-solche gekennzeichnet; ein tatsächlich kostenloser Verbrauch zeigt **0 ct/kWh**.
+Bei teilweise unbekannten Kosten wird ein geschätzter Durchschnittspreis mit
+**≈** angezeigt. Grundlage sind die bekannten Teilkosten geteilt durch die
+zugehörige bewertete Energiemenge. Beispiel: Von 4 kWh sind 2 kWh mit 0,60 €
+bewertet; daraus ergibt sich **Ø ≈ 30 ct/kWh**. Die unbekannten 2 kWh werden nicht
+als kostenlos in den Nenner eingerechnet. Die Annahme ist, dass der bewertete
+Anteil als Schätzgrundlage für den Durchschnitt dienen kann; die UI kennzeichnet
+diesen Preis ausdrücklich als Schätzung. Kostensummen bleiben weiterhin bekannte
+Teilsummen und werden nicht auf die gesamte Energiemenge hochgerechnet.
+Ohne ausreichende bewertete Energiemenge oder ohne Verbrauch bleibt der Preis
+**— ct/kWh**. Ein tatsächlich kostenloser bewerteter Verbrauch zeigt **0 ct/kWh**.
 
 Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** eine eigene Auswertung:
 

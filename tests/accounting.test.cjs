@@ -44,9 +44,9 @@ test('live and reconstructed consumption use their combined cost and energy for 
  assert.match(elements['day-balance'].innerHTML,/4 kWh.*Ø 35 ct\/kWh/);
 });
 
-test('unknown, partially priced and zero-consumption amounts do not invent a unit price',()=>{
+test('fully unknown and zero-consumption amounts do not invent a unit price',()=>{
  const ctx=fixture();
- for(const value of [null,amount(1,0,1),amount(1,.2,.5),amount(0,0)]){
+ for(const value of [null,amount(1,0,1),amount(0,0)]){
   ctx.amount=value;
   assert.match(vm.runInContext('costWithPrice(amount)',ctx),/Ø — ct\/kWh/);
  }
@@ -58,6 +58,52 @@ test('unknown, partially priced and zero-consumption amounts do not invent a uni
  assert.match(vm.runInContext('costWithPrice(amount)',ctx),/Ø 0 ct\/kWh/);
  ctx.amount=amount(2,-.1);
  assert.match(vm.runInContext('costWithPrice(amount)',ctx),/Ø -5 ct\/kWh/);
+});
+
+test('partially priced consumption shows an estimated average of its priced energy',()=>{
+ const ctx=fixture();
+ ctx.amount=amount(4,.6,2);
+ assert.equal(vm.runInContext('averageCost(amount)',ctx),'≈ 30 ct/kWh');
+ assert.match(vm.runInContext('costWithPrice(amount)',ctx),/Ø ≈ 30 ct\/kWh/);
+ // 0.60 euros is only the known subtotal, not a total for all four kWh.
+ assert.match(vm.runInContext('costValue(amount)',ctx),/0,60/);
+ assert.doesNotMatch(vm.runInContext('averageCost(amount)',ctx),/15 ct/);
+ ctx.amount=amount(2,-.1,1);
+ assert.equal(vm.runInContext('averageCost(amount)',ctx),'≈ -10 ct/kWh');
+ ctx.amount=amount(2,0,1);
+ assert.equal(vm.runInContext('averageCost(amount)',ctx),'≈ 0 ct/kWh');
+ for(const value of [amount(1,0,1),amount(1,.1,2),amount(1,.1,-1),amount(1,0,1-.00001)]){
+  ctx.amount=value;
+  assert.equal(vm.runInContext('averageCost(amount)',ctx),'—');
+ }
+});
+
+test('overview, detail, source table and chart tooltip mark estimated unit prices',()=>{
+ const {ctx,elements}=uiFixture();
+ ctx.consumerEnabled=()=>false;
+ ctx.snapshot.accounting={date:'2026-02-01',consumers:{house:{total:amount(4,.6,2)}}};
+ vm.runInContext('dayBalance()',ctx);
+ assert.match(elements['day-balance'].innerHTML,/Ø ≈ 30 ct\/kWh/);
+ assert.match(elements['day-balance'].innerHTML,/billing.estimated_average_note/);
+ const entry={total:amount(4,.6,2),bins:[{time:'2026-02-01',...amount(4,.6,2)}]};
+ ctx.report={date:'2026-02-01',end:'2026-03-01',consumers:{house:entry}};
+ ctx.cards=values=>{ctx.kpis=values;return '';};
+ vm.runInContext("billing.data=report;billing.period='month';billing.date=report.date;usageDetail('house',false)",ctx);
+ assert.match(ctx.kpis[1][2],/Ø ≈ 30 ct\/kWh/);
+ assert.equal(ctx.kpis[3][1],'≈ 30 ct/kWh');
+ assert.match(elements['usage-table'].innerHTML,/≈ 30 ct\/kWh/);
+ assert.match(elements['usage-charts'].innerHTML,/<title>[^<]*Ø ≈ 30 ct\/kWh/);
+ assert.match(elements['billing-quality'].textContent,/billing.estimated_average_note/);
+});
+
+test('combined live and historical estimates divide by combined priced energy',()=>{
+ const {ctx,elements}=uiFixture();
+ ctx.consumerEnabled=()=>false;
+ ctx.snapshot.accounting={date:'2026-02-01',consumers:{house:{total:amount(1,.2)}}};
+ ctx.historical={date:'2026-02-01',historical_consumers:{house:amount(5,1,3)}};
+ vm.runInContext('dayAccounting=historical;dayBalance()',ctx);
+ // 1.20 euros / (6 - 3) kWh = 40 ct/kWh, not 20 ct/kWh.
+ assert.match(elements['day-balance'].innerHTML,/Ø ≈ 40 ct\/kWh/);
 });
 
 test('both consumption and cost chart tooltips include overall and per-source unit prices',()=>{
@@ -95,6 +141,10 @@ test('the short unit-price label is translated in German and English',()=>{
   ctx.t=(key,values={})=>messages[key].replace(/\{(\w+)\}/g,(_match,name)=>values[name]??'');
   const label=vm.runInContext('averageCostLabel({kwh:4,cost_eur:1,cost_unknown_kwh:0})',ctx);
   assert.equal(label,language==='de'?'Ø 25 ct/kWh':'Avg 25 ct/kWh');
+  const estimatedLabel=vm.runInContext('averageCostLabel({kwh:4,cost_eur:.6,cost_unknown_kwh:2})',ctx);
+  assert.equal(estimatedLabel,language==='de'?'Ø ≈ 30 ct/kWh':'Avg ≈ 30 ct/kWh');
+  const note=vm.runInContext('estimatedAverageNote({kwh:4,cost_eur:.6,cost_unknown_kwh:2})',ctx);
+  assert.match(note,language==='de'?/geschätzt/:/estimated/);
  }
 });
 test('calendar month slots include all days rather than compressing measurement gaps',()=>{
