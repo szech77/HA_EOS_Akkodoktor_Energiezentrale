@@ -295,6 +295,13 @@ Plugin ebenso wenig geeignet wie ein ausschließlich Solarman-V5-fähiger Logger
 auf Port 8899. Dieses Plugin implementiert standardisiertes Modbus TCP mit MBAP.
 Cloud-API, Solarman-V5 und direkt angeschlossene USB-Serielladapter sind nicht enthalten.
 
+Als ESPHome-Gateway ist die
+[Modbus Bridge von rosenrot00](https://github.com/rosenrot00/esphome_modbus_bridge)
+vom Protokoll her geeignet: echte MBAP↔RTU-Umsetzung, FC03/FC16, passende
+Puffergrenzen sowie Erhalt von Unit- und Transaktions-ID. Geprüfter Stand:
+2026.10.2 (`9119ba5b036af146eb8fb1e4a59aef29d4f63089`). Ein Test mit ESP und Deye
+steht aus. [Anleitung, Verdrahtungsvoraussetzungen und ESPHome-Beispiel](docs/deye-esphome-gateway.md).
+
 Einrichtung: **Inbetriebnahme → Geräte → Gerät hinzufügen → Speicher /
 Hybrid-Wechselrichter → Deye ...**. Für einen Deye ohne Batterie die gleichnamige
 ausschließlich lesende Variante unter **PV-Wechselrichter ohne Batterie** wählen.

@@ -862,6 +862,8 @@ Modbus-TCP↔RTU-Gateway verfügbar. Messwerte benötigen keine zusätzliche
 HA-Sensorintegration; kompatible Firmware kann optional über den Remote-Modus
 mit Watchdog gesteuert werden. Der Monitoring-Anschluss muss zur Hardwareversion
 passen. [Anschluss, Einrichtung und Grenzen](PLUGINS.md#deye-sun-12k-sg04lp3-eu-direkt-über-modbus).
+Für ein Gateway auf Basis von ESPHome gibt es eine
+[Anleitung mit Beispielkonfiguration](docs/deye-esphome-gateway.md).
 
 Speicher-/Wechselrichter und Wallboxen werden über versionierte Interfaces und lokale,
 dynamisch erkannte Plugins angebunden. Fronius und NRGkick sind eigene Plugins;
