@@ -8,8 +8,10 @@
           "eos_url": "EOS-API-Basisadresse",
           "language": "Panel-Sprache",
           "battery_resource": "EOS-Speicherressource",
-          "vehicle_resource": "EOS-Fahrzeugressource"
-        }
+          "vehicle_resource": "EOS-Fahrzeugressource (Einzelkonfiguration)",
+          "vehicle_resources": "EOS-Ressourcen der konfigurierten Fahrzeuge"
+        },
+        "description": "Alle Fahrzeuge nutzen diese EOS-Verbindung. Fahrzeuge unter Inbetriebnahme → Geräte hinzufügen oder entfernen. Bei einer Fahrzeugliste hier jedem Fahrzeug eine eigene, bereits in EOS vorhandene Ressource zuordnen; die Zuordnung wird auch im Gerät gespeichert. Ohne Liste gilt die Einzelkonfiguration. EOS-Gerätedefinitionen werden nicht angelegt."
       },
       "sensors": {
         "title": "Quellsensoren",
@@ -148,8 +150,10 @@
           "eos_url": "EOS-API-Basisadresse",
           "language": "Panel-Sprache",
           "battery_resource": "EOS-Speicherressource",
-          "vehicle_resource": "EOS-Fahrzeugressource"
-        }
+          "vehicle_resource": "EOS-Fahrzeugressource (Einzelkonfiguration)",
+          "vehicle_resources": "EOS-Ressourcen der konfigurierten Fahrzeuge"
+        },
+        "description": "Alle Fahrzeuge nutzen diese EOS-Verbindung. Fahrzeuge unter Inbetriebnahme → Geräte hinzufügen oder entfernen. Bei einer Fahrzeugliste hier jedem Fahrzeug eine eigene, bereits in EOS vorhandene Ressource zuordnen; die Zuordnung wird auch im Gerät gespeichert. Ohne Liste gilt die Einzelkonfiguration. EOS-Gerätedefinitionen werden nicht angelegt."
       },
       "sensors": {
         "title": "Quellsensoren",

@@ -823,6 +823,80 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["data"]["phase_wait_s"], 90)
         self.assertEqual(result["data"]["car_soc_scale"], "factor")
 
+    def fleet_connection_flow(self):
+        from test_fleet import definitions
+        rows=definitions()
+        self.hass.config_entries.async_update_entry(self.entry,options={'vehicles':json.dumps(rows)})
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+        flow.context={'entry_id':self.entry.entry_id}
+        return flow,rows
+
+    async def test_eos_connection_lists_each_configured_vehicle_and_saves_resources_in_the_device_list(self):
+        from threading import get_ident
+        flow,rows=self.fleet_connection_flow()
+        result=await flow.async_step_connection()
+        fields={str(key):(key,value) for key,value in result['data_schema'].schema.items()}
+        self.assertNotIn('vehicle_resource',fields)
+        marker,control=fields['vehicle_resources']
+        self.assertEqual(marker.default(),{'first':'ev1','second':'ev2'})
+        self.assertEqual(set(control.config['fields']),{'first','second'})
+        self.assertIn('Auto first',control.config['fields']['first']['label'])
+        self.assertEqual(control.config['fields']['second']['default'],'ev2')
+        threads=[]
+        def config_request(*args):
+            threads.append(get_ident())
+            return {}
+        with patch('custom_components.eos_energiezentrale.config_flow.request',side_effect=config_request) as request:
+            result=await flow.async_step_connection({'eos_url':DEFAULTS['eos_url'],'language':'de',
+                'battery_resource':'battery1','vehicle_resources':{'first':'ev2','second':'ev1'}})
+        self.assertEqual(result['type'],'create_entry')
+        expected=[{**row,'resource':{'first':'ev2','second':'ev1'}[row['id']]} for row in rows]
+        self.assertEqual(json.loads(result['data']['vehicles']),expected)
+        self.assertNotIn('vehicle_resources',result['data'])
+        request.assert_called_once_with(DEFAULTS['eos_url']+'/v1/config')
+        self.assertNotEqual(threads[0],get_ident())
+        self.hass.config_entries.async_update_entry(self.entry,options=result['data'])
+        self.assertEqual(flow._vehicle_rows(),expected)
+
+    async def test_eos_connection_rejects_invalid_partial_and_conflicting_vehicle_assignments_atomically(self):
+        flow,rows=self.fleet_connection_flow()
+        for resources in ({'first':'ev3'},{'first':'ev3','second':'ev4','ghost':'ev5'},None,[],
+                          {'first':'ev1','second':'ev1'},{'first':'battery1','second':'ev2'},
+                          {'first':'','second':'ev2'},{'first':'invalid/resource','second':'ev2'},
+                          {'first':42,'second':'ev2'}):
+            with self.subTest(resources=resources),patch('custom_components.eos_energiezentrale.config_flow.request') as request:
+                result=await flow.async_step_connection({'vehicle_resources':resources})
+                self.assertEqual(result['errors'],{'base':'invalid_config'})
+                self.assertEqual(flow._vehicle_rows(),rows)
+                request.assert_not_called()
+
+    async def test_fleet_connection_ignores_unused_legacy_resource_and_preserves_connection_failures(self):
+        flow,rows=self.fleet_connection_flow()
+        with patch('custom_components.eos_energiezentrale.config_flow.request',return_value={}):
+            result=await flow.async_step_connection({'battery_resource':'ev1',
+                'vehicle_resources':{'first':'ev3','second':'ev4'}})
+        self.assertEqual(result['type'],'create_entry')
+        with patch('custom_components.eos_energiezentrale.config_flow.request',side_effect=OSError('offline')):
+            result=await flow.async_step_connection({'vehicle_resources':{'first':'ev3','second':'ev4'}})
+        self.assertEqual(result['errors'],{'base':'cannot_connect'})
+        self.assertEqual(flow._vehicle_rows(),rows)
+        fields={str(key):key for key in result['data_schema'].schema}
+        self.assertEqual(fields['vehicle_resources'].default(),{'first':'ev3','second':'ev4'})
+
+    async def test_legacy_eos_connection_retains_single_resource_and_cannot_create_phantom_vehicles(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+        flow.context={'entry_id':self.entry.entry_id}
+        result=await flow.async_step_connection()
+        self.assertIn('vehicle_resource',{str(key) for key in result['data_schema'].schema})
+        with patch('custom_components.eos_energiezentrale.config_flow.request',return_value={}):
+            result=await flow.async_step_connection({'vehicle_resource':'legacy_ev'})
+        self.assertEqual(result['data']['vehicle_resource'],'legacy_ev')
+        self.assertEqual(result['data']['vehicles'],'[]')
+        with patch('custom_components.eos_energiezentrale.config_flow.request') as request:
+            result=await flow.async_step_connection({'vehicle_resources':{'ghost':'ev2'}})
+        self.assertEqual(result['errors'],{'base':'invalid_config'})
+        request.assert_not_called()
+
     async def test_invalid_urls_driver_parameters_and_ranges_are_rejected(self):
         for change in ({"eos_url": "http://user:secret@eos:8503"}, {"phase_wait_s": 0},
                        {"battery_min_soc": 100}, {"battery_parameters": '{"mode":"sensor.invalid"}'},

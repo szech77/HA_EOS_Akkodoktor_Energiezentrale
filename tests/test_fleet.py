@@ -71,6 +71,12 @@ class FleetRequirements(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(ValueError):
                 validate_options({**DEFAULTS,"vehicles":json.dumps(rows)})
 
+    def test_active_vehicle_list_replaces_unused_legacy_resource_for_json_and_decoded_options(self):
+        rows=definitions()
+        for raw in (rows,json.dumps(rows)):
+            with self.subTest(serialized=isinstance(raw,str)):
+                validate_options({**DEFAULTS,'vehicles':raw,'vehicle_resource':'unused/resource'})
+
     def test_pending_increases_are_reserved_but_unconfirmed_reductions_are_not_spent(self):
         self.assertEqual(reserved_grid(-6000,{"a":0,"b":0},{"a":3680},"b"),-2320)
         self.assertEqual(reserved_grid(-1000,{"a":3000,"b":0},{"a":0},"b"),-1000)

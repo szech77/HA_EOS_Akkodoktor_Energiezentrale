@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.12.0 - 2026-11-12
+
+### Features
+
+- Unter „Inbetriebnahme → EOS-Verbindung“ alle konfigurierten Fahrzeuge mit Name und stabiler ID anzeigen und ihre individuellen EOS-Ressourcen bearbeiten. Die Zuordnung wird direkt in der bestehenden Geräteliste gespeichert; alle Fahrzeuge verwenden weiterhin eine gemeinsame EOS-Verbindung. Ohne Fahrzeugliste bleibt die bisherige Einzelzuordnung verfügbar. Deutsche und englische Einrichtungshinweise ergänzen.
+
+### Bugfixes
+
+- Bei einer Fahrzeugliste nicht länger die ungenutzte einzelne Fahrzeugressource prüfen oder als aktive Zuordnung anzeigen. Unvollständige, doppelte, ungültige und mit der Speicherressource kollidierende Zuordnungen ohne Teiländerungen ablehnen; Fahrzeugeinstellungen und Plugin-Konfiguration erhalten.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.11.0 - 2026-11-11
 
 ### Features

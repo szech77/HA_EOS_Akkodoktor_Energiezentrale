@@ -1,4 +1,5 @@
 """Guided setup and separate commissioning options."""
+import json
 import probatio as vol
 
 from homeassistant import config_entries
@@ -26,6 +27,16 @@ def schema_for(group, values):
     fields = {}
     for key in GROUPS[group]:
         default = values[key]
+        if group == 'connection' and key == 'vehicle_resource':
+            vehicles=json.loads(values.get('vehicles','[]'))
+            if vehicles:
+                resources={row['id']:row.get('resource',row['id']) for row in vehicles}
+                control=selector.ObjectSelector(selector.ObjectSelectorConfig(fields={
+                    row['id']:{'label':f"{row.get('name',row['id'])} ({row['id']})",'required':True,
+                               'default':resources[row['id']],'selector':selector.TextSelector()}
+                    for row in vehicles}))
+                fields[vol.Required('vehicle_resources',default=values.get('vehicle_resources',resources))]=control
+                continue
         if key.endswith("_entity"):
             field = (OptionalWeatherSelector(selector.EntitySelectorConfig(domain="weather"))
                      if key == "weather_entity" else OptionalWeatherSelector(selector.EntitySelectorConfig(domain="sensor")))
@@ -52,6 +63,21 @@ def schema_for(group, values):
         else:
             fields[marker(key, **({} if omit_default else {"default": default}))] = field
     return vol.Schema(fields)
+
+
+def connection_values(base, submitted):
+    """Keep vehicle EOS assignments in the existing device list only."""
+    values={**base,**submitted}
+    values.pop('vehicle_resources',None)
+    if 'vehicle_resources' in submitted:
+        rows=json.loads(base.get('vehicles','[]'))
+        resources=submitted['vehicle_resources']
+        if (not rows or not isinstance(resources,dict)
+                or resources.keys()!={row['id'] for row in rows}
+                or any(not isinstance(value,str) for value in resources.values())):
+            raise ValueError('Invalid vehicle resource assignment')
+        values['vehicles']=json.dumps([{**row,'resource':resources[row['id']]} for row in rows])
+    return values
 
 
 async def check(hass, values, connection=False):
@@ -84,8 +110,11 @@ class ConfigFlow(DeviceFormMixin, PluginFormMixin, config_entries.ConfigFlow, do
                 user_input = {**dict.fromkeys(SENSOR_OPTIONS, ""), "weather_entity":"", **user_input}
             if group == "history" and user_input.get("influx_password_env") and not user_input.get("influx_password"):
                 user_input = {**user_input, "influx_password": ""}
-            values = {**self.values, **user_input}
-            errors = await check(self.hass, values, group == "connection")
+            try:
+                values = connection_values(self.values,user_input) if group == 'connection' else {**self.values, **user_input}
+                errors = await check(self.hass, values, group == "connection")
+            except (ValueError,TypeError,KeyError):
+                errors={'base':'invalid_config'}
             if not errors:
                 self.values = values
                 groups = list(GROUPS)
@@ -129,12 +158,18 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
             user_input = {**dict.fromkeys(SENSOR_OPTIONS, ""), "weather_entity":"", **user_input}
         if group == "history" and user_input and user_input.get("influx_password_env") and not user_input.get("influx_password"):
             user_input = {**user_input, "influx_password": ""}
-        values = {**DEFAULTS, **self.config_entry.data, **self.config_entry.options, **(user_input or {})}
+        base = {**DEFAULTS, **self.config_entry.data, **self.config_entry.options}
+        values = {**base, **(user_input or {})}
         errors = {}
         if user_input is not None:
-            errors = await check(self.hass, values, group == "connection")
+            try:
+                if group == 'connection': values=connection_values(base,user_input)
+                errors = await check(self.hass, values, group == "connection")
+            except (ValueError,TypeError,KeyError):
+                errors={'base':'invalid_config'}
             if not errors:
                 return self.async_create_entry(title="", data=values)
+            if group == 'connection': values={**base,**user_input}
         return self.async_show_form(step_id=group, data_schema=schema_for(group, values), errors=errors)
 
     async def async_step_connection(self, user_input=None):
