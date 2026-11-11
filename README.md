@@ -689,7 +689,9 @@ EOS-Zeitplan. Bis zu acht Fahrzeuge stehen untereinander im Diagramm; dessen Hö
 passt sich der Anzahl sichtbarer Verbraucher an. Nicht angeschlossene oder nicht
 erreichbare Fahrzeuge bleiben ausgegraut, ohne Hinweismeldung im Knoten; der
 Zustand ist im Tooltip und für Screenreader verfügbar. Unbekannte Messwerte bleiben
-unbekannt. Es entstehen eigene native Sensoren
+unbekannt. Unterhalb der Verbrauchsauswertung steht für jedes Fahrzeug eine eigene
+EOS-Modus-Kachel mit aktuellem Modus und nächstem geplanten Moduswechsel. Der
+Fahrzeugname verlinkt auf die jeweilige Detailansicht. Es entstehen eigene native Sensoren
 für Leistung, SoC und Status jedes Fahrzeugs. Die Fahrzeug-ID bestimmt deren Identität.
 
 Alle Regler verwenden denselben Netzanschluss. Nicht gemessene Leistungserhöhungen

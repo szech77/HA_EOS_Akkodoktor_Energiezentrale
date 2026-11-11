@@ -7,7 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
-- Bis zu acht konfigurierte Fahrzeuge einzeln im Stromflussdiagramm mit Name, eigener Ladeleistung, fünf SoC-Balken und eigener Flusslinie darstellen. Ein Klick öffnet die jeweilige Fahrzeug-Detailseite. Die Diagrammhöhe passt sich der Anzahl sichtbarer Verbraucher an; die zusätzlichen Fahrzeugkarten unterhalb der Übersicht entfallen.
+- Bis zu acht konfigurierte Fahrzeuge einzeln im Stromflussdiagramm mit Name, eigener Ladeleistung, fünf SoC-Balken und eigener Flusslinie darstellen. Ein Klick öffnet die jeweilige Fahrzeug-Detailseite. Die Diagrammhöhe passt sich der Anzahl sichtbarer Verbraucher an. Unterhalb der Übersicht zeigen eigene Modus-Kacheln für jedes Auto den aktuellen EOS-Modus und den nächsten geplanten Moduswechsel; Name und Detailverknüpfung bleiben erhalten.
 
 ### Bugfixes
 

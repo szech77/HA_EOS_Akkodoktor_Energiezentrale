@@ -172,10 +172,10 @@ function actualPoints(key) {
   return [...influx.filter(row => !first || Date.parse(row.time) < first), ...local];
 }
 
-function nextPlan(key) {
+function nextPlan(key,source=snapshot) {
   const now = windowNow();
-  const current = snapshot.live[key + '_mode'];
-  return (snapshot.plan[key] ?? []).find(item => Date.parse(item.time) > now && item.mode !== current);
+  const current = source.live[key + '_mode'];
+  return (source.plan?.[key] ?? []).find(item => Date.parse(item.time) > now && item.mode !== current);
 }
 
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
@@ -364,6 +364,18 @@ function renderFlow() {
   });
 }
 
+function modeCards() {
+  const entries=[{key:'battery',source:snapshot,name:t('device.battery'),href:'#battery'}];
+  if (consumerEnabled('car')) {
+    if (snapshot.vehicles?.length) entries.push(...snapshot.vehicles.map(vehicle=>({key:'car',source:vehicle,name:vehicle.name,href:'#car/'+encodeURIComponent(vehicle.id)})));
+    else entries.push({key:'car',source:snapshot,name:t('node.car'),href:'#car'});
+  }
+  return entries.map(({key,source,name,href})=>{
+    const item=nextPlan(key,source);
+    return `<div><small>${th('metric.eos_mode')} · <a href="${html(href)}">${html(name)}</a></small><b>${html(modeLabel(source.live[key+'_mode']))}</b><span>${item ? html(time(item.time)+' · '+modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
+  }).join('');
+}
+
 function overview() {
   dayBalance();
   const live = snapshot.live;
@@ -399,10 +411,7 @@ function overview() {
     [t('metric.grid_connection'),displayedPower('grid'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
   ]);
   renderFlow();
-  byId('next').innerHTML = ['battery','car'].filter(consumerEnabled).filter(key=>key!=='car' || !snapshot.vehicles?.length).map(key => {
-    const item = nextPlan(key);
-    return `<div><small>${th('metric.eos_mode')} · ${key === 'car' ? th('node.car') : th('device.battery')}</small><b>${html(modeLabel(live[key + '_mode']))}</b><span>${item ? html(time(item.time) + ' · ' + modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
-  }).join('');
+  byId('next').innerHTML=modeCards();
 }
 
 const chartModels = new Map();
