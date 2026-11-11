@@ -644,6 +644,17 @@ function sourceConfigurationNotice(configuration, translate) {
   return notices.join(' · ');
 }
 
+function vehicleSocNotices(vehicles, translate) {
+  return (vehicles ?? []).slice(1).map(vehicle => {
+    const report = vehicle.source_configuration;
+    const notice = sourceConfigurationNotice({
+      missing:(report?.missing ?? []).filter(key => key === 'car_soc'),
+      unavailable:(report?.unavailable ?? []).filter(key => key === 'car_soc')
+    },translate);
+    return notice ? `${vehicle.name}: ${notice}` : '';
+  }).filter(Boolean).join(' · ');
+}
+
 function renderView() {
   const requested = location.hash.slice(1);
   if (requested !== route) hideProbe();
@@ -662,7 +673,8 @@ function renderView() {
       .map(key => `${vehicle.name}: ${t(errorAreas[key])}`));
   const warnings = [...errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()), ...vehicleWarnings];
   byId('notice').textContent = warnings.length ? `${t('notice.check')} · ${warnings.join(', ')}` : '';
-  const sourceNotice = sourceConfigurationNotice(snapshot.source_configuration,t);
+  const sourceNotice = [sourceConfigurationNotice(snapshot.source_configuration,t),
+    vehicleSocNotices(snapshot.vehicles,t)].filter(Boolean).join(' · ');
   if (sourceNotice) byId('notice').textContent += `${warnings.length?' · ':''}${sourceNotice}`;
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();

@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.7.1 - 2026-11-11
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Keine SoC-Warnung bei einem vorhandenen, unveränderten Fahrzeug-Ladezustand. Die Warnung erscheint erst nach mehr als fünf Minuten durchgehend ohne gültigen Wert, verschwindet bei Wiederkehr sofort und wird je Fahrzeug getrennt ermittelt. Andere Messquellen behalten ihre bisherigen Altersprüfungen.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.7.0 - 2026-11-11
 
 ### Features
