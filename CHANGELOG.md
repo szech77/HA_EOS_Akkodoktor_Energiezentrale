@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.3.3 - 2026-11-11
+
+### Features
+
+- Repositoryweite Agent-Anweisungen für vollständige Pull Requests mit Release-Metadaten, Kompatibilitätsprüfung und Tests ergänzt, insbesondere für die Nachbearbeitung von Dependabot-Updates.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- `github/codeql-action/upload-sarif` für die Veröffentlichung der Sicherheitsberichte in GitHub Code scanning von Commit `5895b2c9be147bc7f1c75ce72c5cb577febb1907` auf `33d7b85da1a04171e211befe2c739303b9a4c066` aktualisiert.
+
 ## 0.3.2 - 2026-11-10
 
 ### Features
