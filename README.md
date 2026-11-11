@@ -856,6 +856,11 @@ Anteil der Bezugsleistung: Beginn oben bei 12 Uhr, Füllung im Uhrzeigersinn, 25
 entsprechen einem Viertelkreis. Der übrige Ring ist dunkel. Batterie- und Auto-SoC
 bleiben separat innerhalb der Symbole sichtbar.
 
+Das Auto wird in Seitenansicht dargestellt. Wie beim Speicher zeigt der SoC fünf
+vertikale Balken in 20-%-Stufen; der Prozentwert bleibt zusätzlich ablesbar. Bei
+0 % sind alle fünf Balken leer, bei unbekanntem SoC werden sie ausgeblendet.
+In den Fahrzeugkarten gilt dieselbe Darstellung für jedes Auto einzeln.
+
 - **PV:** Bezugsleistung unter **Konfigurieren → Grenzen → PV-Bezugsleistung für den Ring (W)**
   einstellen (`pv_peak_w`, Standard 10000 W). Dies verändert keine Regelgrenze.
 - **Akku:** Bezug auf die maximale Lade- bzw. Entladeleistung der Integration, je nach

@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.7.3 - 2026-11-11
+
+### Features
+
+- Autosymbol in der Energieübersicht und den Fahrzeugkarten in Seitenansicht. Fünf vertikale SoC-Balken zeigen den Ladestand analog zum Speichersymbol in 20-%-Stufen; unbekannter SoC blendet die Balken aus und bleibt von 0 % unterscheidbar.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.7.2 - 2026-11-11
 
 ### Features
