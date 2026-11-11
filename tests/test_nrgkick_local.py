@@ -22,7 +22,7 @@ class API(ThreadingHTTPServer):
     def __init__(self):
         super().__init__(("127.0.0.1", 0), Handler)
         self.info = {"general":{"model_type":"NRGkick Gen2","rated_current":32},
-                     "connector":{"phase_count":3,"max_current":32},"grid":{"phases":7}}
+                     "connector":{"phase_count":3,"max_current":32},"grid":{"phases":7,"voltage":230}}
         self.control = {"current_set":6.,"charge_pause":1,"phase_count":3,"energy_limit":12345}
         self.values = {"general":{"status":2,"charge_permitted":0,"relay_state":0,
                                   "error_code":0,"rcd_trigger":0},"powerflow":{"total_active_power":0.}}
@@ -169,6 +169,15 @@ def test_a_concurrent_phase_change_cannot_enable_three_times_the_reserved_load()
         assert not server.writes
 
 
+def test_a_concurrent_voltage_change_cannot_increase_the_reserved_load():
+    with api() as (driver,server):
+        server.info['grid']['voltage']=120
+        old=driver.read({},NOW)
+        server.info['grid']['voltage']=230
+        with pytest.raises(NRGkickAPIError): driver.charge(6,old)
+        assert not server.writes
+
+
 @pytest.mark.parametrize('code,rcd',[(16,0),(0,1),(None,0)])
 def test_hardware_faults_prevent_enabling(code,rcd):
     with api() as (driver,server):
@@ -294,6 +303,16 @@ def test_two_native_devices_share_grid_headroom_without_ha_wallbox_entities(alre
         else:
             assert all(device.control['charge_pause']==0 for device in devices)
         assert not ha.writes
+        if not already_enabled:
+            first.fail.update(('/info','/values','/control'))
+            previous_calls=app.battery_driver.apply.call_count+app.battery_driver.release.call_count
+            app.tick(NOW+timedelta(seconds=35),35)
+            assert app.armed and second.control['charge_pause']==0
+            assert app.live['car'] is None
+            assert app.vehicle_snapshots[0]['live']['car_connected'] is False
+            assert 'wallbox_stop' in app.vehicle_snapshots[0]['errors']
+            assert app.battery_driver.apply.call_count+app.battery_driver.release.call_count>previous_calls
+            first.fail.clear()
         first.fail.add('/values')
         app.set_armed(False)
         assert all(device.control['charge_pause']==1 for device in devices)
@@ -310,3 +329,104 @@ def test_duplicate_direct_device_is_rejected_without_network_access():
     with patch('urllib.request.OpenerDirector.open') as open_request,pytest.raises(ValueError):
         vehicle_options({**DEFAULTS,'vehicles':json.dumps(vehicles)})
     open_request.assert_not_called()
+
+
+@pytest.mark.parametrize('phases,grid,amps,watts',[(1,1,10,2300),(3,7,16,11040),(3,1,13,2990)])
+def test_socket_limits_translate_to_eos_power_and_discrete_rates(phases,grid,amps,watts):
+    from custom_components.eos_energiezentrale.energy.vehicle_limits import charging_profile
+    with api(phase_switching=True) as (driver,server):
+        server.info['connector'].update(phase_count=phases,max_current=amps)
+        server.info['grid']['phases']=grid
+        box=driver.read({},NOW)
+        profile=charging_profile(box,driver,{'max_current_a':32},{'phase_auto':True},True)
+        assert box.max_phases == (3 if phases==3 and grid==7 else 1)
+        assert box.max_power_w==watts
+        assert profile[0]==watts and profile[3] is True
+        assert profile[2][0]==0 and profile[2][-1]==1
+        assert profile[1]==1380
+
+
+def test_missing_socket_limits_never_make_an_active_eos_profile():
+    from custom_components.eos_energiezentrale.energy.vehicle_limits import charging_profile
+    with api() as (driver,server):
+        server.info['grid'].pop('voltage')
+        profile=charging_profile(driver.read({},NOW),driver,{'max_current_a':16},{'phase_auto':False},True)
+        assert profile == (None,None,(0.,),False)
+
+
+@contextmanager
+def native_controller(driver):
+    from types import SimpleNamespace
+    from zoneinfo import ZoneInfo
+    from custom_components.eos_energiezentrale.energy.controller import Controller
+    from custom_components.eos_energiezentrale.energy.contracts import BatteryReading
+    from custom_components.eos_energiezentrale.energy.settings import daily_settings
+    from test_requirements import OPTIONS, ControllerRequirements
+    with temporary_project_directory() as directory:
+        ha,eos,battery=Mock(),Mock(),Mock()
+        ha.states.return_value=ControllerRequirements.states(grid=-6000)
+        battery.read.return_value=BatteryReading(50,0,0)
+        eos.plan.return_value={'generated_at':NOW.isoformat(),'instructions':[instruction(NOW,'NON_EXPORT')]}
+        eos.solution.return_value={}
+        config=SimpleNamespace(directory=directory,options={**OPTIONS,'wallbox_type':'nrgkick_local'},
+            daily=daily_settings({},20),zone=ZoneInfo('Europe/Berlin'),wallbox=driver,
+            eos=eos,battery=battery,influx=SimpleNamespace(url=None))
+        app=Controller(ha,config)
+        app.set_armed(True)
+        yield app,battery,eos
+
+
+@pytest.mark.parametrize('offline',[False,True])
+def test_absent_ev_does_not_block_startup_or_battery_control_and_reconnects(offline):
+    with api() as (driver,server),native_controller(driver) as (app,battery,eos):
+        app.config.daily.update(schedule='once',departure=(NOW+timedelta(hours=4)).isoformat())
+        if offline: server.fail.update(('/info','/control','/values'))
+        else: server.values['general']['status']=1
+        app.tick(NOW,0)
+        assert app.armed and not app.restore_pending
+        assert app.live['car_connected'] is False
+        assert app.live['car_available'] is (not offline)
+        assert app.live['car'] == (None if offline else 0.)
+        assert app.order_for('ev1',NOW) is None
+        assert app.eos_resources()=={'battery1'}
+        assert battery.apply.called or battery.release.called
+        assert ('wallbox_stop' in app.errors) is offline
+        assert eos.set_vehicle_charging_limits.call_args.args[-2:]==((0.,),False)
+        eos.set_vehicle_goal.assert_called_with('ev1',0,None)
+        if offline:
+            assert app.commanded_car_w is None
+        server.fail.clear()
+        server.values['general']['status']=2
+        app.tick(NOW+timedelta(seconds=30),30)
+        assert app.live['car_connected'] is True
+        assert 'wallbox_stop' not in app.errors
+        assert app.vehicle_profile[-1] is True
+        assert eos.set_vehicle_charging_limits.call_args.args[-1] is True
+        assert eos.set_vehicle_goal.call_args.args[1]>0
+        assert app.armed
+
+
+def test_socket_change_refreshes_eos_limits_and_local_fast_charge_is_bounded():
+    with api() as (driver,server),native_controller(driver) as (app,_,eos):
+        app.config.daily.update(fast=True,phase_auto=False)
+        app.tick(NOW,0)
+        server.info['connector'].update(phase_count=1,max_current=10)
+        server.info['grid']['phases']=1
+        server.control['phase_count']=1
+        app.tick(NOW+timedelta(seconds=30),30)
+        assert app.vehicle_profile[0]==2300
+        assert eos.set_vehicle_charging_limits.call_args.args[1]==2300
+        assert server.control['current_set']<=10
+        assert app.commanded_car_w<=2300
+
+
+def test_unconfirmed_charge_and_stop_remain_local_to_portable_charger():
+    with api() as (driver,server),native_controller(driver) as (app,battery,_):
+        app.config.daily.update(fast=True,phase_auto=False)
+        server.ignore.update(('current_set','charge_pause'))
+        app.tick(NOW,0)
+        assert app.armed
+        assert 'wallbox' in app.errors and 'wallbox_stop' not in app.errors
+        # A failed current write has not enabled charging; a confirmed stop is safe.
+        assert server.control['charge_pause']==1
+        assert battery.apply.called or battery.release.called

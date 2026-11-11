@@ -11,6 +11,7 @@ from .settings import Configuration, daily_settings, save
 from .history import History
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
+from .vehicle_limits import optional_charger
 
 
 def vehicle_options(options):
@@ -187,12 +188,15 @@ class FleetController(Controller):
         snapshots=[]
         for key,app,proxy in self.controllers:
             box=app.config.wallbox.read(rows,now)
-            if not box.plugged:
+            if not box.plugged and box.watts == 0:
                 self.targets[key]=0
             proxy.rows=deepcopy(rows)
-            # If any charger meter is unavailable, adding new load is inhibited.
-            if grid is not None and complete:
-                effective=reserved_grid(grid,actual,self.targets,key)
+            # The fresh common grid meter still bounds all physical load.
+            # Unknown charger consumption earns no credit for a reduction.
+            portable_only = all(actual[identity] is not None or optional_charger(child.config.wallbox)
+                                for identity, child, _ in self.controllers)
+            if grid is not None and (complete or portable_only):
+                effective=reserved_grid(grid,{key:value or 0 for key,value in actual.items()},self.targets,key)
                 proxy.rows[opts["grid_entity"]]={**rows[opts["grid_entity"]],"state":str(effective),
                     "attributes":{**rows[opts["grid_entity"]].get("attributes",{}),"unit_of_measurement":"W"}}
             elif not complete:
@@ -208,7 +212,7 @@ class FleetController(Controller):
                 if getattr(app.config.wallbox,"device_key",None):
                     target=app.commanded_car_w
                     if target is None and box.enabled and box.phases is not None and box.amps is not None:
-                        target=box.phases*box.amps*230
+                        target=box.phases*box.amps*(box.nominal_voltage or 230)
                     if target is not None:
                         self.targets[key]=max(0,target)
             finally:
@@ -314,6 +318,8 @@ class FleetController(Controller):
     def snapshot(self,now):
         result=Controller.snapshot(self,now)
         result["vehicles"]=self.vehicle_snapshots
+        result['live']['car_connected']=any(vehicle['live'].get('car_connected') is not False for vehicle in self.vehicle_snapshots)
+        result['live']['car_available']=any(vehicle['live'].get('car_available') for vehicle in self.vehicle_snapshots)
         references=[vehicle.get("power_reference",{}).get("car") for vehicle in self.vehicle_snapshots]
         result["power_reference"]["car"]=sum(references) if references and all(value is not None for value in references) else None
         result["vehicle_name"]="E-Autos"

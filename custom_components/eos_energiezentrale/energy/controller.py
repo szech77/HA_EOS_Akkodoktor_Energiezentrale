@@ -15,6 +15,7 @@ from .presentation import daily_pv_forecast, heat_utilization, power_references,
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import resolve_sources
+from .vehicle_limits import charging_profile, optional_charger
 
 
 class Controller:
@@ -61,6 +62,12 @@ class Controller:
         self.external_goal_sync = False
         self.goal_sync_ready = False
         self.goal_sync_revision = 0
+        self.vehicle_connected = None
+        self.vehicle_profile = None
+        self.vehicle_profile_confirmed = None
+        self.vehicle_profile_at = None
+        self.external_vehicle_sync = False
+        self.last_vehicle_sync = -1000
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -157,9 +164,11 @@ class Controller:
     def eos_resources(self):
         configured=getattr(self,"fleet_resources",None)
         if configured is not None:
-            return configured
+            return {self.config.options['battery_resource']} | {
+                app.config.options['vehicle_resource'] for _, app, _ in self.controllers
+                if app.vehicle_connected is not False}
         options=self.config.options
-        return {options["battery_resource"]} | ({options["vehicle_resource"]} if options.get("wallbox_type")!="none" else set())
+        return {options["battery_resource"]} | ({options["vehicle_resource"]} if options.get("wallbox_type")!="none" and self.vehicle_connected is not False else set())
 
     def plan_for(self,resource,now):
         failed=self.eos_failure_since.get(resource)
@@ -168,6 +177,8 @@ class Controller:
         return self.resource_plans.get(resource,self.plan if failed is None else None)
 
     def order_for(self,resource,now):
+        if resource == self.config.options['vehicle_resource'] and self.vehicle_connected is False:
+            return None
         plan=self.plan_for(resource,now)
         order=current_instruction(plan,resource,now)
         if (order is None and plan is not None and resource in self.eos_failure_since
@@ -259,7 +270,9 @@ class Controller:
 
     def sync_goal(self, now, clock, departure):
         daily = self.config.daily
-        goal = (daily["target_soc"], departure) if departure else None
+        ready = (not optional_charger(self.config.wallbox) or
+                 self.vehicle_profile is not None and self.vehicle_profile[-1])
+        goal = (daily["target_soc"], departure) if departure and self.vehicle_connected is not False and ready else None
         if self.external_goal_sync:
             self.goal_sync_ready = True
             return goal is not None and goal == self.goal and self.goal_at is not None
@@ -275,6 +288,61 @@ class Controller:
                 self.errors["goal"] = type(error).__name__
         return goal is not None and goal == self.goal and self.goal_at is not None
 
+    def update_vehicle(self, box, now, clock):
+        connected = box.plugged if box.status not in ('unknown', 'unavailable', '') else (
+            False if optional_charger(self.config.wallbox) else None)
+        if connected != self.vehicle_connected and (self.vehicle_connected is not None or connected is False):
+            self.goal_sync_revision += 1
+            self.goal_at = None
+        self.vehicle_connected = connected
+        if not optional_charger(self.config.wallbox):
+            return
+        profile = charging_profile(box, self.config.wallbox, self.config.options,
+                                   self.config.daily, connected)
+        # Keep a valid positive rating when the physical device disappears.
+        if profile[0] is None and self.vehicle_profile is not None:
+            profile = (*self.vehicle_profile[:2], (0.,), False)
+        if profile != self.vehicle_profile:
+            self.goal_sync_revision += 1
+            self.goal_at = None
+        self.vehicle_profile = profile
+        if (not self.external_vehicle_sync and
+                clock - self.last_vehicle_sync >= (60 if profile == self.vehicle_profile_confirmed else 30)):
+            self.last_vehicle_sync = clock
+            try:
+                self.config.eos.set_vehicle_charging_limits(self.config.options['vehicle_resource'], *profile)
+            except Exception as error:
+                self.errors['vehicle_limits'] = type(error).__name__
+                self.vehicle_profile_confirmed = None
+            else:
+                if self.vehicle_profile_confirmed != profile:
+                    self.vehicle_profile_at = now
+                self.vehicle_profile_confirmed = profile
+                self.errors.pop('vehicle_limits', None)
+
+    def control_vehicle(self, box, live, planned, pv, now, clock, states):
+        try:
+            self.regulate_car(box, live, planned, pv, now, clock, states)
+        except (OSError, ValueError) as error:
+            if not optional_charger(self.config.wallbox):
+                raise
+            self.pv_session = False
+            self.candidate = self.phase_target = None
+            self.errors['wallbox'] = type(error).__name__
+            if not box.plugged:
+                self.errors['wallbox_stop'] = 'StopUnconfirmed'
+                return
+            try:
+                self.config.wallbox.pause(box)
+            except (OSError, ValueError):
+                self.errors['wallbox_stop'] = 'StopUnconfirmed'
+            else:
+                self.commanded_car_w = 0
+                self.errors.pop('wallbox_stop', None)
+        else:
+            self.errors.pop('wallbox', None)
+            self.errors.pop('wallbox_stop', None)
+
     def tick(self, now, clock):
         self.control_step = "read_inputs"
         self.sync_battery_limits(now, clock)
@@ -288,6 +356,7 @@ class Controller:
         opts, daily = self.config.options, self.config.daily
         battery = self.config.battery.read(states, now)
         box = self.config.wallbox.read(states, now)
+        self.update_vehicle(box, now, clock)
         opts, states, self.source_configuration = resolve_sources(opts, states,
             ((self.config.battery, battery), (self.config.wallbox, box)), now)
         self.input_options = opts
@@ -298,7 +367,11 @@ class Controller:
                                                ("price", "price", "price", 3600))}
         live.update(time=now.isoformat(), car=box.watts, battery_soc=battery.soc, car_soc=self.soc,
                     soc_source="vehicle" if measured else "estimate" if self.soc is not None else None,
-                    car_status=box.status, phases=box.phases, amps=box.amps,
+                    car_status=box.status, car_connected=self.vehicle_connected,
+                    car_available=box.status not in ('unknown', 'unavailable', ''),
+                    max_phases=box.max_phases, max_charge_power_w=box.max_power_w,
+                    effective_charge_power_w=self.vehicle_profile[0] if self.vehicle_profile else None,
+                    phases=box.phases, amps=box.amps,
                     battery_charge=battery.charge, battery_discharge=battery.discharge)
         live["heat_load"] = heat_utilization(states,opts,now)
         live["weather"] = weather_display(states,opts,now)
@@ -339,8 +412,9 @@ class Controller:
             ready = (battery_order is not None and battery.soc is not None
                      and all(live[key] is not None for key in
                              ("solar", "grid", "battery_charge", "battery_discharge"))
-                     and box.watts is not None and box.status not in {"", "unknown", "unavailable"}
-                     and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)
+                     and (self.vehicle_connected is False or
+                          (box.watts is not None and box.status not in {"", "unknown", "unavailable"}
+                           and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)))
             ids = getattr(self.config.battery, "ids", {})
             mode = ids.get("mode") if isinstance(ids, Mapping) else None
             if mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"}:
@@ -362,22 +436,29 @@ class Controller:
         generated = instant(vehicle_plan.get("generated_at")) if isinstance(vehicle_plan, dict) else None
         planned = 0
         maximum_power = min(11000, opts["max_current_a"] * 690)
+        if optional_charger(self.config.wallbox):
+            maximum_power = self.vehicle_profile[0] or 0
+        if self.vehicle_connected is False:
+            maximum_power = 0
         if daily["fast"] and self.soc is not None and self.soc < daily["target_soc"]:
             planned = maximum_power
-        elif (synchronized and generated and (generated - self.goal_at).total_seconds() >= 120
+        elif (synchronized and (not optional_charger(self.config.wallbox) or
+                               self.vehicle_profile == self.vehicle_profile_confirmed)
+              and generated and (generated - max(self.goal_at, self.vehicle_profile_at or self.goal_at)).total_seconds() >= 120
               and car_order and car_order.mode in {"GRID_SUPPORT_IMPORT", "FORCED_CHARGE"}
               and self.soc is not None and self.soc < daily["target_soc"]):
             planned = maximum_power * car_order.factor
         pv = (self.soc is not None and not daily["fast"] and
               ((daily["pv"] and self.soc < daily["pv_target_soc"]) or
                (not daily["pv"] and synchronized and generated
-                and (generated - self.goal_at).total_seconds() >= 120
+                and (not optional_charger(self.config.wallbox) or self.vehicle_profile == self.vehicle_profile_confirmed)
+                and (generated - max(self.goal_at, self.vehicle_profile_at or self.goal_at)).total_seconds() >= 120
                 and car_order and car_order.mode == "NON_EXPORT" and self.soc < daily["target_soc"])))
         if not (pv and planned == 0):
             self.pv_session = False
         self.control_step = "wallbox_control"
         if car_enabled:
-            self.regulate_car(box, live, planned, pv, now, clock, states)
+            self.control_vehicle(box, live, planned, pv, now, clock, states)
         command = battery_command(battery_order, battery.soc,
                                   {**opts, "battery_min_soc": daily["battery_min_soc"],
                                    "battery_max_soc": daily["battery_max_soc"]},
@@ -392,6 +473,8 @@ class Controller:
 
     def regulate_car(self, box, live, planned, pv, now, clock, states):
         daily, opts, driver = self.config.daily, self.input_options, self.config.wallbox
+        voltage = box.nominal_voltage or 230
+        minimum_power = 6 * voltage
         if (not box.plugged or box.phases is None or box.amps is None or not box.step or not box.maximum
                 or box.watts is None or live["grid"] is None or live["battery_discharge"] is None
                 or (pv and live["solar"] is None) or (not pv and planned <= 0)):
@@ -401,7 +484,8 @@ class Controller:
             self.candidate = self.phase_target = None
             return
         grid, discharge = live["grid"], max(0, live["battery_discharge"])
-        hard = min(11000, max(0, box.watts + opts["grid_limit_w"] - grid - discharge - 100))
+        limit = (self.vehicle_profile[0] or 0) if optional_charger(driver) else 11000
+        hard = min(limit, max(0, box.watts + opts["grid_limit_w"] - grid - discharge - 100))
         if self.last_write is not None and grid<=opts["grid_limit_w"]:
             meter=states.get(opts["grid_entity"],{})
             grid_report=instant(meter.get("last_reported") or meter.get("last_updated"))
@@ -424,7 +508,7 @@ class Controller:
         relative = solar_only and box.charging
         surplus = (pv_budget(max(0, live["solar"]), grid, box.watts if box.enabled else 0,
                              discharge, daily["reserve_w"], box.phases if relative else None,
-                             box.amps if relative else None) if pv else 0)
+                             box.amps if relative else None, voltage) if pv else 0)
         desired = min(hard, max(planned, surplus))
         nearest = pv and surplus > planned and box.charging and daily["reserve_w"] == 0 and box.step <= 0.1
         maximum = min(opts["max_current_a"], box.maximum)
@@ -434,23 +518,23 @@ class Controller:
         if daily["phase_auto"] and getattr(getattr(driver,"features",None),"phase_switching",True):
             if self.phase_target is not None:
                 # Revalidate after opening the relay because export can have changed.
-                phase = self.phase_target if desired >= 1380 * self.phase_target else box.phases
+                phase = self.phase_target if desired >= minimum_power * self.phase_target else box.phases
             elif not box.enabled:
-                phase = 3 if desired >= 4290 else 1 if desired >= 1530 else box.phases
-            elif phase == 3 and desired < 4140 and desired >= 1380:
+                phase = 3 if desired >= 3 * minimum_power + 150 else 1 if desired >= minimum_power + 150 else box.phases
+            elif phase == 3 and desired < 3 * minimum_power and desired >= minimum_power:
                 phase = 1
-            elif phase == 1 and desired >= 4290 and (not solar_only or box.amps >= maximum - 0.05):
+            elif phase == 1 and desired >= 3 * minimum_power + 150 and (not solar_only or box.amps >= maximum - 0.05):
                 phase = 3
-        amps = current_for_power(desired, phase, box.step, maximum, nearest and phase == box.phases, hard)
+        amps = current_for_power(desired, phase, box.step, maximum, nearest and phase == box.phases, hard, voltage)
         transition = (phase, amps is not None)
-        if (not box.enabled and pv and planned == 0 and desired < (1380 * phase + 150)
+        if (not box.enabled and pv and planned == 0 and desired < (minimum_power * phase + 150)
                 and self.phase_target is None):
             amps = None
             transition = (phase, False)
         if self.phase_target is None and (phase != box.phases or amps is None or (not box.enabled and solar_only)):
             if self.candidate is None or self.candidate[0] != transition:
                 self.candidate = (transition, clock)
-            if clock - self.candidate[1] < opts["phase_wait_s"] and pv and hard >= 1380 * box.phases:
+            if clock - self.candidate[1] < opts["phase_wait_s"] and pv and hard >= minimum_power * box.phases:
                 return
         else:
             self.candidate = None
@@ -468,7 +552,7 @@ class Controller:
             self.phase_target = None
         if not box.enabled or abs(box.amps - amps) >= 0.05:
             driver.charge(amps, box)
-            self.commanded_car_w = amps*phase*230
+            self.commanded_car_w = amps*phase*voltage
             self.last_write = now
         self.pv_session = solar_only
         live["car_control"] = "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"
@@ -482,6 +566,8 @@ class Controller:
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
             return {"source_configuration":deepcopy(self.source_configuration),
+                    "vehicle_limits": {"profile":self.vehicle_profile,
+                        "confirmed":self.vehicle_profile is not None and self.vehicle_profile == self.vehicle_profile_confirmed},
                     "power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
                     "heat_load_configured":bool(opts.get("heat_load_entity")), "live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {

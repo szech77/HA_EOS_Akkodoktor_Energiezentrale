@@ -164,6 +164,36 @@ class EOS:
         if not isinstance(confirmed, dict) or any(confirmed.get(key) != value for key, value in desired.items()):
             raise ValueError("EOS did not confirm stationary battery limits")
 
+    def set_vehicle_charging_limits(self, resource, maximum, minimum, rates, active):
+        """EOS requires positive maximum power; disable an absent EV via rates.
+
+        Schema: devices/settings/batterysettings.py in Akkudoktor-EOS/EOS.
+        """
+        if (type(active) is not bool or not isinstance(rates, (tuple,list)) or not rates
+                or (active and (maximum is None or minimum is None))
+                or any(isinstance(rate,bool) or number(rate) is None or not 0<=rate<=1 for rate in rates)
+                or (maximum is not None and (number(maximum) is None or not 0<maximum<=25000))
+                or (minimum is not None and (number(minimum) is None or maximum is None or not 0<minimum<=maximum))):
+            raise ValueError('Invalid vehicle charging limits')
+        with self._configuration_lock:
+            configuration = request(self.url + '/v1/config')
+            vehicles = configuration.get('devices',{}).get('electric_vehicles')
+            if not isinstance(vehicles,dict) or not isinstance(vehicles.get(resource),dict):
+                raise ValueError('Configured vehicle is missing in EOS')
+            desired = {'charge_rates':list(rates) if active else [0.]}
+            if maximum is not None: desired['max_charge_power_w']=maximum
+            if minimum is not None: desired['min_charge_power_w']=minimum
+            if not active:
+                desired.update(min_soc_percentage=0,max_soc_percentage=0,
+                               min_soc_deadline_datetime=None,min_soc_max_duration_h=None)
+            if all(vehicles[resource].get(key)==value for key,value in desired.items()):
+                return
+            updated = {**vehicles,resource:{**vehicles[resource],**desired}}
+            request(self.url + '/v1/config/devices/electric_vehicles',method='PUT',payload=updated)
+            confirmed = request(self.url + '/v1/config').get('devices',{}).get('electric_vehicles',{}).get(resource)
+            if not isinstance(confirmed,dict) or any(confirmed.get(key)!=value for key,value in desired.items()):
+                raise ValueError('EOS did not confirm vehicle charging limits')
+
     def set_vehicle_goal(self, resource, target, departure):
         with self._configuration_lock:
             self._set_vehicle_goal(resource, target, departure)

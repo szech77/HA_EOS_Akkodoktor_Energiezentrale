@@ -52,7 +52,7 @@ class NRGkickLocal(WallboxDriver):
         self.device_key = f"nrgkick:{parsed.scheme}://{parsed.hostname.lower()}:{parsed.port or (443 if parsed.scheme == 'https' else 80)}"
         self.ids = dict.fromkeys(("power", "status", "enable", "current", "phases"), "")
         self.phase_switching = values["phase_switching"]
-        self.features = WallboxFeatures(phase_switching=self.phase_switching)
+        self.features = WallboxFeatures(phase_switching=self.phase_switching, optional_connection=True)
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
         self.zero_after = self.zero_sample = self.phase_requested = None
 
@@ -115,7 +115,7 @@ class NRGkickLocal(WallboxDriver):
             limit = bounded(attachment.get("max_current"), 6, 32)
             phases = attachment.get("phase_count")
             grid = info["grid"].get("phases")
-            self.features = WallboxFeatures(phase_switching=bool(self.phase_switching and phases == 3 and grid == 7))
+            self.features = WallboxFeatures(phase_switching=bool(self.phase_switching and phases == 3 and grid == 7), optional_connection=True)
             maximum = floor(min(rated, limit) * 10 + 1e-9) / 10 if rated is not None and limit is not None else None
             general, power = values["general"], values["powerflow"]
             status = general.get("status")
@@ -138,8 +138,13 @@ class NRGkickLocal(WallboxDriver):
                 active = (relay & 14).bit_count() if type(relay) is int and 0 <= relay <= 15 else None
                 selected = active if active in (1, 3) else None
             watts = bounded(power.get("total_active_power"), 0, 25000)
+            maximum_phases = (min(phases,3 if grid == 7 else 1) if type(phases) is int and phases in (1,3)
+                              and type(grid) is int and grid in (1,7) else None)
+            if maximum_phases is not None and not self.features.phase_switching:
+                maximum_phases = min(maximum_phases,control['phase_count'])
             return WallboxReading(watts, status, not flag(control["charge_pause"]), selected,
-                                  float(control["current_set"]), .1, maximum, now if watts is not None else None)
+                                  float(control["current_set"]), .1, maximum, now if watts is not None else None,
+                                  max_phases=maximum_phases, nominal_voltage=bounded(info['grid'].get('voltage'),100,260))
         except (KeyError, TypeError, AttributeError):
             raise NRGkickAPIError("Incomplete NRGkick measurement response") from None
 
@@ -183,6 +188,7 @@ class NRGkickLocal(WallboxDriver):
         fresh = self._read({}, datetime.now(timezone.utc))
         if (fresh.maximum is None or amps > fresh.maximum or fresh.phases not in (1, 3)
                 or fresh.phases != state.phases
+                or fresh.nominal_voltage is None or fresh.nominal_voltage != state.nominal_voltage
                 or fresh.watts is None or fresh.status not in ("connected", "charging", "wakeup")):
             raise NRGkickAPIError("NRGkick is not ready for requested charging current")
         self._set(current_set=f"{amps:.1f}")

@@ -178,6 +178,28 @@ Maximalstromstärke ist durch Gerät und Adapter begrenzt und wird vor Ladebefeh
 erneut geprüft. Der Regler berücksichtigt zusätzlich die eigenen technischen
 Grenzen und die gemeinsame Netzanschlussleistung. Stromvorgaben erfolgen in 0,1 A.
 
+Die maximale nutzbare Phasenzahl ergibt sich aus `connector.phase_count`, den
+erkannten `grid.phases` und der erlaubten Phaseneinstellung. Die Ladeleistung
+wird aus Phasenzahl, `grid.voltage` und dem kleinsten Wert von Geräte-, Adapter-
+und konfigurierter Stromgrenze berechnet. Beispielsweise ergibt ein einphasiger
+10-A-Adapter bei 230 V höchstens 2.300 W. Das Plugin meldet diese Grenzen im
+Status. EOS erhält `max_charge_power_w`, `min_charge_power_w` und passende
+`charge_rates`; ein eigenes Feld für maximale Phasenzahl bietet das geprüfte
+EOS-Schema nicht. Die Synchronisierung liest die EOS-Konfiguration zurück,
+erhält andere Fahrzeuge und läuft in Home Assistant im Hintergrund. Neue
+EOS-Ladepläne werden erst nach Bestätigung der Grenzen verwendet.
+
+Bei abgestecktem Fahrzeug oder nicht erreichbarem NRGkick bleibt das Fahrzeug
+in der Ansicht ausgegraut. EOS erhält `charge_rates: [0.0]` und gelöschte
+Ladeziele, während die erforderliche positive Leistungsgrenze erhalten bleibt.
+Der gespeicherte Zeitplan bleibt lokal erhalten und wird beim Wiederverbinden
+mit den dann aktuellen Anschlussgrenzen wiederhergestellt. Dafür muss das
+Fahrzeug bereits als eigene Ressource in EOS konfiguriert sein. Fehler dieser
+Wallbox schalten Speicherregelung und andere erreichbare Fahrzeuge nicht ab.
+Ein frischer gemeinsamer Netzleistungsmesswert und konservative Reservierungen
+begrenzen weiterhin die Gesamtlast. Fehlende Fahrzeugleistung bleibt für die
+Bilanz unbekannt und wird nicht als gemessener Nullverbrauch gespeichert.
+
 Jeder Schreibaufruf wird durch einen separaten Leseaufruf auf `/control` bestätigt.
 Zum Start wird zuerst der Strom bestätigt und erst danach eine bestehende Pause
 aufgehoben. Vorhandene Energie-Limits oder andere NRGkick-Einstellungen werden
@@ -204,7 +226,9 @@ der API-Leistung in der bestehenden Bilanz erfasst.
 
 Die dokumentierte API bietet keinen Lade-Watchdog. Bei vollständigem Netzausfall
 kann ein Ladestopp nicht bestätigt oder garantiert werden; ein fehlgeschlagener
-Stop bleibt als ausstehende Geräterückgabe sichtbar. Getestet wird gegen einen
+Stop bleibt als eigener Hinweis sichtbar und wird bei aktiver Regelung erneut
+versucht. Ein Kommunikationsausfall kann auch ein weiterhin ladendes Gerät
+betreffen. Getestet wird gegen einen
 lokalen HTTP-Geräteemulator. Vor unbeaufsichtigtem Betrieb am eigenen Gerät
 Ladestopp, Stromgrenzen und gegebenenfalls Phasenumschaltung prüfen.
 

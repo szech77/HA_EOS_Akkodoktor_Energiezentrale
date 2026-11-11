@@ -921,6 +921,42 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(app.sync_goal(datetime.now(timezone.utc), 0, departure))
         self.assertNotIn("goal", app.errors)
 
+    async def test_slow_vehicle_limits_do_not_confirm_an_unplugged_charger(self):
+        from threading import Event
+        started, finish = Event(), Event()
+        config = Configuration(dict(DEFAULTS), Mock(), self.directory)
+        config.eos = Mock()
+        active = (2300., 1380., (0., .6, 1.), True)
+        absent = (2300., 1380., (0.,), False)
+        calls = []
+        def sync(resource, *profile):
+            calls.append((resource, profile))
+            if len(calls) == 1:
+                started.set()
+                if not finish.wait(5):
+                    raise TimeoutError('test did not release EOS vehicle limits')
+        config.eos.set_vehicle_charging_limits.side_effect = sync
+        app = Controller(Mock(), config)
+        app.vehicle_profile = active
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        try:
+            coordinator._schedule_vehicle_sync()
+            first = coordinator.vehicle_sync_tasks['ev1']
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            # The event loop and controller lock remain available during EOS I/O.
+            async with coordinator.work_lock:
+                app.vehicle_profile = absent
+                app.vehicle_connected = False
+            self.assertIsNone(app.vehicle_profile_confirmed)
+        finally:
+            finish.set()
+        await asyncio.wait_for(first, timeout=3)
+        if 'ev1' in coordinator.vehicle_sync_tasks:
+            await asyncio.wait_for(coordinator.vehicle_sync_tasks['ev1'], timeout=3)
+        self.assertEqual(calls, [('ev1', active), ('ev1', absent)])
+        self.assertEqual(app.vehicle_profile_confirmed, absent)
+        self.assertIsNone(coordinator._desired_goal(app, datetime.now(timezone.utc)))
+
     async def test_vehicle_goals_are_tracked_independently_in_fleet(self):
         from datetime import timedelta
         from custom_components.eos_energiezentrale.energy.fleet import create_controller
