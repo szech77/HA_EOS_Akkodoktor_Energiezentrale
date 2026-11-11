@@ -26,15 +26,16 @@
       <div class="kpis" id="overview-kpis"></div>
       <div class="flow-panel">
         <div class="panel-heading"><h2 data-i18n="flow.title"></h2><span id="flow-weather" class="flow-weather" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><g id="weather-shape"/></svg><span id="weather-temperature"></span></span></div>
-        <div class="flow" data-i18n-aria="flow.aria">
+        <div class="flow" id="energy-flow" data-i18n-aria="flow.aria">
           <svg class="wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <path class="wire" d="M18 19 Q34 19 43 42 M18 50 H43 M18 81 Q34 81 43 58 M57 42 Q66 19 82 19 M57 50 H82 M57 58 Q66 81 82 81"/>
+            <path class="wire" id="flow-wires"/>
             <path class="pulse solar" data-flow="solar" pathLength="100" d="M18 19 Q34 19 43 42"/>
             <path class="pulse grid" data-flow="grid" pathLength="100" d="M18 50 H43"/>
             <path class="pulse battery" data-flow="battery" pathLength="100" d="M43 58 Q34 81 18 81"/>
             <path class="pulse house" data-flow="house" pathLength="100" d="M57 42 Q66 19 82 19"/>
             <path class="pulse car" data-flow="car" pathLength="100" d="M57 50 H82"/>
             <path class="pulse heat" data-flow="heat" pathLength="100" d="M57 58 Q66 81 82 81"/>
+            <g id="vehicle-flows"></g>
           </svg>
           <a class="node solar" style="--x:18%;--y:19%" href="#solar" data-node="solar"><span class="orb" aria-hidden="true">☀</span><span data-i18n="node.solar"></span><strong>—</strong></a>
           <a class="node grid" style="--x:18%;--y:50%" href="#grid" data-node="grid"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m8 21 3-18h2l3 18M7 7h10M5 12h14M9.2 14l5.5 5M14.8 14l-5.5 5M3 7v3m18-3v3M2 7h5m10 0h5M3 12v3m18-3v3M3 21h5m8 0h5"/></svg></span><span data-i18n="node.grid"></span><strong>—</strong></a>
@@ -43,12 +44,12 @@
           <a class="node house" style="--x:82%;--y:19%" href="#house" data-node="house"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 10.5 12 3l9 7.5M5.5 9v11h13V9M10 20v-6h4v6M16 4v3"/><path d="M8 11h.01M16 11h.01"/></svg></span><span data-i18n="node.house"></span><strong>—</strong></a>
           <a class="node car" style="--x:82%;--y:50%" href="#car" data-node="car"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 18H2v-6l3-2 2.5-5h6.8L18 10l3 1.5a1.5 1.5 0 0 1 1 1.4V18h-2M8 18h8M5 10h13M11.5 5v5"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><g class="car-soc" hidden><rect class="car-soc-bar" x="6.4" y="10.8" width="1.5" height="4.4" rx=".35"/><rect class="car-soc-bar" x="8.6" y="10.8" width="1.5" height="4.4" rx=".35"/><rect class="car-soc-bar" x="10.8" y="10.8" width="1.5" height="4.4" rx=".35"/><rect class="car-soc-bar" x="13" y="10.8" width="1.5" height="4.4" rx=".35"/><rect class="car-soc-bar" x="15.2" y="10.8" width="1.5" height="4.4" rx=".35"/></g></svg></span><span data-i18n="node.car"></span><strong>—</strong></a>
           <a class="node heat" style="--x:82%;--y:81%" href="#heat" data-node="heat"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 6c3-5 6 5 9 0s6 5 9 0M3 12c3-5 6 5 9 0s6 5 9 0M3 18c3-5 6 5 9 0s6 5 9 0"/></svg></span><span data-i18n="device.heat"></span><strong>—</strong></a>
+          <div id="vehicle-nodes"></div>
         </div>
         <div class="flow-footer"><span class="tag" id="live-time">—</span></div>
       </div>
       <section class="plan-panel" id="day-balance"></section>
       <div class="next" id="next"></div>
-      <div class="kpis" id="vehicle-cards"></div>
     </section>
     <section id="detail" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>

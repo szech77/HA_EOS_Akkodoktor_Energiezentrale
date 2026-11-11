@@ -172,10 +172,10 @@ function actualPoints(key) {
   return [...influx.filter(row => !first || Date.parse(row.time) < first), ...local];
 }
 
-function nextPlan(key) {
+function nextPlan(key,source=snapshot) {
   const now = windowNow();
-  const current = snapshot.live[key + '_mode'];
-  return (snapshot.plan[key] ?? []).find(item => Date.parse(item.time) > now && item.mode !== current);
+  const current = source.live[key + '_mode'];
+  return (source.plan?.[key] ?? []).find(item => Date.parse(item.time) > now && item.mode !== current);
 }
 
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
@@ -249,7 +249,42 @@ const displayAge = key => {
   return retained && (retained.transition_held || retained.aligned || !valid(snapshot.live[key])) ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : 'metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : null;
 };
 
-function updatePowerRing(node,key,value) {
+// Reuse nodes between polls so keyboard focus and animations stay stable.
+function layoutFlow() {
+  const vehicles=consumerEnabled('car') ? snapshot.vehicles ?? [] : [];
+  const container=byId('vehicle-nodes'), paths=byId('vehicle-flows');
+  const signature=JSON.stringify(vehicles.map(vehicle=>vehicle.id));
+  if (container.dataset.vehicles!==signature) {
+    container.replaceChildren();paths.replaceChildren();
+    vehicles.forEach(vehicle=>{
+      const node=document.createElement('a');
+      node.className='node car';node.href='#car/'+encodeURIComponent(vehicle.id);
+      node.innerHTML=`<span class="orb" aria-hidden="true">${carIcon(null)}</span><span></span><strong></strong>`;
+      container.append(node);
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('class','pulse car');path.setAttribute('pathLength','100');paths.append(path);
+    });
+    container.dataset.vehicles=signature;
+  }
+  const keys=['solar','grid','battery','house','car','heat'];
+  const entries=keys.map(key=>({key,node:document.querySelector(`[data-node="${key}"]`),
+    flow:document.querySelector(`[data-flow="${key}"]`),enabled:consumerEnabled(key) && !(key==='car' && vehicles.length)}));
+  entries.forEach(({node,flow,enabled})=>{node.hidden=!enabled;flow.style.display=enabled ? '' : 'none';});
+  const cars=vehicles.map((vehicle,index)=>({key:'car',vehicle,node:container.children[index],flow:paths.children[index],enabled:true}));
+  const right=[entries[3],...(vehicles.length ? cars : [entries[4]]),entries[5]].filter(entry=>entry.enabled);
+  const height=Math.max(360,right.length*144);
+  byId('energy-flow').style.height=height+'px';
+  right.forEach((entry,index)=>{
+    const y=(index+.5)*100/right.length;
+    entry.node.style.setProperty('--x','82%');entry.node.style.setProperty('--y',y+'%');
+    entry.flow.setAttribute('d',`M57 50 Q66 ${y} 82 ${y}`);
+  });
+  byId('flow-wires').setAttribute('d',[...entries.slice(0,3).filter(entry=>entry.enabled),...right]
+    .map(entry=>entry.flow.getAttribute('d')).join(' '));
+  return [...entries,...cars].filter(entry=>entry.enabled);
+}
+
+function updatePowerRing(node,key,value,source=snapshot) {
   const orb=node.querySelector('.orb');
   const enabled=['solar','battery','car'].includes(key)||(key==='heat'&&snapshot.heat_load_configured);
   orb.classList.toggle('power-ring-enabled',enabled);
@@ -261,7 +296,7 @@ function updatePowerRing(node,key,value) {
     ring.innerHTML='<circle class="ring-track" cx="28" cy="28" r="26"/><circle class="ring-value" cx="28" cy="28" r="26" pathLength="100" transform="rotate(-90 28 28)"/>';
     orb.prepend(ring);
   }
-  const reference=snapshot.power_reference??{};
+  const reference=source.power_reference??{};
   const fraction=key==='heat'?(valid(snapshot.live.heat_load)?Math.max(0,Math.min(1,snapshot.live.heat_load)):null)
     :EosChartData.powerFraction(value,reference[key==='battery'?(value<0?'battery_discharge':'battery_charge'):key]);
   ring.querySelector('.ring-value').setAttribute('stroke-dasharray',`${fraction===null?0:fraction*100} 100`);
@@ -271,9 +306,78 @@ function updatePowerRing(node,key,value) {
   node.setAttribute('aria-label',node.getAttribute('aria-label')+' · '+label);
 }
 
+function renderFlow() {
+  const names = {solar:t('node.solar'), grid:t('node.grid'), battery:t('node.battery'), house:t('node.house'), car:t('node.car'), heat:t('device.heat')};
+  layoutFlow().forEach(({key,node,flow,vehicle}) => {
+    const source=vehicle ?? snapshot, live=source.live;
+    const name=vehicle ? vehicle.name : names[key];
+    const inactiveCar = key === 'car' && !vehicleActive(source);
+    node.classList.toggle('vehicle-inactive', inactiveCar);
+    const retained = source.flow_display?.[key] ?? source.display?.[key];
+    const stale = valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
+    const value = inactiveCar ? null : stale ? retained.value : live[key];
+    const soc = source.flow_display?.[key+'_soc']?.value ?? (valid(live[key+'_soc']) ? live[key+'_soc'] : source.display?.[key+'_soc']?.value);
+    if (key === 'car') {
+      const filled=socBarCount(soc);
+      node.querySelector('.car-soc')?.toggleAttribute('hidden',filled===null);
+      node.querySelectorAll('.car-soc-bar').forEach((bar,index)=>bar.classList.toggle('filled',filled!==null && index<filled));
+    }
+    if (key === 'battery') {
+      const knownSoc=valid(soc) && soc>=0 && soc<=100;
+      const minimum=snapshot.settings.battery_min_soc;
+      const low=knownSoc && valid(minimum) && soc<=minimum;
+      const filled=knownSoc ? Math.ceil(soc/20) : 0;
+      node.classList.toggle('battery-low',low);
+      node.querySelectorAll('.battery-bar').forEach((bar,index)=>bar.classList.toggle('filled',index<filled));
+    }
+    const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
+      : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
+    node.querySelector('strong').hidden=inactiveCar;
+    node.querySelector('strong').textContent = inactiveCar ? '' : (stale && retained.estimated ? '≈ ' : '') + power(value);
+    let ageNote = node.querySelector('.reading-age');
+    if (!ageNote) {
+      ageNote = document.createElement('small');
+      ageNote.className = 'reading-age';
+      node.append(ageNote);
+    }
+    ageNote.hidden = inactiveCar || !stale || (retained.aligned && retained.age_s<10);
+    ageNote.textContent = stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
+      {minutes:Math.ceil(retained.age_s / 60)}) : '';
+    node.title = [vehicle?.name,inactiveCar ? vehicleStatus(source) : '',ageNote.textContent].filter(Boolean).join(' · ');
+    node.querySelector('span:nth-child(2)').textContent = socBarCount(soc)!==null ? `${name} · ${percent(soc)}` : name;
+    node.setAttribute('aria-label', [name,inactiveCar ? vehicleStatus(source) : power(value),value ? direction : ''].filter(Boolean).join(' · '));
+    if (['battery','car'].includes(key) && valid(soc)) {
+      const warning=node.classList.contains('battery-low') ? t('battery.minimum_reached') : '';
+      node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
+    }
+    updatePowerRing(node,key,value,source);
+    flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
+    flow.classList.toggle('reverse', value < 0);
+    flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
+    // One shared power scale keeps sources and consumers visually comparable.
+    // Square-root scaling preserves visibility of small residential loads.
+    const magnitude = valid(value) ? Math.abs(value) : 0;
+    const intensity = Math.sqrt(Math.min(1, magnitude / 11000));
+    const length = 2 + 6 * intensity;
+    flow.style.setProperty('--pulse-width', `${(3 + 9 * intensity).toFixed(2)}px`);
+    flow.style.setProperty('--pulse-dash', `${length.toFixed(2)} ${(100 - length).toFixed(2)}`);
+  });
+}
+
+function modeCards() {
+  const entries=[{key:'battery',source:snapshot,name:t('device.battery'),href:'#battery'}];
+  if (consumerEnabled('car')) {
+    if (snapshot.vehicles?.length) entries.push(...snapshot.vehicles.map(vehicle=>({key:'car',source:vehicle,name:vehicle.name,href:'#car/'+encodeURIComponent(vehicle.id)})));
+    else entries.push({key:'car',source:snapshot,name:t('node.car'),href:'#car'});
+  }
+  return entries.map(({key,source,name,href})=>{
+    const item=nextPlan(key,source);
+    return `<div><small>${th('metric.eos_mode')} · <a href="${html(href)}">${html(name)}</a></small><b>${html(modeLabel(source.live[key+'_mode']))}</b><span>${item ? html(time(item.time)+' · '+modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
+  }).join('');
+}
+
 function overview() {
   dayBalance();
-  byId('vehicle-cards').innerHTML=vehicleCards();
   const live = snapshot.live;
   const remaining = solarRemaining();
   const weather = live.weather;
@@ -306,68 +410,8 @@ function overview() {
     [t('metric.price_now'),price(displayed('price')),t('metric.import')],
     [t('metric.grid_connection'),displayedPower('grid'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
   ]);
-  const names = {solar:t('node.solar'), grid:t('node.grid'), battery:t('node.battery'), house:t('node.house'), car:t('node.car'), heat:t('device.heat')};
-  Object.keys(names).forEach(key => {
-    const node = document.querySelector(`[data-node="${key}"]`);
-    const flow = document.querySelector(`[data-flow="${key}"]`);
-    node.hidden = !consumerEnabled(key);
-    flow.style.display = consumerEnabled(key) ? "" : "none";
-    if (!consumerEnabled(key)) return;
-    const inactiveCar = key === 'car' && !vehicleActive(snapshot);
-    node.classList.toggle('vehicle-inactive', inactiveCar);
-    const retained = snapshot.flow_display?.[key] ?? snapshot.display?.[key];
-    const stale = valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
-    const value = inactiveCar ? null : stale ? retained.value : live[key];
-    const soc = key === 'car' && snapshot.vehicles?.length ? undefined : displayed(key + '_soc');
-    if (key === 'car') {
-      const filled=socBarCount(soc);
-      node.querySelector('.car-soc')?.toggleAttribute('hidden',filled===null);
-      node.querySelectorAll('.car-soc-bar').forEach((bar,index)=>bar.classList.toggle('filled',filled!==null && index<filled));
-    }
-    if (key === 'battery') {
-      const knownSoc=valid(soc) && soc>=0 && soc<=100;
-      const minimum=snapshot.settings.battery_min_soc;
-      const low=knownSoc && valid(minimum) && soc<=minimum;
-      const filled=knownSoc ? Math.ceil(soc/20) : 0;
-      node.classList.toggle('battery-low',low);
-      node.querySelectorAll('.battery-bar').forEach((bar,index)=>bar.classList.toggle('filled',index<filled));
-    }
-    const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
-      : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
-    node.querySelector('strong').textContent = inactiveCar ? vehicleStatus(snapshot) : (stale && retained.estimated ? '≈ ' : '') + power(value);
-    let ageNote = node.querySelector('.reading-age');
-    if (!ageNote) {
-      ageNote = document.createElement('small');
-      ageNote.className = 'reading-age';
-      node.append(ageNote);
-    }
-    ageNote.hidden = inactiveCar || !stale || (retained.aligned && retained.age_s<10);
-    ageNote.textContent = stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
-      {minutes:Math.ceil(retained.age_s / 60)}) : '';
-    node.title = ageNote.textContent;
-    if (key === "car" && snapshot.vehicles?.length) names.car=t("fleet.vehicles",{count:snapshot.vehicles.length});
-    node.querySelector('span:nth-child(2)').textContent = valid(soc) ? `${names[key]} · ${percent(soc)}` : names[key];
-    node.setAttribute('aria-label', [names[key],power(value),value ? direction : ''].filter(Boolean).join(' · '));
-    if (['battery','car'].includes(key) && valid(soc)) {
-      const warning=node.classList.contains('battery-low') ? t('battery.minimum_reached') : '';
-      node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
-    }
-    updatePowerRing(node,key,value);
-    flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
-    flow.classList.toggle('reverse', value < 0);
-    flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
-    // One shared power scale keeps sources and consumers visually comparable.
-    // Square-root scaling preserves visibility of small residential loads.
-    const magnitude = valid(value) ? Math.abs(value) : 0;
-    const intensity = Math.sqrt(Math.min(1, magnitude / 11000));
-    const length = 2 + 6 * intensity;
-    flow.style.setProperty('--pulse-width', `${(3 + 9 * intensity).toFixed(2)}px`);
-    flow.style.setProperty('--pulse-dash', `${length.toFixed(2)} ${(100 - length).toFixed(2)}`);
-  });
-  byId('next').innerHTML = ['battery','car'].filter(consumerEnabled).filter(key=>key!=='car' || !snapshot.vehicles?.length).map(key => {
-    const item = nextPlan(key);
-    return `<div><small>${th('metric.eos_mode')} · ${key === 'car' ? th('node.car') : th('device.battery')}</small><b>${html(modeLabel(live[key + '_mode']))}</b><span>${item ? html(time(item.time) + ' · ' + modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
-  }).join('');
+  renderFlow();
+  byId('next').innerHTML=modeCards();
 }
 
 const chartModels = new Map();

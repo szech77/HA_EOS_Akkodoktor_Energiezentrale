@@ -682,8 +682,16 @@ Die Konfiguration erstellt oder überschreibt keine EOS-Gerätedefinitionen.
 
 In den Alltagseinstellungen das Fahrzeug auswählen und dessen Ziel-SoC,
 PV-Ziel, Abfahrt und Schnellladung speichern. Die Speichergrenzen bleiben global.
-Der Stromfluss zeigt die gesamte Autoladeleistung; einzelne Fahrzeugkarten öffnen
-Messwerte, SoC und den jeweiligen EOS-Zeitplan. Es entstehen eigene native Sensoren
+Der Stromfluss zeigt jedes konfigurierte Fahrzeug mit eigenem Namen, Ladeleistung,
+fünf SoC-Balken und eigener Verbindung zur Energiezentrale. Dies gilt auch bei nur
+einem Fahrzeug. Ein Klick auf das Fahrzeug öffnet dessen Messwerte, SoC und
+EOS-Zeitplan. Bis zu acht Fahrzeuge stehen untereinander im Diagramm; dessen Höhe
+passt sich der Anzahl sichtbarer Verbraucher an. Nicht angeschlossene oder nicht
+erreichbare Fahrzeuge bleiben ausgegraut, ohne Hinweismeldung im Knoten; der
+Zustand ist im Tooltip und für Screenreader verfügbar. Unbekannte Messwerte bleiben
+unbekannt. Unterhalb der Verbrauchsauswertung steht für jedes Fahrzeug eine eigene
+EOS-Modus-Kachel mit aktuellem Modus und nächstem geplanten Moduswechsel. Der
+Fahrzeugname verlinkt auf die jeweilige Detailansicht. Es entstehen eigene native Sensoren
 für Leistung, SoC und Status jedes Fahrzeugs. Die Fahrzeug-ID bestimmt deren Identität.
 
 Alle Regler verwenden denselben Netzanschluss. Nicht gemessene Leistungserhöhungen
