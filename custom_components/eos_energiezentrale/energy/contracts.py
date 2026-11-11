@@ -124,6 +124,7 @@ class BatteryDriver(ABC):
 
 
 class WallboxDriver(ABC):
+    device_key: ClassVar[str | None] = None
     measurement_keys: ClassVar[tuple[str, ...]] = ("car",)
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]

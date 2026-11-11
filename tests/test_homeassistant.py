@@ -275,6 +275,19 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(result['data'][key]=='' for key in ('pv_entity','house_entity','grid_entity')))
         self.assertEqual(result['data']['price_entity'],DEFAULTS['price_entity'])
 
+    async def test_native_nrgkick_form_contains_no_entity_fields_and_saves_without_network(self):
+        flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id;flow.context={"entry_id":self.entry.entry_id}
+        with patch('urllib.request.OpenerDirector.open') as open_request:
+            selected=await flow.async_step_hardware({'battery_type':'fronius','wallbox_type':'nrgkick_local','vehicle_name':'E-Auto'})
+            schema={str(key):value for key,value in selected['data_schema'].schema.items()}
+            fields=schema['wallbox_parameters'].serialize()['selector']['object']['fields']
+            self.assertEqual(set(fields),{'url','phase_switching','username','password_env'})
+            self.assertFalse(any('entity' in field['selector'] for field in fields.values()))
+            result=await flow.async_step_hardware_parameters({'battery_parameters':{},'wallbox_parameters':{'url':'http://nrgkick.local'}})
+            self.assertEqual(result['type'],'create_entry')
+            self.assertEqual(result['data']['wallbox_type'],'nrgkick_local')
+            open_request.assert_not_called()
+
     async def test_common_battery_form_does_not_edit_hidden_wallboxes_in_a_fleet(self):
         from test_fleet import definitions
         self.hass.config_entries.async_update_entry(self.entry,options={"vehicles":json.dumps(definitions())})

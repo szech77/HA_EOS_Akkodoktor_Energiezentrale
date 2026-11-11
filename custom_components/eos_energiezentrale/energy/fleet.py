@@ -22,6 +22,7 @@ def vehicle_options(options):
     resources={options["battery_resource"]}
     identities=set()
     controls=set()
+    devices=set()
     allowed={"id","name","resource","soc_entity","soc_scale","capacity_wh",
              "charging_efficiency","max_current_a","wallbox_type","wallbox_parameters"}
     for row in rows:
@@ -44,10 +45,15 @@ def vehicle_options(options):
         if values["wallbox_type"] == "none" or values["wallbox_type"] not in WALLBOX_DRIVERS:
             raise ValueError("Each vehicle needs a supported wallbox")
         driver=WALLBOX_DRIVERS[values["wallbox_type"]](None,json.loads(values["wallbox_parameters"]))
-        ids={driver.ids[key] for key in ("enable","current","phases","power")}
+        ids={driver.ids[key] for key in ("enable","current","phases","power") if driver.ids[key]}
         if ids & controls:
             raise ValueError("Wallbox control entities cannot be shared by vehicles")
         controls.update(ids)
+        device_key=getattr(driver,"device_key",None)
+        if device_key:
+            if device_key in devices:
+                raise ValueError("Direct wallboxes cannot be shared by vehicles")
+            devices.add(device_key)
         result.append((identity,values))
     return result
 
@@ -199,6 +205,12 @@ class FleetController(Controller):
                     app.restore_pending=True
             try:
                 Controller.tick(app,now,clock)
+                if getattr(app.config.wallbox,"device_key",None):
+                    target=app.commanded_car_w
+                    if target is None and box.enabled and box.phases is not None and box.amps is not None:
+                        target=box.phases*box.amps*230
+                    if target is not None:
+                        self.targets[key]=max(0,target)
             finally:
                 self.owned=any(child.owned for _,child,_ in self.controllers)
             payload=Controller.snapshot(app,now)

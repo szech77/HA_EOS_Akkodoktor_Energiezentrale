@@ -136,6 +136,80 @@ Referenzen: [Fronius GEN24 Modbus-Handbuch](https://manuals.fronius.com/html/420
 [SunSpec-Modell 124](https://github.com/sunspec/models/blob/master/json/model_124.json),
 [SunSpec-Modell 160](https://github.com/sunspec/models/blob/master/json/model_160.json).
 
+## NRGkick Gen2 direkt über die lokale JSON-API
+
+Das Wallbox-Plugin **NRGkick Gen2 local JSON API** (`nrgkick_local`) benötigt keine
+zusätzliche NRGkick-Integration und keine HA-Mess- oder Steuerentitäten. Das bisherige
+Plugin `nrgkick` bleibt für bestehende HA-Entitäten erhalten. Die Einrichtung erfolgt
+unter **Konfigurieren → Hardware** oder im Plugin-Schritt eines Fahrzeugs unter
+**Fahrzeuge und Wallboxen**. Vorher die lokale JSON-API in der NRGkick-App aktivieren.
+Unterstützt wird die dokumentierte Gen2-API, nicht die ältere Gen1-Anbindung.
+
+| Feld | Bedeutung |
+| --- | --- |
+| `url` | Lokale API-Basisadresse, z. B. `http://192.0.2.20`; optional mit Port. Keine Zugangsdaten, API-Pfade oder Query-Parameter in die URL eintragen. |
+| `phase_switching` | Standard aus. Nur aktivieren, wenn die Phasenumschaltung in der NRGkick-App eingeschaltet und am Gerät unterstützt ist. Einphasige Adapter/Netzanschlüsse deaktivieren diese Fähigkeit zur Laufzeit. |
+| `username` | Optionaler Benutzername der in der NRGkick-App eingerichteten Basic-Auth-Anmeldung. |
+| `password_env` | Optionaler Name einer Umgebungsvariable mit dem API-Passwort im Home-Assistant-Core-Prozess; gemeinsam mit `username` konfigurieren. |
+
+```json
+{
+  "url": "http://192.0.2.20",
+  "phase_switching": false,
+  "username": "",
+  "password_env": ""
+}
+```
+
+Bei aktivierter Anmeldung beispielsweise `username: "local"` und
+`password_env: "NRGKICK_API_PASSWORD"` eintragen. Die Variable vor dem Start des
+HA-Core-Prozesses bereitstellen; eine Variable nur in einem separaten Add-on genügt
+nicht. Das Passwort wird erst für die Anfrage gelesen und nicht als Plugin-Parameter
+gespeichert. Konfiguration und Diagnosen enthalten keine Passwortkopie. HTTP Basic
+Auth verschlüsselt die Übertragung nicht; die API ausschließlich im geschützten
+lokalen Netz betreiben. HTTPS wird mit Zertifikatsprüfung verwendet, sofern am
+Gerät verfügbar. Weiterleitungen und Umgebungs-Proxys werden nicht benutzt.
+
+`/info` liefert Geräte-/Adaptergrenzen und die angeschlossenen Phasen; `/values`
+liefert aktuelle Gesamtwirkleistung und Gerätestatus; `/control` liefert die
+eingestellten Ladeparameter. Es werden frische Abfragen ohne alten Messwertcache
+verwendet. Fehlende, fehlerhafte oder ungültige Daten bleiben unbekannt. Die gültige
+Maximalstromstärke ist durch Gerät und Adapter begrenzt und wird vor Ladebefehlen
+erneut geprüft. Der Regler berücksichtigt zusätzlich die eigenen technischen
+Grenzen und die gemeinsame Netzanschlussleistung. Stromvorgaben erfolgen in 0,1 A.
+
+Jeder Schreibaufruf wird durch einen separaten Leseaufruf auf `/control` bestätigt.
+Zum Start wird zuerst der Strom bestätigt und erst danach eine bestehende Pause
+aufgehoben. Vorhandene Energie-Limits oder andere NRGkick-Einstellungen werden
+nicht gelöscht. `charge_permitted` und Gerätefehler werden gelesen; das Plugin
+umgeht keine Schutzfunktionen des NRGkick. Fehler-/RCD-Zustände verhindern neue
+Ladefreigaben. Auch bei ausgefallener Messwertabfrage wird beim Stoppen eine
+unabhängige, bestätigte Pause über `/control` versucht.
+
+Die optionale Phasenumschaltung verwendet nur 1 und 3 Phasen. Sie pausiert zuerst,
+wartet auf zwei neue Nullleistungsmessungen mit mindestens drei Sekunden Abstand,
+schreibt dann die Phaseneinstellung und wartet auf deren erneute Rückmeldung.
+Die dokumentierte Einstellung ist eine maximale Phasenanzahl; bei geöffneten
+Relais wird diese bestätigte Vorgabe angezeigt, beim Laden die Relaisrückmeldung.
+Eine unbestätigte Umschaltung führt nach 45 Sekunden zu einem Steuerfehler.
+
+Für mehrere Fahrzeuge jeden physischen NRGkick genau einmal zuordnen. Identische
+Adressen einschließlich normalisierter Standardports werden zurückgewiesen;
+unterschiedliche Hostnamen/IP-Aliase desselben Geräts nicht parallel verwenden.
+Die Leistungsreservierung benötigt keine HA-Steuerentitäten und berücksichtigt
+auch bereits freigegebene Geräte, deren Leistungsaufnahme noch nicht gemeldet ist.
+Der Fahrzeug-SoC kommt weiterhin aus einer eigenen Fahrzeugdatenquelle: Die
+NRGkick-API liefert keinen Fahrzeug-Akkuladestand. Verbrauch und Kosten werden aus
+der API-Leistung in der bestehenden Bilanz erfasst.
+
+Die dokumentierte API bietet keinen Lade-Watchdog. Bei vollständigem Netzausfall
+kann ein Ladestopp nicht bestätigt oder garantiert werden; ein fehlgeschlagener
+Stop bleibt als ausstehende Geräterückgabe sichtbar. Getestet wird gegen einen
+lokalen HTTP-Geräteemulator. Vor unbeaufsichtigtem Betrieb am eigenen Gerät
+Ladestopp, Stromgrenzen und gegebenenfalls Phasenumschaltung prüfen.
+
+Quelle: [Offizielle NRGkick-Gen2-API-Dokumentation](https://nrgkick.com/wp-content/uploads/local_api_docu_simulate-1.html).
+
 ## Generische HA-Wallbox
 
 Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:
@@ -193,6 +267,14 @@ das Entladelimit auf 0 gesetzt. Bei `grid_discharge` wird das Ladelimit auf 0 ge
 Es werden keine beliebigen HA-Dienste aus Konfigurationstext ausgeführt.
 
 ## Eigenes Plugin entwickeln
+
+Direkt angebundene Wallboxen ohne HA-Entitäten können `device_key` als stabile,
+konfigurationsbasierte Gerätekennung setzen (beispielsweise normalisierte
+API-Adresse ohne Zugangsdaten). Der Standard ist `None` für bisherige Plugins.
+Eine identische Kennung darf nicht zwei Fahrzeugen zugeordnet werden. Für direkte
+Wallboxen reserviert die Flottenregelung bestätigte Stromvorgaben unabhängig von
+HA-Serviceaufrufen. Die erforderlichen `ids`-Schlüssel bleiben vorhanden, dürfen
+bei direktem Zugriff aber leere Werte enthalten.
 
 ### Zusätzliche Messwerte als Sensoralternative
 
