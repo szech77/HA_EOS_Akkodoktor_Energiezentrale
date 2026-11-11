@@ -25,7 +25,7 @@
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.overview"></p><h1 data-i18n="nav.overview"></h1></div><span class="tag" id="connection" data-i18n="status.connecting"></span></div>
       <div class="kpis" id="overview-kpis"></div>
       <div class="flow-panel">
-        <div class="panel-heading"><h2 data-i18n="flow.title"></h2><span id="flow-weather" class="flow-weather" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><g id="weather-shape"/></svg><span id="weather-temperature"></span></span></div>
+        <div class="panel-heading"><h2 data-i18n="flow.title"></h2><button type="button" id="flow-weather" class="flow-weather" aria-haspopup="dialog" aria-controls="weather-dialog" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><g id="weather-shape"/></svg><span id="weather-temperature"></span></button></div>
         <div class="flow" id="energy-flow" data-i18n-aria="flow.aria">
           <svg class="wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             <path class="wire" id="flow-wires"/>
@@ -151,5 +151,9 @@
     </section>
   </main>
 </div>
+<dialog id="weather-dialog" aria-labelledby="forecast-title">
+  <div class="forecast-heading"><h2 id="forecast-title"></h2><button id="forecast-close" type="button" autofocus>×</button></div>
+  <div id="forecast-body"></div>
+</dialog>
 </body>
 </html>

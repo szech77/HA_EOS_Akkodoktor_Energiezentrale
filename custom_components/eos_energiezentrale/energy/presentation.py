@@ -32,13 +32,19 @@ WEATHER_CONDITIONS = frozenset({"clear-night", "cloudy", "exceptional", "fog", "
     "snowy-rainy", "sunny", "windy", "windy-variant"})
 
 
-def weather_display(states, options, now):
-    """Read current weather for display only; never infer weather from a forecast."""
+def weather_source(states, options):
+    """Use the same explicitly selected or automatically chosen weather source."""
     entity = options.get("weather_entity", "")
     if not entity:
         candidates = sorted(key for key, item in states.items() if key.startswith("weather.")
                             and item.get("state") in WEATHER_CONDITIONS)
         entity = candidates[0] if candidates else None
+    return entity
+
+
+def weather_display(states, options, now):
+    """Read current weather for display only; never infer weather from a forecast."""
+    entity = weather_source(states, options)
     if not entity:
         return None
     item = states.get(entity, {})

@@ -212,6 +212,66 @@
 @media(max-width:450px){#eos-energy-design .flow-weather{font-size:1rem;}}
 
 #eos-energy-design .flow-footer {display:flex; justify-content:flex-end; padding-top:12px;}
+#eos-energy-design button.flow-weather {background:transparent;border:1px solid transparent;border-radius:8px;color:var(--ink);padding:4px 8px;min-height:44px;}
+#eos-energy-design button.flow-weather:hover,#eos-energy-design button.flow-weather:focus-visible {background:var(--surface2);border-color:var(--accent);}
+#eos-energy-design:has(#weather-dialog[open]) {overflow:hidden;}
+#eos-energy-design #weather-dialog {color:var(--ink);background:var(--bg);border:1px solid var(--edge);border-radius:14px;width:min(1080px,calc(100% - 28px));max-height:calc(100dvh - 28px);padding:clamp(12px,2.5vw,26px);overflow:auto;}
+#eos-energy-design #weather-dialog::backdrop {background:#000a;}
+#eos-energy-design .forecast-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+#eos-energy-design .forecast-heading h2 {font-size:clamp(22px,3vw,30px);}
+#eos-energy-design #forecast-close {border:0;background:transparent;color:var(--ink);font-size:32px;min-width:44px;min-height:44px;border-radius:8px;}
+#eos-energy-design #forecast-close:hover {background:var(--surface2);}
+#eos-energy-design .forecast-subtitle {color:var(--dim);font-size:18px;}
+#eos-energy-design .forecast-range {color:var(--dim);margin:3px 0 16px;}
+#eos-energy-design .forecast-panel {border:1px solid var(--edge);background:var(--surface);border-radius:12px;padding:clamp(10px,2vw,18px);margin:12px 0;}
+#eos-energy-design .forecast-panel h3 {font-size:21px;margin:0;}
+#eos-energy-design .forecast-panel > p {margin:14px 0;}
+#eos-energy-design .forecast-summary {display:flex;flex-wrap:wrap;gap:8px;}
+#eos-energy-design .forecast-summary > div {border:1px solid var(--edge);border-radius:8px;padding:8px 12px;}
+#eos-energy-design .forecast-summary strong {display:block;font-size:21px;}
+#eos-energy-design .forecast-chart {display:grid;grid-template-columns:56px minmax(0,1fr);gap:6px 8px;margin-top:18px;}
+#eos-energy-design .forecast-plot {position:relative;min-width:0;touch-action:pan-y;}
+#eos-energy-design .forecast-plot > svg {display:block;width:100%;height:190px;overflow:visible;}
+#eos-energy-design .forecast-chart.weather .forecast-plot > svg {height:220px;}
+#eos-energy-design .forecast-plot path,#eos-energy-design .forecast-plot line {fill:none;vector-effect:non-scaling-stroke;}
+#eos-energy-design .forecast-y {display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;color:var(--dim);font-size:11px;white-space:nowrap;}
+#eos-energy-design .forecast-chart.weather .forecast-y {position:relative;}
+#eos-energy-design .forecast-chart.weather .forecast-y span {position:absolute;right:0;transform:translateY(-50%);}
+#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(1) {top:0;}
+#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(2) {top:37.5%;}
+#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(3) {top:75%;}
+#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(4) {top:82%;}
+#eos-energy-design .forecast-guide {stroke:var(--edge);stroke-width:1;}
+#eos-energy-design .forecast-temperature {stroke:var(--house);stroke-width:3;stroke-linejoin:round;}
+#eos-energy-design .forecast-rain {fill:var(--house);opacity:.65;}
+#eos-energy-design .forecast-plot .forecast-solar-area {fill:var(--solar);opacity:.25;}
+#eos-energy-design .forecast-solar-line {stroke:var(--solar);stroke-width:3;}
+#eos-energy-design .forecast-probe {stroke:var(--ink);stroke-width:1;stroke-dasharray:4 4;pointer-events:none;}
+#eos-energy-design .forecast-axis {grid-column:2;display:flex;justify-content:space-between;font-size:11px;color:var(--dim);}
+#eos-energy-design .forecast-axis span:first-child {transform:translateX(-15%);}
+#eos-energy-design .forecast-axis span:last-child {transform:translateX(15%);}
+#eos-energy-design .forecast-icons {display:flex;justify-content:space-between;margin:18px 0 0 64px;}
+#eos-energy-design .forecast-icons svg {width:30px;height:30px;fill:none;stroke:var(--solar);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+#eos-energy-design .forecast-legend {display:flex;flex-wrap:wrap;gap:8px 22px;margin:12px 0 0 64px;color:var(--dim);font-size:12px;}
+#eos-energy-design .forecast-legend span::before {content:'';display:inline-block;width:18px;height:4px;margin-right:8px;vertical-align:middle;background:var(--house);}
+#eos-energy-design .forecast-legend .rain-key::before {height:10px;opacity:.65;}
+#eos-energy-design .forecast-tooltip {position:absolute;z-index:2;top:4px;pointer-events:none;white-space:nowrap;padding:5px 8px;border:1px solid var(--edge);border-radius:6px;background:var(--surface2);font-size:12px;}
+#eos-energy-design .forecast-selection {display:grid;gap:8px;margin:16px 0;}
+#eos-energy-design .forecast-selection label {display:grid;gap:8px;font-size:13px;color:var(--dim);}
+#eos-energy-design #forecast-hour {width:100%;min-height:30px;accent-color:var(--accent);}
+#eos-energy-design #forecast-selected {min-height:1.5em;font-size:13px;}
+#eos-energy-design .forecast-footer {display:flex;gap:8px 16px;flex-wrap:wrap;justify-content:space-between;align-items:center;color:var(--dim);font-size:12px;}
+#eos-energy-design #forecast-retry {border:1px solid var(--edge);border-radius:8px;min-height:44px;padding:7px 12px;background:var(--surface2);color:var(--ink);}
+@media(max-width:500px){
+  #eos-energy-design .forecast-chart {grid-template-columns:44px minmax(0,1fr);gap:6px;}
+  #eos-energy-design .forecast-icons,#eos-energy-design .forecast-legend {margin-left:50px;}
+  #eos-energy-design .forecast-icons svg {width:22px;height:22px;}
+  #eos-energy-design .forecast-icons span:nth-child(even) {display:none;}
+  #eos-energy-design .forecast-axis {font-size:9px;}
+  #eos-energy-design .forecast-summary {width:100%;}
+  #eos-energy-design .forecast-summary > div {flex:1;min-width:0;padding:8px;}
+  #eos-energy-design .forecast-summary strong {font-size:18px;}
+}
 #eos-energy-design .vehicle-inactive {
   opacity: .5;
   filter: grayscale(1);

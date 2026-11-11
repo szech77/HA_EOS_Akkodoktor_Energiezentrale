@@ -14,7 +14,7 @@
       :`The interface could not load ${file}. Update the complete integration and retry.`;
     document.getElementById('overview').hidden=true;retry.hidden=false;
   }
-  const known=['chart-data.js','accounting.js','app.js'];
+  const known=['chart-data.js','accounting.js','forecast.js','app.js'];
   // Parse/runtime errors before app startup must also produce a visible message.
   window.addEventListener('error',event=>{
     const file=String(event.filename||'').split('/').pop().split('?')[0];

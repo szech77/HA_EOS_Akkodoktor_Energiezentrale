@@ -399,8 +399,8 @@ function overview() {
     const temperature = valid(weather.temperature) ? decimal(weather.temperature) + ' ' + weather.unit : '—';
     byId('weather-temperature').textContent = temperature;
     const description = stateLabel('weather', condition) + ' · ' + temperature;
-    weatherNode.setAttribute('aria-label', description);
-    weatherNode.title = description;
+    weatherNode.setAttribute('aria-label', description+' · '+t('forecast.open'));
+    weatherNode.title = description+' · '+t('forecast.open');
   }
   byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? Object.keys(snapshot.eos_cache ?? {}).length ? t('control.cached_eos') : t('control.active') : t('control.read_only');
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
@@ -738,6 +738,7 @@ function renderView() {
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();
   else detail(route);
+  forecastView?.update();
 }
 async function refresh() {
   if (refreshing) return;
@@ -753,6 +754,11 @@ async function refreshHistory() {
   catch { history.influx_error = true; }
   finally { historyRefreshing = false; render(); }
 }
+let forecastView=null;
+byId('flow-weather').addEventListener('click',()=>{
+  forecastView??=EosForecast.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
+  forecastView.open();
+});
 byId('vehicle-selector').addEventListener('change',()=>{formReady=false;settings();});
 form.elements.schedule.addEventListener('change',scheduleFields);
 form.addEventListener('submit', async event => {

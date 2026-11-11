@@ -12,7 +12,7 @@ async function bootstrap(failingFile){
 }
 test('all UI dependencies share the build version instead of mixing cached releases',async()=>{
   const f=await bootstrap();
-  assert.deepEqual(f.resources,['./chart-data.js?v=build123','./accounting.js?v=build123','./app.js?v=build123']);
+  assert.deepEqual(f.resources,['./chart-data.js?v=build123','./accounting.js?v=build123','./forecast.js?v=build123','./app.js?v=build123']);
   assert.equal(f.stylesheet.href,'./style.css?v=build123');
   assert.equal(f.nodes['startup-retry'].hidden,true);
 });
