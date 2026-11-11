@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.7.2 - 2026-11-11
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Die Panel-Warnung „Daten oder Steuerung prüfen · Prognose“ erscheint erst nach fünf Minuten durchgehend fehlgeschlagenem EOS-Prognoseabruf. Eine erfolgreiche Antwort setzt die Frist zurück und entfernt die Warnung sofort. Kurzzeitige Ausfälle und die Startphase lösen die Meldung nicht mehr sofort aus.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.7.1 - 2026-11-11
 
 ### Features

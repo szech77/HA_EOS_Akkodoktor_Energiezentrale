@@ -22,6 +22,54 @@ class EOSGraceRequirements(unittest.TestCase):
         return {"generated_at":when.isoformat(),"instructions":[instruction(when,"NON_EXPORT"),
                 {**instruction(when,mode),"resource_id":"ev1"}]}
 
+    def test_forecast_warning_waits_five_minutes_including_initial_startup(self):
+        app,_=self.controller()
+        app.apply_eos_forecast(None,NOW,TimeoutError())
+        for elapsed in (0,60,299):
+            self.assertNotIn('forecast',app.snapshot(NOW+timedelta(seconds=elapsed))['errors'])
+        # The threshold is evaluated even while a background retry is pending.
+        self.assertEqual(app.snapshot(NOW+timedelta(seconds=300))['errors']['forecast'],'TimeoutError')
+
+    def test_repeated_forecast_failures_do_not_extend_the_warning_deadline(self):
+        app,_=self.controller()
+        for elapsed in (0,60,120,180,240):
+            app.apply_eos_forecast(None,NOW+timedelta(seconds=elapsed),OSError())
+        self.assertEqual(app.snapshot(NOW+timedelta(seconds=300))['errors']['forecast'],'OSError')
+
+    def test_forecast_recovery_clears_warning_and_a_new_outage_gets_a_full_grace_period(self):
+        app,_=self.controller()
+        app.apply_eos_forecast(None,NOW,TimeoutError())
+        self.assertIn('forecast',app.snapshot(NOW+timedelta(seconds=300))['errors'])
+        app.apply_eos_forecast({},NOW+timedelta(seconds=301))
+        self.assertNotIn('forecast',app.snapshot(NOW+timedelta(seconds=301))['errors'])
+        app.apply_eos_forecast(None,NOW+timedelta(seconds=310),TimeoutError())
+        self.assertNotIn('forecast',app.snapshot(NOW+timedelta(seconds=609))['errors'])
+        self.assertIn('forecast',app.snapshot(NOW+timedelta(seconds=610))['errors'])
+
+    def test_brief_forecast_failure_is_forgotten_after_a_successful_response(self):
+        app,_=self.controller()
+        app.apply_eos_forecast(None,NOW,TimeoutError())
+        app.apply_eos_forecast({},NOW+timedelta(seconds=60))
+        self.assertNotIn('forecast',app.snapshot(NOW+timedelta(hours=1))['errors'])
+
+    def test_forecast_failure_keeps_its_own_deadline_when_plans_still_arrive(self):
+        app,_=self.controller()
+        app.apply_eos_forecast(None,NOW,TimeoutError())
+        app.apply_eos_plan(self.plan(NOW+timedelta(seconds=240)),NOW+timedelta(seconds=240))
+        result=app.snapshot(NOW+timedelta(seconds=300))
+        self.assertNotIn('eos',result['errors'])
+        self.assertIn('forecast',result['errors'])
+
+    def test_bad_forecast_is_removed_during_warning_grace_period(self):
+        app,_=self.controller()
+        solution={'start_solution_datetime':NOW.isoformat(),'interval_seconds':900,
+                  'parameters':{'ems':{'pv_forecast_wh':[1000]}},'result':{}}
+        app.apply_eos_forecast(solution,NOW)
+        self.assertTrue(app.forecast)
+        app.apply_eos_forecast(None,NOW+timedelta(seconds=60),TimeoutError())
+        self.assertEqual(app.forecast,[])
+        self.assertNotIn('forecast',app.snapshot(NOW+timedelta(seconds=60))['errors'])
+
     def test_timeout_keeps_last_plan_for_five_minutes_without_sliding_deadline(self):
         app,eos=self.controller()
         eos.plan.return_value=self.plan()

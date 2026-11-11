@@ -354,7 +354,8 @@ class ControllerRequirements(unittest.TestCase):
         result = self.app.snapshot(NOW)
         self.assertEqual(result["live"]["solar"], 7000)
         self.assertEqual(result["forecast"], [])
-        self.assertIn("forecast", result["errors"])
+        self.assertNotIn("forecast", result["errors"])
+        self.assertIn("forecast", self.app.snapshot(NOW + timedelta(minutes=5))["errors"])
 
     def test_failed_emergency_release_leaves_control_off_and_marks_release_pending(self):
         self.config.daily = daily_settings({"fast": True}, 20)

@@ -40,6 +40,8 @@ class Controller:
         self.resource_plans = {}
         self.eos_failure_since = {}
         self.forecast = []
+        self.forecast_failure_since = None
+        self.forecast_failure = None
         self.errors = {}
         self.control_step = "startup"
         self.last_failure = None
@@ -252,10 +254,24 @@ class Controller:
             if error is not None:
                 raise error
             self.forecast = forecast_rows(solution, now)
+            self.forecast_failure_since = None
+            self.forecast_failure = None
             self.errors.pop("forecast", None)
         except Exception as error:
             self.forecast = []
-            self.errors["forecast"] = type(error).__name__
+            if self.forecast_failure_since is None or now < self.forecast_failure_since:
+                self.forecast_failure_since = now
+            self.forecast_failure = type(error).__name__
+            self.report_forecast_availability(now)
+
+    def report_forecast_availability(self, now):
+        if self.forecast_failure_since is not None:
+            if now < self.forecast_failure_since:
+                self.forecast_failure_since = now
+            if (now-self.forecast_failure_since).total_seconds() >= 300:
+                self.errors['forecast'] = self.forecast_failure
+                return
+        self.errors.pop('forecast', None)
 
     def update_soc(self, states, box, now):
         if self.config.options.get("wallbox_type") == "none":
@@ -654,6 +670,8 @@ class Controller:
 
     def snapshot(self, now):
         with self.lock:
+            # A pending background retry must not delay the warning threshold.
+            self.report_forecast_availability(now)
             opts = self.input_options
             plan = self.plan_for(opts["battery_resource"],now)
             generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
