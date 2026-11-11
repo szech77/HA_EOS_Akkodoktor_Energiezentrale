@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.11.0 - 2026-11-11
+
+### Features
+
+- Bis zu acht konfigurierte Fahrzeuge einzeln im Stromflussdiagramm mit Name, eigener Ladeleistung, fünf SoC-Balken und eigener Flusslinie darstellen. Ein Klick öffnet die jeweilige Fahrzeug-Detailseite. Die Diagrammhöhe passt sich der Anzahl sichtbarer Verbraucher an; die zusätzlichen Fahrzeugkarten unterhalb der Übersicht entfallen.
+
+### Bugfixes
+
+- Auch bei genau einem Fahrzeug aus der Geräteliste dessen SoC im Diagramm anzeigen. Messwerte, gehaltene Anzeigen und Bezugsleistungen der Leistungsringe je Fahrzeug verwenden, statt sie aus der Flottensumme zu übernehmen.
+- Nicht angeschlossene oder nicht verfügbare Fahrzeuge einzeln ausgrauen; Status nur im Tooltip und für Screenreader anzeigen, ohne Hinweismeldung im Diagrammknoten. Unbekannte Leistungen und SoC-Werte nicht durch Werte anderer Fahrzeuge ersetzen.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.10.0 - 2026-11-11
 
 ### Features

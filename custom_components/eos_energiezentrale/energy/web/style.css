@@ -110,6 +110,7 @@
 
   #eos-energy-design .orb svg { width:30px; height:30px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   #eos-energy-design .node > span:nth-child(2) { max-width:100%; overflow-wrap:anywhere; text-align:center; }
+  #eos-energy-design .node.car > span:nth-child(2) { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* Interactive charts: values remain available with pointer, touch and keyboard. */
 #eos-energy-design .hub {text-decoration:none;cursor:pointer;}
