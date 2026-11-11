@@ -21,6 +21,8 @@ def power_references(options,live,features):
     phases = live.get("phases") if isinstance(features,WallboxFeatures) and not features.phase_switching else 3
     current = number(options.get("max_current_a",16))
     car = min(11000,current*230*phases) if current is not None and phases in (1,3) else None
+    if isinstance(features,WallboxFeatures) and features.optional_connection:
+        car = live.get('effective_charge_power_w')
     return {"solar":options.get("pv_peak_w",10000),"car":car,
             "battery_charge":options.get("battery_charge_w"),"battery_discharge":options.get("battery_discharge_w")}
 

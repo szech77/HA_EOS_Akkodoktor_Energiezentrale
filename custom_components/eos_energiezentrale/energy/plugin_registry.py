@@ -68,6 +68,10 @@ def validate_class(plugin):
 
 def validate_instance(plugin):
     validate_measurement_keys(plugin)
+    device_key = getattr(plugin, "device_key", None)
+    if device_key is not None and (not isinstance(device_key, str) or not 1 <= len(device_key) <= 512
+                                   or any(ord(c) < 32 for c in device_key)):
+        raise PluginContractError("Invalid direct device identity")
     info = plugin.info
     expected = BatteryFeatures if info.kind=="battery" else WallboxFeatures
     if not isinstance(getattr(plugin,"features",None),expected) or any(type(getattr(plugin.features,field.name)) is not bool for field in fields(expected)):

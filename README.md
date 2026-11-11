@@ -140,6 +140,20 @@ eingetragen. **kW** bezeichnet Leistung, **kWh** eine Energiemenge.
 
 ### Hardware: Fronius-Speicher und NRGkick
 
+Für **NRGkick Gen2** steht das Plugin **NRGkick Gen2 local JSON API**
+(`nrgkick_local`) zur Verfügung. Es liest und steuert den NRGkick direkt über
+dessen lokale API. Zusätzliche HA-Wallbox-Sensoren oder Steuerentitäten sind dafür
+nicht erforderlich. Die JSON-API in der NRGkick-App aktivieren und im Plugin die
+lokale API-Adresse eintragen. Das bestehende HA-Plugin `nrgkick` bleibt verfügbar.
+Einrichtung, optionale Anmeldung und Phasenumschaltung sind unter
+[NRGkick lokal](PLUGINS.md#nrgkick-gen2-direkt-über-die-lokale-json-api) beschrieben.
+
+Adapter-, Strom- und Phasengrenzen bestimmen die an EOS übermittelte maximale
+Ladeleistung. Ist der NRGkick nicht erreichbar oder kein Fahrzeug angeschlossen,
+wird das Auto ausgegraut und die Fahrzeugplanung deaktiviert. Speicher und andere
+Fahrzeuge bleiben regelbar. Ein unbestätigter Ladestopp bleibt als Hinweis sichtbar;
+beim Wiederverbinden werden Ladegrenzen und der gespeicherte Zeitplan übernommen.
+
 Alternativ zur Fronius-Steuerung über zusätzliche HA-Entitäten steht das neue
 Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`) zur Auswahl.
 Es steuert direkt den GEN24 und liest SoC sowie Lade-/Entladeleistung ebenfalls

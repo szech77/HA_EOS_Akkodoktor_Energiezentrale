@@ -43,13 +43,17 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.battery_sync_last_revision = -1
         self.goal_sync_tasks = {}
         self.goal_sync_last = {}
+        self.vehicle_sync_tasks = {}
+        self.vehicle_sync_last = {}
         if isinstance(app, Controller):
             app.external_eos_polling = True
             app.external_battery_sync = True
             app.external_goal_sync = True
+            app.external_vehicle_sync = True
             for _, child, _ in getattr(app, "controllers", ()):
                 child.external_battery_sync = True
                 child.external_goal_sync = True
+                child.external_vehicle_sync = True
 
     def _tick(self):
         with self.app.lock:
@@ -108,6 +112,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
             self._schedule_accounting_refresh()
             self._schedule_battery_sync()
             self._schedule_goal_sync()
+            self._schedule_vehicle_sync()
             return result
 
     def _vehicle_controllers(self):
@@ -117,8 +122,54 @@ class EnergyCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def _desired_goal(app, now):
+        if app.vehicle_connected is False:
+            return None
+        if app.vehicle_profile is not None and not app.vehicle_profile[-1]:
+            return None
         departure = next_departure(app.config.daily, now, app.config.zone)
         return (app.config.daily["target_soc"], departure) if departure else None
+
+    def _schedule_vehicle_sync(self):
+        if self.closing:
+            return
+        for app in self._vehicle_controllers():
+            desired = app.vehicle_profile
+            if desired is None:
+                continue
+            resource = app.config.options['vehicle_resource']
+            task = self.vehicle_sync_tasks.get(resource)
+            if task and not task.done():
+                continue
+            previous = self.vehicle_sync_last.get(resource)
+            interval = 60 if desired == app.vehicle_profile_confirmed else 30
+            if previous and previous[0] == desired and monotonic() - previous[1] < interval:
+                continue
+            self.vehicle_sync_last[resource] = (desired, monotonic())
+            self.vehicle_sync_tasks[resource] = self.hass.async_create_background_task(
+                self._async_sync_vehicle(app, resource, desired), 'EOS vehicle limits sync')
+
+    async def _async_sync_vehicle(self, app, resource, desired):
+        error = None
+        try:
+            await self.hass.async_add_executor_job(app.config.eos.set_vehicle_charging_limits, resource, *desired)
+        except Exception as caught:
+            error = caught
+        async with self.work_lock:
+            if self.closing:
+                return
+            if desired == app.vehicle_profile:
+                if error is None:
+                    changed = app.vehicle_profile_confirmed != desired
+                    app.vehicle_profile_confirmed = desired
+                    if changed:
+                        app.vehicle_profile_at = datetime.now(timezone.utc)
+                    app.errors.pop('vehicle_limits', None)
+                else:
+                    app.vehicle_profile_confirmed = None
+                    app.errors['vehicle_limits'] = type(error).__name__
+            self.vehicle_sync_tasks.pop(resource, None)
+            if desired != app.vehicle_profile:
+                self._schedule_vehicle_sync()
 
     def _schedule_goal_sync(self):
         if not getattr(self.app, "armed", False):
@@ -390,6 +441,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
         if self.battery_sync_task and not self.battery_sync_task.done():
             self.battery_sync_task.cancel()
         for task in self.goal_sync_tasks.values():
+            if not task.done():
+                task.cancel()
+        for task in self.vehicle_sync_tasks.values():
             if not task.done():
                 task.cancel()
         for task in self.eos_poll_tasks.values():

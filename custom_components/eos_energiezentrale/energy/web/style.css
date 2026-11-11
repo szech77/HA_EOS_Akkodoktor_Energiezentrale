@@ -207,3 +207,7 @@
 @media(max-width:450px){#eos-energy-design .flow-weather{font-size:1rem;}}
 
 #eos-energy-design .flow-footer {display:flex; justify-content:flex-end; padding-top:12px;}
+#eos-energy-design .vehicle-inactive {
+  opacity: .5;
+  filter: grayscale(1);
+}

@@ -5,6 +5,7 @@ from threading import Event, Lock
 from unittest.mock import patch
 
 from custom_components.eos_energiezentrale.energy.clients import EOS
+import pytest
 
 
 def test_two_clients_updating_vehicles_do_not_overwrite_each_other():
@@ -98,3 +99,34 @@ def test_a_slow_eos_instance_does_not_block_another_instance():
             finally:
                 release.set()
             slow.result(timeout=5)
+
+
+def test_socket_limits_and_absence_preserve_other_vehicles_and_positive_rating():
+    configuration={'devices':{'electric_vehicles':{
+        'ev1':{'capacity_wh':77000,'max_charge_power_w':11000,'min_soc_percentage':70,
+               'min_soc_deadline_datetime':'2026-11-12T09:00:00+00:00'},
+        'ev2':{'capacity_wh':40000,'max_charge_power_w':7000}}}}
+    other=deepcopy(configuration['devices']['electric_vehicles']['ev2'])
+    def request(_url,*,method='GET',payload=None):
+        if method=='PUT':
+            configuration['devices']['electric_vehicles']=deepcopy(payload)
+        return deepcopy(configuration)
+    with patch('custom_components.eos_energiezentrale.energy.clients.request',side_effect=request):
+        eos=EOS('http://eos')
+        eos.set_vehicle_charging_limits('ev1',2300,1380,(0.,.6,1.),True)
+        ev=configuration['devices']['electric_vehicles']['ev1']
+        assert ev['max_charge_power_w']==2300 and ev['charge_rates']==[0.,.6,1.]
+        eos.set_vehicle_charging_limits('ev1',None,None,(0.,),False)
+        ev=configuration['devices']['electric_vehicles']['ev1']
+        assert ev['max_charge_power_w']==2300 and ev['charge_rates']==[0.]
+        assert ev['min_soc_percentage']==ev['max_soc_percentage']==0
+        assert ev['min_soc_deadline_datetime'] is None
+        eos.set_vehicle_charging_limits('ev1',11040,4140,(0.,.375,1.),True)
+        assert configuration['devices']['electric_vehicles']['ev1']['max_charge_power_w']==11040
+        assert configuration['devices']['electric_vehicles']['ev2']==other
+
+
+def test_unconfirmed_socket_limit_is_rejected():
+    with patch('custom_components.eos_energiezentrale.energy.clients.request',return_value={
+            'devices':{'electric_vehicles':{'ev1':{'max_charge_power_w':11000}}}}),pytest.raises(ValueError):
+        EOS('http://eos').set_vehicle_charging_limits('ev1',2300,1380,(0.,1.),True)

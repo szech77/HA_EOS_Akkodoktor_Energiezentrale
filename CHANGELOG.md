@@ -3,6 +3,28 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.6.0 - 2026-11-11
+
+### Features
+
+- Neues Plugin `nrgkick_local` für die lokale NRGkick-Gen2-JSON-API ohne zusätzliche HA-Wallbox-Sensoren oder Steuerentitäten: Leistung, Status, Ladestrom und Gerätegrenzen direkt lesen; Laden pausieren/freigeben und Strom in 0,1-A-Schritten einstellen.
+- Optional aktivierte Phasenumschaltung mit bestätigtem Ladestopp, zwei neuen Nullleistungsmessungen und Rückbestätigung der Phaseneinstellung. Hardware-/Adaptergrenzen werden zur Laufzeit berücksichtigt.
+- Mehrere direkt angebundene NRGkicks mit gemeinsamer Leistungsreservierung und Erkennung doppelt konfigurierter Geräteadressen.
+- Anschlussabhängige Phasenzahl und Ladeleistung aus Geräte-, Adapter- und Netzgrenzen lesen und mit der konfigurierten Stromgrenze als Leistungsgrenzen und Ladestufen an EOS übertragen; Änderungen werden separat rückbestätigt.
+- Nicht erreichbare NRGkicks und nicht angeschlossene Fahrzeuge werden ausgegraut und aus der Fahrzeugplanung genommen. Speicher und erreichbare Fahrzeuge bleiben regelbar; unbestätigte Ladestopps bleiben sichtbar und fehlende Verbrauchsmessungen unbekannt. Wiederverbinden stellt die aktuellen Ladegrenzen und den konfigurierten Zeitplan wieder her.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine. Das bisherige Plugin `nrgkick` für HA-Entitäten bleibt verfügbar.
+
+### Security
+
+- Optionale Basic-Auth-Anmeldung mit Passwort aus einer HA-Prozess-Umgebungsvariable; keine Passwörter in Plugin-Parametern. Keine HTTP-Weiterleitungen oder Umgebungs-Proxys, begrenzte Antworten und Zeitüberschreitungen sowie bereinigte Fehlermeldungen. Schreibbefehle benötigen ein separates Rücklesen.
+
 ## 0.5.0 - 2026-11-11
 
 ### Features

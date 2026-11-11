@@ -48,10 +48,13 @@ def wallbox_reading(value, now=None):
     step = bounded(value.step,.001,32)
     maximum = bounded(value.maximum,6,80)
     amps = bounded(value.amps,0,80)
-    if amps is not None and maximum is not None and amps>maximum:
-        amps = None
+    # A retained setpoint can exceed a newly detected adapter limit. Preserve
+    # the observed value so control can lower it; charging_current enforces the
+    # current hardware limit on every new command.
     return replace(value,watts=watts,status=status,phases=value.phases if type(value.phases) is int and value.phases in (1,3) else None,
-                   amps=amps,step=step,maximum=maximum,sample=sample)
+                   amps=amps,step=step,maximum=maximum,sample=sample,
+                   max_phases=value.max_phases if type(value.max_phases) is int and value.max_phases in (1,3) else None,
+                   nominal_voltage=bounded(value.nominal_voltage,100,260))
 
 
 def battery_command(value):

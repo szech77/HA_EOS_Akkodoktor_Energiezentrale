@@ -1,6 +1,12 @@
 {
   "locale": "de-DE",
   "messages": {
+    "vehicle.unavailable": "Ladegerät nicht erreichbar",
+    "notice.wallbox": "Ladegerätsteuerung fehlgeschlagen; übrige Regelung läuft weiter",
+    "notice.wallbox_stop": "Ladestopp nicht bestätigt; Fahrzeug kann weiterhin laden",
+    "notice.vehicle_limits": "Fahrzeug-Ladegrenzen in EOS nicht bestätigt",
+    "vehicle.disconnected": "Kein Fahrzeug angeschlossen",
+    "plugin.feature.optional_connection": "Absteckbares Ladegerät",
     "app.title": "EOS Energiezentrale",
     "app.name": "Energiezentrale",
     "nav.main": "Hauptnavigation",

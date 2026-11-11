@@ -219,13 +219,22 @@ function solarForecastCards(now) {
 
 const consumerEnabled = key => !["car","heat"].includes(key) || snapshot.features?.[key] !== false;
 
+function vehicleActive(vehicle) {
+  if (vehicle.vehicles?.length) return vehicle.vehicles.some(vehicleActive);
+  return vehicle.live?.car_connected !== false;
+}
+
+function vehicleStatus(vehicle) {
+  return t(vehicle.live?.car_available === false ? 'vehicle.unavailable' : 'vehicle.disconnected');
+}
+
 function carIcon(soc) {
   const known=valid(soc) && soc>=0 && soc<=100;
   return `<svg class="vehicle-soc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 1.5-4h11L19 9M4 17v3m16-3v3"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 13h2m8 0h2"/>${known ? `<rect class="car-soc-track" x="7.5" y="6.2" width="9" height="1.8" rx=".4"/><rect class="car-soc-fill" x="7.5" y="6.2" width="${(9*soc/100).toFixed(3)}" height="1.8" rx=".4"/>` : ''}</svg>`;
 }
 
 function vehicleCards() {
-  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card" href="#car/${html(vehicle.id)}"><small class="vehicle-heading">${carIcon(valid(vehicle.live.car_soc) ? vehicle.live.car_soc : vehicle.display?.car_soc?.value)}${html(vehicle.name)}</small><strong>${html((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
+  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card${vehicleActive(vehicle) ? '' : ' vehicle-inactive'}" href="#car/${html(vehicle.id)}"><small class="vehicle-heading">${carIcon(valid(vehicle.live.car_soc) ? vehicle.live.car_soc : vehicle.display?.car_soc?.value)}${html(vehicle.name)}</small><strong>${html(vehicleActive(vehicle) ? ((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value)) : vehicleStatus(vehicle))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
 }
 
 const displayed = key => snapshot.flow_display?.[key]?.value ?? (valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value);
@@ -299,9 +308,11 @@ function overview() {
     node.hidden = !consumerEnabled(key);
     flow.style.display = consumerEnabled(key) ? "" : "none";
     if (!consumerEnabled(key)) return;
+    const inactiveCar = key === 'car' && !vehicleActive(snapshot);
+    node.classList.toggle('vehicle-inactive', inactiveCar);
     const retained = snapshot.flow_display?.[key] ?? snapshot.display?.[key];
     const stale = valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
-    const value = stale ? retained.value : live[key];
+    const value = inactiveCar ? null : stale ? retained.value : live[key];
     const soc = key === 'car' && snapshot.vehicles?.length ? undefined : displayed(key + '_soc');
     if (key === 'car') {
       const knownSoc=valid(soc) && soc>=0 && soc<=100;
@@ -318,14 +329,14 @@ function overview() {
     }
     const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
       : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
-    node.querySelector('strong').textContent = (stale && retained.estimated ? '≈ ' : '') + power(value);
+    node.querySelector('strong').textContent = inactiveCar ? vehicleStatus(snapshot) : (stale && retained.estimated ? '≈ ' : '') + power(value);
     let ageNote = node.querySelector('.reading-age');
     if (!ageNote) {
       ageNote = document.createElement('small');
       ageNote.className = 'reading-age';
       node.append(ageNote);
     }
-    ageNote.hidden = !stale || (retained.aligned && retained.age_s<10);
+    ageNote.hidden = inactiveCar || !stale || (retained.aligned && retained.age_s<10);
     ageNote.textContent = stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
       {minutes:Math.ceil(retained.age_s / 60)}) : '';
     node.title = ageNote.textContent;
@@ -508,6 +519,7 @@ function timeline(key, now) {
 }
 
 function detail(key) {
+  byId('detail-kpis').classList.toggle('vehicle-inactive', (key === 'car' || key.startsWith('car/')) && !vehicleActive(snapshot));
   const usageLink=byId('usage-link');
   usageLink.hidden=!['house','car','heat'].includes(key)&&!key.startsWith('car/');
   usageLink.href='#usage/'+key;
@@ -552,7 +564,8 @@ function detail(key) {
     car:[[t('chart.soc'),percent(displayed("car_soc")),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
     heat:[]
   };
-  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),displayedPower(key),displayAge(key) ?? (key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured'))],...metadata[key]]);
+  const inactiveCar = key === 'car' && !vehicleActive(snapshot);
+  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),inactiveCar ? vehicleStatus(snapshot) : displayedPower(key),inactiveCar ? '' : displayAge(key) ?? (key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured'))],...metadata[key]]);
   const withPlan = key === 'battery' || key === 'car';
   byId('timeline').innerHTML = withPlan ? timeline(key,now) : '';
   byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now,withPlan ? [{key:'solar',label:t('chart.solar'),divisor:1000,color:'solar'}] : [])
@@ -642,10 +655,14 @@ function renderView() {
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
   const errors = Object.keys(snapshot.errors);
   const errorAreas = {eos:Object.keys(snapshot.eos_cache??{}).length?'notice.eos_cached':'notice.eos',accounting:'notice.accounting',device_pending:'notice.device_pending',goal:'notice.goal',runtime:'notice.runtime',forecast:'notice.forecast',
-    release:'notice.release',battery_limits:'notice.battery_limits',control_persistence:'notice.control_persistence',connection:'notice.connection'};
-  byId('notice').textContent = errors.length ? `${t('notice.check')} · ${errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()).join(', ')}` : '';
+    release:'notice.release',battery_limits:'notice.battery_limits',vehicle_limits:'notice.vehicle_limits',wallbox:'notice.wallbox',wallbox_stop:'notice.wallbox_stop',control_persistence:'notice.control_persistence',connection:'notice.connection'};
+  const vehicleWarnings = (snapshot.vehicles ?? []).slice(1).flatMap(vehicle =>
+    Object.keys(vehicle.errors ?? {}).filter(key => ['wallbox','wallbox_stop','vehicle_limits','goal'].includes(key))
+      .map(key => `${vehicle.name}: ${t(errorAreas[key])}`));
+  const warnings = [...errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()), ...vehicleWarnings];
+  byId('notice').textContent = warnings.length ? `${t('notice.check')} · ${warnings.join(', ')}` : '';
   const sourceNotice = sourceConfigurationNotice(snapshot.source_configuration,t);
-  if (sourceNotice) byId('notice').textContent += `${errors.length?' · ':''}${sourceNotice}`;
+  if (sourceNotice) byId('notice').textContent += `${warnings.length?' · ':''}${sourceNotice}`;
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();

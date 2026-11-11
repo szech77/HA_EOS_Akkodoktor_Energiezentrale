@@ -123,10 +123,10 @@ def battery_command(order, soc, settings, pv_car, grid, discharge, charge):
     return None
 
 
-def current_for_power(power, phases, step, maximum, nearest=False, hard_limit=None):
+def current_for_power(power, phases, step, maximum, nearest=False, hard_limit=None, voltage=230):
     if phases not in (1, 3) or not 0 < step <= 1:
         return None
-    watts_per_amp = 230 * phases
+    watts_per_amp = voltage * phases
     budget = power + (watts_per_amp * step / 2 if nearest else 0)
     if hard_limit is not None:
         budget = min(budget, hard_limit)
@@ -135,9 +135,9 @@ def current_for_power(power, phases, step, maximum, nearest=False, hard_limit=No
     return result if result >= 6 else None
 
 
-def pv_budget(pv, grid, car, discharge, reserve, phases=None, setpoint=None):
+def pv_budget(pv, grid, car, discharge, reserve, phases=None, setpoint=None, voltage=230):
     if phases in (1, 3) and setpoint is not None:
-        return max(0, 230 * phases * setpoint - grid - discharge - reserve)
+        return max(0, voltage * phases * setpoint - grid - discharge - reserve)
     return max(0, min(pv, car - grid - discharge) - reserve)
 
 

@@ -39,6 +39,7 @@ class BatteryFeatures:
 @dataclass(frozen=True)
 class WallboxFeatures:
     phase_switching: bool = True
+    optional_connection: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,13 @@ class WallboxReading:
     maximum: float | None
     sample: datetime | None
     measurements: Mapping[str, Measurement] = field(default_factory=dict)
+    max_phases: int | None = None
+    nominal_voltage: float | None = None
+
+    @property
+    def max_power_w(self):
+        return self.maximum * self.max_phases * self.nominal_voltage if all(
+            value is not None for value in (self.maximum, self.max_phases, self.nominal_voltage)) else None
 
     @property
     def plugged(self):
@@ -124,6 +132,7 @@ class BatteryDriver(ABC):
 
 
 class WallboxDriver(ABC):
+    device_key: ClassVar[str | None] = None
     measurement_keys: ClassVar[tuple[str, ...]] = ("car",)
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]

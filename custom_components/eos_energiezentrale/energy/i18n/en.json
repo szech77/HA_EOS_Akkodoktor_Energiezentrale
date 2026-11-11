@@ -1,6 +1,12 @@
 {
   "locale": "en-GB",
   "messages": {
+    "vehicle.unavailable": "Charger unreachable",
+    "notice.wallbox": "Charger control failed; other controls continue",
+    "notice.wallbox_stop": "Charging stop unconfirmed; vehicle may still be charging",
+    "notice.vehicle_limits": "Vehicle charging limits not confirmed by EOS",
+    "vehicle.disconnected": "No vehicle connected",
+    "plugin.feature.optional_connection": "Portable charger",
     "app.title": "EOS Energy Dashboard",
     "app.name": "Energy Dashboard",
     "nav.main": "Main navigation",
