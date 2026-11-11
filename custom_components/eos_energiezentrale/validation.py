@@ -39,10 +39,13 @@ def validate_options(options):
         raise ValueError("Invalid PV reference power")
     if not 0 <= options["battery_min_soc"] < options["battery_max_soc"] <= 100:
         raise ValueError("Invalid battery limits")
-    for key in ("battery_resource", "vehicle_resource"):
-        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", options[key]):
+    vehicles=options.get('vehicles','[]')
+    fleet=bool(json.loads(vehicles) if isinstance(vehicles,str) else vehicles)
+    # List entries are validated below; the legacy EV assignment is unused.
+    for key in (("battery_resource",) if fleet else ("battery_resource", "vehicle_resource")):
+        if not isinstance(options[key],str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", options[key]):
             raise ValueError("Invalid resource")
-    if options["battery_resource"] == options["vehicle_resource"]:
+    if not fleet and options["battery_resource"] == options["vehicle_resource"]:
         raise ValueError("Resources must be different")
     if type(options["allow_battery_export"]) is not bool:
         raise ValueError("Invalid export permission")

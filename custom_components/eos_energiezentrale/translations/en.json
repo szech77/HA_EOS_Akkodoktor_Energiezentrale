@@ -8,8 +8,10 @@
           "eos_url": "EOS API base URL",
           "language": "Panel language",
           "battery_resource": "EOS battery resource",
-          "vehicle_resource": "EOS vehicle resource"
-        }
+          "vehicle_resource": "EOS vehicle resource (single-vehicle configuration)",
+          "vehicle_resources": "EOS resources of configured vehicles"
+        },
+        "description": "All vehicles use this EOS connection. Add or remove vehicles under Commissioning → Devices. For a vehicle list, assign each vehicle its own existing EOS resource here; the assignment also updates the device configuration. Without a list, the single-vehicle configuration applies. EOS device definitions are not created."
       },
       "sensors": {
         "title": "Source sensors",
@@ -148,8 +150,10 @@
           "eos_url": "EOS API base URL",
           "language": "Panel language",
           "battery_resource": "EOS battery resource",
-          "vehicle_resource": "EOS vehicle resource"
-        }
+          "vehicle_resource": "EOS vehicle resource (single-vehicle configuration)",
+          "vehicle_resources": "EOS resources of configured vehicles"
+        },
+        "description": "All vehicles use this EOS connection. Add or remove vehicles under Commissioning → Devices. For a vehicle list, assign each vehicle its own existing EOS resource here; the assignment also updates the device configuration. Without a list, the single-vehicle configuration applies. EOS device definitions are not created."
       },
       "sensors": {
         "title": "Source sensors",

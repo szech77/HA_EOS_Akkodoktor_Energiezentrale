@@ -680,6 +680,16 @@ eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, Kapazität und die fünf
 Wallbox-Entitäten angeben. Die Fahrzeuge müssen auch in EOS angelegt sein.
 Die Konfiguration erstellt oder überschreibt keine EOS-Gerätedefinitionen.
 
+Unter **Inbetriebnahme → EOS-Verbindung** erscheint bei einer eingerichteten
+Fahrzeugliste für jedes Auto ein eigenes Ressourcenfeld, beschriftet mit Name und
+stabiler Fahrzeug-ID. Dort beispielsweise `ev1` dem ID.4 und `ev2` einem zweiten
+Fahrzeug zuordnen. Die Ressourcen müssen bereits in EOS vorhanden und untereinander
+sowie gegenüber der Speicherressource eindeutig sein. Änderungen werden in derselben
+Geräteliste gespeichert, die auch unter **Geräte** bearbeitet wird. Alle Fahrzeuge
+verwenden die gemeinsame EOS-API-Basisadresse; es sind keine zusätzlichen
+EOS-Verbindungen nötig. Ohne Fahrzeugliste bleibt das Feld für die bisherige
+Einzelkonfiguration sichtbar. Neue Fahrzeuge weiterhin unter **Geräte** hinzufügen.
+
 In den Alltagseinstellungen das Fahrzeug auswählen und dessen Ziel-SoC,
 PV-Ziel, Abfahrt und Schnellladung speichern. Die Speichergrenzen bleiben global.
 Der Stromfluss zeigt jedes konfigurierte Fahrzeug mit eigenem Namen, Ladeleistung,
