@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.7.0 - 2026-11-11
+
+### Features
+
+- Abschaltbarer, standardmäßig deaktivierter speichergestützter PV-Ladestart bei Überschuss unterhalb der minimalen Fahrzeugladeleistung. Speicher-Untergrenze (Standard 50 %) und durchgängige Überschussdauer (Standard 60 s) sind im Panel und als HA-Entitäten einstellbar. Start mit zwei Prozentpunkten Hysterese; die allgemeine Speicher-Untergrenze bleibt wirksam.
+- Vor dem Ladestart bestätigte Sperre der Speicherladung und Freigabe der Eigenverbrauchsentladung. Die Regelung berücksichtigt ein- und dreiphasige Mindestleistung, verfügbare Entladeleistung und gemeinsame Netzleistungsreservierungen mehrerer Fahrzeuge. Fehlende Messwerte, SoC-Untergrenze oder anhaltender Netzbezug beenden die Unterstützung.
+
+### Bugfixes
+
+- Gemeinsame Speicherregeln werden im Mehrfahrzeugbetrieb vor der Regelung an alle Fahrzeuge weitergereicht.
+
+### Breaking Changes
+
+- Keine. Ohne Aktivierung bleibt das bisherige PV-Startverhalten erhalten.
+
+### Security
+
+- Keine.
+
 ## 0.6.0 - 2026-11-11
 
 ### Features

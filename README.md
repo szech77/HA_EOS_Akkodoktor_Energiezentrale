@@ -325,7 +325,31 @@ Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entität
 | Regelintervall | 5–120 s; Mindestabstand zwischen Stromanpassungen, zusätzlich ist eine neue Netzmessung erforderlich. |
 | Phasenautomatik | Automatischer Wechsel zwischen ein- und dreiphasigem Laden. |
 | Speicherunterstützung | Kann während tatsächlicher Auto-PV-Ladung die EOS-Entladesperre unter Beachtung der SoC-Grenzen aufheben. |
+| Speichergestützter PV-Ladestart | Eigener Schalter, standardmäßig aus; ermöglicht den Start bei kleinem Überschuss unterhalb der Fahrzeug-Mindestleistung. Benötigt zusätzlich Speicherunterstützung und aktives PV-Laden. |
+| Speicher-Untergrenze für PV-Ladestart | Standard 50 %, einstellbar 0–98 %. Wirksam ist die höhere Grenze aus diesem Wert und dem allgemeinen Speicher-Mindest-SoC. Start ab zwei Prozentpunkten darüber, Ende der Unterstützung an der Grenze. |
+| Überschusswartezeit | Standard 60 s, einstellbar 10–600 s. Unterbrechungen, fehlende Messwerte oder zu niedriger SoC starten die Wartezeit neu. |
 | Abfahrtsplanung | Aus, einmalig mit Datum/Uhrzeit oder wöchentlich mit einzelnen Wochentagen. |
+
+Beispiel: Bei 500 W PV-Überschuss und einphasiger Mindestladung von 1.380 W
+kann der Speicher die fehlenden 880 W bereitstellen. Bei einer Untergrenze von
+50 % beginnt die Wartezeit ab 52 % Speicher-SoC. Die Unterstützung endet bei
+50 %; ein neuer Start benötigt wieder mindestens 52 %. Die allgemeine
+Speicher-Untergrenze und die konfigurierte Entladeleistungsgrenze gelten weiterhin.
+
+Vor der Ladefreigabe wird die Speicherladung gesperrt und Entladung zur
+Eigenverbrauchsdeckung bestätigt. Es wird keine erzwungene Netzentladung
+verwendet. Während dieser lokalen PV-Unterstützung hat die Deckung der
+Fahrzeug-Mindestleistung Vorrang vor dem EOS-Speicherauftrag. Bei ausreichend
+PV-Leistung geht die Regelung in normales PV-Laden über. Beim Ausschalten des
+Features oder bei fehlenden Voraussetzungen endet die Unterstützung; reicht
+der reine PV-Überschuss nicht, wird das Fahrzeug pausiert.
+
+Ziel ist eine Netzleistung von 0 W. Mess- und Stellverzögerungen können kurzzeitig
+Netzbezug verursachen. Mehr als 100 W Netzbezug über 10 Sekunden stoppt die
+Unterstützung; ein neuer Versuch benötigt erneut die volle Überschusswartezeit.
+Ein Speicher ohne bestätigbare Lade- und Entladebegrenzung kann den unterstützten
+Start nicht freigeben. Die Funktion arbeitet auch bei mehreren Fahrzeugen mit
+gemeinsamen Speichergrenzen und konservativer Netzleistungsreservierung.
 
 Das Panel übernimmt die vollständige Termin- und Wochentagsauswahl. Für eine
 einmalige Planung muss vor der Wahl von `once` über native Entitäten ein gültiger

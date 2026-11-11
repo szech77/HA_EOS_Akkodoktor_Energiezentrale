@@ -1,6 +1,11 @@
 {
   "locale": "de-DE",
   "messages": {
+    "settings.battery_pv_start": "PV-Ladestart bei geringem Überschuss aus dem Speicher unterstützen",
+    "settings.battery_pv_min_soc": "Speicher-Untergrenze für den PV-Ladestart (%)",
+    "settings.battery_pv_wait_s": "Anhaltender geringer Überschuss vor Ladestart (s)",
+    "settings.battery_pv_info": "Standardmäßig aus. Benötigt PV-Laden und Speicherunterstützung. Start erst zwei Prozentpunkte über der höheren Speicher-Untergrenze; Stopp an dieser Grenze. Die Wartezeit beginnt bei unterbrochenem Überschuss erneut. Während der Unterstützung wird Speicherladung gesperrt und Eigenverbrauchsentladung erlaubt. Anhaltender Netzbezug stoppt das unterstützte Laden; kurze Regeltransienten sind möglich.",
+    "mode.pv_battery": "PV-Laden mit Speicherunterstützung",
     "vehicle.unavailable": "Ladegerät nicht erreichbar",
     "notice.wallbox": "Ladegerätsteuerung fehlgeschlagen; übrige Regelung läuft weiter",
     "notice.wallbox_stop": "Ladestopp nicht bestätigt; Fahrzeug kann weiterhin laden",

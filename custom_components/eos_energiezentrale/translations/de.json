@@ -335,6 +335,9 @@
       "fast": {
         "name": "Schnellladen"
       },
+      "battery_pv_start": {
+        "name": "Speichergestützter PV-Ladestart"
+      },
       "battery_pv_support": {
         "name": "Speicherunterstützung beim PV-Laden"
       },
@@ -343,6 +346,12 @@
       }
     },
     "number": {
+      "battery_pv_min_soc": {
+        "name": "Speicher-Untergrenze für PV-Ladestart"
+      },
+      "battery_pv_wait_s": {
+        "name": "Überschusswartezeit vor PV-Ladestart"
+      },
       "target_soc": {
         "name": "Ziel-SoC zur Abfahrt"
       },

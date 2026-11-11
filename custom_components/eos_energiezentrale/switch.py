@@ -7,7 +7,7 @@ from .entity import EnergyEntity
 
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(EnergySwitch(entry.runtime_data, key) for key in
-                       ("control", "pv", "fast", "battery_pv_support", "phase_auto"))
+                       ("control", "pv", "fast", "battery_pv_support", "battery_pv_start", "phase_auto"))
 
 
 class EnergySwitch(EnergyEntity, SwitchEntity):

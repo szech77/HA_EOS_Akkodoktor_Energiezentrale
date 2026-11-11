@@ -5,6 +5,7 @@ from .entity import EnergyEntity
 
 NUMBERS = {"target_soc": (1, 100, "%"), "pv_target_soc": (1, 100, "%"),
            "battery_min_soc": (0, 99, "%"), "battery_max_soc": (1, 100, "%"),
+           "battery_pv_min_soc": (0, 98, "%"), "battery_pv_wait_s": (10, 600, "s"),
            "reserve_w": (0, 500, "W"), "regulation_interval_s": (5, 120, "s")}
 
 

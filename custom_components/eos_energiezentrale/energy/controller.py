@@ -7,7 +7,7 @@ from threading import Event, RLock
 from time import monotonic
 
 from .clients import reading
-from .domain import (battery_command, current_for_power, current_instruction, estimate_soc,
+from .domain import (BatteryCommand, battery_command, current_for_power, current_instruction, estimate_soc,
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows
 from .display import DisplayValues
@@ -16,6 +16,7 @@ from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
+from .pv_support import PVSupport
 
 
 class Controller:
@@ -68,6 +69,7 @@ class Controller:
         self.vehicle_profile_at = None
         self.external_vehicle_sync = False
         self.last_vehicle_sync = -1000
+        self.pv_support = PVSupport()
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -92,6 +94,7 @@ class Controller:
                 self.errors.pop("runtime", None)
                 return
             self.armed = False
+            self.pv_support.reset()
             self.commanded_car_w = None
             self.restore_pending = False
             persistence_error = None
@@ -111,6 +114,7 @@ class Controller:
                 raise persistence_error
 
     def release(self, states, now):
+        self.pv_support.reset()
         try:
             self.config.wallbox.pause(self.config.wallbox.read(states, now))
         finally:
@@ -324,9 +328,10 @@ class Controller:
         try:
             self.regulate_car(box, live, planned, pv, now, clock, states)
         except (OSError, ValueError) as error:
-            if not optional_charger(self.config.wallbox):
+            if self.control_step == 'battery_support' or not optional_charger(self.config.wallbox):
                 raise
             self.pv_session = False
+            self.pv_support.reset()
             self.candidate = self.phase_target = None
             self.errors['wallbox'] = type(error).__name__
             if not box.plugged:
@@ -405,6 +410,7 @@ class Controller:
             self.history.write(now, live)
             self.last_minute = minute
         if not self.armed:
+            self.pv_support.reset()
             return
         if self.restore_pending:
             # HA integrations and EOS can become ready after this integration.
@@ -464,6 +470,8 @@ class Controller:
                                    "battery_max_soc": daily["battery_max_soc"]},
                                   daily["battery_pv_support"] and box.charging and self.pv_session,
                                   live["grid"], battery.discharge, battery.charge)
+        if self.pv_support.active:
+            command = BatteryCommand('limits', 0, opts['battery_discharge_w'])
         self.control_step = "battery_control"
         if command is None:
             self.config.battery.release(states)
@@ -475,6 +483,57 @@ class Controller:
         daily, opts, driver = self.config.daily, self.input_options, self.config.wallbox
         voltage = box.nominal_voltage or 230
         minimum_power = 6 * voltage
+        support_phases = 1 if daily['phase_auto'] and driver.features.phase_switching else box.phases
+        support_minimum = minimum_power * (support_phases or 3)
+        values = [live.get(key) for key in ('solar','grid','battery_charge','battery_discharge')]
+        valid = (all(value is not None for value in values) and box.watts is not None
+                 and box.plugged and box.phases in (1,3) and box.amps is not None
+                 and box.step is not None and box.maximum is not None
+                 and (not optional_charger(driver) or
+                      self.vehicle_profile is not None and self.vehicle_profile[-1]))
+        balance = (box.watts - live['grid'] - live['battery_discharge']
+                   + live['battery_charge'] - daily['reserve_w']) if valid else None
+        surplus = min(max(0, live['solar']), balance) if valid else None
+        battery_driver = getattr(self, 'support_driver', getattr(self.config,'battery',None))
+        features = getattr(battery_driver, 'features', None)
+        support_floor = max(daily['battery_min_soc'],daily['battery_pv_min_soc'])
+        floor_stop = (daily['battery_pv_start'] and pv and planned == 0 and box.enabled
+                      and (live.get('battery_soc') is None or live['battery_soc'] <= support_floor)
+                      and (balance is None or balance < box.watts))
+        was_supported = self.pv_support.active
+        supported = self.pv_support.update(
+            enabled=daily['battery_pv_start'] and daily['battery_pv_support'],
+            eligible=bool(pv and planned == 0 and valid and
+                          getattr(features,'charge_limit',False) is True and
+                          getattr(features,'discharge_limit',False) is True),
+            soc=live.get('battery_soc'), floor=support_floor,
+            wait=daily['battery_pv_wait_s'], clock=clock, surplus=surplus,
+            minimum=support_minimum, required=support_minimum-balance if valid else 0,
+            capacity=opts.get('battery_discharge_w',0), grid=live.get('grid'))
+        live['car_battery_support'] = supported
+        if supported:
+            # Confirm self-consumption discharge and block battery charging before
+            # enabling the EV. Never force discharge/export into the grid.
+            self.control_step = 'battery_support'
+            try:
+                battery_driver.apply(BatteryCommand('limits',0,opts['battery_discharge_w']),states)
+            except Exception:
+                self.pv_support.reset()
+                live['car_battery_support'] = False
+                try:
+                    driver.pause(box)
+                except Exception:
+                    self.errors['wallbox_stop'] = 'StopUnconfirmed'
+                else:
+                    self.commanded_car_w = 0
+                raise
+            self.control_step = 'wallbox_control'
+        elif floor_stop or (was_supported and (not pv or surplus is None or surplus < support_minimum)):
+            driver.pause(box)
+            self.commanded_car_w = 0
+            self.pv_session = False
+            self.candidate = self.phase_target = None
+            return
         if (not box.plugged or box.phases is None or box.amps is None or not box.step or not box.maximum
                 or box.watts is None or live["grid"] is None or live["battery_discharge"] is None
                 or (pv and live["solar"] is None) or (not pv and planned <= 0)):
@@ -486,6 +545,9 @@ class Controller:
         grid, discharge = live["grid"], max(0, live["battery_discharge"])
         limit = (self.vehicle_profile[0] or 0) if optional_charger(driver) else 11000
         hard = min(limit, max(0, box.watts + opts["grid_limit_w"] - grid - discharge - 100))
+        if supported:
+            hard = min(limit, max(0, box.watts-grid+live['battery_charge']
+                                  +opts['battery_discharge_w']-discharge-daily['reserve_w']))
         if self.last_write is not None and grid<=opts["grid_limit_w"]:
             meter=states.get(opts["grid_entity"],{})
             grid_report=instant(meter.get("last_reported") or meter.get("last_updated"))
@@ -510,12 +572,16 @@ class Controller:
                              discharge, daily["reserve_w"], box.phases if relative else None,
                              box.amps if relative else None, voltage) if pv else 0)
         desired = min(hard, max(planned, surplus))
+        if supported:
+            desired = min(hard, max(desired, support_minimum))
         nearest = pv and surplus > planned and box.charging and daily["reserve_w"] == 0 and box.step <= 0.1
         maximum = min(opts["max_current_a"], box.maximum)
         phase = box.phases
         if not getattr(getattr(driver,"features",None),"phase_switching",True):
             self.phase_target = None
-        if daily["phase_auto"] and getattr(getattr(driver,"features",None),"phase_switching",True):
+        if supported:
+            phase = support_phases
+        elif daily["phase_auto"] and getattr(getattr(driver,"features",None),"phase_switching",True):
             if self.phase_target is not None:
                 # Revalidate after opening the relay because export can have changed.
                 phase = self.phase_target if desired >= minimum_power * self.phase_target else box.phases
@@ -527,14 +593,14 @@ class Controller:
                 phase = 3
         amps = current_for_power(desired, phase, box.step, maximum, nearest and phase == box.phases, hard, voltage)
         transition = (phase, amps is not None)
-        if (not box.enabled and pv and planned == 0 and desired < (minimum_power * phase + 150)
+        if (not supported and not box.enabled and pv and planned == 0 and desired < (minimum_power * phase + 150)
                 and self.phase_target is None):
             amps = None
             transition = (phase, False)
         if self.phase_target is None and (phase != box.phases or amps is None or (not box.enabled and solar_only)):
             if self.candidate is None or self.candidate[0] != transition:
                 self.candidate = (transition, clock)
-            if clock - self.candidate[1] < opts["phase_wait_s"] and pv and hard >= minimum_power * box.phases:
+            if not supported and clock - self.candidate[1] < opts["phase_wait_s"] and pv and hard >= minimum_power * box.phases:
                 return
         else:
             self.candidate = None
@@ -555,7 +621,7 @@ class Controller:
             self.commanded_car_w = amps*phase*voltage
             self.last_write = now
         self.pv_session = solar_only
-        live["car_control"] = "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"
+        live["car_control"] = 'pv_battery' if supported else "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"
 
     def snapshot(self, now):
         with self.lock:
@@ -566,6 +632,8 @@ class Controller:
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
             return {"source_configuration":deepcopy(self.source_configuration),
+                    "pv_battery_support": {"active":self.pv_support.active,
+                        "required_w":self.pv_support.required_w},
                     "vehicle_limits": {"profile":self.vehicle_profile,
                         "confirmed":self.vehicle_profile is not None and self.vehicle_profile == self.vehicle_profile_confirmed},
                     "power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),

@@ -1,6 +1,11 @@
 {
   "locale": "en-GB",
   "messages": {
+    "settings.battery_pv_start": "Use the battery to start PV charging with a small surplus",
+    "settings.battery_pv_min_soc": "Battery minimum SoC for PV charging assistance (%)",
+    "settings.battery_pv_wait_s": "Continuous small surplus before charging starts (s)",
+    "settings.battery_pv_info": "Off by default. Requires PV charging and battery support. Starts two percentage points above the higher battery floor and stops at that floor. An interrupted surplus resets the timer. Battery charging is blocked and self-consumption discharge allowed during assistance. Sustained grid import stops assisted charging; brief control transients may occur.",
+    "mode.pv_battery": "PV charging with battery assistance",
     "vehicle.unavailable": "Charger unreachable",
     "notice.wallbox": "Charger control failed; other controls continue",
     "notice.wallbox_stop": "Charging stop unconfirmed; vehicle may still be charging",

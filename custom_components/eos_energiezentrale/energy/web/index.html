@@ -127,6 +127,12 @@
         <p class="footnote" data-i18n="settings.battery_limits_info"></p>
         <p id="battery-limits-status" class="footnote" role="status"></p>
         <label class="check" data-optional="car"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
+        <label class="check" data-optional="car"><input name="battery_pv_start" type="checkbox"><span data-i18n="settings.battery_pv_start"></span></label>
+        <div class="fields" data-optional="car">
+          <label><span data-i18n="settings.battery_pv_min_soc"></span><input name="battery_pv_min_soc" type="number" min="0" max="98" step="1" required></label>
+          <label><span data-i18n="settings.battery_pv_wait_s"></span><input name="battery_pv_wait_s" type="number" min="10" max="600" step="1" required></label>
+        </div>
+        <p class="footnote" data-optional="car" data-i18n="settings.battery_pv_info"></p>
         <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
       </form>
       <section class="plan-panel">

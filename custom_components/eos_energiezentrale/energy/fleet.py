@@ -5,13 +5,16 @@ import re
 
 from .clients import reading
 from .controller import Controller
-from .domain import battery_command, house_only, instant
+from .domain import BatteryCommand, battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, daily_settings, save
 from .history import History
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
+
+SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
+                           'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s'}
 
 
 def vehicle_options(options):
@@ -140,12 +143,13 @@ class FleetController(Controller):
                 self.primary_settings_path=vehicle_dir/"daily.json"
                 if self.primary_settings_path.exists():
                     saved=json.loads(self.primary_settings_path.read_text(encoding="utf-8"))
-                    shared_keys={"battery_min_soc","battery_max_soc","battery_pv_support","_battery_limits_managed"}
+                    shared_keys=SHARED_BATTERY_SETTINGS | {'_battery_limits_managed'}
                     config.daily=daily_settings({**config.daily,**{key:value for key,value in saved.items() if key not in shared_keys},"fast":False},values["regulation_interval_s"])
             else:
                 config.battery=MeterOnlyBattery(self.battery_driver)
                 controller=Controller(proxy,config)
                 controller.update_eos=lambda now,clock,child=controller:self._share_plan(child)
+            controller.support_driver = self.battery_driver
             self.controllers.append((identity,controller,proxy))
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
 
@@ -163,7 +167,7 @@ class FleetController(Controller):
         if controller is None:
             raise ValueError("Unknown vehicle")
         # Battery bounds and support are one shared policy, not per-wallbox settings.
-        shared={key:values[key] for key in ("battery_min_soc","battery_max_soc","battery_pv_support") if key in values}
+        shared={key:values[key] for key in SHARED_BATTERY_SETTINGS if key in values}
         specific={key:value for key,value in values.items() if key not in shared}
         shared_checked=daily_settings({**self.config.daily,**shared},self.config.options["regulation_interval_s"])
         merged=daily_settings({**controller.config.daily,**specific},controller.config.options["regulation_interval_s"])
@@ -187,6 +191,8 @@ class FleetController(Controller):
         complete=all(value is not None for value in actual.values())
         snapshots=[]
         for key,app,proxy in self.controllers:
+            if app is not self:
+                app.config.daily.update({name:self.config.daily[name] for name in SHARED_BATTERY_SETTINGS})
             box=app.config.wallbox.read(rows,now)
             if not box.plugged and box.watts == 0:
                 self.targets[key]=0
@@ -285,6 +291,8 @@ class FleetController(Controller):
             "battery_max_soc":self.config.daily["battery_max_soc"]},self.config.daily["battery_pv_support"] and
             any(app.pv_session and app.config.wallbox.read(rows,now).charging for _,app,_ in self.controllers),
             grid,battery.discharge,battery.charge)
+        if any(app.pv_support.active for _,app,_ in self.controllers):
+            command=BatteryCommand('limits',0,opts['battery_discharge_w'])
         if command is None:
             self.battery_driver.release(rows)
         else:
@@ -293,6 +301,7 @@ class FleetController(Controller):
     def release(self,states,now):
         errors=[]
         for key,app,_ in self.controllers:
+            app.pv_support.reset()
             try:
                 app.config.wallbox.pause(app.config.wallbox.read(states,now))
             except Exception as error:

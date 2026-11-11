@@ -644,6 +644,24 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(restored.daily["fast"])
         self.assertFalse(app.armed)
 
+    async def test_battery_assisted_pv_start_controls_persist_and_can_be_disabled(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        switch = EnergySwitch(coordinator, 'battery_pv_start')
+        self.assertFalse(switch.is_on)
+        await EnergyNumber(coordinator, 'battery_pv_min_soc').async_set_native_value(45)
+        await EnergyNumber(coordinator, 'battery_pv_wait_s').async_set_native_value(90)
+        await switch.async_turn_on()
+        self.assertTrue(switch.is_on)
+        restored = Configuration(dict(DEFAULTS), Mock(), self.directory)
+        self.assertTrue(restored.daily['battery_pv_start'])
+        self.assertEqual(restored.daily['battery_pv_min_soc'],45)
+        self.assertEqual(restored.daily['battery_pv_wait_s'],90)
+        await switch.async_turn_off()
+        self.assertFalse(switch.is_on)
+        self.assertFalse(Configuration(dict(DEFAULTS), Mock(), self.directory).daily['battery_pv_start'])
+
     async def test_native_schedule_requires_valid_departure_and_keeps_previous_plan_on_error(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
         coordinator = EnergyCoordinator(self.hass, self.entry, app)

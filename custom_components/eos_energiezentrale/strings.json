@@ -335,6 +335,9 @@
       "fast": {
         "name": "Fast charging"
       },
+      "battery_pv_start": {
+        "name": "Battery-assisted PV charging start"
+      },
       "battery_pv_support": {
         "name": "Battery support during PV charging"
       },
@@ -343,6 +346,12 @@
       }
     },
     "number": {
+      "battery_pv_min_soc": {
+        "name": "Battery minimum SoC for PV charging assistance"
+      },
+      "battery_pv_wait_s": {
+        "name": "PV charging assistance surplus wait"
+      },
       "target_soc": {
         "name": "Departure target SoC"
       },
