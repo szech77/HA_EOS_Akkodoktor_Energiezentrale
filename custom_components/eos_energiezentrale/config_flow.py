@@ -10,6 +10,7 @@ from .energy.clients import request
 from .validation import validate_options
 from .plugin_forms import PluginFormMixin, plugin_choices, plugin_object, configured
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
+from .energy.measurement_sources import SENSOR_OPTIONS
 
 
 class OptionalWeatherSelector(selector.EntitySelector):
@@ -25,7 +26,7 @@ def schema_for(group, values):
         default = values[key]
         if key.endswith("_entity"):
             field = (OptionalWeatherSelector(selector.EntitySelectorConfig(domain="weather"))
-                     if key == "weather_entity" else selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")))
+                     if key == "weather_entity" else OptionalWeatherSelector(selector.EntitySelectorConfig(domain="sensor")))
         elif isinstance(default, bool):
             field = selector.BooleanSelector()
         elif key in {"language", "car_soc_scale", "heat_load_scale", "battery_type", "wallbox_type"}:
@@ -38,11 +39,16 @@ def schema_for(group, values):
             field = selector.TextSelector(selector.TextSelectorConfig(
                 type=selector.TextSelectorType.PASSWORD if key == "influx_password"
                 else selector.TextSelectorType.TEXT, multiline=key.endswith("_parameters") or key == "vehicles"))
-        optional_source = key in {"heat_entity", "car_soc_entity", "heat_load_entity", "weather_entity"}
+        optional_source = key in SENSOR_OPTIONS or key == "weather_entity"
         marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password", "influx_password_env"} else vol.Required
         # Password fields must not send the saved credential back as a form default.
         omit_default = key == "influx_password" or (optional_source and not default)
-        fields[marker(key, **({} if omit_default else {"default": default}))] = field
+        if key in SENSOR_OPTIONS:
+            # Suggested values remain visible, but clearing an optional picker
+            # must not reinsert the old entity through schema defaults.
+            fields[vol.Optional(key, description={"suggested_value": default} if default else {})] = field
+        else:
+            fields[marker(key, **({} if omit_default else {"default": default}))] = field
     return vol.Schema(fields)
 
 
@@ -73,7 +79,7 @@ class ConfigFlow(PluginFormMixin, config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             if group == "sensors":
-                user_input = {"heat_entity":"", "car_soc_entity":"", "heat_load_entity":"", "weather_entity":"", **user_input}
+                user_input = {**dict.fromkeys(SENSOR_OPTIONS, ""), "weather_entity":"", **user_input}
             if group == "history" and user_input.get("influx_password_env") and not user_input.get("influx_password"):
                 user_input = {**user_input, "influx_password": ""}
             values = {**self.values, **user_input}
@@ -115,7 +121,7 @@ class OptionsFlow(PluginFormMixin, config_entries.OptionsFlow):
 
     async def _step(self, group, user_input):
         if group == "sensors" and user_input is not None:
-            user_input = {"heat_entity":"", "car_soc_entity":"", "heat_load_entity":"", "weather_entity":"", **user_input}
+            user_input = {**dict.fromkeys(SENSOR_OPTIONS, ""), "weather_entity":"", **user_input}
         if group == "history" and user_input and user_input.get("influx_password_env") and not user_input.get("influx_password"):
             user_input = {**user_input, "influx_password": ""}
         values = {**DEFAULTS, **self.config_entry.data, **self.config_entry.options, **(user_input or {})}

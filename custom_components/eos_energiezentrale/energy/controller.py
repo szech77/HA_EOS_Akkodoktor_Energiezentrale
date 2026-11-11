@@ -14,11 +14,14 @@ from .display import DisplayValues
 from .presentation import daily_pv_forecast, heat_utilization, power_references, weather_display
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
+from .measurement_sources import resolve_sources
 
 
 class Controller:
     def __init__(self, ha, config):
         self.ha, self.config = ha, config
+        self.input_options, _, self.source_configuration = resolve_sources(getattr(config, "options", {}), {},
+            ((getattr(config, "battery", None), None), (getattr(config, "wallbox", None), None)), datetime.now(timezone.utc))
         self.history = History(config.directory / "history.sqlite3")
         self.lock = RLock()
         self.stop_event = Event()
@@ -237,7 +240,7 @@ class Controller:
     def update_soc(self, states, box, now):
         if self.config.options.get("wallbox_type") == "none":
             return False
-        options = self.config.options
+        options = self.input_options
         entity = options["car_soc_entity"]
         raw = reading(states, entity, now, "soc")
         if raw is not None:
@@ -285,6 +288,9 @@ class Controller:
         opts, daily = self.config.options, self.config.daily
         battery = self.config.battery.read(states, now)
         box = self.config.wallbox.read(states, now)
+        opts, states, self.source_configuration = resolve_sources(opts, states,
+            ((self.config.battery, battery), (self.config.wallbox, box)), now)
+        self.input_options = opts
         measured = self.update_soc(states, box, now)
         live = {key: reading(states, opts[source + "_entity"], now, kind, age)
                 for key, source, kind, age in (("solar", "pv", "power", 45), ("grid", "grid", "power", 45),
@@ -385,7 +391,7 @@ class Controller:
         live["battery_control"] = command.mode if command else "auto"
 
     def regulate_car(self, box, live, planned, pv, now, clock, states):
-        daily, opts, driver = self.config.daily, self.config.options, self.config.wallbox
+        daily, opts, driver = self.config.daily, self.input_options, self.config.wallbox
         if (not box.plugged or box.phases is None or box.amps is None or not box.step or not box.maximum
                 or box.watts is None or live["grid"] is None or live["battery_discharge"] is None
                 or (pv and live["solar"] is None) or (not pv and planned <= 0)):
@@ -469,13 +475,14 @@ class Controller:
 
     def snapshot(self, now):
         with self.lock:
-            opts = self.config.options
+            opts = self.input_options
             plan = self.plan_for(opts["battery_resource"],now)
             generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
             current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
-            return {"power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
+            return {"source_configuration":deepcopy(self.source_configuration),
+                    "power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
                     "heat_load_configured":bool(opts.get("heat_load_entity")), "live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {
                         "managed": getattr(self.config, "battery_limits_managed", False),

@@ -610,7 +610,7 @@ function settings() {
     : limits?.managed ? t('settings.battery_limits_pending') : t('settings.battery_limits_unmanaged');
   byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${snapshot.errors.eos ? th('status.fetch_failed') : snapshot.plan.battery?.length || snapshot.plan.car?.length ? th('status.plan_available') : th('status.no_plan')}</dd>
     <dt>InfluxDB</dt><dd>${!snapshot.influx_configured ? th('status.local_history') : history.influx_error ? th('status.fetch_failed') : history.influx.length ? th('status.history_available') : th('status.no_samples')}</dd>`;
-  for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}</dd>`;}
+  for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}${(plugin.measurements??[]).length?' · '+plugin.measurements.map(key=>th(`measurement.${key}`)).join(', '):''}</dd>`;}
   const wallbox=snapshot.vehicles?.find(item=>item.id===selector.value)?.plugins?.wallbox??snapshot.plugins?.wallbox;
   form.elements.phase_auto.disabled=wallbox?.features?.phase_switching===false;
   if(form.elements.phase_auto.disabled)form.elements.phase_auto.checked=false;
@@ -619,6 +619,15 @@ function render() {
   try {
     renderView();byId('startup-retry').hidden=true;byId('startup-details').hidden=true;return true;
   }catch(error){showStartupError('view',error);return false;}
+}
+
+function sourceConfigurationNotice(configuration, translate) {
+  const notices = [];
+  for (const kind of ['missing','unavailable']) {
+    const names = (configuration?.[kind] ?? []).map(key => translate(`measurement.${key}`));
+    if (names.length) notices.push(translate(`notice.sources_${kind}`,{values:names.join(', ')}));
+  }
+  return notices.join(' · ');
 }
 
 function renderView() {
@@ -635,6 +644,8 @@ function renderView() {
   const errorAreas = {eos:Object.keys(snapshot.eos_cache??{}).length?'notice.eos_cached':'notice.eos',accounting:'notice.accounting',device_pending:'notice.device_pending',goal:'notice.goal',runtime:'notice.runtime',forecast:'notice.forecast',
     release:'notice.release',battery_limits:'notice.battery_limits',control_persistence:'notice.control_persistence',connection:'notice.connection'};
   byId('notice').textContent = errors.length ? `${t('notice.check')} · ${errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()).join(', ')}` : '';
+  const sourceNotice = sourceConfigurationNotice(snapshot.source_configuration,t);
+  if (sourceNotice) byId('notice').textContent += `${errors.length?' · ':''}${sourceNotice}`;
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();

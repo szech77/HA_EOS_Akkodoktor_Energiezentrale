@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import timedelta
 import json
 import unittest
+from dataclasses import replace
 from unittest.mock import Mock
 
 from custom_components.eos_energiezentrale.const import DEFAULTS
@@ -10,6 +11,7 @@ from custom_components.eos_energiezentrale.energy.fleet import create_controller
 from custom_components.eos_energiezentrale.energy.drivers import Fronius
 from custom_components.eos_energiezentrale.validation import validate_options
 from test_energy import NOW, instruction, temporary_project_directory
+from custom_components.eos_energiezentrale.energy.contracts import Measurement
 
 
 def definitions():
@@ -89,6 +91,43 @@ class FleetRequirements(unittest.TestCase):
         self.assertLessEqual(sum(app.targets.values()),6000)
         self.assertEqual(len(app.snapshot(NOW)["vehicles"]),2)
         app.battery_driver.apply.assert_called()
+
+    def test_plugin_grid_meter_keeps_shared_reservations_without_a_grid_sensor(self):
+        app,ha,_,_=self.setup_fleet()
+        for key,child,_ in app.controllers:
+            child.config.options['grid_entity']=''
+            app.change_vehicle_settings(key,{"pv":True,"phase_auto":False})
+        driver=app.battery_driver
+        driver.measurement_keys=driver.measurement_keys+('grid',)
+        original_read=driver.read
+        driver.read=lambda rows,now:replace(original_read(rows,now),measurements={'grid':Measurement(-6000,now)})
+        app.set_armed(True)
+        for clock in (0,20,25):
+            app.tick(NOW+timedelta(seconds=clock),clock)
+        self.assertGreater(app.targets['first'],0)
+        self.assertGreater(app.targets['second'],0)
+        self.assertLessEqual(sum(app.targets.values()),6000)
+        self.assertEqual(app.live['grid'],-6000)
+        self.assertEqual(app.snapshot(NOW)['source_configuration']['sources']['grid']['source']['type'],'plugin')
+        ha.rows['sensor.second_power']['state']='unavailable'
+        app.tick(NOW+timedelta(seconds=35),35)
+        self.assertTrue(all(target==0 for target in app.targets.values()))
+        self.assertTrue(all(ha.rows[proxy.ids['enable']]['state']=='off' for _,_,proxy in app.controllers))
+        self.assertTrue(app.snapshot(NOW)['source_configuration']['sources']['grid']['available'])
+
+    def test_vehicle_soc_from_plugins_is_never_shared_between_vehicles(self):
+        app,_,_,_=self.setup_fleet()
+        for index,(_,child,_) in enumerate(app.controllers):
+            child.config.options['car_soc_entity']=''
+            box=child.config.wallbox
+            box.measurement_keys=box.measurement_keys+('car_soc',)
+            original=box.read
+            percent=40+index*20
+            box.read=lambda rows,now,original=original,percent=percent:replace(
+                original(rows,now),measurements={'car_soc':Measurement(percent,now)})
+        app.tick(NOW,0)
+        self.assertEqual([item['live']['car_soc'] for item in app.snapshot(NOW)['vehicles']],[40,60])
+        self.assertIsNone(app.live['car_soc'])
 
     def test_settings_and_soc_are_independent_and_survive_restart(self):
         app,ha,opts,directory=self.setup_fleet()

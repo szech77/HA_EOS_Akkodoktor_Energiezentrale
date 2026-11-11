@@ -25,6 +25,117 @@ Der Hausspeicher bleibt eine gemeinsame Ressource. Sobald Fahrzeugprofile angele
 werden deren Wallboxen ausschließlich im Fahrzeugmenü bearbeitet; Hardware zeigt dann
 nur die gemeinsame Speicherkonfiguration.
 
+## Fronius GEN24 direkt über Modbus TCP
+
+Das zusätzliche Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`)
+liest und schreibt direkt auf dem Wechselrichter. Die bisherige Auswahl `fronius` für
+`callifo/fronius_modbus` bleibt bestehen. Keine automatische Umstellung bestehender
+Installationen; die neue Auswahl bewusst in der Hardwarekonfiguration vornehmen.
+
+Voraussetzungen am GEN24: Modbus TCP aktivieren (üblicherweise Port 502),
+**Wechselrichter-Steuerung über Modbus** zulassen und die Steuerprioritäten passend
+setzen. Für Netzladung zusätzlich **Batterieladung aus dem öffentlichen Netz** erlauben.
+Nur eine Anwendung darf den Speicher regeln; parallele EOS-/evcc-/HA-Regler deaktivieren.
+Es werden GEN24-Geräte mit SunSpec-Modellen 124 und 160 unterstützt, keine RTU-Verbindung
+und keine ausschließliche 700er-Modellimplementierung.
+
+| Feld | Bedeutung |
+| --- | --- |
+| `host` | Lokale IP-Adresse oder Hostname des GEN24; keine URL. |
+| `port` | TCP-Port, Standard 502. |
+| `unit_id` | Unit-ID, Standard 1 (GEN24-Wechselrichter); keine Broadcast-ID 0. |
+| `grid_meter_enabled` | Netzanschlusszähler über den GEN24 lesen, Standard an. Nur für einen tatsächlich am Netzanschlusspunkt installierten Primärzähler verwenden. |
+| `grid_meter_unit_id` | Gateway-Unit-ID dieses Zählers, Standard 200. Dies ist nicht die Wechselrichter-ID 1. |
+| `grid_meter_invert` | Vorzeichen des Zählers umkehren, Standard aus; im Panel muss Bezug positiv und Einspeisung negativ sein. |
+| `grid_discharge_supported` | Erzwungene Netzentladung ausdrücklich erlauben, Standard aus. Die globale Exportfreigabe gilt zusätzlich. |
+
+Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Felder):
+
+```json
+{
+  "host": "192.0.2.10",
+  "port": 502,
+  "unit_id": 1,
+  "grid_meter_enabled": true,
+  "grid_meter_unit_id": 200,
+  "grid_meter_invert": false,
+  "grid_discharge_supported": false
+}
+```
+
+SoC (`ChaState`) wird einschließlich Skalierungsfaktor aus Modell 124 gelesen.
+Lade- und Entladeleistung stammen aus `DCW` der Batteriekanäle 3 und 4 in Modell 160;
+PV-Kanäle 1 und 2 werden nicht als Batterie ausgewertet. Modelladressen und
+Kanalanordnung werden erkannt. Alle drei Werte werden bei jedem Poll neu abgefragt,
+ohne gespeicherte Altwerte als aktuelle Messungen auszugeben. Fehlende Kanäle,
+nicht implementierte Register oder ungültige Skalierung bleiben unbekannt; echte
+Nullwerte bleiben gültig. Verbindungs- und Protokollfehler lösen den bestehenden
+Steuerfehlerpfad einschließlich Rückgabeversuch aus.
+
+Für dieses Plugin sind keine zusätzlichen HA-Sensoren, Templates oder
+`select`-/`number`-Steuerentitäten erforderlich. Für den Netzanschlusswert unter
+**Quellsensoren** die Netzsensor-Auswahl leeren. Ein dort ausgewählter Sensor hat
+weiterhin Vorrang. Der am GEN24 angebundene Netzanschlusszähler wird über seine
+Gateway-Unit-ID gelesen; SunSpec 201–203 und 211–213 werden erkannt. Fehlt der Zähler
+oder ist er unerreichbar, bleibt der Netzwert unbekannt, während die verfügbaren
+Speichermesswerte weiter angezeigt werden. Bei deaktivierter Zählerabfrage meldet
+das Plugin Netzleistung und abgeleiteten Hausverbrauch nicht als Fähigkeiten.
+Die PV-Leistung wird unabhängig davon direkt gelesen. Keine neuen
+Python-Abhängigkeiten nötig. Ältere Entwicklungsversionen dieses Plugins mit
+Sensorparametern bei der Einrichtung erneut auswählen bzw. die veralteten
+`soc`-/`charge_power`-/`discharge_power`-Parameter entfernen.
+
+Die drei allgemeinen Sensorfelder **PV-Leistung**, **Gesamter Hausverbrauch** und
+**Netzleistung** können bei diesem Plugin gemeinsam leer bleiben:
+
+| Leeres Sensorfeld | Wert aus `fronius_modbus` |
+| --- | --- |
+| `pv_entity` | Summe der vorhandenen PV-Kanäle MPP1/MPP2 aus SunSpec 160; aktuelle DC-Leistung in W. Dies ist kein kumulativer kWh-Zähler. |
+| `grid_entity` | AC-Wirkleistung des konfigurierten Primärzählers; Bezug positiv, Einspeisung negativ. |
+| `house_entity` | Gesamter Hausverbrauch einschließlich Fahrzeugen und Wärmepumpe: AC-Ausgangsleistung des GEN24 plus vorzeichenbehaftete Netzleistung. SunSpec 101–103 und 111–113 werden unterstützt. |
+
+Für Netz- und Hausleistung muss die Zählerabfrage aktiviert und der Primärzähler
+am Netzanschlusspunkt vorhanden sein. Die Hausbilanz setzt voraus, dass die
+AC-Leistung dieses GEN24 alle Erzeuger am Messpunkt erfasst. Bei weiteren, nicht
+erfassten Wechselrichtern oder Erzeugern einen eigenen Hausverbrauchssensor wählen;
+dieser hat weiterhin Vorrang. Akkuentladung und Netzladung sind bereits in der
+AC-Leistung enthalten und werden nicht nochmals addiert oder subtrahiert.
+Fehlende Teilmessungen und negative, widersprüchliche Hausbilanzen bleiben unbekannt.
+
+Fronius meldet PV- und Batteriekanäle als **DC-Leistung**. Die Werte werden ohne
+unbelegte Umrechnung in W übernommen. In einer AC-basierten Hausbilanz können
+Umwandlungsverluste deshalb Abweichungen der Quellenzuordnung und Kostenbewertung
+verursachen; größere Bilanzabweichungen bleiben gemäß Bilanzmodell unbekannt.
+Der Hausverbrauch selbst wird aus den AC-Messwerten berechnet.
+Ältere Influx-Historien der bisherigen externen Speichersensoren werden diesem
+Plugin ohne deren Entitätszuordnung nicht automatisch zugerechnet. Die interne
+Aufzeichnung der neuen Live-Messungen läuft regulär weiter.
+
+Der Treiber erkennt SunSpec-Modell 124 dynamisch und prüft den Hersteller. Er liest
+Referenzleistung und Skalierungsfaktoren vom Gerät. Lade-/Entladegrenzen werden
+gemeinsam geschrieben und zurückgelesen; eine Registerbestätigung bestätigt den
+Sollwert, nicht das Erreichen der gewünschten Leistung. Geräteschutz und Prioritäten
+können die tatsächliche Leistung begrenzen. Eine fehlerhafte oder ausbleibende
+Rückbestätigung wird als Steuerfehler behandelt.
+
+Jeder Steueraufruf erneuert `InOutWRte_RvrtTms` auf 300 Sekunden. Ohne weitere
+Aufrufe laufen die externen Leistungsgrenzen am Wechselrichter aus. Firmware, die
+diesen Wert nicht schreiben und zurückbestätigen kann, wird nicht ohne Zeitbegrenzung
+weitergesteuert. Bei normaler Rückgabe wird `StorCtl_Mod=0` bestätigt und die zuvor
+gelesene Netzladefreigabe wiederhergestellt. Nach einem Prozessabbruch wird bei der
+nächsten Rückgabe die externe Leistungssteuerung deaktiviert; eine vorherige
+Netzladefreigabe kann dann mangels ursprünglichem Zustand nicht rekonstruiert werden.
+Der Timer setzt nur die Leistungsgrenzen zurück, nicht alle sonstigen Einstellungen.
+
+Modbus TCP bietet weder Verschlüsselung noch Anmeldung. Nur im geschützten lokalen
+Netz betreiben und den Port nicht ins Internet freigeben. Die Implementierung ist
+mit einem lokalen TCP-Geräteemulator getestet; ein Test am eigenen GEN24 inklusive
+Verbindungsausfall und Automatik-Rückgabe ist vor unbeaufsichtigtem Betrieb erforderlich.
+
+Referenzen: [Fronius GEN24 Modbus-Handbuch](https://manuals.fronius.com/html/4204102649/en-US.html),
+[SunSpec-Modell 124](https://github.com/sunspec/models/blob/master/json/model_124.json),
+[SunSpec-Modell 160](https://github.com/sunspec/models/blob/master/json/model_160.json).
+
 ## Generische HA-Wallbox
 
 Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:
@@ -82,6 +193,45 @@ das Entladelimit auf 0 gesetzt. Bei `grid_discharge` wird das Ladelimit auf 0 ge
 Es werden keine beliebigen HA-Dienste aus Konfigurationstext ausgeführt.
 
 ## Eigenes Plugin entwickeln
+
+### Zusätzliche Messwerte als Sensoralternative
+
+Die Plugin-API 2 erhält eine additive, optionale Erweiterung. Vorhandene Plugins
+bleiben kompatibel. `measurement_keys` deklariert als Tupel die vom eingerichteten
+Plugin bereitgestellten Werte; nach der Parameterprüfung darf das Tupel von den
+tatsächlich aktivierten Fähigkeiten abhängen. Im Panel werden neben den
+Steuerfähigkeiten auch diese Messfähigkeiten angezeigt.
+
+Zusätzliche Werte stehen im Feld `measurements` von `BatteryReading` bzw.
+`WallboxReading`, jeweils als `Measurement(value, sample)`. `sample` ist ein
+zeitzonenbehafteter Beobachtungszeitpunkt. Werte sind in W, SoCs/Auslastung in %
+und Preise in ct/kWh zu liefern. Netzleistung ist positiv bei Bezug und negativ
+bei Einspeisung. Die Basis-`read()`-Methode prüft deklarierte Schlüssel, Datentypen,
+Wertebereiche und Messwertalter. Fehlende oder veraltete Werte werden niemals 0.
+Die bisherigen festen Felder für Speicher und Wallbox bleiben bestehen.
+
+```python
+measurement_keys = BatteryDriver.measurement_keys + ("grid",)
+# Im Ergebnis von _read(), zusätzlich zu den normalen Speicherfeldern:
+extra = {"grid": Measurement(grid_watts, grid_observed_at)}
+result = BatteryReading(soc, charge, discharge,
+                        soc_at, charge_at, discharge_at, measurements=extra)
+```
+
+Für die allgemeinen Quellsensoren unterstützt die Auflösung `solar`, `grid`,
+`house_total`, `heat`, `price`, `car_soc` und `heat_load`. Explizit konfigurierte
+HA-Sensoren haben Vorrang, auch bei einem Ausfall; es gibt dabei keinen stillen
+Wechsel auf einen anderen Messpunkt. Ohne Sensor wird zuerst das Speicher-,
+anschließend das Wallbox-Plugin berücksichtigt. Die Auswahl wird je Poll für
+Regelung, Anzeige, Live-Verlauf und Kostenbilanz gemeinsam angewendet. In der
+Mehrfahrzeugregelung bleiben bereits reservierte Netzleistungen berücksichtigt.
+
+Ohne Quelle zeigt das Panel die konkret fehlende Konfiguration. Eine konfigurierte
+Quelle ohne gültigen Messwert erhält einen separaten Verfügbarkeitshinweis.
+Deaktivierte optionale Verbraucher benötigen keine Messquelle. Preise und
+Fahrzeug-SoC bleiben bei fehlenden Werten unbekannt; die Hinweise ersetzen keine
+Messwerte und heben keine Sicherheitsbedingungen der Regelung auf. Das Wetter
+bleibt bei seiner bisherigen optionalen HA-Wetterquelle.
 
 Der Vertrag ist in `energy/contracts.py`, die zentrale Prüfung in `energy/sanitiser.py`,
 die Erkennung in `energy/plugin_registry.py` definiert. API-Version 2 verlangt:

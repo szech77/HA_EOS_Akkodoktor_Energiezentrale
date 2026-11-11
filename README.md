@@ -140,6 +140,27 @@ eingetragen. **kW** bezeichnet Leistung, **kWh** eine Energiemenge.
 
 ### Hardware: Fronius-Speicher und NRGkick
 
+Alternativ zur Fronius-Steuerung über zusätzliche HA-Entitäten steht das neue
+Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`) zur Auswahl.
+Es steuert direkt den GEN24 und liest SoC sowie Lade-/Entladeleistung ebenfalls
+über Modbus. Zusätzliche Speichersensoren sind nicht erforderlich. Einrichtung,
+DC-Leistungsdefinition und Rückgabe an die Automatik stehen in
+[Hardware-Plugins](PLUGINS.md#fronius-gen24-direkt-über-modbus-tcp).
+
+Auch die Netzanschlussleistung kann dieses Plugin über den am GEN24 angebundenen
+Primärzähler liefern (Gateway-Unit-ID üblicherweise 200). Dafür den Netzsensor unter
+**Konfigurieren → Quellsensoren** leeren. Allgemein gilt für Messwerte: Ein explizit
+gewählter Sensor hat Vorrang; ohne Sensor kann ein Plugin mit entsprechender
+Messfähigkeit einspringen. Fehlt beides, nennt das Panel die fehlende Konfiguration.
+Ein vorübergehender Ausfall einer eingerichteten Quelle wird separat angezeigt.
+
+Beim Plugin `fronius_modbus` können **PV-Leistung**, **Hausverbrauch** und
+**Netzleistung** gemeinsam leer bleiben. PV kommt aus den PV-Kanälen; Hausverbrauch
+wird aus GEN24-AC-Leistung und dem Netzanschlusszähler berechnet. Voraussetzung für
+die Hausbilanz: Der GEN24 erfasst alle Erzeuger an diesem Messpunkt. Bei weiteren
+Erzeugern einen eigenen Hausverbrauchssensor verwenden. Gemeint sind aktuelle
+Leistungen in W; ein kumulativer PV-Energiezähler in kWh ist hierfür nicht erforderlich.
+
 Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug
 benennen, beispielsweise `Mein ID.4`. Der Standard ist **E-Auto**. Der Name erscheint
 im Stromfluss, auf der Fahrzeug-Detailseite, in der Modus-Zeitlinie und in den

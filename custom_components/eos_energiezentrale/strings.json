@@ -24,7 +24,8 @@
           "heat_load_entity": "Heat pump power utilization (optional)",
           "heat_load_scale": "Utilization scale",
           "weather_entity": "Weather (optional; empty = automatic selection)"
-        }
+        },
+        "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. If neither source is configured, the panel shows a configuration notice. Heat pump and vehicle remain optional."
       },
       "hardware": {
         "title": "Hardware drivers",
@@ -108,7 +109,8 @@
           "heat_load_entity": "Heat pump power utilization (optional)",
           "heat_load_scale": "Utilization scale",
           "weather_entity": "Weather (optional; empty = automatic selection)"
-        }
+        },
+        "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. If neither source is configured, the panel shows a configuration notice. Heat pump and vehicle remain optional."
       },
       "hardware": {
         "title": "Hardware drivers",

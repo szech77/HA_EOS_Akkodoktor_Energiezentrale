@@ -1,6 +1,6 @@
 """Versioned hardware plugin API. Public methods enforce the safety boundary."""
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import ClassVar, Mapping
 
@@ -42,6 +42,13 @@ class WallboxFeatures:
 
 
 @dataclass(frozen=True)
+class Measurement:
+    """Canonical units: W, ct/kWh or percent; timestamp of the observation."""
+    value: float | None
+    sample: datetime | None
+
+
+@dataclass(frozen=True)
 class BatteryReading:
     soc: float | None
     charge: float | None
@@ -49,6 +56,7 @@ class BatteryReading:
     soc_sample: datetime | None = None
     charge_sample: datetime | None = None
     discharge_sample: datetime | None = None
+    measurements: Mapping[str, Measurement] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -61,6 +69,7 @@ class WallboxReading:
     step: float | None
     maximum: float | None
     sample: datetime | None
+    measurements: Mapping[str, Measurement] = field(default_factory=dict)
 
     @property
     def plugged(self):
@@ -80,6 +89,7 @@ class UnsupportedFeature(PluginContractError):
 
 
 class BatteryDriver(ABC):
+    measurement_keys: ClassVar[tuple[str, ...]] = ("battery_soc", "battery_charge", "battery_discharge")
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]
     features: BatteryFeatures
@@ -87,7 +97,9 @@ class BatteryDriver(ABC):
 
     def read(self, states: dict, now: datetime) -> BatteryReading:
         from .sanitiser import battery_reading
-        return battery_reading(self._read(states,now),now)
+        from .measurement_sources import checked_measurements
+        result = battery_reading(self._read(states,now),now)
+        return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now))
 
     def apply(self, command: BatteryCommand, states: dict) -> None:
         from .sanitiser import battery_command
@@ -112,6 +124,7 @@ class BatteryDriver(ABC):
 
 
 class WallboxDriver(ABC):
+    measurement_keys: ClassVar[tuple[str, ...]] = ("car",)
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]
     features: WallboxFeatures
@@ -119,7 +132,9 @@ class WallboxDriver(ABC):
 
     def read(self, states: dict, now: datetime) -> WallboxReading:
         from .sanitiser import wallbox_reading
-        return wallbox_reading(self._read(states,now),now)
+        from .measurement_sources import checked_measurements
+        result = wallbox_reading(self._read(states,now),now)
+        return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now))
 
     def pause(self, state: WallboxReading) -> None:
         from .sanitiser import wallbox_reading

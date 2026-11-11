@@ -3,6 +3,27 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.5.0 - 2026-11-11
+
+### Features
+
+- PV-Leistung und gesamter Hausverbrauch ebenfalls über `fronius_modbus`: PV aus den PV-Kanälen, Hausverbrauch aus AC-Wechselrichterleistung und Netzanschlussleistung. Die drei Sensorfelder für PV, Hausverbrauch und Netz können gemeinsam leer bleiben; fehlende Teilwerte bleiben unbekannt.
+- Netzanschlussleistung über den Fronius-Smart-Meter-Gateway des GEN24, mit konfigurierbarer Unit-ID und Integer-/Float-SunSpec-Zählermodellen. Optionale Quellsensoren haben Vorrang vor deklarierten Plugin-Messwerten; fehlende Konfiguration und vorübergehend ungültige Quellen werden im Panel getrennt angezeigt. Gemeinsame Netzleistungsreservierung mehrerer Fahrzeuge nutzt dieselbe Quellenwahl.
+- Eigenes Speicher-Plugin `fronius_modbus` für direkte Fronius-GEN24-Steuerung über Modbus TCP/SunSpec 124: Lade-/Entladelimits, Entladesperre, erzwungene Ladung und optional Netzentladung sowie Rückgabe an die Automatik. SoC und DC-Lade-/Entladeleistung werden aus SunSpec 124/160 direkt gelesen; zusätzliche HA-Speichersensoren und Steuerentitäten entfallen.
+- Automatische SunSpec-Modellerkennung für int+SF und float sowie skalierte, atomar geschriebene Leistungsfenster mit Register-Rückbestätigung und 300 Sekunden Gültigkeit.
+
+### Bugfixes
+
+- Geleerte Quellsensor-Auswahlfelder übernehmen beim Speichern nicht erneut die alten Sensor-IDs; vorhandene Werte werden als löschbare Vorschläge angezeigt.
+
+### Breaking Changes
+
+- Keine. Das bisherige Plugin `fronius` bleibt unverändert verfügbar.
+
+### Security
+
+- Modbus-Antworten werden auf Transaktion, Protokoll, Unit-ID, Funktion und Länge geprüft; fehlende Bestätigungen brechen die Steuerung ab. Geräteerkennung und Parameterprüfung erfolgen vor Steuerbefehlen, Netzentladung benötigt eine zusätzliche Plugin-Freigabe. Modbus TCP bleibt ein unverschlüsseltes lokales Protokoll ohne Authentifizierung.
+
 ## 0.4.0 - 2026-11-11
 
 ### Features

@@ -304,6 +304,19 @@
     "weather.unknown": "Wetter nicht verfügbar",
     "billing.known_portion": "bekannter Anteil",
     "billing.known_costs": "Bekannte Kosten",
-    "billing.missing_costs_for": "Kosten fehlen für {energy}"
+    "billing.missing_costs_for": "Kosten fehlen für {energy}",
+    "notice.sources_missing": "Konfiguration fehlt: {values}. Unter Konfigurieren → Quellsensoren einen Sensor wählen oder ein Plugin mit diesem Messwert einrichten.",
+    "notice.sources_unavailable": "Keine gültigen Messwerte für: {values}. Die konfigurierten Quellen prüfen.",
+    "measurement.solar": "PV-Leistung",
+    "measurement.grid": "Netzanschlussleistung",
+    "measurement.house_total": "Hausverbrauch",
+    "measurement.heat": "Wärmepumpenleistung",
+    "measurement.price": "Strompreis",
+    "measurement.car_soc": "Fahrzeug-SoC",
+    "measurement.heat_load": "Wärmepumpenauslastung",
+    "measurement.battery_soc": "Speicher-SoC",
+    "measurement.battery_charge": "Speicher-Ladeleistung",
+    "measurement.battery_discharge": "Speicher-Entladeleistung",
+    "measurement.car": "Fahrzeug-Ladeleistung"
   }
 }
