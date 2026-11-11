@@ -25,6 +25,73 @@ Der Hausspeicher bleibt eine gemeinsame Ressource. Sobald Fahrzeugprofile angele
 werden deren Wallboxen ausschließlich im Fahrzeugmenü bearbeitet; Hardware zeigt dann
 nur die gemeinsame Speicherkonfiguration.
 
+## Fronius GEN24 direkt über Modbus TCP
+
+Das zusätzliche Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`)
+schreibt direkt auf den Wechselrichter. Die bisherige Auswahl `fronius` für
+`callifo/fronius_modbus` bleibt bestehen. Keine automatische Umstellung bestehender
+Installationen; die neue Auswahl bewusst in der Hardwarekonfiguration vornehmen.
+
+Voraussetzungen am GEN24: Modbus TCP aktivieren (üblicherweise Port 502),
+**Wechselrichter-Steuerung über Modbus** zulassen und die Steuerprioritäten passend
+setzen. Für Netzladung zusätzlich **Batterieladung aus dem öffentlichen Netz** erlauben.
+Nur eine Anwendung darf den Speicher regeln; parallele EOS-/evcc-/HA-Regler deaktivieren.
+Es werden GEN24-Geräte mit SunSpec-Speichermodell 124 unterstützt, keine RTU-Verbindung
+und keine ausschließliche 700er-Modellimplementierung.
+
+| Feld | Bedeutung |
+| --- | --- |
+| `host` | Lokale IP-Adresse oder Hostname des GEN24; keine URL. |
+| `port` | TCP-Port, Standard 502. |
+| `unit_id` | Unit-ID, Standard 1 (GEN24-Wechselrichter); keine Broadcast-ID 0. |
+| `soc` | HA-Sensor mit aktuellem SoC in %. |
+| `charge_power` / `discharge_power` | Separate HA-Sensoren mit nichtnegativen Leistungen in W/kW; Rückmeldungen müssen jünger als 120 Sekunden sein. |
+| `grid_discharge_supported` | Erzwungene Netzentladung ausdrücklich erlauben, Standard aus. Die globale Exportfreigabe gilt zusätzlich. |
+
+Beispiel der gespeicherten Plugin-Parameter (die Einrichtung bietet einzelne Felder):
+
+```json
+{
+  "host": "192.0.2.10",
+  "port": 502,
+  "unit_id": 1,
+  "soc": "sensor.speicher_soc",
+  "charge_power": "sensor.speicher_ladeleistung",
+  "discharge_power": "sensor.speicher_entladeleistung",
+  "grid_discharge_supported": false
+}
+```
+
+Die Sensoren können aus vorhandenen HA-Integrationen oder eigenen Templates stammen.
+Sie müssen echte Messungen liefern; bei einer vorzeichenbehafteten Speicherleistung
+sind daraus zwei getrennte nichtnegative Leistungswerte zu bilden. Das Plugin liest
+keine Leistungstelemetrie über Modbus und benötigt keine `select`-/`number`-Entitäten
+der zusätzlichen Fronius-Modbus-Integration. Keine neuen Python-Abhängigkeiten nötig.
+
+Der Treiber erkennt SunSpec-Modell 124 dynamisch und prüft den Hersteller. Er liest
+Referenzleistung und Skalierungsfaktoren vom Gerät. Lade-/Entladegrenzen werden
+gemeinsam geschrieben und zurückgelesen; eine Registerbestätigung bestätigt den
+Sollwert, nicht das Erreichen der gewünschten Leistung. Geräteschutz und Prioritäten
+können die tatsächliche Leistung begrenzen. Eine fehlerhafte oder ausbleibende
+Rückbestätigung wird als Steuerfehler behandelt.
+
+Jeder Steueraufruf erneuert `InOutWRte_RvrtTms` auf 300 Sekunden. Ohne weitere
+Aufrufe laufen die externen Leistungsgrenzen am Wechselrichter aus. Firmware, die
+diesen Wert nicht schreiben und zurückbestätigen kann, wird nicht ohne Zeitbegrenzung
+weitergesteuert. Bei normaler Rückgabe wird `StorCtl_Mod=0` bestätigt und die zuvor
+gelesene Netzladefreigabe wiederhergestellt. Nach einem Prozessabbruch wird bei der
+nächsten Rückgabe die externe Leistungssteuerung deaktiviert; eine vorherige
+Netzladefreigabe kann dann mangels ursprünglichem Zustand nicht rekonstruiert werden.
+Der Timer setzt nur die Leistungsgrenzen zurück, nicht alle sonstigen Einstellungen.
+
+Modbus TCP bietet weder Verschlüsselung noch Anmeldung. Nur im geschützten lokalen
+Netz betreiben und den Port nicht ins Internet freigeben. Die Implementierung ist
+mit einem lokalen TCP-Geräteemulator getestet; ein Test am eigenen GEN24 inklusive
+Verbindungsausfall und Automatik-Rückgabe ist vor unbeaufsichtigtem Betrieb erforderlich.
+
+Referenzen: [Fronius GEN24 Modbus-Handbuch](https://manuals.fronius.com/html/4204102649/en-US.html),
+[SunSpec-Modell 124](https://github.com/sunspec/models/blob/master/json/model_124.json).
+
 ## Generische HA-Wallbox
 
 Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:

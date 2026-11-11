@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.5.0 - 2026-11-11
+
+### Features
+
+- Eigenes Speicher-Plugin `fronius_modbus` für direkte Fronius-GEN24-Steuerung über Modbus TCP/SunSpec 124: Lade-/Entladelimits, Entladesperre, erzwungene Ladung und optional Netzentladung sowie Rückgabe an die Automatik. Vorhandene HA-Sensoren liefern die Messwerte; zusätzliche Fronius-Modbus-Steuerentitäten entfallen.
+- Automatische SunSpec-Modellerkennung für int+SF und float sowie skalierte, atomar geschriebene Leistungsfenster mit Register-Rückbestätigung und 300 Sekunden Gültigkeit.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine. Das bisherige Plugin `fronius` bleibt unverändert verfügbar.
+
+### Security
+
+- Modbus-Antworten werden auf Transaktion, Protokoll, Unit-ID, Funktion und Länge geprüft; fehlende Bestätigungen brechen die Steuerung ab. Geräteerkennung und Parameterprüfung erfolgen vor Steuerbefehlen, Netzentladung benötigt eine zusätzliche Plugin-Freigabe. Modbus TCP bleibt ein unverschlüsseltes lokales Protokoll ohne Authentifizierung.
+
 ## 0.4.0 - 2026-11-11
 
 ### Features

@@ -140,6 +140,12 @@ eingetragen. **kW** bezeichnet Leistung, **kWh** eine Energiemenge.
 
 ### Hardware: Fronius-Speicher und NRGkick
 
+Alternativ zur Fronius-Steuerung über zusätzliche HA-Entitäten steht das neue
+Speicher-Plugin **Fronius GEN24 direct Modbus TCP** (`fronius_modbus`) zur Auswahl.
+Es steuert direkt den GEN24; SoC und Leistungsrückmeldungen kommen weiterhin aus
+HA-Sensoren. Einrichtung, Voraussetzungen und Rückgabe an die Automatik stehen in
+[Hardware-Plugins](PLUGINS.md#fronius-gen24-direkt-über-modbus-tcp).
+
 Unter **Konfigurieren → Hardware-Treiber → Fahrzeugname** kannst du das Fahrzeug
 benennen, beispielsweise `Mein ID.4`. Der Standard ist **E-Auto**. Der Name erscheint
 im Stromfluss, auf der Fahrzeug-Detailseite, in der Modus-Zeitlinie und in den
