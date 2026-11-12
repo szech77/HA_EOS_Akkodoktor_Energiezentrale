@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.15.0 - 2026-11-12
+
+### Features
+
+- Speicher-Plugin „Victron Venus MQTT / HACS (Home Assistant)“ mit auswählbaren SoC-, DC-Leistungs-, Spannungs-, PV-, Netz- und Hausverbrauchsentitäten. Lesender Betrieb als Vorgabe; optionale ESS-Mode-2-Steuerung mit bestätigten Lade-/Entladegrenzen, Netzsollwert, SoC-Grenzen und expliziten nativen Rückgabewerten für Neustarts. Erzwungene Einspeisung separat freigeben. DC/AC-Wirkungsgrade konfigurierbar; Einrichtung und Grenzen auf Deutsch und Englisch dokumentiert.
+- Direkt gemeldeten Hausverbrauch der gewählten Geräte-Netzquelle auch ohne vollständige AC-Einzelmessungen nutzen. Victron-SoC-Berichte bis 360 Sekunden akzeptieren, ohne Zeitstempel zu erneuern oder die Leistungsfristen anderer Plugins zu verändern.
+
+### Bugfixes
+
+- SoC- und Verteilungskontext beim Neutralisieren mehrerer Speicher erhalten, damit Plugins mit notwendigen SoC-Grenzen auch im gemeinsamen Speicherpool funktionieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.14.0 - 2026-11-12
 
 ### Features

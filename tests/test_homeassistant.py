@@ -344,6 +344,27 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(rows[-1]['wallbox_type'],'goe_http_v2')
             connect.assert_not_called()
 
+    async def test_victron_hacs_can_be_added_read_only_with_entity_selectors(self):
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        with patch('socket.create_connection') as connect:
+            await flow.async_step_device_add({'kind':'battery'})
+            form=await flow.async_step_device_plugin({'plugin':'victron_ha'})
+            control=next(value for key,value in form['data_schema'].schema.items() if str(key)=='parameters')
+            self.assertEqual(control.config['fields']['soc']['selector'].config['domain'],['sensor'])
+            self.assertEqual(control.config['fields']['charge_limit']['selector'].config['domain'],['number'])
+            self.assertFalse(control.config['fields']['control_enabled']['default'])
+            result=await flow.async_step_device_parameters({'id':'venus','name':'Victron Venus','grid_source':True,
+                'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,
+                'parameters':{'soc':'sensor.victron_soc','battery_power':'sensor.victron_power','grid':'sensor.victron_grid'}})
+            self.assertEqual(result['step_id'],'devices')
+            validate_options(flow.values)
+            config=Configuration(flow.values,Mock(),self.directory)
+            driver=config.battery.batteries[0][1]
+            self.assertEqual(driver.info.identifier,'victron_ha')
+            self.assertFalse(driver.features.grid_charge)
+            self.assertIn('grid',config.battery.measurement_keys)
+            connect.assert_not_called()
+
     async def test_deye_plugin_form_needs_no_ha_entities_and_opens_no_connections(self):
         flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
         with patch('socket.create_connection') as connect:

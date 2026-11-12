@@ -1,5 +1,12 @@
 # Hardware-Plugins
 
+## Victron Venus MQTT / HACS
+
+`victron_ha` übernimmt Messwerte und optional bestätigte ESS-Mode-2-Steuerung
+über **Victron Venus MQTT** aus HACS. Das Plugin startet lesend; Entitäten,
+Grenzen und Rückgabewerte werden explizit zugeordnet.
+[Einrichtung, Entitätszuordnung und Grenzen](VICTRON.md).
+
 Die Energiezentrale entdeckt lokale Plugins beim Start aus
 `custom_components/eos_energiezentrale/energy/plugins/`. Ein Registry-Eintrag im
 Controller ist nicht nötig. Änderungen an installiertem Python-Code werden nach
@@ -671,6 +678,11 @@ bleibt auch hier unverändert; Schreibmethoden sind nicht Teil dieses Vertrags.
 Die IDs der Plugins sind je Geräteart eindeutig; `fronius_modbus` und `generic`
 dürfen daher sowohl als Speicher- als auch als PV-Plugin vorkommen.
 
+`provides_site_consumption = True` kennzeichnet eine gemessene Haus-Gesamtleistung
+der Anlage in `house_total`. Die gewählte Netzquelle darf damit einen direkten
+Hausverbrauch liefern. Ohne diese Kennzeichnung wird eine geräteweise aus Netz
+und Wechselrichterleistung abgeleitete Messung nicht als Standortsumme verwendet.
+
 Speicher können `power_limits(self, states)` implementieren und aktuelle
 Hardwaregrenzen als Tupel `(max_charge_w, max_discharge_w)` melden. `None` verwendet
 die je Gerät konfigurierten Grenzen. Das Lesen darf keine Steuerbefehle auslösen;
@@ -698,6 +710,9 @@ Akkutreiber müssen für jeden vorhandenen Wert den zugehörigen zeitzonenbehaft
 Messzeitpunkt in `BatteryReading.soc_sample`, `charge_sample` bzw. `discharge_sample`
 liefern. Fehlende, zukünftige oder 120 Sekunden alte Messwerte werden verworfen;
 der Messzeitpunkt darf nicht durch den Zeitpunkt des Leseaufrufs ersetzt werden.
+Nur für SoC darf ein Treiber mit `soc_max_age` ein begründetes Meldeintervall bis
+höchstens 360 Sekunden angeben (Victron: 360 s). Standard und Leistungsfrist
+bleiben 120 Sekunden; auch ein Speicherpool validiert jedes Gerät zuerst einzeln.
 Wallbox-Leistungsmessungen ohne aktuelle Zeitmarke werden nicht zur Regelung verwendet.
 Nicht unterstützte Befehle und ungültige Strom-/Leistungsvorgaben werden vor dem
 Hardwareaufruf abgewiesen.

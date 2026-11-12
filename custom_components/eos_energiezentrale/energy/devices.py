@@ -87,6 +87,7 @@ class DeviceSite(BatteryDriver):
                     row[key]=value
             self.devices.append((row,driver))
         self.batteries=[(row,driver) for row,driver in self.devices if row['kind']=='battery']
+        self.soc_max_age=max((driver.soc_max_age for _,driver in self.batteries),default=120)
         self.requires_dispatch_context=len(self.batteries)>1
         self.uses_dispatch_context=any(driver.uses_dispatch_context for _,driver in self.batteries)
         sizes=[row['capacity_wh'] or None for row,_ in self.batteries]
@@ -101,7 +102,8 @@ class DeviceSite(BatteryDriver):
         if any('solar' in driver.measurement_keys for _,driver in self.devices): keys.add('solar')
         if self.grid_sources:
             keys.add('grid')
-            if all('inverter_ac' in driver.measurement_keys for _,driver in self.devices): keys.add('house_total')
+            if (self.grid_sources[0][1].provides_site_consumption
+                    or all('inverter_ac' in driver.measurement_keys for _,driver in self.devices)): keys.add('house_total')
         self.measurement_keys=tuple(sorted(keys))
         self.site_summary={'inverter_count':len(self.devices),'battery_count':len(self.batteries),
                            'capacity_wh':size,'devices':[],'approximate':self.requires_dispatch_context}
@@ -146,10 +148,15 @@ class DeviceSite(BatteryDriver):
             stamps['grid']=next((value.measurements.get('grid',Measurement(None,None)).sample if value else None
                 for row,_,value in samples if row.get('grid_source')))
             if 'house_total' in self.measurement_keys:
-                ac=total(values('inverter_ac'));grid=extra['grid']
-                extra['house_total']=bounded(ac+grid,0,1000000) if ac is not None and grid is not None else None
-                ac_time=sample_time('inverter_ac')
-                stamps['house_total']=min(ac_time,stamps['grid']) if ac_time and stamps['grid'] else None
+                provider=next(((driver,value) for row,driver,value in samples if row.get('grid_source')),None)
+                if provider and provider[0].provides_site_consumption:
+                    measurement=provider[1].measurements.get('house_total',Measurement(None,None)) if provider[1] else Measurement(None,None)
+                    extra['house_total'],stamps['house_total']=measurement.value,measurement.sample
+                else:
+                    ac=total(values('inverter_ac'));grid=extra['grid']
+                    extra['house_total']=bounded(ac+grid,0,1000000) if ac is not None and grid is not None else None
+                    ac_time=sample_time('inverter_ac')
+                    stamps['house_total']=min(ac_time,stamps['grid']) if ac_time and stamps['grid'] else None
         def battery_time(key):
             times=[getattr(value,key) if value else None for _,value in batteries]
             return min(times) if times and all(stamp is not None for stamp in times) else None
@@ -191,7 +198,8 @@ class DeviceSite(BatteryDriver):
             if sum(outgoing)+1e-6<command.required_discharge_w: raise ValueError('Insufficient storage support')
             # Across unrelated plugins no common hardware-state cache exists.
             # Confirm a neutral state everywhere before assigning a new budget.
-            for _,driver in self.batteries: driver.apply(BatteryCommand('limits'),states)
+            for _,driver in self.batteries:
+                driver.apply(replace(command,mode='limits',charge_w=0,discharge_w=0,required_discharge_w=0),states)
             for index,(_,driver) in enumerate(self.batteries):
                 driver.apply(replace(command,mode=command.mode if incoming[index] or outgoing[index] else 'limits',
                     charge_w=incoming[index],discharge_w=outgoing[index],required_discharge_w=0),states)
