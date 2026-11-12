@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.1 - 2026-11-12
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- HTTP-Clients für go-e HTTP API v2 und NRGkick Local erst beim ersten API-Zugriff im Executor erzeugen und anschließend wiederverwenden. Plugin-Konstruktion und Konfigurationsprüfung laden damit keine TLS-Zertifikate mehr im Home-Assistant-Eventloop, auch bei HTTP-Adressen. TLS-Prüfung, Redirect-Sperre und Proxy-Verzicht bleiben erhalten; fehlgeschlagene Initialisierungen werden als Gerätefehler behandelt und beim nächsten Zugriff erneut versucht.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.0 - 2026-11-12
 
 ### Features

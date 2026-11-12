@@ -44,11 +44,13 @@ class GoEHTTPv2(WallboxDriver):
         self.switching=values['phase_switching']
         self.features=WallboxFeatures(phase_switching=self.switching,optional_connection=True)
         self.ids=dict.fromkeys(('power','status','enable','current','phases'),'')
-        self.opener=build_opener(ProxyHandler({}),NoRedirect())
+        self.opener=None  # Certificate loading belongs to the first executor request.
         self.zero_after=self.zero_sample=self.phase_requested=None
 
     def _request(self,path,timeout=3):
         try:
+            if self.opener is None:
+                self.opener=build_opener(ProxyHandler({}),NoRedirect())
             request=Request(self.url+path,headers={'Accept':'application/json','Cache-Control':'no-cache'})
             with self.opener.open(request,timeout=timeout) as response: raw=response.read(65537)
             if len(raw)>65536: raise ValueError('Oversized response')

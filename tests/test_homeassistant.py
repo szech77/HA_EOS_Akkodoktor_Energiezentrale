@@ -250,6 +250,52 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(json.loads(result['data']['battery_parameters'])['host'],'inverter.local')
             connect.assert_not_called()
 
+    async def test_http_wallbox_configuration_never_loads_certificates_in_event_loop(self):
+        from custom_components.eos_energiezentrale.plugin_forms import configured
+        from custom_components.eos_energiezentrale.energy.drivers import WALLBOX_DRIVERS
+        with (patch('ssl.SSLContext.load_default_certs',side_effect=AssertionError('Certificate I/O in config validation')) as certs,
+              patch('socket.create_connection') as connect):
+            for plugin in ('goe_http_v2','nrgkick_local'):
+                for scheme in ('http','https'):
+                    with self.subTest(plugin=plugin,scheme=scheme):
+                        values={'url':f'{scheme}://charger.local'}
+                        configured(WALLBOX_DRIVERS[plugin],values)
+                        validate_options({**DEFAULTS,'wallbox_type':plugin,'wallbox_parameters':json.dumps(values)})
+            certs.assert_not_called()
+            connect.assert_not_called()
+
+    async def test_http_wallbox_clients_are_created_once_with_the_first_executor_request(self):
+        import threading
+        import ssl
+        from urllib.request import HTTPSHandler
+        from test_goe_http_v2 import api as goe_api
+        from test_nrgkick_local import api as nrgkick_api
+        from custom_components.eos_energiezentrale.energy.plugins import goe_http_v2,nrgkick_local
+        from datetime import datetime,timezone
+        loop_thread=threading.get_ident()
+        for module,api in ((goe_http_v2,goe_api),(nrgkick_local,nrgkick_api)):
+            with self.subTest(plugin=module.__name__):
+                threads=[];original=module.build_opener
+
+                def checked_build(*args,**kwargs):
+                    threads.append(threading.get_ident())
+                    self.assertNotEqual(threads[-1],loop_thread)
+                    if len(threads)==1: raise OSError('Simulated certificate loading failure')
+                    return original(*args,**kwargs)
+
+                with patch.object(module,'build_opener',side_effect=checked_build),api() as (driver,server):
+                    self.assertEqual(threads,[])
+                    failed=await self.hass.async_add_executor_job(driver.read,{},datetime.now(timezone.utc))
+                    self.assertEqual(failed.status,'unavailable')
+                    self.assertFalse(server.requests)
+                    for _ in range(2):
+                        sample=await self.hass.async_add_executor_job(driver.read,{},datetime.now(timezone.utc))
+                        self.assertEqual(sample.status,'connected')
+                    self.assertEqual(len(threads),2)  # One failure, one cached successful client.
+                    context=next(handler._context for handler in driver.opener.handlers if isinstance(handler,HTTPSHandler))
+                    self.assertEqual(context.verify_mode,ssl.CERT_REQUIRED)
+                    self.assertTrue(context.check_hostname)
+
     async def test_multi_fronius_form_roundtrips_without_connecting_and_syncs_eos_group_capacity(self):
         params={'host':'primary.local','battery_capacity_wh':10000,'additional_inverters':json.dumps({
             'roof':{'host':'pv.local'},'garage':{'host':'battery.local','battery':True,'capacity_wh':20000}})}
