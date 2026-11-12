@@ -1,4 +1,4 @@
-/* Consumption reports use measured ledger data, never display-held power. */
+/* Consumption reports include explicit estimates, never control/display-held power. */
 let dayAccounting=null;
 const billing = {period:'month',date:null,data:null,key:null,loading:false,at:0,error:null};
 const sourceColors = {pv:'#f2c94c',battery:'#55c7cb',grid:'#5794f2',unknown:'#8995a5'};
@@ -9,14 +9,15 @@ const money = value => {
   return tiny ? (value>0 ? '< ' : '> ')+format.format(Math.sign(value)*.0001) : format.format(value);
 };
 const energyValue = value => `${decimal(value,2)} kWh`;
-const costValue = amount => amount && !(amount.kwh>.0001 && amount.cost_unknown_kwh>=amount.kwh-.0001) ? `${amount.cost_unknown_kwh > .0001 ? '≈ ' : ''}${money(amount.cost_eur)}${amount.cost_unknown_kwh > .0001 ? ' ('+t('billing.known_portion')+')' : ''}` : '—';
+const isEstimated = amount => (amount?.estimated_kwh??0)>0 || (amount?.cost_unknown_kwh??0)>0;
+const costValue = amount => amount && !(amount.kwh>0 && amount.cost_unknown_kwh>=amount.kwh) ? `${isEstimated(amount) ? '≈ ' : ''}${money(amount.cost_eur)}${amount.cost_unknown_kwh > .0001 ? ' ('+t('billing.known_portion')+')' : ''}` : '—';
 const averageCost = amount => {
   if (!valid(amount?.kwh) || amount.kwh<=0 || !valid(amount.cost_eur)
       || !valid(amount.cost_unknown_kwh) || amount.cost_unknown_kwh<0 || amount.cost_unknown_kwh>amount.kwh) return '—';
   const priced=amount.kwh-amount.cost_unknown_kwh;
-  if (priced<=0 || (amount.kwh>.0001 && priced<=.0001)) return '—';
+  if (priced<=Math.max(1e-12,amount.kwh*1e-9)) return '—';
   const rate=amount.cost_eur/priced*100;
-  return valid(rate) ? `${amount.cost_unknown_kwh>0 ? '≈ ' : ''}${price(rate)}` : '—';
+  return valid(rate) ? `${isEstimated(amount) ? '≈ ' : ''}${price(rate)}` : '—';
 };
 const estimatedAverageNote = amount => averageCost(amount).startsWith('≈ ') ? t('billing.estimated_average_note') : '';
 const averageCostLabel = amount => {
@@ -34,17 +35,18 @@ function dayBalance() {
     const live=report.consumers[key]?.total,old=dayAccounting?.date===report.date?dayAccounting.historical_consumers?.[key]:null;
     if(!old)return live;
     const result=structuredClone(live??old);
-    if(live){for(const field of ['kwh','cost_eur','cost_unknown_kwh','seconds'])result[field]+=old[field];for(const source of Object.keys(result.sources))for(const field of ['kwh','cost_eur','cost_unknown_kwh'])result.sources[source][field]+=old.sources[source][field];}
+    if(live){for(const field of ['kwh','cost_eur','cost_unknown_kwh','seconds','estimated_kwh','estimated_seconds'])result[field]=(result[field]??0)+(old[field]??0);for(const source of Object.keys(result.sources))for(const field of ['kwh','cost_eur','cost_unknown_kwh','estimated_kwh'])result.sources[source][field]=(result.sources[source][field]??0)+(old.sources[source][field]??0);}
     return result;
   };
   const amounts=items.map(totalFor).filter(Boolean);
   const kwh=amounts.reduce((sum,item)=>sum+item.kwh,0),cost=amounts.reduce((sum,item)=>sum+item.cost_eur,0);
   const unknown=amounts.reduce((sum,item)=>sum+item.cost_unknown_kwh,0);
-  target.innerHTML=`<div class="panel-heading"><h2>${th('billing.today')}</h2><span>${th('billing.total')}: ${html(energyValue(kwh))} · ${html(costWithPrice({kwh,cost_eur:cost,cost_unknown_kwh:unknown}))}</span></div>
+  const estimated=amounts.reduce((sum,item)=>sum+(item.estimated_kwh??0),0);
+  target.innerHTML=`<div class="panel-heading"><h2>${th('billing.today')}</h2><span>${th('billing.total')}: ${html(energyValue(kwh))} · ${html(costWithPrice({kwh,cost_eur:cost,cost_unknown_kwh:unknown,estimated_kwh:estimated}))}</span></div>
     <div class="balance-grid">${items.map(key=>{
       const value=totalFor(key);
-      return `<a class="balance-card" href="#usage/${key}"><span>${html(billingName(key))}</span><strong>${html(value?energyValue(value.kwh):'—')}</strong><span>${html(costWithPrice(value))}</span>${sourceBar(value)}<small>${value?.kwh>0?Object.entries(value.sources).filter(([,item])=>item.kwh>.0001).map(([source,item])=>`${th("billing."+source)} ${decimal(item.kwh/value.kwh*100)} %`).join(" · "):""}</small><small>${th('billing.observed')}</small></a>`;
-    }).join('')}</div><p class="footnote">${th('billing.partial')} ${unknown>.0001?th('billing.unknown_cost'):''} ${html(estimatedAverageNote({kwh,cost_eur:cost,cost_unknown_kwh:unknown}))}</p>`;
+      return `<a class="balance-card" href="#usage/${key}"><span>${html(billingName(key))}</span><strong>${value?.estimated_seconds>0?'≈ ':''}${html(value?energyValue(value.kwh):'—')}</strong><span>${html(costWithPrice(value))}</span>${sourceBar(value)}<small>${value?.kwh>0?Object.entries(value.sources).filter(([,item])=>item.kwh>.0001).map(([source,item])=>`${th("billing."+source)} ${decimal(item.kwh/value.kwh*100)} %`).join(" · "):""}</small><small>${th('billing.observed')}</small></a>`;
+    }).join('')}</div><p class="footnote">${th('billing.partial')} ${unknown>.0001?th('billing.unknown_cost'):''} ${html(estimatedAverageNote({kwh,cost_eur:cost,cost_unknown_kwh:unknown,estimated_kwh:estimated}))}</p>`;
 }
 
 function sourceBar(value) {
@@ -122,7 +124,7 @@ function usageDetail(key, fetch=true) {
   byId('billing-date').value=billing.date??localDay(windowNow());
   byId('billing-message').textContent=billing.error??(billing.loading?t('billing.loading'):'');
   byId('usage-kpis').innerHTML=cards([
-    [t('billing.consumption'),amount?energyValue(amount.kwh):'—',t('billing.observed')],
+    [t('billing.consumption'),amount?(amount.estimated_seconds>0?'≈ ':'')+energyValue(amount.kwh):'—',t('billing.observed')+(amount?.estimated_seconds>0?' · '+t('billing.estimated_duration',{hours:decimal(amount.estimated_seconds/3600,1)}):'')],
     [t(amount?.cost_unknown_kwh>.0001?'billing.known_costs':'billing.costs'),costValue(amount),averageCostLabel(amount)+' · '+(amount?.cost_unknown_kwh>.0001?t('billing.missing_costs_for',{energy:energyValue(amount.cost_unknown_kwh)}):t('billing.variable'))],
     [t('billing.pv_share'),amount?.kwh>0?percent(amount.sources.pv.kwh/amount.kwh*100):'—',t('billing.direct_pv')],
     [t('billing.average'),averageCost(amount),estimatedAverageNote(amount)||t('billing.variable')]]);

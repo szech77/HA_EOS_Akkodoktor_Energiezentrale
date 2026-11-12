@@ -99,16 +99,20 @@ class EnergyAccountingRequirements(TestCase):
         restarted.observe(sample(NOW+timedelta(minutes=2),battery_soc=50))
         restarted.observe(sample(NOW+timedelta(minutes=3),battery_soc=50))
         self.assertAlmostEqual(restarted.stock["cost"],.8)
-        # Subsequent measurement gaps remain unknown, even after a restart.
+        # Later gaps preserve the established weighted book price, not a new PV price.
         restarted.observe(sample(NOW+timedelta(minutes=10),battery_soc=50))
         restarted.observe(sample(NOW+timedelta(minutes=11),battery_soc=50))
-        self.assertEqual(restarted.stock["unknown"],5.)
+        self.assertEqual(restarted.stock["unknown"],0.)
+        self.assertAlmostEqual(restarted.stock['cost'],.8)
+        self.assertAlmostEqual(restarted.stock['estimated'],5.)
 
     def test_initial_estimate_waits_for_tariff_and_accepts_zero_and_negative(self):
         for price in (0,-9,9):
             with self.subTest(price=price):
                 self.ledger.stock=None
                 self.ledger.previous=None
+                self.ledger.last_rate=None
+                self.ledger.initial_pv_valued=False
                 self.ledger.configure({"pv_price_source":"eos"})
                 self.ledger.pv_tariff=None
                 self.report_minute(battery_soc=50)
@@ -142,15 +146,16 @@ class EnergyAccountingRequirements(TestCase):
             self.assertEqual(len(report["hours"]),count)
             self.assertEqual(len(set(report["hours"])),count)
 
-    def test_gaps_and_restart_do_not_invent_consumption_and_preserve_history(self):
+    def test_gaps_and_restart_interpolate_consumption_and_flag_the_estimated_share(self):
         self.report_minute()
         self.ledger.observe(sample(NOW+timedelta(minutes=10)))
         before=self.ledger.report({"period":"year"},NOW)
-        self.assertAlmostEqual(before["consumers"]["house"]["total"]["kwh"],.03)
+        self.assertAlmostEqual(before["consumers"]["house"]["total"]["kwh"],.3)
         restarted=Accounting(self.directory,self.ledger.zone)
         restarted.observe(sample(NOW+timedelta(hours=1)))
         after=restarted.report({"period":"year"},NOW)
-        self.assertEqual(before["consumers"],after["consumers"])
+        self.assertAlmostEqual(after['consumers']['house']['total']['kwh'],1.8)
+        self.assertAlmostEqual(after['consumers']['house']['total']['estimated_kwh'],1.77)
 
     def test_battery_book_value_survives_restart_with_unchanged_soc(self):
         self.ledger.configure({"initial_price_ct":20})

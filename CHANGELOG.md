@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.14.0 - 2026-11-12
+
+### Features
+
+- Verbrauchs- und Akkukostenschätzung über Messlücken und Neustarts fortsetzen. Letzten Messpunkt, gewichteten Akkupreis und gültige Speicherparameter gemeinsam mit dem Kostenbestand speichern. Lücken bis sechs Stunden zwischen Messpunkten interpolieren, geschätzte Bestände mit dem beobachteten SoC abgleichen und Haus, Wärmepumpe sowie Fahrzeuge mit derselben Akkubewertung versorgen.
+- Interpolierte Energiemengen und angenäherte Kosten einschließlich Influx-Rekonstruktion mit „≈“ kennzeichnen. Bei längeren Ausfällen den Akkupreis erhalten und den Bestand am neuen SoC ausrichten, ohne tagelange Verbräuche aus Momentanwerten zu erfinden. Bestehende unbewertete Akkuanteile in Berichtskopien schätzen, ohne gespeicherte historische Kosten zu überschreiben.
+
+### Bugfixes
+
+- Messlücken und fehlende Akku-Leistungswerte löschen nicht mehr den bekannten Kostenbestand. Fehlenden Akku-Leistungsfluss bei vollständiger AC-Bilanz daraus ableiten; bei unzureichendem rechnerischem Bestand den zuletzt bewerteten Preis als Schätzung fortführen. Ohne jede Preisgrundlage bleiben Kosten unbekannt; echte Null- und Negativtarife bleiben gültig.
+- Kleine bewertete Verbrauchsanteile erhalten ebenfalls einen Preis je kWh. Datenbankfehler rollen Kostenbestand und Messpunkt gemeinsam zurück, damit ein erneuter Versuch keine Energie doppelt zählt. Vorhandene Datenbankeinträge ohne Schätzfelder bleiben lesbar.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.13.0 - 2026-11-12
 
 ### Features
