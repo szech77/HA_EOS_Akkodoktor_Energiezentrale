@@ -53,7 +53,7 @@ class NRGkickLocal(WallboxDriver):
         self.ids = dict.fromkeys(("power", "status", "enable", "current", "phases"), "")
         self.phase_switching = values["phase_switching"]
         self.features = WallboxFeatures(phase_switching=self.phase_switching, optional_connection=True)
-        self.opener = build_opener(ProxyHandler({}), NoRedirect())
+        self.opener = None  # Certificate loading belongs to the first executor request.
         self.zero_after = self.zero_sample = self.phase_requested = None
 
     def _request(self, path):
@@ -65,6 +65,8 @@ class NRGkickLocal(WallboxDriver):
             token = base64.b64encode(f"{self.username}:{secret}".encode()).decode("ascii")
             headers["Authorization"] = "Basic " + token
         try:
+            if self.opener is None:
+                self.opener = build_opener(ProxyHandler({}), NoRedirect())
             with self.opener.open(Request(self.url + path, headers=headers), timeout=3) as response:
                 raw = response.read(262145)
             if len(raw) > 262144:
