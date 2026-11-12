@@ -2,6 +2,11 @@
 
 ## Victron GX und Victron Venus MQTT / HACS
 
+Ohne weitere HA-Integration: **Victron GX direct Modbus TCP** (`victron_modbus`)
+verbindet das GX-Gerät direkt über dessen IP-Adresse. Es liest Systemmesswerte
+und bietet optionale ESS-Mode-2-Steuerung mit bestätigten Registerwerten.
+[Direkte Anbindung einrichten](VICTRON_MODBUS.md).
+
 `victron_gx` verbindet die offizielle HA-Integration **Victron GX**;
 `victron_ha` verbindet **Victron Venus MQTT** aus HACS. Beide übernehmen Messwerte
 und optional bestätigte ESS-Mode-2-Steuerung. Die Plugins starten lesend; Entitäten,

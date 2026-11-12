@@ -390,6 +390,26 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(config.battery.uses_dispatch_context)
             connect.assert_not_called()
 
+    async def test_direct_victron_modbus_form_requires_no_homeassistant_entities(self):
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        with patch('socket.create_connection') as connect:
+            await flow.async_step_device_add({'kind':'battery'})
+            form=await flow.async_step_device_plugin({'plugin':'victron_modbus'})
+            control=next(value for key,value in form['data_schema'].schema.items() if str(key)=='parameters')
+            self.assertIn('host',control.config['fields'])
+            self.assertNotIn('soc',control.config['fields'])
+            self.assertFalse(control.config['fields']['control_enabled']['default'])
+            result=await flow.async_step_device_parameters({'id':'gx','name':'Direct GX','grid_source':True,
+                'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,'parameters':{'host':'gx.local'}})
+            self.assertEqual(result['step_id'],'devices')
+            validate_options(flow.values)
+            config=Configuration(flow.values,Mock(),self.directory)
+            driver=config.battery.batteries[0][1]
+            self.assertEqual(driver.info.identifier,'victron_modbus')
+            self.assertFalse(driver.features.grid_charge)
+            self.assertIn('house_total',config.battery.measurement_keys)
+            connect.assert_not_called()
+
     async def test_new_installation_device_list_starts_empty_and_returns_added_device_by_name(self):
         flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
         empty=await flow.async_step_devices()

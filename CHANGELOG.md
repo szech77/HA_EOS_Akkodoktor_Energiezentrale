@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.0 - 2026-11-12
+
+### Features
+
+- Direktes Speicher-Plugin „Victron GX direct Modbus TCP“ für Venus OS ab 3.50 hinzufügen. Akku-SoC, Spannung, Lade-/Entladeleistung, Netzanschluss, Hausverbrauch und ausgewählte AC-/DC-PV-Quellen ohne zusätzliche HA-Integration oder Sensoren lesen. Anlagen mit einer oder drei Phasen unterstützen; eine GX-Anlage als ein Gerät konfigurieren.
+- Optionale ESS-Mode-2-Steuerung mit bestätigten DVCC-Ladestrom- und Entladeleistungsgrenzen sowie flüchtigem 32-Bit-Netzsollwert. SoC-/Leistungsgrenzen berücksichtigen, Dynamic ESS bzw. Inselbetrieb vor neuen Befehlen abweisen und explizite native Rückgabewerte nach Neustarts bestätigen. Standardmäßig lesend, erzwungene Einspeisung zusätzlich freigeben. Registerskalierungen, Einrichtung und Grenzen auf Deutsch und Englisch dokumentieren.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.16.0 - 2026-11-12
 
 ### Features
