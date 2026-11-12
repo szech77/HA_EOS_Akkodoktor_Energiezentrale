@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.16.0 - 2026-11-12
+
+### Features
+
+- Eigenes Speicher-Plugin „Victron GX (Home Assistant official)“ für die offizielle Home-Assistant-Integration hinzufügen. Messwerte und optionale ESS-Mode-2-Steuerung über auswählbare Entitäten; standardmäßig lesend. Gemeinsame Victron-Logik erhält bestätigte Befehle, SoC-/Leistungsgrenzen, Frischeprüfungen und explizite Rückgabewerte auch nach Neustarts. Die HACS-Auswahl bleibt unverändert verfügbar. Einrichtung und Wechsel zwischen den Integrationen dokumentiert.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.15.0 - 2026-11-12
 
 ### Features

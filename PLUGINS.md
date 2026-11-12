@@ -1,9 +1,10 @@
 # Hardware-Plugins
 
-## Victron Venus MQTT / HACS
+## Victron GX und Victron Venus MQTT / HACS
 
-`victron_ha` übernimmt Messwerte und optional bestätigte ESS-Mode-2-Steuerung
-über **Victron Venus MQTT** aus HACS. Das Plugin startet lesend; Entitäten,
+`victron_gx` verbindet die offizielle HA-Integration **Victron GX**;
+`victron_ha` verbindet **Victron Venus MQTT** aus HACS. Beide übernehmen Messwerte
+und optional bestätigte ESS-Mode-2-Steuerung. Die Plugins starten lesend; Entitäten,
 Grenzen und Rückgabewerte werden explizit zugeordnet.
 [Einrichtung, Entitätszuordnung und Grenzen](VICTRON.md).
 

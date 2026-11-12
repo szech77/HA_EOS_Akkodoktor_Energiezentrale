@@ -1,4 +1,34 @@
-# Victron Venus MQTT / HACS
+# Victron GX und Victron Venus MQTT / HACS
+
+## Offizielle Home-Assistant-Integration Victron GX
+
+Für die offizielle [Victron GX-Integration](https://www.home-assistant.io/integrations/victron_gx/)
+zuerst unter **Einstellungen → Geräte & Dienste → Integration hinzufügen → Victron GX**
+das GX-Gerät verbinden. MQTT muss auf Venus OS aktiviert und vom HA-Host erreichbar
+sein. Anmeldung, TLS und gegebenenfalls Token-Pairing übernimmt die GX-Integration;
+in der Energiezentrale werden keine weiteren MQTT-Zugangsdaten benötigt.
+
+Danach unter **Inbetriebnahme → Geräte → Gerät hinzufügen → Speicher/Hybrid-Wechselrichter**
+das Plugin **Victron GX (Home Assistant official)** (`victron_gx`) auswählen.
+Die tatsächlich vorhandenen Sensor-, Number- und Select-Entitäten dieses
+GX-Integrationseintrags zuordnen. Die Entitäten werden je nach Hardware automatisch
+entdeckt und können andere IDs als bei HACS haben. Die unten dokumentierten Felder,
+Vorzeichen, Einheiten, ESS-Voraussetzungen und Grenzen gelten für beide Plugins.
+Der Standard ist auch hier lesend, Steuerung wird ausdrücklich freigeschaltet.
+
+GX stellt dieselben Venus-Messungen und Stellwerte über die Bibliothek
+`victron-mqtt` bereit. Deshalb verwenden beide Plugins dieselbe geprüfte ESS-Logik,
+ohne interne HA-Integrationsmodule zu importieren. EOS benötigt keine zusätzliche
+Laufzeitabhängigkeit. Geprüfte Vertragsgrundlage: HA 2026.11 mit `victron-mqtt`
+2026.10.3. Verfügbare Stellwerte hängen von Firmware und Hardware ab; ohne die
+benötigten Number-/Select-Entitäten nur lesend betreiben.
+
+**Wechsel von HACS zu GX:** Zuerst EOS-Steuerung ausschalten und die bestätigte
+Rückgabe prüfen. Den bestehenden Geräteeintrag bearbeiten, das Plugin wechseln
+und alle Entitäten sowie Rückgabewerte neu zuordnen. Plugin-Parameter werden beim
+Wechsel bewusst nicht übernommen. Nicht beide Plugins für dieselbe GX-Anlage
+gleichzeitig als zwei Speicher konfigurieren: Leistung, Kapazität und Regelung
+würden doppelt erfasst. Andere vorhandene Geräte bleiben bestehen.
 
 ## Einrichtung
 
@@ -6,8 +36,8 @@ Das Speicher-Plugin **Victron Venus MQTT / HACS (Home Assistant)** (`victron_ha`
 verwendet Entitäten der [HACS-Integration von tomer-w](https://github.com/tomer-w/ha-victron-mqtt).
 Diese Integration samt MQTT-Verbindung zu Venus OS muss bereits funktionieren.
 Das Plugin benötigt weder einen weiteren MQTT-Zugang noch VRM-Zugangsdaten oder
-zusätzliche Python-Abhängigkeiten. Es ist kein Adapter für die offizielle
-Integration „Victron GX“; andere HACS-Projekte sind nicht geprüft.
+zusätzliche Python-Abhängigkeiten. Für die offizielle Integration stattdessen
+`victron_gx` auswählen; andere HACS-Projekte sind nicht geprüft.
 
 Unter **Inbetriebnahme → Geräte → Gerät hinzufügen → Speicher/Hybrid-Wechselrichter**
 das Plugin auswählen. Kapazität und zulässige Lade-/Entladeleistung des gesamten
@@ -102,6 +132,20 @@ Quellen: [HACS-Integration](https://github.com/tomer-w/ha-victron-mqtt),
 [Victron ESS Mode 2/3](https://www.victronenergy.com/live/ess:ess_mode_2_and_3).
 
 ## English setup notes
+
+For the **official Victron GX integration**, configure it in Home Assistant first
+(MQTT enabled on Venus OS), then select **Victron GX (Home Assistant official)**
+(`victron_gx`) in the EOS device manager. Select that integration's actual entities.
+Authentication/TLS remain managed by HA. Field mapping and ESS requirements below
+apply to both plugins: they share the same Venus entity contract and control logic.
+The inspected baseline is HA 2026.11 / `victron-mqtt` 2026.10.3. No additional EOS
+runtime dependency is added. Missing controls mean read-only operation.
+
+To migrate from HACS, disable EOS control and verify confirmed release first.
+Change the existing device's plugin and reselect all entities and native release
+values. Parameters are intentionally not copied across plugin changes. Never add
+the same physical GX installation twice; this would duplicate power and capacity
+and create competing controllers.
 
 Install and configure tomer-w's Venus MQTT HACS integration first, then add
 **Victron Venus MQTT / HACS (Home Assistant)** as a storage device. Select the

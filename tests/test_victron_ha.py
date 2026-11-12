@@ -28,6 +28,7 @@ class HA:
 
 
 class VictronTests(TestCase):
+    plugin_id='victron_ha'
     def setUp(self):
         self.ha=HA()
         self.params={'soc':'sensor.soc','battery_power':'sensor.battery','battery_voltage':'sensor.voltage','grid':'sensor.grid',
@@ -35,7 +36,7 @@ class VictronTests(TestCase):
             'charge_limit':'number.charge','discharge_limit':'number.discharge','release_charge_limit':60,'release_discharge_limit':4500,
             'charge_efficiency':1,'discharge_efficiency':1,'control_enabled':True}
         self.scope=ScopedHardwareAdapter(self.ha)
-        self.driver=BATTERY_DRIVERS['victron_ha'](self.scope,self.params)
+        self.driver=BATTERY_DRIVERS[self.plugin_id](self.scope,self.params)
         self.scope.bind(self.driver.ids.values())
 
     def command(self,mode='limits',charge=5000,discharge=3000,**extra):
@@ -52,7 +53,7 @@ class VictronTests(TestCase):
         self.assertFalse(self.ha.writes)
 
     def test_dc_ac_efficiencies_are_applied_once_and_kw_is_supported(self):
-        driver=BATTERY_DRIVERS['victron_ha'](self.ha,{**self.params,'charge_efficiency':.8,'discharge_efficiency':.9})
+        driver=BATTERY_DRIVERS[self.plugin_id](self.ha,{**self.params,'charge_efficiency':.8,'discharge_efficiency':.9})
         self.ha.rows['sensor.battery']['state']='1'
         self.ha.rows['sensor.battery']['attributes']['unit_of_measurement']='kW'
         self.assertEqual(driver.read(self.ha.rows,self.ha.now).charge,1250)
@@ -64,7 +65,7 @@ class VictronTests(TestCase):
         self.assertEqual(self.driver.read(self.ha.rows,self.ha.now).soc,60)
         self.assertIsNone(battery_reading(self.driver.read(self.ha.rows,self.ha.now),self.ha.now).soc)
         self.assertEqual(self.driver.read(self.ha.rows,self.ha.now).soc_sample,self.ha.now-timedelta(seconds=200))
-        site=DeviceSite(self.scope,[{'id':'gx','name':'GX','kind':'battery','plugin':'victron_ha','parameters':self.params,
+        site=DeviceSite(self.scope,[{'id':'gx','name':'GX','kind':'battery','plugin':self.plugin_id,'parameters':self.params,
             'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,'grid_source':True}])
         self.assertEqual(site.read(self.ha.rows,self.ha.now).soc,60)
         self.assertEqual(site.read(self.ha.rows,self.ha.now).measurements['house_total'].value,3000)
@@ -72,7 +73,7 @@ class VictronTests(TestCase):
         self.assertIsNone(self.driver.read(self.ha.rows,self.ha.now).soc)
 
     def test_direct_site_consumption_and_optional_sources_preserve_missing_data_and_sensor_priority(self):
-        site=DeviceSite(self.ha,[{'id':'gx','name':'GX','kind':'battery','plugin':'victron_ha','parameters':self.params,
+        site=DeviceSite(self.ha,[{'id':'gx','name':'GX','kind':'battery','plugin':self.plugin_id,'parameters':self.params,
             'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,'grid_source':True}])
         sample=site.read(self.ha.rows,self.ha.now)
         options,states,report=resolve_sources({},self.ha.rows,[(site,sample)],self.ha.now,keys={'solar','grid','house_total'})
@@ -85,7 +86,7 @@ class VictronTests(TestCase):
         self.assertIsNone(site.read(self.ha.rows,self.ha.now).measurements['house_total'].value)
 
     def test_read_only_default_has_no_write_capability(self):
-        driver=BATTERY_DRIVERS['victron_ha'](self.scope,{'soc':'sensor.soc','battery_power':'sensor.battery'})
+        driver=BATTERY_DRIVERS[self.plugin_id](self.scope,{'soc':'sensor.soc','battery_power':'sensor.battery'})
         self.assertFalse(driver.features.grid_charge);self.assertFalse(driver.features.charge_limit)
         driver.release(self.ha.rows)
         with self.assertRaises(UnsupportedFeature):driver.apply(self.command(),self.ha.rows)
@@ -96,7 +97,7 @@ class VictronTests(TestCase):
         self.ha.rows.update({'%s.other_%s'%tuple(key.split('.',1)):value for key,value in other.rows.items()})
         other_params={key:('%s.other_%s'%tuple(value.split('.',1)) if isinstance(value,str) and value.startswith(('sensor.','select.','number.')) else value)
                       for key,value in self.params.items()}
-        rows=[{'id':name,'name':name,'kind':'battery','plugin':'victron_ha','parameters':params,
+        rows=[{'id':name,'name':name,'kind':'battery','plugin':self.plugin_id,'parameters':params,
                'capacity_wh':10000,'charge_w':3000,'discharge_w':3000,'grid_source':index==0}
               for index,(name,params) in enumerate((('one',self.params),('two',other_params)))]
         site=DeviceSite(self.ha,rows)
@@ -122,7 +123,7 @@ class VictronTests(TestCase):
 
     def test_forced_export_requires_explicit_opt_in(self):
         with self.assertRaises(UnsupportedFeature):self.driver.apply(self.command('grid_discharge',0,2000),self.ha.rows)
-        driver=BATTERY_DRIVERS['victron_ha'](self.scope,{**self.params,'grid_discharge_supported':True})
+        driver=BATTERY_DRIVERS[self.plugin_id](self.scope,{**self.params,'grid_discharge_supported':True})
         driver.apply(self.command('grid_discharge',0,2000),self.ha.rows)
         self.assertEqual(float(self.ha.rows['number.setpoint']['state']),-1000)
 
@@ -135,7 +136,7 @@ class VictronTests(TestCase):
 
     def test_watt_charge_limits_work_without_a_voltage_sensor(self):
         self.ha.rows['number.charge'].update(state='3000',attributes={'unit_of_measurement':'W','min':-1,'max':6000,'step':50})
-        driver=BATTERY_DRIVERS['victron_ha'](self.scope,{**self.params,'battery_voltage':'','release_charge_limit':3000})
+        driver=BATTERY_DRIVERS[self.plugin_id](self.scope,{**self.params,'battery_voltage':'','release_charge_limit':3000})
         driver.apply(self.command('grid_charge',2200,0),self.ha.rows)
         self.assertEqual(float(self.ha.rows['number.charge']['state']),2200)
 
@@ -170,7 +171,7 @@ class VictronTests(TestCase):
     def test_release_uses_explicit_native_values_even_after_restart_and_without_telemetry(self):
         self.ha.rows['number.charge']['state']='0';self.ha.rows['number.discharge']['state']='0';self.ha.rows['number.setpoint']['state']='3000'
         self.ha.rows['sensor.voltage']['state']='unavailable'
-        restarted=BATTERY_DRIVERS['victron_ha'](self.scope,self.params)
+        restarted=BATTERY_DRIVERS[self.plugin_id](self.scope,self.params)
         restarted.release({})
         self.assertEqual(self.ha.writes,[('number.setpoint',50),('number.charge',60),('number.discharge',4500)])
 
@@ -178,7 +179,7 @@ class VictronTests(TestCase):
         for changes in ({'release_charge_limit':None},{'grid':''},{'charge_efficiency':0},{'discharge_limit':'number.charge'},
                         {'ess_mode_option':'external_control'}):
             with self.subTest(changes=changes),self.assertRaises(ValueError):
-                BATTERY_DRIVERS['victron_ha'](None,{**self.params,**changes})
+                BATTERY_DRIVERS[self.plugin_id](None,{**self.params,**changes})
         self.assertFalse(self.ha.writes)
 
     def test_invalid_release_bounds_and_units_are_checked_before_writes(self):

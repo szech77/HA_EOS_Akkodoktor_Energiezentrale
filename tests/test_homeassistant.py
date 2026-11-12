@@ -345,10 +345,16 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             connect.assert_not_called()
 
     async def test_victron_hacs_can_be_added_read_only_with_entity_selectors(self):
+        await self._check_victron_entity_form('victron_ha')
+
+    async def test_official_victron_gx_can_be_added_read_only_with_entity_selectors(self):
+        await self._check_victron_entity_form('victron_gx')
+
+    async def _check_victron_entity_form(self,plugin_id):
         flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
         with patch('socket.create_connection') as connect:
             await flow.async_step_device_add({'kind':'battery'})
-            form=await flow.async_step_device_plugin({'plugin':'victron_ha'})
+            form=await flow.async_step_device_plugin({'plugin':plugin_id})
             control=next(value for key,value in form['data_schema'].schema.items() if str(key)=='parameters')
             self.assertEqual(control.config['fields']['soc']['selector'].config['domain'],['sensor'])
             self.assertEqual(control.config['fields']['charge_limit']['selector'].config['domain'],['number'])
@@ -360,7 +366,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             validate_options(flow.values)
             config=Configuration(flow.values,Mock(),self.directory)
             driver=config.battery.batteries[0][1]
-            self.assertEqual(driver.info.identifier,'victron_ha')
+            self.assertEqual(driver.info.identifier,plugin_id)
             self.assertFalse(driver.features.grid_charge)
             self.assertIn('grid',config.battery.measurement_keys)
             connect.assert_not_called()

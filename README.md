@@ -2,7 +2,8 @@
 
 # EOS Energiezentrale
 
-Victron-Anlagen über **Victron Venus MQTT / HACS** anbinden:
+Victron-Anlagen über die offizielle **Victron GX**-Integration oder
+**Victron Venus MQTT / HACS** anbinden:
 [Plugin einrichten](VICTRON.md) (Messwerte und optionale ESS-Mode-2-Steuerung).
 
 HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen,
