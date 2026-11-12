@@ -927,6 +927,32 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             connection.send_error.assert_called_once()
         app.set_armed.assert_not_called()
 
+    async def test_weather_forecast_request_is_read_only_and_rejects_source_overrides(self):
+        coordinator,app=self.controller()
+        with patch.object(coordinator.weather_forecast,'async_read',return_value={'status':'empty','rows':[]}) as read:
+            connection=await self.invoke({'action':'weather_forecast'})
+            connection.send_result.assert_called_once_with(1,{'status':'empty','rows':[]})
+            read.assert_awaited_once_with(app.config.options)
+            connection=await self.invoke({'action':'weather_forecast','values':{'entity_id':'weather.other'}})
+            connection.send_error.assert_called_once()
+        app.set_armed.assert_not_called()
+
+    async def test_slow_weather_service_never_holds_the_device_control_lock(self):
+        coordinator,app=self.controller()
+        started,finish=asyncio.Event(),asyncio.Event()
+        async def slow(_options):
+            started.set();await finish.wait();return {'rows':[],'status':'empty'}
+        with patch.object(coordinator.weather_forecast,'async_read',side_effect=slow):
+            pending=asyncio.create_task(coordinator.async_weather_forecast({}))
+            try:
+                await asyncio.wait_for(started.wait(),2)
+                await asyncio.wait_for(coordinator.async_change(enabled=True),2)
+                app.set_armed.assert_called_once_with(True)
+            finally:
+                finish.set();await pending
+        coordinator.closing=True
+        with self.assertRaises(ValueError): await coordinator.async_weather_forecast({})
+
     async def test_websocket_history_keeps_local_data_on_influx_failure(self):
         coordinator, app = self.controller()
         app.history.read.return_value = [{"time": "2026-11-08T12:00:00+00:00", "solar": 1000}]

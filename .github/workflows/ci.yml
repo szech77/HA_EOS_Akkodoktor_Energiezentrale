@@ -39,6 +39,7 @@ jobs:
           node --check custom_components/eos_energiezentrale/energy/web/accounting.js
           node --check custom_components/eos_energiezentrale/energy/web/app.js
           node --check custom_components/eos_energiezentrale/energy/web/panel.js
+          node --check custom_components/eos_energiezentrale/energy/web/forecast.js
           node --test tests/*.test.cjs
 
   security:

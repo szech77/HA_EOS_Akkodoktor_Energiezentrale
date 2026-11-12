@@ -17,6 +17,7 @@ from .energy.controller import Controller
 from .energy.domain import next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import daily_settings
+from .weather_forecast import WeatherForecast
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.goal_sync_last = {}
         self.vehicle_sync_tasks = {}
         self.vehicle_sync_last = {}
+        self.weather_forecast = WeatherForecast(hass)
         if isinstance(app, Controller):
             app.external_eos_polling = True
             app.external_battery_sync = True
@@ -408,6 +410,11 @@ class EnergyCoordinator(DataUpdateCoordinator):
             self.accounting_cache.pop(next(iter(self.accounting_cache)))
         self.accounting_cache[key] = (monotonic(),historical)
         return merge_reconstruction(result,deepcopy(historical))
+
+    async def async_weather_forecast(self, values):
+        if values or self.closing:
+            raise ValueError('Invalid weather forecast request')
+        return await self.weather_forecast.async_read(self.app.config.options)
 
     async def async_history(self):
         # An unresponsive history database must not block control operations.

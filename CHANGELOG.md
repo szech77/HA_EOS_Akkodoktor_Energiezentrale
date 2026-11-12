@@ -3,6 +3,25 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.13.0 - 2026-11-12
+
+### Features
+
+- Das Wettersymbol im Stromflussdiagramm öffnet eine Wetter-/PV-Vorhersage für die nächsten 24 Stunden. Oben stehen stündliche Wetterlage, Temperatur und Niederschlagsmenge aus Home Assistant, darunter die EOS-PV-Prognose mit Ertrag und Spitzenleistung. Beide Diagramme verwenden denselben Zeitraum und eine gemeinsame Auswahl per Maus, Touch oder Tastatur. Responsiver Dialog mit hellem/dunklem Design, Escape und Rückkehr des Tastaturfokus.
+- Stündliche Prognosen derselben Wetterentität wie im Energiefluss über `weather.get_forecasts` abrufen und fünf Minuten zwischenspeichern. Wetterabfragen laufen unabhängig von der Gerätesteuerung. Fehlende Stunden, nicht unterstützte Quellen und Ausfälle bleiben sichtbar; der PV-Bereich bleibt unabhängig verfügbar. Teilweise PV-Prognosen kennzeichnen und Erträge nur aus vorhandenen, überlappungsfrei auf 24 Stunden begrenzten Intervallen berechnen.
+
+### Bugfixes
+
+- Das Wettermodul bei Bedarf mit der Version des laufenden Panels nachladen, wenn ein älteres zwischengespeichertes Startskript es noch nicht kennt. Lade- und Dialogfehler abfangen, damit ein Klick auf das Wettersymbol die Energieübersicht nicht ausblendet. JavaScript-Ausführungsfehler von fehlenden Dateien unterscheiden und technische Details ohne rohe Fehlertexte anzeigen.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Neue reine Leseaktion hinter der bestehenden Home-Assistant-Administratorprüfung; Wetterquelle ausschließlich aus der Integrationskonfiguration bestimmen. Anbieter-Rohfehler nicht an das Panel weitergeben; Quellenbezeichnungen als Text darstellen.
+
 ## 0.12.0 - 2026-11-12
 
 ### Features
