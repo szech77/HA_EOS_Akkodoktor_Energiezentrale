@@ -1,5 +1,8 @@
 # Victron GX und Victron Venus MQTT / HACS
 
+Ohne zusätzliche HA-Integration ist auch eine
+[direkte Modbus-TCP-Anbindung](VICTRON_MODBUS.md) verfügbar.
+
 ## Offizielle Home-Assistant-Integration Victron GX
 
 Für die offizielle [Victron GX-Integration](https://www.home-assistant.io/integrations/victron_gx/)

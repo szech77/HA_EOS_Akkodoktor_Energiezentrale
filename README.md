@@ -5,6 +5,8 @@
 Victron-Anlagen über die offizielle **Victron GX**-Integration oder
 **Victron Venus MQTT / HACS** anbinden:
 [Plugin einrichten](VICTRON.md) (Messwerte und optionale ESS-Mode-2-Steuerung).
+Alternativ [Victron GX direkt über Modbus TCP](VICTRON_MODBUS.md) anbinden,
+ohne zusätzliche Victron-Integration oder HA-Sensoren.
 
 HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen,
 Speichersteuerung und PV-Überschussladen. Ab Version **0.2.0** läuft die
