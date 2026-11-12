@@ -1,6 +1,7 @@
 'use strict';
 
 const byId = id => document.getElementById(id);
+const appScriptUrl=document.currentScript?.src||location.href;
 const html = value => String(value ?? '').replace(/[&<>"']/g, char =>
   ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 const startupLanguage=(new URL(location.href).searchParams.get('lang')||navigator.language||'en').startsWith('de')?'de':'en';
@@ -730,6 +731,7 @@ function renderView() {
     Object.keys(vehicle.errors ?? {}).filter(key => ['wallbox','wallbox_stop','vehicle_limits','goal'].includes(key))
       .map(key => `${vehicle.name}: ${t(errorAreas[key])}`));
   const warnings = [...errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()), ...vehicleWarnings];
+  if(forecastOpenFailure)warnings.push(t('forecast.open_failed'));
   byId('notice').textContent = warnings.length ? `${t('notice.check')} · ${warnings.join(', ')}` : '';
   const sourceNotice = [sourceConfigurationNotice(snapshot.source_configuration,t),
     vehicleSocNotices(snapshot.vehicles,t)].filter(Boolean).join(' · ');
@@ -755,10 +757,44 @@ async function refreshHistory() {
   finally { historyRefreshing = false; render(); }
 }
 let forecastView=null;
-byId('flow-weather').addEventListener('click',()=>{
-  forecastView??=EosForecast.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
-  forecastView.open();
-});
+let forecastModuleLoading=null,forecastOpenFailure=false;
+function ensureForecastModule(){
+  if(typeof globalThis.EosForecast?.create==='function')return Promise.resolve(globalThis.EosForecast);
+  if(!forecastModuleLoading){
+    // An older cached bootstrap may not know about this optional dependency.
+    const url=new URL('./forecast.js',location.href);
+    url.searchParams.set('v',new URL(appScriptUrl).searchParams.get('v')||String(Date.now()));
+    forecastModuleLoading=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');let finished=false;
+      const finish=error=>{
+        if(finished)return;finished=true;clearTimeout(timer);script.remove();
+        if(error)reject(requestError('asset_mismatch','interface'));else resolve(globalThis.EosForecast);
+      };
+      const timer=setTimeout(()=>finish(true),10000);
+      script.src=url.href;
+      script.onload=()=>finish(typeof globalThis.EosForecast?.create!=='function');
+      script.onerror=()=>finish(true);
+      document.head.append(script);
+    }).catch(error=>{forecastModuleLoading=null;throw error;});
+  }
+  return forecastModuleLoading;
+}
+async function openWeatherForecast(){
+  const button=byId('flow-weather');
+  if(button.disabled)return;
+  button.disabled=true;forecastOpenFailure=false;
+  try{
+    const module=await ensureForecastModule();
+    if(!byId('weather-dialog')||!byId('forecast-close')||!byId('forecast-body'))throw requestError('asset_mismatch','interface');
+    forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
+    forecastView.open();
+  }catch{
+    forecastOpenFailure=true;
+  }finally{
+    button.disabled=false;render();
+  }
+}
+byId('flow-weather').addEventListener('click',openWeatherForecast);
 byId('vehicle-selector').addEventListener('change',()=>{formReady=false;settings();});
 form.elements.schedule.addEventListener('change',scheduleFields);
 form.addEventListener('submit', async event => {

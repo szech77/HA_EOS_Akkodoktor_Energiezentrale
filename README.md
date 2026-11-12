@@ -992,6 +992,12 @@ Spitzenleistung nur auf die vorhandenen Intervalle; Nachtstunden zählen nur bei
 einer expliziten 0-W-Prognose als abgedeckt. Die Darstellung nutzt die konfigurierte
 Zeitzone und exakt 24 verstrichene Stunden, auch bei Zeitumstellungen.
 
+Nach Updates lädt der Klick ein fehlendes Vorhersagemodul bei Bedarf mit der
+Version des laufenden Panels nach, auch wenn der Browser noch ein älteres
+Startskript verwendet. Schlägt das Nachladen fehl, bleibt die Energieübersicht
+benutzbar und der Klick kann wiederholt werden. Bei weiterhin unvollständigen
+UI-Dateien die Integration vollständig aktualisieren und die Oberfläche neu laden.
+
 ### Schutz der InfluxDB-Zugangsdaten
 
 Ohne Passwort-Umgebungsvariable speichert Home Assistant das eingegebene Passwort in

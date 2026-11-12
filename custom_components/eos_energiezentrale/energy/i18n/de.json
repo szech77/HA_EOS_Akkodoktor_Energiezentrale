@@ -370,6 +370,7 @@
     "forecast.sources": "Wetter: Home Assistant · PV-Prognose: EOS",
     "forecast.updated": "Wetter abgerufen",
     "forecast.refresh": "Aktualisieren",
-    "action.weather_forecast": "Wettervorhersage"
+    "action.weather_forecast": "Wettervorhersage",
+    "forecast.open_failed": "Die Wetter-/PV-Vorhersage konnte nicht geöffnet werden. Bitte erneut auf das Wettersymbol klicken oder die Oberfläche neu laden."
   }
 }

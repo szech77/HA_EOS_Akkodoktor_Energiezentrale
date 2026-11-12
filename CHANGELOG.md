@@ -12,7 +12,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
-- Keine.
+- Das Wettermodul bei Bedarf mit der Version des laufenden Panels nachladen, wenn ein älteres zwischengespeichertes Startskript es noch nicht kennt. Lade- und Dialogfehler abfangen, damit ein Klick auf das Wettersymbol die Energieübersicht nicht ausblendet. JavaScript-Ausführungsfehler von fehlenden Dateien unterscheiden und technische Details ohne rohe Fehlertexte anzeigen.
 
 ### Breaking Changes
 
