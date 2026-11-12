@@ -2,6 +2,9 @@
 
 # EOS Energiezentrale
 
+Victron-Anlagen über **Victron Venus MQTT / HACS** anbinden:
+[Plugin einrichten](VICTRON.md) (Messwerte und optionale ESS-Mode-2-Steuerung).
+
 HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen,
 Speichersteuerung und PV-Überschussladen. Ab Version **0.2.0** läuft die
 Energiezentrale direkt in Home Assistant. Der EOS-Server bleibt ein separater Dienst.

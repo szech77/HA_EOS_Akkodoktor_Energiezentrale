@@ -56,6 +56,7 @@ class InverterReading:
 
 class InverterDriver(ABC):
     """Read-only generation device, with the same measurement safety boundary."""
+    provides_site_consumption: ClassVar[bool] = False
     measurement_keys: ClassVar[tuple[str, ...]] = ("solar", "inverter_ac")
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]
@@ -121,6 +122,9 @@ class UnsupportedFeature(PluginContractError):
 
 class BatteryDriver(ABC):
     uses_dispatch_context: ClassVar[bool] = False
+    # True only for a measured site total, not grid + this inverter's output.
+    provides_site_consumption: ClassVar[bool] = False
+    soc_max_age: ClassVar[int] = 120
     measurement_keys: ClassVar[tuple[str, ...]] = ("battery_soc", "battery_charge", "battery_discharge")
     info: ClassVar[PluginInfo]
     configuration: ClassVar[tuple[PluginField, ...]]
@@ -134,7 +138,7 @@ class BatteryDriver(ABC):
     def read(self, states: dict, now: datetime) -> BatteryReading:
         from .sanitiser import battery_reading
         from .measurement_sources import checked_measurements
-        result = battery_reading(self._read(states,now),now)
+        result = battery_reading(self._read(states,now),now,soc_max_age=self.soc_max_age)
         return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now))
 
     def apply(self, command: BatteryCommand, states: dict) -> None:
