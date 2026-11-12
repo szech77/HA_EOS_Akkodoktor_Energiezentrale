@@ -72,10 +72,30 @@ test('partially priced consumption shows an estimated average of its priced ener
  assert.equal(vm.runInContext('averageCost(amount)',ctx),'≈ -10 ct/kWh');
  ctx.amount=amount(2,0,1);
  assert.equal(vm.runInContext('averageCost(amount)',ctx),'≈ 0 ct/kWh');
- for(const value of [amount(1,0,1),amount(1,.1,2),amount(1,.1,-1),amount(1,0,1-.00001)]){
+ for(const value of [amount(1,0,1),amount(1,.1,2),amount(1,.1,-1)]){
   ctx.amount=value;
   assert.equal(vm.runInContext('averageCost(amount)',ctx),'—');
  }
+});
+
+test('estimated battery costs and tiny priced heat-pump shares have a visible estimated unit price',()=>{
+ const ctx=fixture();ctx.amount={...amount(1,.2),estimated_kwh:1};
+ assert.equal(vm.runInContext('averageCost(amount)',ctx),'≈ 20 ct/kWh');
+ assert.match(vm.runInContext('costValue(amount)',ctx),/^≈/);
+ assert.doesNotMatch(vm.runInContext('costValue(amount)',ctx),/known_portion/);
+ ctx.amount=amount(.00005,.00001);
+ assert.equal(vm.runInContext('averageCost(amount)',ctx),'20 ct/kWh');
+});
+
+test('merging historical estimates into legacy live totals preserves estimate markers without NaN',()=>{
+ const {ctx,elements}=uiFixture();ctx.consumerEnabled=()=>false;
+ ctx.snapshot.accounting={date:'2026-02-01',consumers:{house:{total:amount(1,.2)}}};
+ const old=amount(1,.2);old.estimated_kwh=1;old.estimated_seconds=300;old.sources.grid.estimated_kwh=1;
+ ctx.historical={date:'2026-02-01',historical_consumers:{house:old}};
+ vm.runInContext('dayAccounting=historical;dayBalance()',ctx);
+ assert.match(elements['day-balance'].innerHTML,/≈ 2 kWh/);
+ assert.match(elements['day-balance'].innerHTML,/Ø ≈ 20 ct\/kWh/);
+ assert.doesNotMatch(elements['day-balance'].innerHTML,/NaN|undefined/);
 });
 
 test('overview, detail, source table and chart tooltip mark estimated unit prices',()=>{

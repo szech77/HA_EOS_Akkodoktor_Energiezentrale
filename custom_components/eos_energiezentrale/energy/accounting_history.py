@@ -1,13 +1,15 @@
 """Read-only reconstruction of older Influx measurements before ledger recording.
 
-Five-minute means are estimates. Missing buckets stay missing; historical storage
-starts with unknown value. Reconstruction never modifies the live cost inventory.
+Five-minute means and gaps up to six hours are estimates. Initial battery value
+uses the same price assumptions as the live model, without modifying live inventory.
 """
 from concurrent.futures import ThreadPoolExecutor
+from bisect import bisect_right
 from datetime import datetime, time, timedelta, timezone
 
 from .accounting import Accounting, add, empty
 from .domain import house_only, instant, number
+from .accounting_estimates import MAX_GAP_SECONDS, interpolate, repair
 
 
 def reconstruct(config, report, now, vehicle_configs=()):
@@ -49,12 +51,15 @@ def reconstruct(config, report, now, vehicle_configs=()):
                 if stamp is not None and number(value) is not None:
                     rows.setdefault(stamp,{})[key]=value
     model = object.__new__(Accounting)
+    prices=sorted((stamp,row['price']) for stamp,row in rows.items() if number(row.get('price')) is not None)
+    price_times=[stamp for stamp,_ in prices]
     model.settings = report["settings"]
     model.stock = None
     model.pv_tariff = report.get("pv_tariff")
     effective = report["effective"]
     consumers = {}
-    previous_stamp = None
+    prepared = []
+    model.last_rate = None
     held = {}
     for stamp,row in sorted(rows.items()):
         # Prices are step values rather than power samples: an hourly tariff
@@ -64,8 +69,7 @@ def reconstruct(config, report, now, vehicle_configs=()):
                 held[field] = (stamp,row[field])
             elif field in held and (stamp-held[field][0]).total_seconds() < 3600:
                 row[field] = held[field][1]
-        first,last=max(start,stamp),min(end,stamp+timedelta(minutes=5))
-        if last <= first:
+        if not any(key in row for key in ('pv','house','grid','heat','battery_charge','battery_discharge','car',*vehicle_keys)):
             continue
         row["solar"] = row.get("pv")
         row["house_total"] = row.get("house")
@@ -76,21 +80,33 @@ def reconstruct(config, report, now, vehicle_configs=()):
         if not options.get("heat_entity"):
             row["heat"] = 0
         row["house"] = house_only(row.get("house_total"),row.get("car"),row.get("heat"))
-        if model.stock is not None and previous_stamp is not None and (stamp-previous_stamp).total_seconds()>300:
-            energy=(max(0,min(100,row["battery_soc"]))*effective["capacity_wh"]/100000
-                    if effective is not None and number(row.get("battery_soc")) is not None else model.stock["kwh"])
-            model.stock={"kwh":energy,"cost":0.,"unknown":energy}
+        row['consumers']={key:row.get(key) for key in ('house','heat','car',*vehicle_keys)}
+        row['time']=stamp.isoformat()
+        prepared.append((stamp,row))
+    previous_stamp=None
+    for index,(stamp,row) in enumerate(prepared):
+        following=prepared[index+1] if index+1<len(prepared) else None
+        gap=(following[0]-stamp).total_seconds() if following else 0
+        bridge=300<gap<=MAX_GAP_SECONDS
+        first=max(start,stamp)
+        last=min(end,following[0] if bridge else stamp+timedelta(minutes=5))
+        if following: last=min(last,following[0])
+        if last<=first: continue
+        if model.stock is None or (previous_stamp is not None and (stamp-previous_stamp).total_seconds()>300):
+            model.reconcile_stock(row,effective)
         previous_stamp=stamp
-        if model.stock is None and effective is not None and number(row.get("battery_soc")) is not None:
-            energy=max(0,min(100,row["battery_soc"]))*effective["capacity_wh"]/100000
-            model.stock={"kwh":energy,"cost":0.,"unknown":energy}
-        row["consumers"] = {key:row.get(key) for key in ("house","heat","car",*vehicle_keys)}
         cursor=first
         while cursor<last:
             next_day=datetime.combine(cursor.astimezone(config.zone).date()+timedelta(days=1),time(),config.zone).astimezone(timezone.utc)
-            stop=min(last,next_day)
-            row["time"] = cursor.isoformat()
-            amounts=model.allocate(row,(stop-cursor).total_seconds()/3600000,effective)
+            next_hour=datetime.fromtimestamp((int(cursor.timestamp())//3600+1)*3600,timezone.utc)
+            stop=min(last,next_day,next_hour,cursor+timedelta(minutes=5))
+            price_index=bisect_right(price_times,cursor)-1
+            if price_index+1<len(prices): stop=min(stop,prices[price_index+1][0])
+            current=interpolate(row,following[1],((cursor-stamp).total_seconds()+(stop-cursor).total_seconds()/2)/gap) if bridge else repair(dict(row))
+            current.update(time=cursor.isoformat(),estimated=True)
+            if price_index>=0 and (cursor-prices[price_index][0]).total_seconds()<3600:
+                current['price']=prices[price_index][1]
+            amounts=model.allocate(current,(stop-cursor).total_seconds()/3600000,effective)
             local=cursor.astimezone(config.zone)
             key=(datetime.fromtimestamp(int(cursor.timestamp())//3600*3600,timezone.utc).isoformat() if report["period"]=="day"
                  else local.date().isoformat() if report["period"]=="month" else local.strftime("%Y-%m"))

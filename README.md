@@ -795,15 +795,26 @@ Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** eine eigene Aus
 Die neue lokale Bilanz speichert Stundenaggregate dauerhaft in
 `.storage/eos_energiezentrale/<entry_id>/accounting.sqlite3` und ist unabhängig vom
 kurzen Diagrammcache. Datenbank und Kostenbestand gehören in die HA-Sicherung.
-Messlücken über 120 Sekunden sowie Zeiten während eines Neustarts werden nicht mit
-gehaltenen Anzeigewerten aufgefüllt. Die ausgewiesene Beobachtungsdauer macht die Abdeckung sichtbar.
+Der letzte Messpunkt wird zusammen mit dem Kostenbestand gespeichert. Nach einem
+Neustart oder bei Messlücken bis **sechs Stunden** werden die Werte zwischen dem
+letzten und dem nächsten Messpunkt linear angenähert und in höchstens fünf Minuten
+langen Abschnitten ausgewertet. Stunden-, Tages- und Zeitumstellungsgrenzen bleiben
+erhalten. Solche Verbräuche und ihre Kosten sind mit **≈** gekennzeichnet. Bei einem
+einseitig fehlenden Wert dient der verfügbare Nachbarwert als Näherung; fehlen beide,
+wird kein beliebiger Nullwert erfunden. Bei längeren Ausfällen bleibt die
+Verbrauchslücke offen, während der bekannte Akkupreis erhalten bleibt.
 
 Für Zeiträume vor Beginn der lokalen Bilanz liest die Auswertung vorhandene Messwerte
 aus der konfigurierten InfluxDB 1.x. Diese Rekonstruktion verwendet Fünf-Minuten-Mittelwerte,
-füllt fehlende Intervalle nicht auf und überlappt die neue Bilanz nicht. Sie ist ausdrücklich
-eine Schätzung. Fehlende Preise oder unbekannte anfängliche Akkuenergie bleiben unbekannt.
+interpoliert Lücken zwischen Messpunkten bis sechs Stunden und überlappt die neue
+Bilanz nicht. Sie ist ausdrücklich eine Schätzung. Für den anfänglichen Akkuinhalt
+gelten dieselben Preisannahmen wie für den Live-Bestand; fehlt jede Preisgrundlage,
+bleibt der Kostenanteil unbekannt.
 Historische Auswertungen verwenden für die Rekonstruktion die aktuell eingestellten
-PV-Kosten und Speicherparameter; bereits dauerhaft erfasste Bilanzwerte werden nicht neu bewertet.
+PV-Kosten und Speicherparameter. Bereits dauerhaft bewertete Kosten werden nicht
+neu bewertet. Noch unbewertete Akkuanteile erhalten in der Berichtskopie eine
+gekennzeichnete Näherung zum verfügbaren Akkupreis, ohne die ursprünglichen
+Datenbankeinträge zu überschreiben.
 Die Datenbankabfragen laufen außerhalb der Gerätesteuerung und sind zeitlich begrenzt.
 
 ### Einstellungen zur Bilanzierung
@@ -822,8 +833,10 @@ Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
 und `discharging_efficiency` gelesen. Dies verändert keine EOS-Konfiguration. Fehlen diese
 Werte, bleibt die Bewertung von Akkuenergie unbekannt, bis EOS bereit ist oder manuelle
-Parameter eingestellt sind. Der letzte gültige Parametersatz wird während der Laufzeit
-weitergenutzt. Die aktuellen verwendeten Parameter werden im Einstellungsbereich angezeigt.
+Parameter eingestellt sind. Der letzte gültige Parametersatz wird auch über
+Neustarts erhalten und bei vorübergehend fehlender EOS-Verbindung als gekennzeichnete
+Näherung für diese Auswertung weitergenutzt. Die aktuell verwendeten Parameter
+werden im Einstellungsbereich angezeigt.
 
 PV, Netz und Akku werden anteilig auf die gleichzeitig gemessenen Verbraucher,
 Speicherladung und Einspeisung verteilt. Eine eindeutige physische Quellenzuordnung
@@ -836,8 +849,14 @@ Netzladung erhöht den Akku-Kostenbestand zum jeweiligen Strompreis, PV-Ladung z
 PV-Kostenansatz. Ladeverluste reduzieren die eingelagerte Energie; bei Entladung wird
 die für die gelieferte Energie nötige gespeicherte Energie einschließlich Entladeverlusten
 ausgebucht. Energie und Kosten werden mit gewichtetem Durchschnitt entnommen.
-Der Kostenbestand bleibt über Neustarts erhalten; nicht beobachtete Bestandszunahmen
-werden beim Abgleich mit dem SoC als unbekannt behandelt. Es werden keine Grundgebühren
+Der Kostenbestand bleibt über Neustarts erhalten. Ein Messausfall löscht weder
+bekannte Kosten noch den zuletzt bewerteten Preis. Der nach einer Lücke gemeldete
+SoC begrenzt den Bestand: Minderungen buchen Energie und Kosten proportional aus;
+zusätzliche, nicht beobachtete Energie wird zum verfügbaren gewichteten Akkupreis
+angenähert. Ist noch kein Akkupreis bekannt, wird der manuelle Anfangspreis oder
+der PV-Kostenansatz einschließlich Ladeverlusten verwendet. Auch eine rechnerische
+Bestandsunterschreitung bei gemessener Entladung wird mit diesem Preis geschätzt,
+statt Strom kostenlos zu behandeln. Es werden keine Grundgebühren
 oder Einspeiseerlöse des übrigen Hauses verrechnet. Negative Arbeitspreise sind zulässig.
 
 Ohne ausdrücklich angegebenen Anfangspreis wird der anfängliche Akkuinhalt als
@@ -845,13 +864,18 @@ PV-Ladung geschätzt: gespeicherte kWh geteilt durch den Ladewirkungsgrad, bewer
 zum aktuellen PV-Kostenansatz (standardmäßig EOS-Einspeisevergütung). Bei der
 Entladung kommen die Entladeverluste hinzu. Auch der noch unbekannte Rest eines
 bisherigen Kostenbestands wird einmalig so bewertet; bekannte Kosten bleiben erhalten.
-Fehlt der Tarif, wartet diese Schätzung auf einen gültigen Wert. Spätere Datenlücken
-bleiben unbekannt. Die Annahme ist eine Näherung; bereits erfasste Auswertungen
-werden dadurch nicht rückwirkend geändert.
+Fehlt jede Preisgrundlage, wartet diese Schätzung auf einen gültigen Wert. Spätere
+Datenlücken verwenden den vorhandenen gewichteten Preis als Näherung. Fehlende
+Akku-Leistungswerte können für die Auswertung aus PV-Leistung, Netzleistung und
+Gesamtverbrauch abgeleitet werden. Die tatsächliche Gerätesteuerung verwendet
+weiterhin ausschließlich ihre eigenen gültigen Messwerte.
 
 Bei nur teilweise bekannten Kosten zeigt die UI die bekannte Teilsumme mit `≈` an;
 bei vollständig unbekannten Kosten steht `—`. Unbekannte Energie wird nicht als kostenlos bewertet.
-Die Auswertung ist eine Energiekostenbilanz und ersetzt keine Stromrechnung.
+Auch vollständig bewertete, aber interpolierte oder geschätzte Werte tragen `≈`.
+Das gilt ebenfalls für den berechneten Preis je kWh. Ein echter Null- oder
+Negativtarif bleibt ein gültiger Preis; fehlende Preise werden nicht als 0 angesetzt.
+Die Auswertung dient der Orientierung und Prognose und ersetzt keine Stromrechnung.
 
 
 Der PV-Kostenansatz wird zur Laufzeit aus der **EOS-REST-API** gelesen. Es werden keine
