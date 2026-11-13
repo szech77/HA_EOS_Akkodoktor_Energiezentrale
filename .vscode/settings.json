@@ -28,5 +28,6 @@
             ],
             "parameters": []
         }
-    ]
+    ],
+    "python.terminal.useEnvFile": true
 }

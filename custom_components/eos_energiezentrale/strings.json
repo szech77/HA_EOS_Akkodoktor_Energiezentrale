@@ -529,6 +529,485 @@
         "inverter": "PV inverter without battery",
         "wallbox": "Charger with vehicle"
       }
+    },
+    "plugin_battery_deye_modbus": {
+      "fields": {
+        "host": {
+          "name": "RS485 gateway host / IP"
+        },
+        "port": {
+          "name": "Modbus TCP gateway port"
+        },
+        "unit_id": {
+          "name": "Inverter Modbus address"
+        },
+        "grid_meter_enabled": {
+          "name": "Provide common grid meter"
+        },
+        "grid_meter_invert": {
+          "name": "Invert grid meter sign"
+        },
+        "remote_control": {
+          "name": "Enable supported remote-control firmware"
+        },
+        "grid_discharge_supported": {
+          "name": "Allow forced battery export"
+        },
+        "minimum_soc": {
+          "name": "Additional device minimum SoC (%)"
+        },
+        "maximum_soc": {
+          "name": "Additional device maximum SoC (%)"
+        }
+      }
+    },
+    "plugin_battery_fronius": {
+      "fields": {
+        "mode": {
+          "name": "Mode"
+        },
+        "soc": {
+          "name": "Soc"
+        },
+        "charge_power": {
+          "name": "Charge Power"
+        },
+        "discharge_power": {
+          "name": "Discharge Power"
+        },
+        "pv_limit": {
+          "name": "Pv Limit"
+        },
+        "discharge_limit": {
+          "name": "Discharge Limit"
+        },
+        "grid_charge": {
+          "name": "Grid Charge"
+        },
+        "grid_discharge": {
+          "name": "Grid Discharge"
+        }
+      }
+    },
+    "plugin_battery_fronius_modbus": {
+      "fields": {
+        "host": {
+          "name": "Modbus host / IP"
+        },
+        "port": {
+          "name": "Modbus TCP port"
+        },
+        "unit_id": {
+          "name": "Modbus unit ID"
+        },
+        "grid_meter_enabled": {
+          "name": "Read grid connection meter"
+        },
+        "grid_meter_unit_id": {
+          "name": "Grid meter unit ID"
+        },
+        "grid_meter_host": {
+          "name": "Grid meter gateway host (empty: primary inverter)"
+        },
+        "grid_meter_port": {
+          "name": "Grid meter gateway port (0: primary inverter port)"
+        },
+        "grid_meter_invert": {
+          "name": "Invert grid meter sign"
+        },
+        "grid_discharge_supported": {
+          "name": "Allow forced grid export"
+        },
+        "battery_capacity_wh": {
+          "name": "Primary battery capacity (Wh; required with multiple batteries)"
+        },
+        "additional_inverters": {
+          "name": "Additional inverters (JSON object; see PLUGINS.md)"
+        }
+      }
+    },
+    "plugin_battery_generic": {
+      "fields": {
+        "soc": {
+          "name": "Battery SoC"
+        },
+        "soc_scale": {
+          "name": "SoC unit"
+        },
+        "charge_power": {
+          "name": "Charging power"
+        },
+        "discharge_power": {
+          "name": "Discharging power"
+        },
+        "mode": {
+          "name": "Control mode"
+        },
+        "charge_limit": {
+          "name": "Charge power limit"
+        },
+        "discharge_limit": {
+          "name": "Discharge power limit"
+        },
+        "solar": {
+          "name": "PV power (optional)"
+        },
+        "inverter_ac": {
+          "name": "Signed inverter AC power (optional)"
+        },
+        "grid": {
+          "name": "Signed grid power (optional)"
+        },
+        "grid_charge_supported": {
+          "name": "Supports forced grid charging"
+        },
+        "grid_discharge_supported": {
+          "name": "Supports forced grid export"
+        },
+        "mode_map": {
+          "name": "Mode mapping"
+        }
+      }
+    },
+    "plugin_battery_generic_soc_scale": {
+      "options": {
+        "percent": "Percent (0–100)",
+        "factor": "Factor (0–1)"
+      }
+    },
+    "plugin_battery_victron_gx": {
+      "fields": {
+        "soc": {
+          "name": "Battery SoC (%)"
+        },
+        "battery_power": {
+          "name": "Signed battery DC power (+ charging)"
+        },
+        "battery_voltage": {
+          "name": "Battery voltage (required for A-based charge limit)"
+        },
+        "grid": {
+          "name": "Total grid power (+ import)"
+        },
+        "solar": {
+          "name": "Total PV power (optional)"
+        },
+        "house_total": {
+          "name": "Total AC consumption including EV/heat (optional)"
+        },
+        "inverter_ac": {
+          "name": "Signed inverter AC output (+ generation, optional)"
+        },
+        "control_enabled": {
+          "name": "Enable ESS Mode 2 control"
+        },
+        "ess_mode": {
+          "name": "ESS user mode (optimized, not Hub4)"
+        },
+        "ess_mode_option": {
+          "name": "Required ESS user mode"
+        },
+        "grid_setpoint": {
+          "name": "ESS AC grid power setpoint (W)"
+        },
+        "charge_limit": {
+          "name": "ESS max charge current (A) or charge power (W)"
+        },
+        "discharge_limit": {
+          "name": "ESS max inverter power (W)"
+        },
+        "release_setpoint": {
+          "name": "Grid setpoint on release (W)"
+        },
+        "release_charge_limit": {
+          "name": "Native charge limit on release (A or W/kW)"
+        },
+        "release_discharge_limit": {
+          "name": "Native discharge limit on release (W/kW)"
+        },
+        "charge_efficiency": {
+          "name": "AC/DC charge efficiency"
+        },
+        "discharge_efficiency": {
+          "name": "DC/AC discharge efficiency"
+        },
+        "grid_discharge_supported": {
+          "name": "Allow forced grid export"
+        }
+      }
+    },
+    "plugin_battery_victron_gx_ess_mode_option": {
+      "options": {
+        "optimized_no_battery_life": "Optimized without BatteryLife",
+        "optimized_battery_life": "Optimized with BatteryLife"
+      }
+    },
+    "plugin_battery_victron_ha": {
+      "fields": {
+        "soc": {
+          "name": "Battery SoC (%)"
+        },
+        "battery_power": {
+          "name": "Signed battery DC power (+ charging)"
+        },
+        "battery_voltage": {
+          "name": "Battery voltage (required for A-based charge limit)"
+        },
+        "grid": {
+          "name": "Total grid power (+ import)"
+        },
+        "solar": {
+          "name": "Total PV power (optional)"
+        },
+        "house_total": {
+          "name": "Total AC consumption including EV/heat (optional)"
+        },
+        "inverter_ac": {
+          "name": "Signed inverter AC output (+ generation, optional)"
+        },
+        "control_enabled": {
+          "name": "Enable ESS Mode 2 control"
+        },
+        "ess_mode": {
+          "name": "ESS user mode (optimized, not Hub4)"
+        },
+        "ess_mode_option": {
+          "name": "Required ESS user mode"
+        },
+        "grid_setpoint": {
+          "name": "ESS AC grid power setpoint (W)"
+        },
+        "charge_limit": {
+          "name": "ESS max charge current (A) or charge power (W)"
+        },
+        "discharge_limit": {
+          "name": "ESS max inverter power (W)"
+        },
+        "release_setpoint": {
+          "name": "Grid setpoint on release (W)"
+        },
+        "release_charge_limit": {
+          "name": "Native charge limit on release (A or W/kW)"
+        },
+        "release_discharge_limit": {
+          "name": "Native discharge limit on release (W/kW)"
+        },
+        "charge_efficiency": {
+          "name": "AC/DC charge efficiency"
+        },
+        "discharge_efficiency": {
+          "name": "DC/AC discharge efficiency"
+        },
+        "grid_discharge_supported": {
+          "name": "Allow forced grid export"
+        }
+      }
+    },
+    "plugin_battery_victron_ha_ess_mode_option": {
+      "options": {
+        "optimized_no_battery_life": "Optimized without BatteryLife",
+        "optimized_battery_life": "Optimized with BatteryLife"
+      }
+    },
+    "plugin_battery_victron_modbus": {
+      "fields": {
+        "host": {
+          "name": "GX hostname / IP"
+        },
+        "port": {
+          "name": "GX Modbus TCP port"
+        },
+        "phases": {
+          "name": "System phases"
+        },
+        "grid_meter_enabled": {
+          "name": "Provide common grid / consumption measurements"
+        },
+        "read_consumption": {
+          "name": "Read system AC consumption"
+        },
+        "dc_pv_enabled": {
+          "name": "Read DC-coupled PV"
+        },
+        "ac_pv_input_enabled": {
+          "name": "Read AC PV on grid input"
+        },
+        "ac_pv_output_enabled": {
+          "name": "Read AC PV on inverter output"
+        },
+        "control_enabled": {
+          "name": "Enable ESS Mode 2 control (requires DVCC)"
+        },
+        "max_charge_current": {
+          "name": "Allowed system charge current (A DC)"
+        },
+        "max_discharge_power": {
+          "name": "Allowed inverter power (W, steps of 10)"
+        },
+        "release_setpoint": {
+          "name": "Native grid setpoint on release (W)"
+        },
+        "release_charge_current": {
+          "name": "Native charge current on release (A DC, -1 unlimited)"
+        },
+        "release_discharge_power": {
+          "name": "Native inverter limit on release (W, finite, steps of 10)"
+        },
+        "charge_efficiency": {
+          "name": "AC/DC charge efficiency"
+        },
+        "discharge_efficiency": {
+          "name": "DC/AC discharge efficiency"
+        },
+        "grid_discharge_supported": {
+          "name": "Allow forced battery export"
+        }
+      }
+    },
+    "plugin_battery_victron_modbus_phases": {
+      "options": {
+        "1": "Single phase",
+        "3": "Three phases"
+      }
+    },
+    "plugin_wallbox_generic": {
+      "fields": {
+        "power": {
+          "name": "Charging power"
+        },
+        "status": {
+          "name": "Wallbox status"
+        },
+        "plugged": {
+          "name": "Plug connected"
+        },
+        "enable": {
+          "name": "Charge enable"
+        },
+        "current": {
+          "name": "Charging current (A)"
+        },
+        "phases": {
+          "name": "Phase count"
+        },
+        "phase_feedback": {
+          "name": "Actual phase count (required with phase helpers)"
+        },
+        "phase_switching": {
+          "name": "Supports phase switching"
+        },
+        "status_map": {
+          "name": "Status mapping"
+        }
+      }
+    },
+    "plugin_wallbox_goe_http_v2": {
+      "fields": {
+        "url": {
+          "name": "Local HTTP API v2 base URL"
+        },
+        "phase_switching": {
+          "name": "Enable supported 1-/3-phase switching"
+        },
+        "nominal_voltage": {
+          "name": "Nominal phase-to-neutral voltage (V)"
+        }
+      }
+    },
+    "plugin_wallbox_nrgkick": {
+      "fields": {
+        "power": {
+          "name": "Power"
+        },
+        "status": {
+          "name": "Status"
+        },
+        "enable": {
+          "name": "Enable"
+        },
+        "current": {
+          "name": "Current"
+        },
+        "phases": {
+          "name": "Phases"
+        }
+      }
+    },
+    "plugin_wallbox_nrgkick_local": {
+      "fields": {
+        "url": {
+          "name": "Local API URL"
+        },
+        "phase_switching": {
+          "name": "Phase switching enabled in NRGkick app"
+        },
+        "username": {
+          "name": "Basic Auth username (optional)"
+        },
+        "password_env": {
+          "name": "Basic Auth password environment variable (optional)"
+        }
+      }
+    },
+    "plugin_inverter_deye_modbus": {
+      "fields": {
+        "host": {
+          "name": "RS485 gateway host / IP"
+        },
+        "port": {
+          "name": "Modbus TCP gateway port"
+        },
+        "unit_id": {
+          "name": "Inverter Modbus address"
+        },
+        "grid_meter_enabled": {
+          "name": "Provide common grid meter"
+        },
+        "grid_meter_invert": {
+          "name": "Invert grid meter sign"
+        }
+      }
+    },
+    "plugin_inverter_fronius_modbus": {
+      "fields": {
+        "host": {
+          "name": "Modbus host / IP"
+        },
+        "port": {
+          "name": "Modbus TCP port"
+        },
+        "unit_id": {
+          "name": "Modbus unit ID"
+        },
+        "grid_meter_enabled": {
+          "name": "Read grid connection meter"
+        },
+        "grid_meter_unit_id": {
+          "name": "Grid meter unit ID"
+        },
+        "grid_meter_host": {
+          "name": "Grid meter gateway host (empty: primary inverter)"
+        },
+        "grid_meter_port": {
+          "name": "Grid meter gateway port (0: primary inverter port)"
+        },
+        "grid_meter_invert": {
+          "name": "Invert grid meter sign"
+        }
+      }
+    },
+    "plugin_inverter_generic": {
+      "fields": {
+        "solar": {
+          "name": "PV power (DC, W/kW)"
+        },
+        "inverter_ac": {
+          "name": "Signed inverter AC power (W/kW)"
+        },
+        "grid": {
+          "name": "Signed grid power (optional)"
+        }
+      }
     }
   }
 }

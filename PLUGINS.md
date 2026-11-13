@@ -28,6 +28,10 @@ Unter **Einstellungen → Geräte & Dienste → EOS Energiezentrale → Konfigur
    PV-Wechselrichter oder Wallbox auswählen.
 2. Für genau dieses Gerät ein installiertes Plugin wählen. Anschließend erscheinen
    dessen eigene Felder, einschließlich Entitätsauswahl, Auswahllisten und Schaltern.
+   Die Plugin-Felder und Auswahltexte folgen der Home-Assistant-Oberflächensprache
+   (Deutsch/Englisch, Englisch als Rückfall), unabhängig von der Panel-Sprache.
+   Die übersetzten Beschriftungen werden auch direkt an den inneren Dialog
+   **Plugin-Einstellungen** übergeben, falls dort die HA-Übersetzungsauflösung fehlt.
 3. Namen und stabile ID vergeben, Plugin konfigurieren und speichern. Die Seite
    **Geräte** zeigt alle bereits eingerichteten Geräte mit ihrem Namen und einem
    Pfeil zum Öffnen; neue Installationen starten mit leerer Liste. Unter der Liste

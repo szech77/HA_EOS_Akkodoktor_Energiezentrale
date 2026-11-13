@@ -5,7 +5,7 @@ import probatio as vol
 from homeassistant.helpers import selector
 
 from .energy.devices import DeviceSite, REGISTRIES, device_rows
-from .plugin_forms import configured, plugin_choices, plugin_object
+from .plugin_forms import configured, plugin_choices, async_plugin_object
 from .flow_menus import show_menu
 
 
@@ -170,6 +170,6 @@ class DeviceFormMixin:
             for key in ('capacity_wh','charge_w','discharge_w'):
                 fields[vol.Required(key,default=displayed[key])]=selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0,max=1000000,mode=selector.NumberSelectorMode.BOX))
-        control,params=plugin_object(factory,(user_input or {}).get('parameters',old_parameters))
+        control,params=await async_plugin_object(self,factory,(user_input or {}).get('parameters',old_parameters))
         if factory.configuration: fields[vol.Required('parameters',default=params)]=control
         return self.async_show_form(step_id='device_parameters',data_schema=vol.Schema(fields),errors=errors)

@@ -111,14 +111,17 @@ class DeviceSite(BatteryDriver):
     def _read(self,states,now):
         samples=[];snapshots=[]
         for row,driver in self.devices:
+            read_error=None
             try: value=driver.read(states,now)
-            except (OSError,ValueError): value=None
+            except (OSError,ValueError) as error:
+                value=None;read_error=type(error).__name__
             measurements=value.measurements if value else {}
             def get(key):
                 return measurements[key].value if key in measurements else None
             snapshots.append({'name':row['name'],'id':row['id'],'battery':row['kind']=='battery',
                 'capacity_wh':row.get('capacity_wh'),'solar':get('solar'),'ac':get('inverter_ac'),
                 'soc':value.soc if isinstance(value,BatteryReading) else None,
+                'read_error':read_error,'read_diagnostics':deepcopy(getattr(driver,'read_diagnostics',None)),
                 'available':value is not None and all(item.value is not None for item in measurements.values()) and
                     (not isinstance(value,BatteryReading) or all(item is not None for item in (value.soc,value.charge,value.discharge))),
                 'plugin':describe(driver)})

@@ -456,6 +456,77 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             self.assertIn('house_total',config.battery.measurement_keys)
             connect.assert_not_called()
 
+    async def test_plugin_form_labels_resolve_through_native_ha_translations_with_english_fallback(self):
+        from homeassistant.helpers.translation import async_get_translations
+        root=Path(__file__).resolve().parents[1]/'custom_components'/DOMAIN
+        integration=SimpleNamespace(file_path=root,has_translations=True,name='EOS Energiezentrale')
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        await flow.async_step_device_add({'kind':'battery'})
+        form=await flow.async_step_device_plugin({'plugin':'victron_modbus'})
+        control=next(value for key,value in form['data_schema'].schema.items() if str(key)=='parameters')
+        config=control.serialize()['selector']['object']
+        prefix=f"component.{DOMAIN}.selector.{config['translation_key']}"
+        phases=config['fields']['phases']['selector']['select']
+        phase_prefix=f"component.{DOMAIN}.selector.{phases['translation_key']}"
+        with patch('homeassistant.helpers.translation.async_get_integrations',
+                   new=AsyncMock(return_value={DOMAIN:integration})):
+            for language,phase_label,output_label,phase_option in (
+                ('de','Phasenanzahl der Anlage','AC-PV am Wechselrichterausgang auslesen','Dreiphasig'),
+                ('en','System phases','Read AC PV on inverter output','Three phases'),
+                ('fr','System phases','Read AC PV on inverter output','Three phases')):
+                with self.subTest(language=language):
+                    translated=await async_get_translations(self.hass,language,'selector',{DOMAIN})
+                    self.assertEqual(translated[f'{prefix}.fields.phases.name'],phase_label)
+                    self.assertEqual(translated[f'{prefix}.fields.ac_pv_output_enabled.name'],output_label)
+                    self.assertEqual(translated[f'{phase_prefix}.options.3'],phase_option)
+        self.assertEqual(config['fields']['phases']['default'],'3')
+        self.assertEqual(phases['options'],[{'value':'1','label':'Einphasig'},{'value':'3','label':'Dreiphasig'}])
+        self.assertFalse(config['fields']['control_enabled']['default'])
+
+    async def test_existing_victron_inner_editor_has_translated_labels_without_frontend_lookup(self):
+        from threading import get_ident
+        from custom_components.eos_energiezentrale.flow_translations import _translations
+        _translations.cache_clear()
+        row={'id':'gx','name':'GX','kind':'battery','plugin':'victron_modbus','grid_source':True,
+             'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,
+             'parameters':{'host':'gx.local','phases':'1','dc_pv_enabled':False,'ac_pv_output_enabled':True}}
+        self.hass.config_entries.async_update_entry(self.entry,options={'devices':json.dumps([row])})
+        self.hass.config.language='de'
+        main_thread=get_ident();read=Path.read_text;read_threads=[]
+        def checked_read(path,*args,**kwargs):
+            read_threads.append(get_ident())
+            self.assertNotEqual(get_ident(),main_thread)
+            return read(path,*args,**kwargs)
+        with patch.object(Path,'read_text',checked_read):
+            for language,label,output_label,option in (
+                ('de','Phasenanzahl der Anlage','AC-PV am Wechselrichterausgang auslesen','Dreiphasig'),
+                ('en','System phases','Read AC PV on inverter output','Three phases'),
+                ('fr','System phases','Read AC PV on inverter output','Three phases'),
+                ('de-DE','Phasenanzahl der Anlage','AC-PV am Wechselrichterausgang auslesen','Dreiphasig'),
+                (None,'Phasenanzahl der Anlage','AC-PV am Wechselrichterausgang auslesen','Dreiphasig')):
+                with self.subTest(language=language):
+                    flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+                    flow.context={'entry_id':self.entry.entry_id,**({'language':language} if language else {})}
+                    await flow.async_step_device_edit({'device_id':'gx'})
+                    form=await flow.async_step_device_plugin({'plugin':'victron_modbus'})
+                    control=next(value for key,value in form['data_schema'].schema.items() if str(key)=='parameters')
+                    # This is the actual wire payload used by the nested edit dialog;
+                    # no translation callback or client resource lookup is involved.
+                    fields=json.loads(json.dumps(control.serialize()))['selector']['object']['fields']
+                    self.assertEqual(fields['phases']['label'],label)
+                    self.assertEqual(fields['ac_pv_output_enabled']['label'],output_label)
+                    phases=fields['phases']['selector']['select']
+                    self.assertEqual(phases['options'][1],{'value':'3','label':option})
+                    self.assertEqual(fields['host']['default'],'gx.local')
+                    self.assertEqual(fields['phases']['default'],'1')
+                    self.assertFalse(fields['dc_pv_enabled']['default'])
+                    self.assertTrue(fields['ac_pv_output_enabled']['default'])
+                    submitted={key:field['default'] for key,field in fields.items() if 'default' in field}
+                    submitted['phases']='3'
+                    self.assertEqual(control(submitted),submitted)
+        self.assertTrue(read_threads)
+        self.assertEqual(json.loads(self.entry.options['devices']),[row])
+
     async def test_new_installation_device_list_starts_empty_and_returns_added_device_by_name(self):
         flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
         empty=await flow.async_step_devices()
@@ -1062,6 +1133,24 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         diagnostics = json.dumps(await async_get_config_entry_diagnostics(self.hass, self.entry))
         for private in ("test-secret", "private-host", "car_soc"):
             self.assertNotIn(private, diagnostics)
+
+    async def test_device_diagnostics_keep_read_context_without_names_settings_or_measurements(self):
+        coordinator,app=self.controller()
+        coordinator.async_set_updated_data({'battery_group':{'capacity_wh':32000,'devices':[
+            {'name':'Private home','id':'private-id','capacity_wh':32000,'soc':61,'solar':4321,
+             'plugin':{'identifier':'victron_modbus'},'available':False,'read_error':'ModbusError',
+             'read_diagnostics':{'phases':3,'dc_pv_enabled':True,'ac_pv_output_enabled':False,
+                 'host':'private-host','serial':'private-serial','failure':{
+                     'type':'ModbusError','stage':'dc_pv','unit':100,'address':850,'count':1,
+                     'exception_code':2,'message':'private-error'}}}]}})
+        diagnostic=await async_get_config_entry_diagnostics(self.hass,self.entry)
+        self.assertEqual(diagnostic['devices'],[{'device':1,'plugin':'victron_modbus',
+            'available':False,'read_error':'ModbusError','configuration':{
+                'phases':3,'dc_pv_enabled':True,'ac_pv_output_enabled':False},
+            'failure':{'type':'ModbusError','stage':'dc_pv','unit':100,'address':850,'count':1,'exception_code':2}}])
+        payload=json.dumps(diagnostic)
+        for private in ('Private home','private-id','private-host','private-serial','private-error','32000','4321','"soc"'):
+            self.assertNotIn(private,payload)
 
     async def test_native_controls_preserve_independent_pv_target_and_restart_safety(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))

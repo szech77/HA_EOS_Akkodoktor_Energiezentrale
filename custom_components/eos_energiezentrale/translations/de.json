@@ -529,6 +529,485 @@
         "inverter": "PV-Wechselrichter ohne Batterie",
         "wallbox": "Wallbox mit Fahrzeug"
       }
+    },
+    "plugin_battery_deye_modbus": {
+      "fields": {
+        "host": {
+          "name": "RS485-Gateway: Hostname / IP"
+        },
+        "port": {
+          "name": "Modbus-TCP-Gateway-Port"
+        },
+        "unit_id": {
+          "name": "Modbus-Adresse des Wechselrichters"
+        },
+        "grid_meter_enabled": {
+          "name": "Gemeinsamen Netzzähler bereitstellen"
+        },
+        "grid_meter_invert": {
+          "name": "Vorzeichen des Netzzählers umkehren"
+        },
+        "remote_control": {
+          "name": "Steuerung mit unterstützter Fernsteuerungs-Firmware aktivieren"
+        },
+        "grid_discharge_supported": {
+          "name": "Erzwungene Speichereinspeisung erlauben"
+        },
+        "minimum_soc": {
+          "name": "Zusätzlicher minimaler Geräte-SoC (%)"
+        },
+        "maximum_soc": {
+          "name": "Zusätzlicher maximaler Geräte-SoC (%)"
+        }
+      }
+    },
+    "plugin_battery_fronius": {
+      "fields": {
+        "mode": {
+          "name": "Betriebsmodus"
+        },
+        "soc": {
+          "name": "Speicher-SoC"
+        },
+        "charge_power": {
+          "name": "Ladeleistung"
+        },
+        "discharge_power": {
+          "name": "Entladeleistung"
+        },
+        "pv_limit": {
+          "name": "PV-Ladegrenze"
+        },
+        "discharge_limit": {
+          "name": "Entladegrenze"
+        },
+        "grid_charge": {
+          "name": "Netzladung"
+        },
+        "grid_discharge": {
+          "name": "Speichereinspeisung"
+        }
+      }
+    },
+    "plugin_battery_fronius_modbus": {
+      "fields": {
+        "host": {
+          "name": "Modbus-Hostname / IP"
+        },
+        "port": {
+          "name": "Modbus-TCP-Port"
+        },
+        "unit_id": {
+          "name": "Modbus-Unit-ID"
+        },
+        "grid_meter_enabled": {
+          "name": "Netzanschlusszähler auslesen"
+        },
+        "grid_meter_unit_id": {
+          "name": "Unit-ID des Netzzählers"
+        },
+        "grid_meter_host": {
+          "name": "Gateway-Hostname des Netzzählers (leer: Hauptwechselrichter)"
+        },
+        "grid_meter_port": {
+          "name": "Gateway-Port des Netzzählers (0: Port des Hauptwechselrichters)"
+        },
+        "grid_meter_invert": {
+          "name": "Vorzeichen des Netzzählers umkehren"
+        },
+        "grid_discharge_supported": {
+          "name": "Erzwungene Netzeinspeisung erlauben"
+        },
+        "battery_capacity_wh": {
+          "name": "Kapazität des Hauptspeichers (Wh; bei mehreren Speichern erforderlich)"
+        },
+        "additional_inverters": {
+          "name": "Weitere Wechselrichter (JSON-Objekt; siehe PLUGINS.md)"
+        }
+      }
+    },
+    "plugin_battery_generic": {
+      "fields": {
+        "soc": {
+          "name": "Speicher-SoC"
+        },
+        "soc_scale": {
+          "name": "SoC-Einheit"
+        },
+        "charge_power": {
+          "name": "Ladeleistung"
+        },
+        "discharge_power": {
+          "name": "Entladeleistung"
+        },
+        "mode": {
+          "name": "Regelmodus"
+        },
+        "charge_limit": {
+          "name": "Ladeleistungsgrenze"
+        },
+        "discharge_limit": {
+          "name": "Entladeleistungsgrenze"
+        },
+        "solar": {
+          "name": "PV-Leistung (optional)"
+        },
+        "inverter_ac": {
+          "name": "Wechselrichter-AC-Leistung mit Vorzeichen (optional)"
+        },
+        "grid": {
+          "name": "Netzleistung mit Vorzeichen (optional)"
+        },
+        "grid_charge_supported": {
+          "name": "Erzwungene Netzladung unterstützen"
+        },
+        "grid_discharge_supported": {
+          "name": "Erzwungene Netzeinspeisung unterstützen"
+        },
+        "mode_map": {
+          "name": "Zuordnung der Betriebsmodi"
+        }
+      }
+    },
+    "plugin_battery_generic_soc_scale": {
+      "options": {
+        "percent": "Prozent (0–100)",
+        "factor": "Faktor (0–1)"
+      }
+    },
+    "plugin_battery_victron_gx": {
+      "fields": {
+        "soc": {
+          "name": "Speicher-SoC (%)"
+        },
+        "battery_power": {
+          "name": "Speicher-DC-Leistung mit Vorzeichen (+ Laden)"
+        },
+        "battery_voltage": {
+          "name": "Akkuspannung (für Ladestromgrenze in A erforderlich)"
+        },
+        "grid": {
+          "name": "Gesamte Netzleistung (+ Bezug)"
+        },
+        "solar": {
+          "name": "Gesamte PV-Leistung (optional)"
+        },
+        "house_total": {
+          "name": "Gesamter AC-Verbrauch einschließlich Auto/Wärmepumpe (optional)"
+        },
+        "inverter_ac": {
+          "name": "Wechselrichter-AC-Ausgangsleistung (+ Erzeugung, optional)"
+        },
+        "control_enabled": {
+          "name": "ESS-Mode-2-Steuerung aktivieren"
+        },
+        "ess_mode": {
+          "name": "ESS-Benutzermodus (optimiert, kein Hub4-Modus)"
+        },
+        "ess_mode_option": {
+          "name": "Erforderlicher ESS-Benutzermodus"
+        },
+        "grid_setpoint": {
+          "name": "ESS-Netzleistungssollwert (W AC)"
+        },
+        "charge_limit": {
+          "name": "ESS: maximaler Ladestrom (A) oder maximale Ladeleistung (W)"
+        },
+        "discharge_limit": {
+          "name": "ESS: maximale Wechselrichterleistung (W)"
+        },
+        "release_setpoint": {
+          "name": "Netzsollwert bei Rückgabe (W)"
+        },
+        "release_charge_limit": {
+          "name": "Native Ladegrenze bei Rückgabe (A oder W/kW)"
+        },
+        "release_discharge_limit": {
+          "name": "Native Entladegrenze bei Rückgabe (W/kW)"
+        },
+        "charge_efficiency": {
+          "name": "AC/DC-Ladewirkungsgrad"
+        },
+        "discharge_efficiency": {
+          "name": "DC/AC-Entladewirkungsgrad"
+        },
+        "grid_discharge_supported": {
+          "name": "Erzwungene Netzeinspeisung erlauben"
+        }
+      }
+    },
+    "plugin_battery_victron_gx_ess_mode_option": {
+      "options": {
+        "optimized_no_battery_life": "Optimiert ohne BatteryLife",
+        "optimized_battery_life": "Optimiert mit BatteryLife"
+      }
+    },
+    "plugin_battery_victron_ha": {
+      "fields": {
+        "soc": {
+          "name": "Speicher-SoC (%)"
+        },
+        "battery_power": {
+          "name": "Speicher-DC-Leistung mit Vorzeichen (+ Laden)"
+        },
+        "battery_voltage": {
+          "name": "Akkuspannung (für Ladestromgrenze in A erforderlich)"
+        },
+        "grid": {
+          "name": "Gesamte Netzleistung (+ Bezug)"
+        },
+        "solar": {
+          "name": "Gesamte PV-Leistung (optional)"
+        },
+        "house_total": {
+          "name": "Gesamter AC-Verbrauch einschließlich Auto/Wärmepumpe (optional)"
+        },
+        "inverter_ac": {
+          "name": "Wechselrichter-AC-Ausgangsleistung (+ Erzeugung, optional)"
+        },
+        "control_enabled": {
+          "name": "ESS-Mode-2-Steuerung aktivieren"
+        },
+        "ess_mode": {
+          "name": "ESS-Benutzermodus (optimiert, kein Hub4-Modus)"
+        },
+        "ess_mode_option": {
+          "name": "Erforderlicher ESS-Benutzermodus"
+        },
+        "grid_setpoint": {
+          "name": "ESS-Netzleistungssollwert (W AC)"
+        },
+        "charge_limit": {
+          "name": "ESS: maximaler Ladestrom (A) oder maximale Ladeleistung (W)"
+        },
+        "discharge_limit": {
+          "name": "ESS: maximale Wechselrichterleistung (W)"
+        },
+        "release_setpoint": {
+          "name": "Netzsollwert bei Rückgabe (W)"
+        },
+        "release_charge_limit": {
+          "name": "Native Ladegrenze bei Rückgabe (A oder W/kW)"
+        },
+        "release_discharge_limit": {
+          "name": "Native Entladegrenze bei Rückgabe (W/kW)"
+        },
+        "charge_efficiency": {
+          "name": "AC/DC-Ladewirkungsgrad"
+        },
+        "discharge_efficiency": {
+          "name": "DC/AC-Entladewirkungsgrad"
+        },
+        "grid_discharge_supported": {
+          "name": "Erzwungene Netzeinspeisung erlauben"
+        }
+      }
+    },
+    "plugin_battery_victron_ha_ess_mode_option": {
+      "options": {
+        "optimized_no_battery_life": "Optimiert ohne BatteryLife",
+        "optimized_battery_life": "Optimiert mit BatteryLife"
+      }
+    },
+    "plugin_battery_victron_modbus": {
+      "fields": {
+        "host": {
+          "name": "GX-Hostname / IP"
+        },
+        "port": {
+          "name": "GX-Modbus-TCP-Port"
+        },
+        "phases": {
+          "name": "Phasenanzahl der Anlage"
+        },
+        "grid_meter_enabled": {
+          "name": "Gemeinsame Netz- und Verbrauchsmessungen bereitstellen"
+        },
+        "read_consumption": {
+          "name": "Gesamten AC-Verbrauch auslesen"
+        },
+        "dc_pv_enabled": {
+          "name": "DC-gekoppelte PV auslesen"
+        },
+        "ac_pv_input_enabled": {
+          "name": "AC-PV am Netzeingang auslesen"
+        },
+        "ac_pv_output_enabled": {
+          "name": "AC-PV am Wechselrichterausgang auslesen"
+        },
+        "control_enabled": {
+          "name": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich)"
+        },
+        "max_charge_current": {
+          "name": "Zulässiger Gesamtladestrom (A DC)"
+        },
+        "max_discharge_power": {
+          "name": "Zulässige Wechselrichterleistung (W, in 10-W-Schritten)"
+        },
+        "release_setpoint": {
+          "name": "Nativer Netzsollwert bei Rückgabe (W)"
+        },
+        "release_charge_current": {
+          "name": "Nativer Ladestrom bei Rückgabe (A DC, -1: unbegrenzt)"
+        },
+        "release_discharge_power": {
+          "name": "Native Wechselrichtergrenze bei Rückgabe (W, endlich, in 10-W-Schritten)"
+        },
+        "charge_efficiency": {
+          "name": "AC/DC-Ladewirkungsgrad"
+        },
+        "discharge_efficiency": {
+          "name": "DC/AC-Entladewirkungsgrad"
+        },
+        "grid_discharge_supported": {
+          "name": "Erzwungene Speichereinspeisung erlauben"
+        }
+      }
+    },
+    "plugin_battery_victron_modbus_phases": {
+      "options": {
+        "1": "Einphasig",
+        "3": "Dreiphasig"
+      }
+    },
+    "plugin_wallbox_generic": {
+      "fields": {
+        "power": {
+          "name": "Ladeleistung"
+        },
+        "status": {
+          "name": "Wallbox-Status"
+        },
+        "plugged": {
+          "name": "Ladestecker angeschlossen"
+        },
+        "enable": {
+          "name": "Ladefreigabe"
+        },
+        "current": {
+          "name": "Ladestrom (A)"
+        },
+        "phases": {
+          "name": "Phasenanzahl"
+        },
+        "phase_feedback": {
+          "name": "Tatsächliche Phasenanzahl (bei Phasen-Helfern erforderlich)"
+        },
+        "phase_switching": {
+          "name": "Phasenumschaltung unterstützen"
+        },
+        "status_map": {
+          "name": "Zuordnung der Statuswerte"
+        }
+      }
+    },
+    "plugin_wallbox_goe_http_v2": {
+      "fields": {
+        "url": {
+          "name": "Lokale Basisadresse der HTTP-API v2"
+        },
+        "phase_switching": {
+          "name": "Unterstützte Umschaltung zwischen einer und drei Phasen aktivieren"
+        },
+        "nominal_voltage": {
+          "name": "Nennspannung zwischen Phase und Neutralleiter (V)"
+        }
+      }
+    },
+    "plugin_wallbox_nrgkick": {
+      "fields": {
+        "power": {
+          "name": "Ladeleistung"
+        },
+        "status": {
+          "name": "Status"
+        },
+        "enable": {
+          "name": "Ladefreigabe"
+        },
+        "current": {
+          "name": "Ladestrom"
+        },
+        "phases": {
+          "name": "Phasenanzahl"
+        }
+      }
+    },
+    "plugin_wallbox_nrgkick_local": {
+      "fields": {
+        "url": {
+          "name": "Lokale API-Adresse"
+        },
+        "phase_switching": {
+          "name": "Phasenumschaltung in der NRGkick-App aktiviert"
+        },
+        "username": {
+          "name": "Benutzername für HTTP-Basisauthentifizierung (optional)"
+        },
+        "password_env": {
+          "name": "Umgebungsvariable für das HTTP-Basisauthentifizierungs-Passwort (optional)"
+        }
+      }
+    },
+    "plugin_inverter_deye_modbus": {
+      "fields": {
+        "host": {
+          "name": "RS485-Gateway: Hostname / IP"
+        },
+        "port": {
+          "name": "Modbus-TCP-Gateway-Port"
+        },
+        "unit_id": {
+          "name": "Modbus-Adresse des Wechselrichters"
+        },
+        "grid_meter_enabled": {
+          "name": "Gemeinsamen Netzzähler bereitstellen"
+        },
+        "grid_meter_invert": {
+          "name": "Vorzeichen des Netzzählers umkehren"
+        }
+      }
+    },
+    "plugin_inverter_fronius_modbus": {
+      "fields": {
+        "host": {
+          "name": "Modbus-Hostname / IP"
+        },
+        "port": {
+          "name": "Modbus-TCP-Port"
+        },
+        "unit_id": {
+          "name": "Modbus-Unit-ID"
+        },
+        "grid_meter_enabled": {
+          "name": "Netzanschlusszähler auslesen"
+        },
+        "grid_meter_unit_id": {
+          "name": "Unit-ID des Netzzählers"
+        },
+        "grid_meter_host": {
+          "name": "Gateway-Hostname des Netzzählers (leer: Hauptwechselrichter)"
+        },
+        "grid_meter_port": {
+          "name": "Gateway-Port des Netzzählers (0: Port des Hauptwechselrichters)"
+        },
+        "grid_meter_invert": {
+          "name": "Vorzeichen des Netzzählers umkehren"
+        }
+      }
+    },
+    "plugin_inverter_generic": {
+      "fields": {
+        "solar": {
+          "name": "PV-Leistung (DC, W/kW)"
+        },
+        "inverter_ac": {
+          "name": "Wechselrichter-AC-Leistung mit Vorzeichen (W/kW)"
+        },
+        "grid": {
+          "name": "Netzleistung mit Vorzeichen (optional)"
+        }
+      }
     }
   }
 }
