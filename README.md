@@ -12,6 +12,8 @@ HACS-Custom-Integration für Akkudoktor EOS mit animiertem Stromfluss, Prognosen
 Speichersteuerung und PV-Überschussladen. Ab Version **0.2.0** läuft die
 Energiezentrale direkt in Home Assistant. Der EOS-Server bleibt ein separater Dienst.
 
+[Plugin-Übersicht mit Checkboxen „Getestet und freigegeben“](PLUGINS.md#plugin-übersicht-und-freigabestatus).
+
 ## Einblick in die Oberfläche
 
 Die folgenden Screenshots zeigen die aktuelle Oberfläche mit **synthetischen

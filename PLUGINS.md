@@ -1,5 +1,39 @@
 # Hardware-Plugins
 
+## Plugin-Übersicht und Freigabestatus
+
+Die Checkbox **Getestet und freigegeben** dokumentiert einen bestätigten
+Praxistest des jeweiligen Plugins. Nach der Freigabe `[ ]` durch `[x]` ersetzen
+und die Änderung im Repository speichern. Offene Checkboxen bedeuten, dass hier
+noch keine bestätigte Freigabe dokumentiert ist.
+
+### Speicher und Hybrid-Wechselrichter
+
+- [ ] **Deye SUN-12K-SG04LP3-EU – Modbus-TCP-Gateway** (`deye_modbus`) – Getestet und freigegeben
+- [ ] **Fronius GEN24 / BYD – Home-Assistant-Entitäten** (`fronius`) – Getestet und freigegeben
+- [ ] **Fronius GEN24 – direkt über Modbus TCP** (`fronius_modbus`) – Getestet und freigegeben
+- [ ] **Generischer Home-Assistant-Speicher / Wechselrichter** (`generic`) – Getestet und freigegeben
+- [ ] **Victron GX – offizielle Home-Assistant-Integration** (`victron_gx`) – Getestet und freigegeben
+- [ ] **Victron Venus MQTT / HACS – Home-Assistant-Entitäten** (`victron_ha`) – Getestet und freigegeben
+- [ ] **Victron GX – direkt über Modbus TCP** (`victron_modbus`) – Getestet und freigegeben
+
+### PV-Wechselrichter ohne Speicher
+
+- [ ] **Deye SUN-12K-SG04LP3-EU – lesendes Modbus-Gateway** (`deye_modbus`) – Getestet und freigegeben
+- [ ] **Fronius PV-Wechselrichter – Modbus TCP** (`fronius_modbus`) – Getestet und freigegeben
+- [ ] **Generischer Home-Assistant-PV-Wechselrichter** (`generic`) – Getestet und freigegeben
+
+### Wallboxen
+
+- [ ] **Generische Home-Assistant-Wallbox** (`generic`) – Getestet und freigegeben
+- [ ] **go-e Charger – lokale HTTP-API v2** (`goe_http_v2`) – Getestet und freigegeben
+- [ ] **NRGkick – Home-Assistant-Entitäten** (`nrgkick`) – Getestet und freigegeben
+- [ ] **NRGkick Gen2 – lokale JSON-API** (`nrgkick_local`) – Getestet und freigegeben
+
+Die Auswahl `none` deaktiviert die Fahrzeug-/Wallbox-Anbindung und benötigt
+keine Gerätefreigabe. Freigaben für Speicher- und reine PV-Plugins mit gleicher
+ID werden getrennt gepflegt.
+
 ## Victron GX und Victron Venus MQTT / HACS
 
 Ohne weitere HA-Integration: **Victron GX direct Modbus TCP** (`victron_modbus`)

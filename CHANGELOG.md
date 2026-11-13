@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.4 - 2026-11-13
+
+### Features
+
+- Plugin-Übersicht mit der Checkbox „Getestet und freigegeben“ für jedes der 14 Hardware-Plugins ergänzen, nach Speicher, PV-Wechselrichter und Wallbox gruppiert und aus der README verlinkt. Freigaben zunächst offen lassen und nach bestätigten Praxistests im Repository dokumentieren.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.3 - 2026-11-13
 
 ### Features
