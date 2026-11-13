@@ -2,26 +2,26 @@
 
 ## Plugin-Übersicht und Teststatus
 
-☒ markiert den aktuellen Status, ☐ bleibt offen. Nach einem bestätigten
-Praxistest die Markierung von **Ungetestet** nach **Getestet** verschieben und
-die Änderung im Repository speichern. Bisher ist hier kein Praxistest bestätigt.
+**Legende:** ✅ Getestet · ❌ Ungetestet · — Nicht zutreffend.
+Nach einem bestätigten Praxistest das ✅ unter **Getestet** eintragen und das
+❌ unter **Ungetestet** durch — ersetzen. Bisher ist hier kein Praxistest bestätigt.
 
 | Plugin | Getestet | Ungetestet |
 | --- | :---: | :---: |
-| Speicher: Deye SUN-12K-SG04LP3-EU – Modbus-TCP-Gateway (`deye_modbus`) | ☐ | ☒ |
-| Speicher: Fronius GEN24 / BYD – Home-Assistant-Entitäten (`fronius`) | ☐ | ☒ |
-| Speicher: Fronius GEN24 – direkt über Modbus TCP (`fronius_modbus`) | ☐ | ☒ |
-| Speicher: Generischer Home-Assistant-Speicher / Wechselrichter (`generic`) | ☐ | ☒ |
-| Speicher: Victron GX – offizielle Home-Assistant-Integration (`victron_gx`) | ☐ | ☒ |
-| Speicher: Victron Venus MQTT / HACS – Home-Assistant-Entitäten (`victron_ha`) | ☐ | ☒ |
-| Speicher: Victron GX – direkt über Modbus TCP (`victron_modbus`) | ☐ | ☒ |
-| PV-Wechselrichter: Deye SUN-12K-SG04LP3-EU – lesendes Modbus-Gateway (`deye_modbus`) | ☐ | ☒ |
-| PV-Wechselrichter: Fronius – Modbus TCP (`fronius_modbus`) | ☐ | ☒ |
-| PV-Wechselrichter: Generischer Home-Assistant-PV-Wechselrichter (`generic`) | ☐ | ☒ |
-| Wallbox: Generische Home-Assistant-Wallbox (`generic`) | ☐ | ☒ |
-| Wallbox: go-e Charger – lokale HTTP-API v2 (`goe_http_v2`) | ☐ | ☒ |
-| Wallbox: NRGkick – Home-Assistant-Entitäten (`nrgkick`) | ☐ | ☒ |
-| Wallbox: NRGkick Gen2 – lokale JSON-API (`nrgkick_local`) | ☐ | ☒ |
+| Speicher: Deye SUN-12K-SG04LP3-EU – Modbus-TCP-Gateway (`deye_modbus`) | — | ❌ |
+| Speicher: Fronius GEN24 / BYD – Home-Assistant-Entitäten (`fronius`) | — | ❌ |
+| Speicher: Fronius GEN24 – direkt über Modbus TCP (`fronius_modbus`) | — | ❌ |
+| Speicher: Generischer Home-Assistant-Speicher / Wechselrichter (`generic`) | — | ❌ |
+| Speicher: Victron GX – offizielle Home-Assistant-Integration (`victron_gx`) | — | ❌ |
+| Speicher: Victron Venus MQTT / HACS – Home-Assistant-Entitäten (`victron_ha`) | — | ❌ |
+| Speicher: Victron GX – direkt über Modbus TCP (`victron_modbus`) | — | ❌ |
+| PV-Wechselrichter: Deye SUN-12K-SG04LP3-EU – lesendes Modbus-Gateway (`deye_modbus`) | — | ❌ |
+| PV-Wechselrichter: Fronius – Modbus TCP (`fronius_modbus`) | — | ❌ |
+| PV-Wechselrichter: Generischer Home-Assistant-PV-Wechselrichter (`generic`) | — | ❌ |
+| Wallbox: Generische Home-Assistant-Wallbox (`generic`) | — | ❌ |
+| Wallbox: go-e Charger – lokale HTTP-API v2 (`goe_http_v2`) | — | ❌ |
+| Wallbox: NRGkick – Home-Assistant-Entitäten (`nrgkick`) | — | ❌ |
+| Wallbox: NRGkick Gen2 – lokale JSON-API (`nrgkick_local`) | — | ❌ |
 
 Die Auswahl `none` deaktiviert die Fahrzeug-/Wallbox-Anbindung und benötigt
 keinen Gerätetest. Teststatus für Speicher- und reine PV-Plugins mit gleicher
