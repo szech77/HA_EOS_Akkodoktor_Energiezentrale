@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.2 - 2026-11-13
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- EOS-Konfiguration mit Batterieprofilen (u. a. `0.3.0.dev2611122196862169`) neben der bisherigen flachen Struktur unterstützen. Kapazität und Lade-/Entladegrenzen in `profile_adjustment` zusammenführen; ausgewählte Profile, zusätzliche Anpassungen und andere Geräte erhalten. Berechnete `effective_*`- und Messschlüssel-Felder nicht in Schreibanfragen zurücksenden, auch beim Aktualisieren von Fahrzeug-Ladezielen.
+- Ladegrenzen erst nach bestätigter Konfiguration und passenden aufgelösten Profilwerten freigeben. Nicht auflösbare Profile oder abweichende wirksame Leistungen bleiben Fehler. Für abwesende Fahrzeuge Ladefaktoren auf null setzen und Ziele entfernen, ohne die technische Profilspanne mit einer maximalen SoC-Grenze von null zu blockieren. Nicht darstellbare Null-Leistungsgrenzen im neuen Profilmodell vor dem Schreiben ablehnen.
+- Kapazität und Wirkungsgrade für die Akkukostenschätzung aus aufgelösten EOS-Profilwerten lesen. Fehlende Werte bleiben unbekannt und werden nicht durch erfundene Nullwerte ersetzt. Einrichtung und Einschränkungen der neuen Struktur dokumentieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.1 - 2026-11-12
 
 ### Features

@@ -99,6 +99,10 @@ Home-Assistant-InfluxDB-Integration und zu optionalen Template-Sensoren.
 
 ### EOS-Verbindung und Sprache
 
+Die Anbindung unterstützt auch die neue EOS-Batterieprofilstruktur, etwa im
+Add-on-Build `0.3.0.dev2611122196862169`.
+[Kompatibilität, Feldzuordnung und Hinweise bei fehlender Bestätigung](EOS_COMPATIBILITY.md).
+
 | Feld / interner Schlüssel | Beispiel oder Standard | Bedeutung |
 |---|---|---|
 | EOS-API-Basisadresse / `eos_url` | `http://homeassistant.local:8503` | Erreichbare Adresse des separat laufenden EOS-Servers, einschließlich Port. |

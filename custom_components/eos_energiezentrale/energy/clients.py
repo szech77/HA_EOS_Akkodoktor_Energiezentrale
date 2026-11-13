@@ -9,6 +9,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from weakref import WeakValueDictionary
 
 from .domain import instant, number
+from ._eos_battery import accounting_values,confirmed,limits_patch,matches,profiled,updated_collection
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -135,11 +136,7 @@ class EOS:
         battery = configuration.get("devices", {}).get("batteries", {}).get(resource)
         if not isinstance(battery, dict):
             raise ValueError("Stationary battery configuration missing")
-        keys = ("capacity_wh", "charging_efficiency", "discharging_efficiency")
-        values = [number(battery.get(key)) for key in keys]
-        if any(value is None for value in values):
-            raise ValueError("Battery capacity/efficiencies missing")
-        return dict(zip(("capacity_wh", "charge_efficiency", "discharge_efficiency"), values))
+        return accounting_values(battery)
 
     def set_battery_limits(self, resource, minimum, maximum, capacity_wh=None, charge_w=None, discharge_w=None):
         if (type(minimum) is not int or type(maximum) is not int
@@ -165,14 +162,15 @@ class EOS:
             desired['capacity_wh']=capacity_wh
         if charge_w is not None: desired['max_charge_power_w']=charge_w
         if discharge_w is not None: desired['max_discharge_power_w']=discharge_w
-        if all(batteries[resource].get(key) == value for key, value in desired.items()):
+        desired=limits_patch(batteries[resource],desired)
+        if matches(batteries[resource],desired):
+            confirmed(batteries[resource],desired)
             return
-        updated = {**batteries, resource: {**batteries[resource], **desired}}
+        updated = updated_collection(batteries,resource,desired)
         # Updating the collection avoids EOS versions rejecting a raw leaf dict.
         request(self.url + "/v1/config/devices/batteries", method="PUT", payload=updated)
-        confirmed = request(self.url + "/v1/config").get("devices", {}).get("batteries", {}).get(resource)
-        if not isinstance(confirmed, dict) or any(confirmed.get(key) != value for key, value in desired.items()):
-            raise ValueError("EOS did not confirm stationary battery limits")
+        returned = request(self.url + "/v1/config").get("devices", {}).get("batteries", {}).get(resource)
+        confirmed(returned,desired)
 
     def set_vehicle_charging_limits(self, resource, maximum, minimum, rates, active):
         """EOS requires positive maximum power; disable an absent EV via rates.
@@ -194,15 +192,16 @@ class EOS:
             if maximum is not None: desired['max_charge_power_w']=maximum
             if minimum is not None: desired['min_charge_power_w']=minimum
             if not active:
-                desired.update(min_soc_percentage=0,max_soc_percentage=0,
+                desired.update(min_soc_percentage=0,max_soc_percentage=100 if profiled(vehicles[resource]) else 0,
                                min_soc_deadline_datetime=None,min_soc_max_duration_h=None)
-            if all(vehicles[resource].get(key)==value for key,value in desired.items()):
+            desired=limits_patch(vehicles[resource],desired)
+            if matches(vehicles[resource],desired):
+                confirmed(vehicles[resource],desired)
                 return
-            updated = {**vehicles,resource:{**vehicles[resource],**desired}}
+            updated = updated_collection(vehicles,resource,desired)
             request(self.url + '/v1/config/devices/electric_vehicles',method='PUT',payload=updated)
-            confirmed = request(self.url + '/v1/config').get('devices',{}).get('electric_vehicles',{}).get(resource)
-            if not isinstance(confirmed,dict) or any(confirmed.get(key)!=value for key,value in desired.items()):
-                raise ValueError('EOS did not confirm vehicle charging limits')
+            returned = request(self.url + '/v1/config').get('devices',{}).get('electric_vehicles',{}).get(resource)
+            confirmed(returned,desired)
 
     def set_vehicle_goal(self, resource, target, departure):
         with self._configuration_lock:
@@ -220,7 +219,7 @@ class EOS:
             desired["min_soc_max_duration_h"] = None
         if all(current.get(key) == value for key, value in desired.items()):
             return
-        updated = {**vehicles, resource: {**current, **desired}}
+        updated = updated_collection(vehicles,resource,desired)
         request(self.url + "/v1/config/devices/electric_vehicles", method="PUT", payload=updated)
         confirmed = request(self.url + "/v1/config")["devices"]["electric_vehicles"][resource]
         if (confirmed.get("min_soc_percentage") != target or confirmed.get("max_soc_percentage") != target
