@@ -7,7 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
-- Plugin-Übersicht als Tabelle mit den Spalten „Plugin“, „Getestet“ und „Ungetestet“ für alle 14 Hardware-Plugins ergänzen und aus der README verlinken. Grüne Häkchen (✅) und rote Kreuze (❌) kennzeichnen den Teststatus. Mangels bestätigter Praxistests zunächst „Ungetestet“ markieren; den Teststatus nach bestätigten Praxistests im Repository pflegen.
+- Plugin-Übersicht als Tabelle mit den Spalten „Plugin“ und „Teststatus“ für alle 14 Hardware-Plugins ergänzen und aus der README verlinken. Grüne Häkchen (✅) kennzeichnen getestete, rote Kreuze (❌) ungetestete Plugins. Mangels bestätigter Praxistests zunächst alle Plugins als ungetestet markieren; den Teststatus nach bestätigten Praxistests im Repository pflegen.
 
 ### Bugfixes
 
