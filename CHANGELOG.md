@@ -7,7 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
-- Plugin-Übersicht mit der Checkbox „Getestet und freigegeben“ für jedes der 14 Hardware-Plugins ergänzen, nach Speicher, PV-Wechselrichter und Wallbox gruppiert und aus der README verlinkt. Freigaben zunächst offen lassen und nach bestätigten Praxistests im Repository dokumentieren.
+- Plugin-Übersicht als Tabelle mit den Spalten „Plugin“, „Getestet“ und „Ungetestet“ für alle 14 Hardware-Plugins ergänzen und aus der README verlinken. Mangels bestätigter Praxistests zunächst „Ungetestet“ markieren; den Teststatus nach bestätigten Praxistests im Repository pflegen.
 
 ### Bugfixes
 
