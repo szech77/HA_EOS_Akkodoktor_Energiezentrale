@@ -1,13 +1,5 @@
 """Send menu labels as well as step IDs, including after frontend cache updates."""
-from functools import lru_cache
-import json
-from pathlib import Path
-
-
-@lru_cache(maxsize=2)
-def _translations(language):
-    path=Path(__file__).parent/'translations'/f'{language}.json'
-    return json.loads(path.read_text(encoding='utf-8'))
+from .flow_translations import _translations, flow_language
 
 
 def _labels(language,section,step,options):
@@ -20,9 +12,7 @@ def _labels(language,section,step,options):
 
 
 async def show_menu(flow,section,step,options):
-    language=flow.context.get('language') or flow.hass.config.language or 'en'
-    language=language.split('-',1)[0].lower()
-    if language not in {'de','en'}: language='en'
+    language=flow_language(flow)
     labels=await flow.hass.async_add_executor_job(_labels,language,section,step,tuple(options))
     if isinstance(options,dict): labels.update({key:value for key,value in options.items() if value is not None})
     return flow.async_show_menu(step_id=step,menu_options=labels)

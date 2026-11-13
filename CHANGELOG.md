@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.3 - 2026-11-13
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Lesefehler einzelner Anlagengeräte in den HA-Diagnosedaten ausgeben. Für Victron GX zusätzlich Phasenzahl, ausgewählte Messquellen, Steuerungsfreigabe und den fehlgeschlagenen Leseabschnitt mit Registerbereich und gegebenenfalls Modbus-Ausnahmecode erfassen. Gerätenamen, Adressen, Seriennummern, Messwerte und rohe Fehlermeldungen bleiben ausgeschlossen; erfolgreiche Abfragen löschen den Lesefehler. Die Ablehnung unvollständiger Messungen und die Steuerungsprüfungen bleiben erhalten.
+- Fehlersuche für dreiphasige Victron-Anlagen mit Fronius am AC-Ausgang dokumentieren; die vorbelegte DC-PV-Quelle ist nur bei tatsächlich vorhandenen DC-Ladereglern geeignet.
+- Dynamische Plugin-Felder und Auswahllisten für alle mitgelieferten Speicher-, Wechselrichter- und Wallbox-Plugins lokalisieren. Übersetzte Beschriftungen auch direkt im Formular mitsenden, damit der innere Dialog „Plugin-Einstellungen“ ohne eigene Übersetzungsauflösung lesbar bleibt; native HA-Übersetzungsschlüssel erhalten. Sprache aus dem HA-Dialogkontext übernehmen, ersatzweise die HA-Sprache und Englisch nutzen. Übersetzungsdateien ausschließlich im Executor laden. Gilt für Einrichtung, Gerätebearbeitung, Fahrzeug-/Wallbox-Dialoge und die bisherige Hardwarekonfiguration.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.2 - 2026-11-13
 
 ### Features

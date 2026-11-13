@@ -3,8 +3,7 @@
 Das Plugin **Victron GX direct Modbus TCP** (`victron_modbus`) verbindet sich lokal
 mit dem GX-Gerät. Es benötigt keine zusätzliche Victron-HA-Integration, MQTT-
 Verbindung, VRM-Anmeldung oder HA-Sensoren. Bestehende HA-/HACS-Plugins bleiben
-unverändert verfügbar. Gemeinsame Regelungs- und Transportdateien werden für
-dieses Plugin nicht verändert.
+unverändert verfügbar. Die synchronen Modbus-Abfragen laufen im HA-Executor.
 
 ## Voraussetzungen und Einrichtung
 
@@ -107,6 +106,45 @@ Quellen: [GX Modbus-Handbuch](https://www.victronenergy.com/live/ccgx:modbustcp_
 [Registerliste 3.81](https://www.victronenergy.com/upload/documents/CCGX-Modbus-TCP-register-list-3.81.xlsx),
 [Victron-Serverimplementierung](https://github.com/victronenergy/dbus_modbustcp).
 
+## Fehlersuche bei „Messwerte unvollständig“
+
+Bei drei Phasen mit einem Fronius Symo am **AC-Ausgang** des MultiPlus-II:
+`phases = 3`, `ac_pv_output_enabled = true`, `ac_pv_input_enabled = false`.
+Ohne zusätzliche DC-Solarladeregler auch `dc_pv_enabled = false` setzen.
+Die vorbelegte DC-PV-Quelle passt nicht zu einer ausschließlich AC-gekoppelten
+PV-Anlage. Bei weiteren tatsächlich vorhandenen PV-Quellen diese zusätzlich
+aktivieren. Das Plugin errät die Topologie nicht.
+
+Ab Version 0.17.3 enthalten die heruntergeladenen HA-Diagnosedaten unter
+`devices` die Geräte in konfigurierter Reihenfolge (Nummer statt privatem Namen),
+Plugin, Verfügbarkeit und Lesefehlerklasse. Bei Victron enthält `configuration`
+Phasenzahl, ausgewählte Messquellen und Steuerungsfreigabe. `failure` nennt den
+Leseabschnitt, Unit-ID, Registeradresse, Anzahl und gegebenenfalls den numerischen
+Modbus-Ausnahmecode. Nach erfolgreichem Lesen wird der Fehler gelöscht. Host,
+Port, Seriennummer, Kapazität, Messwerte und rohe Fehlermeldungen fehlen bewusst.
+
+- `identity` / 800: Verbindung, aktivierten Modbus-TCP-Dienst und Systemdienst
+  auf Unit-ID 100 prüfen. `firmware` / 834: Venus OS ab 3.50 erforderlich.
+- `battery` / 840–843: Akkuspannung, Leistung und SoC am GX prüfen.
+- `dc_pv` / 850, `ac_pv_input` / 811–813, `ac_pv_output` / 808–810:
+  eingeschaltete Quellen mit der tatsächlichen Installation abgleichen.
+- `grid` / 820–822 oder `consumption` / 817–819: Phasenauswahl und die am GX
+  verfügbaren Netz-/Verbrauchsmessungen prüfen.
+- `snapshot_timeout`: Der gesamte Lesevorgang dauerte länger als zehn Sekunden.
+
+Code 2 bedeutet eine ungültige Registeradresse, Code 10 einen nicht verfügbaren
+Gateway-Pfad und Code 11 ein nicht gefundenes Zielgerät. Den letzten Fehler am
+GX unter **Einstellungen → Dienste → Modbus TCP** ergänzend prüfen.
+Ein fehlgeschlagener ausgewählter Messkanal verwirft weiterhin den gesamten
+Gerätesnapshot; fehlende Werte werden nicht als null oder als alte Messung genutzt.
+`AC —` ist bei diesem Plugin auch im Erfolgsfall möglich: Es liefert keine
+separate Wechselrichter-AC-Leistung (`inverter_ac`).
+
+Vier Steuerfunktionen mit „Nein“ sind bei ausgeschaltetem `control_enabled`
+erwartet. Das Einschalten der ESS-Steuerung repariert keine fehlenden Messungen.
+`vehicle_limits` betrifft die Übernahme der Fahrzeug-Ladegrenzen durch EOS;
+dieser Fehler ist getrennt von der Victron-Leseverbindung zu untersuchen.
+
 ## English setup
 
 Enable Modbus TCP on a GX running Venus OS 3.50 or newer. Add **Victron GX direct
@@ -140,3 +178,29 @@ DVCC also limits solar charging; BMS and hardware can constrain achieved power.
 Communication loss does not guarantee automatic expiry of the settings. Retain
 device-side protections and a suitable local failure strategy. Tests use a local
 protocol emulator; real-hardware validation remains outstanding.
+
+### Troubleshooting incomplete measurements
+
+For a three-phase MultiPlus-II installation with a Fronius Symo on **AC out**,
+select three phases and enable AC-output PV. Disable AC-input PV unless installed;
+disable the default DC-PV source if there are no DC solar chargers. Enable any
+additional sources only when physically present.
+
+Since 0.17.3, downloaded HA diagnostics include `devices` in configuration order,
+using a number instead of the private device name. They report the plugin,
+availability and read error type. Victron also reports phase/source/control
+selection under `configuration` and the failed stage, unit, register range and
+optional numeric Modbus exception code under `failure`. A successful read clears
+the error. Hosts, ports, serials, capacities, measurements and raw errors are
+excluded. Stages identify identity (800), firmware (834), battery (840–843), DC PV
+(850), AC-input PV (811–813), AC-output PV (808–810), grid (820–822), consumption
+(817–819), or a snapshot exceeding ten seconds (`snapshot_timeout`).
+
+Check the GX's last Modbus TCP error as well: code 2 means an illegal register
+address, 10 an unavailable gateway path and 11 an unknown target device. Any failed
+selected channel still invalidates the device snapshot; missing data is never
+replaced with zero or a cached reading. `AC —` can appear even on successful
+reads because this plugin does not provide separate `inverter_ac` power.
+Control capabilities set to “No” are expected in read-only mode; enabling control
+does not repair telemetry. `vehicle_limits` concerns EOS vehicle charging limits
+and must be investigated separately.

@@ -9,7 +9,7 @@ from homeassistant.helpers import selector
 from .const import DEFAULTS, DOMAIN, GROUPS
 from .energy.clients import request
 from .validation import validate_options
-from .plugin_forms import PluginFormMixin, plugin_choices, plugin_object, configured
+from .plugin_forms import PluginFormMixin, plugin_choices, async_plugin_object, configured
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
 from .device_forms import DeviceFormMixin
@@ -303,7 +303,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         fields={}
         for key,value in defaults.items():
             if key=="wallbox_parameters":
-                field,value=plugin_object(factory,value)
+                field,value=await async_plugin_object(self,factory,value)
             elif key=="soc_entity":
                 field=selector.EntitySelector(selector.EntitySelectorConfig(domain="weather" if key == "weather_entity" else "sensor"))
             elif key=="soc_scale":

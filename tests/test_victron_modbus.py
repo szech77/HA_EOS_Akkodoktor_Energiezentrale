@@ -178,6 +178,66 @@ def test_direct_consumption_flows_through_device_manager_and_duplicate_gx_is_rej
         with pytest.raises(ValueError):DeviceSite(None,[row,{**row,'id':'second'}])
 
 
+@pytest.mark.parametrize('address,invalid,stage,count',[
+    (800,0,'identity',6),(834,0x0349,'firmware',1),(840,0,'battery',4),
+    (850,65535,'dc_pv',1),(820,32767,'grid',3),(817,65535,'consumption',3),
+])
+def test_device_read_failure_identifies_register_and_clears_after_recovery(address,invalid,stage,count):
+    with gx(control_enabled=False) as (_,server,params):
+        row={'id':'gx','name':'Private installation','kind':'battery','plugin':'victron_modbus',
+             'parameters':params,'capacity_wh':32000,'charge_w':5000,'discharge_w':5000,'grid_source':True}
+        site=DeviceSite(None,[row])
+        original=server.registers[address];server.registers[address]=invalid
+        sample=site.read({},NOW)
+        assert sample.soc is None and sample.measurements['solar'].value is None
+        failed=site.site_summary['devices'][0]
+        assert not failed['available'] and failed['read_error']=='ModbusError'
+        assert failed['read_diagnostics']['failure']=={'type':'ModbusError','stage':stage,
+            'unit':100,'address':address,'count':count,'exception_code':None}
+        server.registers[address]=original
+        assert site.read({},NOW).soc==60
+        recovered=site.site_summary['devices'][0]
+        assert recovered['available'] and recovered['read_error'] is None
+        assert recovered['read_diagnostics']['failure'] is None
+        assert failed['read_diagnostics']['failure']['address']==address
+        assert not server.writes
+
+
+def test_modbus_rejection_and_transport_errors_are_diagnostic_without_raw_messages():
+    with gx(control_enabled=False) as (driver,server,_):
+        server.reject=True
+        with pytest.raises(ModbusError):driver.read({},NOW)
+        assert driver.read_diagnostics['failure']=={'type':'ModbusError','stage':'identity',
+            'unit':100,'address':800,'count':6,'exception_code':3}
+        with patch.object(driver.client,'read',side_effect=TimeoutError('private-host / private data')):
+            with pytest.raises(TimeoutError):driver.read({},NOW)
+        assert driver.read_diagnostics['failure']['type']=='TimeoutError'
+        assert driver.read_diagnostics['failure']['exception_code'] is None
+        assert 'private' not in repr(driver.read_diagnostics)
+        server.reject=False
+        assert driver.read({},NOW).soc==60
+        assert driver.read_diagnostics['failure'] is None
+
+
+def test_ac_output_pv_on_three_phases_does_not_require_dc_pv():
+    with gx(control_enabled=False,dc_pv_enabled=False,ac_pv_output_enabled=True) as (driver,server,_):
+        server.registers.update({850:65535,808:1000,809:2000,810:3000})
+        sample=driver.read({},NOW)
+        assert sample.soc==60 and sample.measurements['solar'].value==6000
+        assert driver.read_diagnostics=={'phases':3,'control_enabled':False,'grid_meter_enabled':True,
+            'read_consumption':True,'dc_pv_enabled':False,'ac_pv_input_enabled':False,
+            'ac_pv_output_enabled':True,'failure':None}
+        assert not any(address in (850,811) for _,_,address,_ in server.requests)
+        assert not server.writes
+
+
+def test_slow_read_reports_snapshot_timeout_without_blame_on_last_register():
+    with gx(control_enabled=False) as (driver,_,_):
+        with patch('custom_components.eos_energiezentrale.energy.plugins.victron_modbus.monotonic',side_effect=[0,11]):
+            with pytest.raises(ModbusError):driver.read({},NOW)
+        assert driver.read_diagnostics['failure']=={'type':'ModbusError','stage':'snapshot_timeout','exception_code':None}
+
+
 @pytest.mark.parametrize('changes',[{'host':'http://gx.local'},{'port':1.5},{'phases':'2'},
     {'release_discharge_power':-1},{'release_discharge_power':4501},{'release_charge_current':None},
     {'charge_efficiency':0},{'max_charge_current':40000}])

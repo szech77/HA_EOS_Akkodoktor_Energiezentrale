@@ -9,6 +9,10 @@ from time import monotonic
 class ModbusError(OSError):
     """Transport, protocol or device confirmation failed."""
 
+    def __init__(self, message, *, exception_code=None):
+        super().__init__(message)
+        self.exception_code = exception_code
+
 
 def checked_host(host):
     try:
@@ -52,7 +56,8 @@ class ModbusTCP:
                 raise ModbusError("Invalid Modbus response header")
             response = self._receive(connection, size - 1, deadline)
         if response[0] == function | 0x80:
-            raise ModbusError("Modbus device rejected request")
+            raise ModbusError("Modbus device rejected request",
+                              exception_code=response[1] if len(response) == 2 else None)
         if response[0] != function:
             raise ModbusError("Unexpected Modbus response function")
         return response[1:]

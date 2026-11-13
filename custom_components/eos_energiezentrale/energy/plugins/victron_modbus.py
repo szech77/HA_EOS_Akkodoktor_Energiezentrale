@@ -50,6 +50,9 @@ class VictronModbus(BatteryDriver):
         if v['port']!=int(v['port']) or not 1<=v['port']<=65535: raise ValueError('Invalid Modbus port')
         self.client=ModbusTCP(host,int(v['port']),100)
         self.phases=int(v['phases']);self.enabled=v['control_enabled']
+        self.read_diagnostics={'phases':self.phases,
+            **{key:v[key] for key in ('control_enabled','grid_meter_enabled','read_consumption',
+                'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None}
         for key in ('charge_efficiency','discharge_efficiency'):
             if not .1<=v[key]<=1: raise ValueError('Invalid Victron efficiency')
         for key,low,high,step in (('max_charge_current',1,32766,1),('max_discharge_power',10,327660,10),
@@ -73,21 +76,29 @@ class VictronModbus(BatteryDriver):
         except ValueError: pass
         return f'modbus:{host}:{self.client.port}:100'
 
+    def _registers(self,address,count,stage):
+        # Keep protocol context only; never retain returned words or raw errors.
+        self._read_context={'stage':stage,'unit':100,'address':address,'count':count}
+        return self.client.read(address,count)
+
     def _identity(self):
-        serial=struct.pack('>6H',*self.client.read(800,6)).decode('ascii',errors='replace')
-        firmware=self.client.read(834,1)[0]
-        if not re.fullmatch('[0-9a-fA-F]{12}',serial) or not 0x0350<=firmware<=0x0999:
+        serial=struct.pack('>6H',*self._registers(800,6,'identity')).decode('ascii',errors='replace')
+        if not re.fullmatch('[0-9a-fA-F]{12}',serial):
+            raise ModbusError('Expected Victron GX system serial')
+        firmware=self._registers(834,1,'firmware')[0]
+        if not 0x0350<=firmware<=0x0999:
             raise ModbusError('Expected Victron GX system / Venus OS >= 3.50')
 
     def _battery(self):
-        voltage,_,power,soc=self.client.read(840,4)
+        voltage,_,power,soc=self._registers(840,4,'battery')
         voltage/=10;power=signed(power)
         if not 10<=voltage<=1000 or not 0<=soc<=100 or not -32768<power<32766:
             raise ModbusError('Invalid or saturated GX battery telemetry')
         return voltage,power,soc
 
     def _power(self,address,count,signed_power=False):
-        words=self.client.read(address,count)
+        stage={850:'dc_pv',811:'ac_pv_input',808:'ac_pv_output',820:'grid',817:'consumption'}[address]
+        words=self._registers(address,count,stage)
         values=[signed(word) for word in words] if signed_power else words
         # The GX server can clamp to max-1; reject that endpoint as well.
         invalid=any(not -32768<value<32766 for value in values) if signed_power else any(value>=65534 for value in values)
@@ -105,14 +116,23 @@ class VictronModbus(BatteryDriver):
             values['grid']=self._power(820,self.phases,True)
         if self.provides_site_consumption:
             values['house_total']=self._power(817,self.phases)
-        if monotonic()-start>10: raise ModbusError('GX telemetry snapshot took too long')
+        if monotonic()-start>10:
+            self._read_context={'stage':'snapshot_timeout'}
+            raise ModbusError('GX telemetry snapshot took too long')
         charge=max(0,power)/self.values['charge_efficiency']
         discharge=max(0,-power)*self.values['discharge_efficiency']
         return voltage,BatteryReading(soc,charge,discharge,now,now,now,
             {key:Measurement(value,now) for key,value in values.items()})
 
     def _read(self,states,now):
-        _,sample=self._telemetry(now)
+        self.read_diagnostics['failure']=None
+        self._read_context={}
+        try:
+            _,sample=self._telemetry(now)
+        except (OSError,ValueError) as error:
+            self.read_diagnostics['failure']={**self._read_context,'type':type(error).__name__,
+                'exception_code':getattr(error,'exception_code',None)}
+            raise
         return sample
 
     def power_limits(self,states):
