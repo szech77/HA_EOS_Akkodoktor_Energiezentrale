@@ -16,9 +16,10 @@ from urllib.request import Request, ProxyHandler, build_opener
 from ..clients import NoRedirect, base_url
 from ..contracts import WallboxDriver, WallboxReading, WallboxFeatures, PluginInfo, PluginField
 from ..sanitiser import bounded
+from ..failures import HardwareAPIError
 
 
-class NRGkickAPIError(OSError):
+class NRGkickAPIError(HardwareAPIError):
     """Safe error text: no credentials, URLs or private response bodies."""
 
 
@@ -61,7 +62,7 @@ class NRGkickLocal(WallboxDriver):
         if self.password_env:
             secret = os.environ.get(self.password_env)
             if not secret:
-                raise NRGkickAPIError("NRGkick API credential is unavailable")
+                raise NRGkickAPIError("NRGkick API credential is unavailable",reason='credential_unavailable',fields=('password_env',))
             token = base64.b64encode(f"{self.username}:{secret}".encode()).decode("ascii")
             headers["Authorization"] = "Basic " + token
         try:
@@ -102,7 +103,9 @@ class NRGkickLocal(WallboxDriver):
     def _read(self, states, now):
         try:
             return self._sample(now)
-        except NRGkickAPIError:
+        except NRGkickAPIError as error:
+            from ..plugin_diagnostics import partial_read_failure
+            partial_read_failure(self, error, 'telemetry')
             # Telemetry failure must still allow an independent confirmed pause
             # through /control, including during explicit disarm/unload.
             return WallboxReading(None, "unavailable", False, None, None, None, None, None)

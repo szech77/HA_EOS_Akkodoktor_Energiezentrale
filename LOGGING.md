@@ -56,18 +56,35 @@ Für die Dauer einer Fehlersuche kann statt `info` der Wert `debug` genutzt werd
 Home Assistants eigene Log-Konfiguration entscheidet über Speicherung und Filterung.
 Bei einem auf `error` eingeschränkten Logger werden Warnungen entsprechend gefiltert.
 
+## Plugin- und Konfigurationsfehler
+
+Die gemeinsame Plugin-Leseschnittstelle protokolliert auch Ausfälle, die nicht in
+einer ausgewählten Haus-/PV-Quelle sichtbar werden. Das umfasst geworfene und intern
+abgefangene Lesefehler, fehlende bzw. ungültige Messwerte, unbekannte Gerätezustände
+und fehlende Steuerdaten angeschlossener Wallboxen. Gültige Nullwerte sind keine
+Fehler; abgewählte optionale Messquellen werden nicht verlangt.
+
+Die Einträge nennen die Plugin-Kennung und einen technischen Ort wie `device/2`
+oder `vehicle/1/wallbox`. Nummern entsprechen der Reihenfolge der Geräte bzw.
+Fahrzeuge. Bei Victron-Modbusfehlern werden Leseabschnitt, Unit, Registeradresse,
+Anzahl und Ausnahme-Code übernommen, soweit vorhanden. Wiederholungen werden pro
+Plugin-Instanz dedupliziert; ein wieder erfolgreicher Abruf erzeugt einen INFO-Eintrag.
+Dies gilt auch für die bisherige Fronius-Speichergruppe.
+
+Fehler beim Laden von Plugins, bei der Integrationseinrichtung und in den nativen
+HA-Konfigurationsdialogen werden ebenfalls im Backend erfasst. Bei einem ungültigen
+Plugin-Parameter wird dessen Feldname statt seines Inhalts protokolliert. Aktive
+Plugin-Leseprobleme und Konfigurationsereignisse stehen zusätzlich in den Diagnosen.
+
 ## Browser- und Verbindungsfehler
 
 Ladefehler von UI-Dateien, Darstellungsfehler und fehlgeschlagene Verbindungen sind
-Browserereignisse. Sie werden mit festen Codes an das Backend gemeldet und dort
-protokolliert. Der Kanal nutzt die bestehende HA-Authentifizierung und
-Administratorprüfung. Er akzeptiert keine freien Fehlermeldungen oder Messdaten.
-
-Solange die Verbindung unterbrochen ist, ist kein sofortiger Backend-Logeintrag
-möglich. Das offene Panel puffert bis zu 32 Ereignisse und übermittelt sie nach
-Wiederherstellung der Verbindung; bei Übertragungsfehlern wird frühestens nach
-30 Sekunden erneut versucht. Die Browserkonsole enthält ebenfalls den festen Code.
-Beim Schließen des Panels kann ein noch nicht übertragener Puffer verloren gehen.
+Browserereignisse. Sie bleiben in der Oberfläche bzw. Browserkonsole. Es gibt weder
+einen Meldepuffer noch eine Nachlieferung an das Backend, auch nicht nach einem
+HA-Neustart. Frühere Panels können noch alte Meldungen gepuffert haben: Diese
+werden ohne Auswertung, Speicherung oder Logeintrag quittiert und verworfen.
+Auch normale Panelanfragen während des HA-Starts erzeugen keinen zusätzlichen
+Integrations-Logeintrag für den vorübergehenden Zustand „noch nicht geladen“.
 Meldungen anderer HA-Integrationen, etwa `cover/set_cover_position`, gehören zum
 HA-Core bzw. zur betroffenen Integration und werden nicht als EOS-Fehler ausgegeben.
 
@@ -86,9 +103,15 @@ they never include addresses, credentials, device names, measurements, targets o
 raw exception messages. Diagnostics retain the last 50 transitions in memory.
 INFO includes recovery/normal waiting; DEBUG adds bounded HTTP operation timings.
 
-Browser-only failures use a coded, authenticated administrator-only reporting
-channel. During a connection outage the open panel queues up to 32 events for
-delivery after reconnecting, retrying no sooner than 30 seconds after failure.
-Closing the panel may lose undelivered events; immediate server logging while
-disconnected is impossible. Other integrations' service failures remain HA/the
-respective integration's responsibility.
+Plugin reads are monitored independently of the selected HA measurement sources.
+Exceptions, suppressed partial failures, incomplete/invalid telemetry and missing
+charger controls are logged per instance, with plugin ID, ordinal scope and safe
+protocol context. Valid zero readings and disabled optional sources remain valid.
+Native configuration forms, plugin registration and integration setup log rejected
+configurations with parameter names, never parameter values.
+
+Browser-only failures stay in the browser. They are neither queued nor forwarded
+to the backend after reconnect/restart. Old reports from cached previous panels are
+acknowledged and discarded without logging or persistence. Ordinary panel requests
+during HA startup do not produce integration-not-ready log spam. Other integrations'
+service failures remain HA/the respective integration's responsibility.

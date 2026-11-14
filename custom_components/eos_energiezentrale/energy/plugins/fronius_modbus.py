@@ -97,14 +97,18 @@ class FroniusModbus(BatteryDriver):
         extra = {"solar": Measurement(solar, now if solar is not None else None)}
         try:
             ac = self._ac_power()
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
+            from ..plugin_diagnostics import partial_read_failure
+            partial_read_failure(self, error, 'inverter_ac')
             self._invalidate()
             ac = None
         extra['inverter_ac'] = Measurement(ac, now if ac is not None else None)
         if include_grid and "grid" in self.measurement_keys:
             try:
                 grid = self._grid_power()
-            except (OSError, ValueError):
+            except (OSError, ValueError) as error:
+                from ..plugin_diagnostics import partial_read_failure
+                partial_read_failure(self, error, 'grid')
                 # A missing gateway meter must not hide healthy battery data.
                 self.grid_model = None
                 grid = None

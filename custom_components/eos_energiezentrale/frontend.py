@@ -1,7 +1,6 @@
 """Authenticated HA WebSocket API and same-origin panel resources."""
 from functools import partial
 from hashlib import sha256
-import logging
 from pathlib import Path
 import sqlite3
 
@@ -12,16 +11,9 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
 from .energy.localization import load_language
-from .energy.status import IssueLog
 
 STATIC_URL = "/eos-energiezentrale-static"
 PANEL_URL = "eos-energiezentrale"
-_LOGGER = logging.getLogger(__name__)
-CLIENT_CODES = frozenset({'timeout', 'bridge_not_ready', 'not_ready', 'asset_mismatch', 'ui_render_failed',
-    'forecast_open_failed', 'invalid_input', 'request_failed', 'connection_lost', 'language_invalid',
-    'language_unavailable', 'history_unavailable', 'history_invalid', 'invalid_report', 'report_unavailable',
-    'internal_error', 'invalid_settings', 'change_unconfirmed', 'unauthorized', 'unknown_command', 'ingress_only'})
-CLIENT_ACTIONS = frozenset({'interface', 'language', 'snapshot', 'history', 'settings', 'control', 'accounting', 'weather_forecast'})
 
 
 def asset_version(directory=None):
@@ -73,31 +65,20 @@ def async_remove_panel(hass):
 @websocket_api.async_response
 async def websocket_request(hass, connection, msg):
     action, values = msg["action"], msg.get("values", {})
-    api_log = hass.data.setdefault(DOMAIN, {}).setdefault('api_log', IssueLog(_LOGGER))
+    if action == 'client_event':
+        # Discard pending reports from cached older panels, including on restart.
+        # ACK once so the old browser stops retrying; do not inspect or log data.
+        connection.send_result(msg['id'], {'ok':True})
+        return
     entries = hass.config_entries.async_entries(DOMAIN)
     coordinator = entries[0].runtime_data if entries else None
     if coordinator is None or coordinator.closing:
-        api_log.update('api/' + action, [{'id':action, 'code':'not_ready', 'scope':'api/' + action}])
+        # A panel reconnecting during HA startup is not a backend incident.
         connection.send_error(msg["id"], "not_ready", "Integration is not loaded")
         return
     try:
         if action == "snapshot":
             result = coordinator.data
-        elif action == 'client_event':
-            events = values.get('events')
-            if (values.keys() != {'events'} or not isinstance(events, list) or not 1 <= len(events) <= 32
-                    or any(not isinstance(event, dict) or event.keys() != {'code', 'action', 'active'}
-                        or not isinstance(event['code'], str) or event['code'] not in CLIENT_CODES
-                        or not isinstance(event['action'], str) or event['action'] not in CLIENT_ACTIONS
-                        or type(event['active']) is not bool for event in events)):
-                raise ValueError('Invalid client event')
-            for event in events:
-                area = 'client/' + event['action'] + '/' + event['code']
-                if event['active']:
-                    coordinator.report_notice(area, event['code'])
-                else:
-                    coordinator.report_success(area)
-            result = {'ok':True}
         elif action == "accounting":
             result = await coordinator.async_accounting(values)
         elif action == "history":
@@ -117,7 +98,6 @@ async def websocket_request(hass, connection, msg):
                 await coordinator.async_change(settings=values)
             result = {"ok": True}
         coordinator.report_success('api/' + action)
-        api_log.update('api/' + action, [])
         connection.send_result(msg["id"], result)
     except ValueError as error:
         code = {"language":"language_invalid","history":"history_invalid","accounting":"invalid_report"}.get(action,"invalid_settings")

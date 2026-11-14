@@ -22,7 +22,9 @@ class FroniusInverter(InverterDriver):
         if 'grid' in self.measurement_keys:
             try:
                 grid = self.driver._grid_power()
-            except (OSError, ValueError):
+            except (OSError, ValueError) as error:
+                from ..plugin_diagnostics import partial_read_failure
+                partial_read_failure(self, error, 'grid')
                 self.driver.grid_model = None
                 grid = None
             result['grid'] = Measurement(grid, now)

@@ -7,6 +7,7 @@ from .const import DEFAULTS
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.plugin_parameters import parameters
 from .flow_translations import _translations, flow_language
+from .configuration_logging import configuration_failure, configuration_success
 
 
 def plugin_choices(registry,include_none=True):
@@ -90,7 +91,9 @@ class PluginFormMixin:
                 return self.async_abort(reason='use_device_manager')
             selected['devices']='null'
             if selected["battery_type"] not in BATTERY_DRIVERS or selected["wallbox_type"] not in WALLBOX_DRIVERS:
+                configuration_failure(self, 'hardware_selection', ValueError('Invalid plugin selection'))
                 return self.async_abort(reason="invalid_plugin")
+            configuration_success(self, 'hardware_selection')
             for kind in ("battery","wallbox"):
                 if selected[kind+"_type"]!=base[kind+"_type"]: selected[kind+"_parameters"]="{}"
             self._hardware_values = selected
@@ -105,15 +108,20 @@ class PluginFormMixin:
         values = self._hardware_values
         errors = {}
         if user_input is not None:
+            selected_plugin = None
             try:
                 payload = {key:values[key] for key in ("battery_type","wallbox_type","vehicle_name","devices")}
                 for kind,registry in (("battery",BATTERY_DRIVERS),("wallbox",WALLBOX_DRIVERS)):
                     if kind=="wallbox" and self._fleet_configured():
                         payload[kind+"_parameters"] = values[kind+"_parameters"]
                         continue
+                    selected_plugin = registry[values[kind+"_type"]].info.identifier
                     payload[kind+"_parameters"] = json.dumps(configured(registry[values[kind+"_type"]],user_input.get(kind+"_parameters",{})))
+                configuration_success(self, 'hardware_parameters')
                 return await self._step("hardware",payload)
-            except (ValueError,KeyError,TypeError): errors={"base":"invalid_config"}
+            except (ValueError,KeyError,TypeError) as error:
+                configuration_failure(self, 'hardware_parameters', error, selected_plugin)
+                errors={"base":"invalid_config"}
         fields = {}
         for kind,registry in (("battery",BATTERY_DRIVERS),("wallbox",WALLBOX_DRIVERS)):
             if kind=="wallbox" and self._fleet_configured(): continue

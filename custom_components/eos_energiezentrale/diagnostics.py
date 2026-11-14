@@ -3,6 +3,7 @@
 
 from .energy.drivers import PLUGIN_ERRORS
 from .energy.status import IssueLog
+from .const import DOMAIN
 
 
 def device_diagnostics(data):
@@ -13,6 +14,7 @@ def device_diagnostics(data):
         details=device.get('read_diagnostics') or {}
         failure=details.get('failure')
         result.append({'device':index,'plugin':device.get('plugin',{}).get('identifier'),
+            **({'telemetry_status':device['telemetry_status']} if 'telemetry_status' in device else {}),
             'available':device.get('available'),'read_error':device.get('read_error'),
             'configuration':{key:details[key] for key in ('phases','control_enabled','grid_meter_enabled',
                 'read_consumption','dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled') if key in details},
@@ -24,11 +26,14 @@ def device_diagnostics(data):
 async def async_get_config_entry_diagnostics(hass, entry):
     coordinator = entry.runtime_data
     data = coordinator.data or {}
+    configuration_issues = hass.data.get(DOMAIN, {}).get('configuration_issues')
     return {"plugin_errors":dict(PLUGIN_ERRORS),"plugins":data.get("plugins",{}),"devices":device_diagnostics(data),
             "version": entry.version, "armed": bool(data.get("armed")),
             "control_waiting": bool(data.get("control_waiting")),
             "release_pending": bool(data.get("release_pending")),
             "issues": coordinator.issue_log.diagnostics() if isinstance(getattr(coordinator, 'issue_log', None), IssueLog) else {},
+            "configuration_issues": configuration_issues.diagnostics() if isinstance(configuration_issues, IssueLog) else {},
+            "plugin_read_issues": data.get('plugin_read_issues', {}),
             "eos_cache": data.get("eos_cache", {}),
             "errors": data.get("errors", {}), "last_failure": data.get("last_failure"), "plan_available": bool(data.get("plan_end")),
             "battery_type": coordinator.app.config.options["battery_type"],

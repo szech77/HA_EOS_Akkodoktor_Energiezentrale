@@ -742,10 +742,13 @@ class Controller:
             generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
             current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
             driver=getattr(self.config.battery,'driver',self.config.battery)
+            plugin_reads={kind:getattr(value,'telemetry_status',[]) for kind,value in
+                          (('battery',driver),('wallbox',self.config.wallbox))}
             group=getattr(driver,'site_summary',None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
             return {"source_configuration":deepcopy(self.source_configuration),
+                    "plugin_read_issues":{key:deepcopy(value) if isinstance(value,list) else [] for key,value in plugin_reads.items()},
                     "battery_group":deepcopy(group) if isinstance(group,dict) else None,
                     "pv_battery_support": {"active":self.pv_support.active,
                         "session":self.pv_support.session,

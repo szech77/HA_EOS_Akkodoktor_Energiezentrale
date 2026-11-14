@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 
 from .domain import instant, number
 from .measurement_sources import MEASUREMENT_KEYS
-from .failures import BackendError, REASONS, FIELDS
+from .failures import BackendError, PluginParameterError, HardwareAPIError, REASONS, FIELDS
 
 ERROR_MESSAGES = {key: 'notice.' + key for key in (
     'eos', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
@@ -29,8 +29,22 @@ def failure_details(error):
         result['http_status'] = error.code
     if isinstance(error, URLError) and isinstance(error.reason, Exception):
         result['cause'] = type(error.reason).__name__
-    if isinstance(error, BackendError):
+    nested = error.__cause__ or error.__context__
+    for _ in range(4):
+        if not isinstance(nested, Exception):
+            break
+        result['cause'] = type(nested).__name__
+        if isinstance(nested, HTTPError):
+            result['http_status'] = nested.code
+        if isinstance(nested, URLError) and isinstance(nested.reason, Exception):
+            result['cause'] = type(nested.reason).__name__
+        nested = nested.__cause__ or nested.__context__
+    if isinstance(error, (BackendError, HardwareAPIError)):
         result.update(reason=error.reason, fields=error.fields)
+    if isinstance(error, PluginParameterError) and isinstance(error.parameter, str):
+        result['parameter'] = safe_kind(error.parameter)
+    if isinstance(getattr(error, 'plugin_identifier', None), str):
+        result['plugin'] = safe_kind(error.plugin_identifier)
     if error.__traceback__ is not None:
         result['trace'] = [{'module':Path(frame.f_code.co_filename).stem, 'function':frame.f_code.co_name, 'line':line}
                            for frame, line in list(walk_tb(error.__traceback__))[-8:]]
@@ -125,6 +139,19 @@ class IssueLog:
                 safe['details']['trace'] = [{'module':safe_kind(frame.get('module')),
                     'function':safe_kind(frame.get('function')), 'line':frame['line']}
                     for frame in details['trace'][-8:] if type(frame.get('line')) is int and 0 < frame['line'] < 1000000]
+            if details.get('stage'):
+                safe['details']['stage'] = safe_kind(details['stage'])
+            if details.get('parameter'):
+                safe['details']['parameter'] = safe_kind(details['parameter'])
+            for key in ('unit','address','count','exception_code'):
+                value = details.get(key)
+                if type(value) is int and 0 <= value <= 65535:
+                    safe['details'][key] = value
+            if item.get('plugin'):
+                safe['plugin'] = safe_kind(item['plugin'])
+            if item.get('missing_controls'):
+                safe['missing_controls'] = sorted(key for key in item['missing_controls'] if key in
+                    {'phases','amps','step','maximum','max_phases','nominal_voltage'})
             if item.get('measurements'):
                 safe['measurements'] = sorted(key for key in item['measurements'] if key in MEASUREMENT_KEYS)
             if item.get('source_problems'):

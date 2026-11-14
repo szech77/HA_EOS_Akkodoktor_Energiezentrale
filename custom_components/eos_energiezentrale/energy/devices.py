@@ -69,6 +69,7 @@ class DeviceSite(BatteryDriver):
             if any(field.key=='grid_meter_enabled' for field in registry[row['plugin']].configuration):
                 params={**params,'grid_meter_enabled':row.get('grid_source',False)}
             driver=registry[row['plugin']](ha,params)
+            driver.diagnostic_scope = f'device/{len(self.devices)+1}'
             assigned={value for value in driver.ids.values() if value}
             if assigned & entities:
                 raise ValueError('Device entities cannot be shared')
@@ -122,6 +123,7 @@ class DeviceSite(BatteryDriver):
                 'capacity_wh':row.get('capacity_wh'),'solar':get('solar'),'ac':get('inverter_ac'),
                 'soc':value.soc if isinstance(value,BatteryReading) else None,
                 'read_error':read_error,'read_diagnostics':deepcopy(getattr(driver,'read_diagnostics',None)),
+                'telemetry_status':deepcopy(getattr(driver,'telemetry_status',[])),
                 'available':value is not None and all(item.value is not None for item in measurements.values()) and
                     (not isinstance(value,BatteryReading) or all(item is not None for item in (value.soc,value.charge,value.discharge))),
                 'plugin':describe(driver)})

@@ -133,6 +133,7 @@ class FleetController(Controller):
             child_dir.mkdir(parents=True,exist_ok=True)
             proxy=MeteredAdapter(ha,values,identity,self.targets)
             config=Configuration(values,proxy,child_dir)
+            config.wallbox.diagnostic_scope = f'vehicle/{index+1}/wallbox'
             if index==0:
                 self.battery_driver=config.battery
                 config.battery=MeterOnlyBattery(self.battery_driver)

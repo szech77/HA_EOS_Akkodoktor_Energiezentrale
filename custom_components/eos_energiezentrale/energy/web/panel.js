@@ -1,25 +1,6 @@
 /* HA owns authentication. No access tokens enter the iframe or its URL. */
 class EnergyPanel extends HTMLElement {
-  set hass(value) { this._hass = value; if(this.frame)this.updateSource(); void this.flushClientEvents(); }
-  queueClientEvent(event) {
-    if(typeof event.code!=='string'||typeof event.action!=='string'||!/^[a-z_]{1,64}$/.test(event.code)||!/^[a-z_]{1,32}$/.test(event.action)||typeof event.active!=='boolean')return;
-    this.clientEvents??=[];
-    const previous=this.clientEvents.findLast(item=>item.code===event.code&&item.action===event.action);
-    if(previous?.active===event.active)return;
-    if(this.clientEvents.length>=32)this.clientEvents.shift();
-    this.clientEvents.push({code:event.code,action:event.action,active:event.active});
-    void this.flushClientEvents();
-  }
-  async flushClientEvents() {
-    if(this.flushingEvents||!this.clientEvents?.length||!this._hass?.callWS||Date.now()<(this.nextEventRetry??0))return;
-    this.flushingEvents=true;
-    const batch=this.clientEvents.splice(0,32);
-    try {
-      await this._hass.callWS({type:'eos_energiezentrale/request',action:'client_event',values:{events:batch}});
-      this.nextEventRetry=0;
-    } catch {this.clientEvents=[...batch,...this.clientEvents].slice(-32);this.nextEventRetry=Date.now()+30000;}
-    finally {this.flushingEvents=false;if(!this.nextEventRetry)void this.flushClientEvents();}
-  }
+  set hass(value) { this._hass = value; if(this.frame)this.updateSource(); }
   set panel(value) {
     this._panel = value;
     if(this.frame)this.updateSource();
@@ -43,8 +24,7 @@ class EnergyPanel extends HTMLElement {
     this.fallbackVersion=String(Date.now());
     this.listener = async event => {
       if (event.source !== this.frame.contentWindow || event.origin !== location.origin
-          || !['eos-energy-request','eos-energy-client-event'].includes(event.data?.channel)) return;
-      if(event.data.channel==='eos-energy-client-event'){this.queueClientEvent(event.data);return;}
+          || event.data?.channel !== 'eos-energy-request') return;
       const {id, action, values} = event.data;
       const client=typeof event.data.client==='string'&&event.data.client.length<=80?event.data.client:undefined;
       if (!Number.isSafeInteger(id)) return;

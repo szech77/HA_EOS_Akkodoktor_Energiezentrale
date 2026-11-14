@@ -1077,8 +1077,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
 
     async def test_websocket_rejects_non_admin_before_accessing_controller(self):
         connection = Mock(user=SimpleNamespace(is_admin=False))
-        with self.assertRaises(Unauthorized):
-            websocket_request(self.hass, connection, {"id": 1, "action": "control", "values": {"enabled": True}})
+        for action in ('control', 'client_event'):
+            with self.assertRaises(Unauthorized):
+                websocket_request(self.hass, connection, {"id": 1, "action": action, "values": {"enabled": True}})
 
     async def invoke(self, msg):
         answered = asyncio.Event()
@@ -1135,20 +1136,47 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         issue = next(item for item in coordinator.issue_log.diagnostics()['active'] if item['scope'] == 'api/settings')
         self.assertEqual(issue['details']['fields'],['battery_max_soc','battery_min_soc'])
 
-    async def test_browser_events_are_logged_and_arbitrary_text_is_rejected(self):
+    async def test_cached_browser_reports_are_discarded_without_logs_even_during_restart(self):
         coordinator,_ = self.controller()
-        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='INFO') as logs:
+        with self.assertNoLogs('custom_components.eos_energiezentrale',level='INFO'):
             for active in (True,False):
                 result = await self.invoke({'action':'client_event','values':{'events':[
-                    {'code':'connection_lost','action':'snapshot','active':active}]}})
+                    {'code':'connection_lost','action':'snapshot','active':active,'message':'test-secret'}]}})
                 result.send_result.assert_called_once()
-        self.assertIn('connection_lost',logs.output[0])
-        self.assertIn('resolved',logs.output[-1])
-        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
-            result = await self.invoke({'action':'client_event','values':{'events':[
-                {'code':'connection_lost','action':'snapshot','active':True,'message':'test-secret'}]}})
+            self.entry.runtime_data = None
+            result = await self.invoke({'action':'client_event','values':{'events':[]}})
+            result.send_result.assert_called_once()
+        self.assertEqual(coordinator.issue_log.diagnostics()['history'],[])
+
+    async def test_browser_startup_requests_do_not_log_integration_not_ready(self):
+        self.entry.runtime_data = None
+        with self.assertNoLogs('custom_components.eos_energiezentrale',level='INFO'):
+            result = await self.invoke({'action':'snapshot'})
         result.send_error.assert_called_once()
-        self.assertNotIn('test-secret', '\n'.join(logs.output))
+
+    async def test_native_configuration_logs_plugin_parameter_failure_and_recovery(self):
+        values = {**DEFAULTS,'battery_type':'fronius_modbus','battery_parameters':json.dumps({'host':'inverter.test','port':'test-secret'})}
+        with self.assertLogs('custom_components.eos_energiezentrale.configuration_logging',level='WARNING') as logs:
+            self.assertEqual(await check(self.hass,values),{'base':'invalid_config'})
+        self.assertIn('fronius_modbus',logs.output[0])
+        self.assertIn('port',logs.output[0])
+        self.assertNotIn('test-secret','\n'.join(logs.output))
+        with self.assertLogs('custom_components.eos_energiezentrale.configuration_logging',level='INFO') as logs:
+            self.assertEqual(await check(self.hass,{**values,'battery_parameters':json.dumps({'host':'inverter.test'})}),{})
+        self.assertIn('resolved',logs.output[-1])
+
+    async def test_entry_setup_logs_invalid_plugin_before_a_coordinator_exists(self):
+        from homeassistant.exceptions import ConfigEntryError
+        self.hass.config_entries.async_update_entry(self.entry,data={**DEFAULTS,'battery_type':'fronius_modbus',
+            'battery_parameters':json.dumps({'host':'inverter.test','port':'test-secret'})})
+        with self.assertLogs('custom_components.eos_energiezentrale.configuration_logging',level='WARNING') as logs:
+            with self.assertRaises(ConfigEntryError):
+                await async_setup_entry(self.hass,self.entry)
+        self.assertIn('entry_setup',logs.output[0])
+        self.assertIn('fronius_modbus',logs.output[0])
+        self.assertIn('port',logs.output[0])
+        self.assertNotIn('test-secret','\n'.join(logs.output))
+        self.assertIsNone(getattr(self.entry,'runtime_data',None))
 
     async def test_departure_local_api_input_is_normalized_by_backend(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))

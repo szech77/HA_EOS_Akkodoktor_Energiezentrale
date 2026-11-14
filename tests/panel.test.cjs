@@ -82,7 +82,7 @@ test('the iframe identity is echoed so retry cannot consume an old response',asy
   assert.equal(reply.client,'current-frame');
 });
 
-test('browser failures wait for HA and forward only coded events from the real iframe',async()=>{
+test('browser failures are ignored and never sent or replayed after HA reconnects',async()=>{
   const f=panelFixture();f.panel.hass=undefined;
   const data={channel:'eos-energy-client-event',code:'connection_lost',action:'snapshot',active:true,message:'test-secret'};
   await f.send({source:{},origin:f.origin,data});
@@ -90,25 +90,9 @@ test('browser failures wait for HA and forward only coded events from the real i
   assert.equal(f.panel.clientEvents,undefined);
   await f.send({source:f.frame.contentWindow,origin:f.origin,data});
   await f.send({source:f.frame.contentWindow,origin:f.origin,data});
-  assert.equal(f.panel.clientEvents.length,1);assert.equal(f.calls.length,0);
+  assert.equal(f.panel.clientEvents,undefined);assert.equal(f.calls.length,0);
   f.panel.hass={callWS:async message=>{f.calls.push(message);return {ok:true};}};
   await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(f.calls[0].action,'client_event');
-  assert.equal(f.panel.clientEvents.length,0);
+  assert.equal(f.calls.length,0);
   assert.ok(!JSON.stringify(f.calls).includes('test-secret'));
-});
-
-test('outage and recovery survive a failed log submission in their original order',async()=>{
-  const f=panelFixture();f.panel.hass={callWS:async()=>{throw {code:'connection_lost'};}};
-  const data={channel:'eos-energy-client-event',code:'timeout',action:'snapshot',active:true};
-  await f.send({source:f.frame.contentWindow,origin:f.origin,data});
-  await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(f.panel.clientEvents.length,1);
-  await f.send({source:f.frame.contentWindow,origin:f.origin,data:{...data,active:false}});
-  assert.equal(f.panel.clientEvents.length,2);
-  f.panel.nextEventRetry=0;
-  f.panel.hass={callWS:async message=>{f.calls.push(message);return {ok:true};}};
-  await new Promise(resolve=>setImmediate(resolve));
-  assert.deepEqual(Array.from(f.calls[0].values.events,item=>item.active),[true,false]);
-  assert.equal(f.panel.clientEvents.length,0);
 });

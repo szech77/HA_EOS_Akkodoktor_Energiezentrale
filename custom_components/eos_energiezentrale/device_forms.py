@@ -7,6 +7,7 @@ from homeassistant.helpers import selector
 from .energy.devices import DeviceSite, REGISTRIES, device_rows
 from .plugin_forms import configured, plugin_choices, async_plugin_object
 from .flow_menus import show_menu
+from .configuration_logging import configuration_failure, configuration_success
 
 
 def choice(options):
@@ -57,7 +58,10 @@ class DeviceFormMixin:
         if user_input is not None:
             kind=user_input.get('kind')
             if kind=='wallbox' and not hasattr(self,'values'): return await self.async_step_vehicle_add()
-            if kind not in REGISTRIES: return self.async_abort(reason='invalid_plugin')
+            if kind not in REGISTRIES:
+                configuration_failure(self, 'device_kind', ValueError('Invalid device kind'))
+                return self.async_abort(reason='invalid_plugin')
+            configuration_success(self, 'device_kind')
             self._editing_device=None
             self._device_kind=kind
             return await self.async_step_device_plugin()
@@ -115,10 +119,12 @@ class DeviceFormMixin:
         values=self._device_values()
         rows=[row for row in device_rows(values) if row['id']!=selected]
         try: DeviceSite(None,rows)
-        except (ValueError,TypeError,KeyError):
+        except (ValueError,TypeError,KeyError) as error:
+            configuration_failure(self, 'device_remove', error)
             return self.async_show_form(step_id='device_remove',data_schema=vol.Schema({
                 vol.Required('device_id'):choice([{'value':row['id'],'label':row['name']} for row in device_rows(values)])}),
                 errors={'base':'invalid_config'})
+        configuration_success(self, 'device_remove')
         return await self._save_devices(rows)
 
     async def async_step_device_plugin(self,user_input=None):
@@ -128,7 +134,10 @@ class DeviceFormMixin:
             if user_input.get('remove_device') and self._editing_device:
                 return await self.async_step_device_delete()
             plugin=user_input.get('plugin')
-            if plugin not in registry: return self.async_abort(reason='invalid_plugin')
+            if plugin not in registry:
+                configuration_failure(self, 'device_plugin', ValueError('Invalid plugin selection'))
+                return self.async_abort(reason='invalid_plugin')
+            configuration_success(self, 'device_plugin')
             self._device_plugin=plugin
             return await self.async_step_device_parameters()
         default=old.get('plugin',next(iter(registry)))
@@ -161,8 +170,11 @@ class DeviceFormMixin:
                     row.update({key:user_input[key] for key in ('capacity_wh','charge_w','discharge_w')})
                 updated=[row if item['id']==identity else item for item in rows]+([] if identity else [row])
                 DeviceSite(None,updated)
+                configuration_success(self, 'device_parameters')
                 return await self._save_devices(updated)
-            except (ValueError,TypeError,KeyError): errors={'base':'invalid_config'}
+            except (ValueError,TypeError,KeyError) as error:
+                configuration_failure(self, 'device_parameters', error, factory.info.identifier)
+                errors={'base':'invalid_config'}
         displayed={**defaults,**(user_input or {})}
         fields={vol.Required(key,default=displayed[key]):str for key in ('id','name')}
         fields[vol.Required('grid_source',default=displayed['grid_source'])]=selector.BooleanSelector()

@@ -98,7 +98,11 @@ class PluginFactory:
 
     def __call__(self, ha, params):
         scoped_adapter = ScopedHardwareAdapter(ha)
-        plugin = validate_instance(self.plugin_class(scoped_adapter, parameters(self.configuration, params)))
+        try:
+            plugin = validate_instance(self.plugin_class(scoped_adapter, parameters(self.configuration, params)))
+        except (ValueError, TypeError, KeyError) as error:
+            error.plugin_identifier = self.info.identifier
+            raise
         scoped_adapter.bind(plugin.ids.values())
         return plugin
 
@@ -126,7 +130,9 @@ def load_plugins(package_name=__package__+".plugins", include_inverters=False):
         except Exception as error:
             # One broken optional plugin must not hide healthy installed devices.
             errors[module.name] = type(error).__name__
-            _LOGGER.error("Rejected hardware plugin %s: %s",module.name,error)
+            from .status import IssueLog, failure_details
+            IssueLog(_LOGGER).update('registration', [{'id':'registration', 'code':'plugin_registration_failed',
+                'scope':'plugin_loader', 'plugin':module.name, 'severity':'error','details':failure_details(error)}])
     result=(MappingProxyType(registries["battery"]),MappingProxyType(registries["wallbox"]))
     return result+((MappingProxyType(registries['inverter']),) if include_inverters else ())+ (MappingProxyType(errors),)
 
