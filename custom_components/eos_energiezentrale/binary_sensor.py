@@ -21,7 +21,7 @@ class EnergyBinarySensor(EnergyEntity, BinarySensorEntity):
         if self.key == "battery_limits_confirmed":
             return bool(data.get("battery_limits", {}).get("confirmed"))
         if self.key == "problem":
-            return bool(data.get("errors"))
+            return bool(data.get("notices", data.get("errors")))
         if self.key == "plan_current":
             return bool(data.get("plan_end"))
         return bool(data.get("release_pending"))
@@ -29,5 +29,6 @@ class EnergyBinarySensor(EnergyEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self):
         if self.key == "problem":
-            return {"errors": (self.coordinator.data or {}).get("errors", {})}
+            return {"errors": (self.coordinator.data or {}).get("errors", {}),
+                    "notices": (self.coordinator.data or {}).get("notices", [])}
         return None

@@ -10,6 +10,9 @@
   });
   let loaded=false;
   function failed(file,event){
+    const code=event?'ui_render_failed':'asset_mismatch';
+    console.warn('EOS UI '+code);
+    if(window.parent&&window.parent!==window)window.parent.postMessage({channel:'eos-energy-client-event',code,action:'interface',active:true},location.origin);
     document.getElementById('notice').textContent=event
       ?(german?`Bei der Ausführung von ${file} ist ein JavaScript-Fehler aufgetreten.`:`A JavaScript error occurred while running ${file}.`)
       :(german?`Die Oberfläche konnte die Datei ${file} nicht laden. Bitte die Integration vollständig aktualisieren und erneut versuchen.`

@@ -98,6 +98,7 @@
     "control.taken": "Control enabled",
     "control.released": "Control released",
     "control.active": "Control active",
+    "notice.unknown": "A backend operation failed. Check the integration log and diagnostics.",
     "control.syncing_vehicle": "Active · syncing vehicle settings with EOS",
     "control.planning_vehicle": "Active · waiting for an updated EOS vehicle plan",
     "control.read_only": "Read-only mode",

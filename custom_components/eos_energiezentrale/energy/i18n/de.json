@@ -98,6 +98,7 @@
     "control.taken": "Steuerung freigegeben",
     "control.released": "Steuerung zurückgegeben",
     "control.active": "Steuerung aktiv",
+    "notice.unknown": "Ein Backend-Vorgang ist fehlgeschlagen. Integrationsprotokoll und Diagnosedaten prüfen.",
     "control.syncing_vehicle": "Aktiv · Fahrzeugvorgaben werden an EOS übertragen",
     "control.planning_vehicle": "Aktiv · wartet auf aktualisierte EOS-Fahrzeugplanung",
     "control.read_only": "Lesemodus",

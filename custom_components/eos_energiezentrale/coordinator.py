@@ -16,7 +16,10 @@ from .energy.clients import ENTITY
 from .energy.controller import Controller
 from .energy.domain import next_departure
 from .energy.drivers import DeviceNotReady
-from .energy.settings import daily_settings
+from .energy.settings import daily_settings, settings_payload
+from .energy.status import IssueLog, view_state, failure_details
+from .energy.report_values import current_day_values, report_values
+from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline
 from .weather_forecast import WeatherForecast
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +39,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.accounting_cache = {}
         self.accounting_refresh_task = None
         self.accounting_revision = 0
+        self.day_historical = None
+        self.history_for_view = {'local':[], 'vehicles':{}}
         self.eos_poll_tasks = {}
         self.eos_poll_started = {"plan": float("-inf"), "solution": float("-inf")}
         self.battery_sync_task = None
@@ -47,6 +52,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.vehicle_sync_tasks = {}
         self.vehicle_sync_last = {}
         self.weather_forecast = WeatherForecast(hass)
+        self.issue_log = IssueLog(_LOGGER)
+        self.control_status = None
         if isinstance(app, Controller):
             app.external_eos_polling = True
             app.external_battery_sync = True
@@ -68,14 +75,13 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self.app.errors["device_pending"] = error.entity
             except Exception as error:
                 self.app.errors.pop("device_pending", None)
-                self.app.errors["runtime"] = type(error).__name__
+                self._sync_failure(self.app, "runtime", error)
                 entity = getattr(error, "entity", None)
                 self.app.last_failure = {
                     "type": type(error).__name__,
                     "step": getattr(self.app, "control_step", "unknown"),
                     "at": datetime.now(timezone.utc).isoformat(),
                     "entity": entity if isinstance(entity, str) and ENTITY.fullmatch(entity) else None}
-                _LOGGER.exception("Energy control failed during %s", self.app.last_failure["step"])
                 self.app.armed = False
                 self.app.restore_pending = False
                 if not self.closing:
@@ -93,14 +99,63 @@ class EnergyCoordinator(DataUpdateCoordinator):
             try:
                 ledger = self._accounting()
                 ledger.observe(result["live"], result.get("vehicles", []))
-                result["accounting"] = ledger.report({"period":"day"}, now)
+                consumers = ['house'] + (['heat'] if result.get('features', {}).get('heat') else []) + (['car'] if result.get('features', {}).get('car') else [])
+                result["accounting"] = current_day_values(ledger.report({"period":"day"}, now), self.day_historical, consumers)
+                local = self.app.history.read(now)
+                self.history_for_view = {'local':local, 'vehicles':self.app.vehicle_histories(now)
+                    if callable(getattr(type(self.app), 'vehicle_histories', None)) else {}}
+                result['pv_today_kwh'] = measured_pv_energy(local, self.influx_rows, now, result['zone'])
                 self.app.errors.pop("accounting", None)
             except (OSError, sqlite3.Error, ValueError, TypeError, KeyError) as error:
                 # Reporting failures must never stop an otherwise safe charge.
                 self.app.errors["accounting"] = type(error).__name__
-                _LOGGER.warning("Energy accounting unavailable: %s", type(error).__name__)
+                result['accounting'] = None
+                result['pv_today_kwh'] = None
+                if isinstance(self.app, Controller):
+                    self.app.record_failure("accounting", error)
             result["errors"] = dict(self.app.errors)
-            return result
+            if isinstance(self.app, Controller):
+                result['error_details'] = dict(self.app.error_details)
+            return self._present(result)
+
+    def _present(self, data):
+        now = datetime.now(timezone.utc)
+        retained = {key:self.data[key] for key in ('accounting', 'pv_today_kwh') if self.data and key in self.data}
+        result = view_state({**retained, **data}, now)
+        measured = result.get('pv_today_kwh')
+        result['pv_forecast_totals'] = [{**row, 'total_kwh':row['kwh'] + measured if index == 0
+            and row.get('kwh') is not None and measured is not None else row.get('kwh'),
+            'includes_measured':index == 0 and row.get('kwh') is not None and measured is not None}
+            for index, row in enumerate(result.get('pv_daily_forecast', []))]
+        result['pv_next24'] = next24_pv_forecast(result.get('forecast', []), now)
+        result['pv_next24_start'] = now.isoformat()
+        result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], now)
+        for vehicle in result.get('vehicles', []):
+            vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
+        self.issue_log.update('state', result['notices'])
+        self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
+                              if result['battery_low'] else [])
+        if result['control_status'] != self.control_status:
+            _LOGGER.info('EOS control status: %s', result['control_status'])
+            self.control_status = result['control_status']
+        return result
+
+    def async_set_updated_data(self, data):
+        super().async_set_updated_data(self._present(data))
+
+    async def _async_publish_snapshot(self):
+        snapshot = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
+        self.async_set_updated_data({**(self.data or {}), **snapshot})
+
+    def report_failure(self, area, error, code):
+        self.report_notice(area, code, failure_details(error))
+
+    def report_notice(self, area, code, details=None):
+        self.issue_log.update(area, [{'id':area, 'code':code, 'scope':area,
+            'severity':'warning', 'details':details or {}}])
+
+    def report_success(self, area):
+        self.issue_log.update(area, [])
 
     async def _async_update_data(self):
         async with self.work_lock:
@@ -133,12 +188,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def _sync_failure(app, area, error):
-        kind = type(error).__name__
-        if app.errors.get(area) != kind:
-            # Keep the failing operation after recovery, without exception text
-            # that may contain URLs, credentials or private configuration.
-            _LOGGER.warning("EOS %s synchronization failed (%s)", area, kind)
-        app.errors[area] = kind
+        app.errors[area] = type(error).__name__
+        if isinstance(app, Controller):
+            app.error_details[area] = failure_details(error)
 
     def _schedule_vehicle_sync(self):
         if self.closing:
@@ -179,6 +231,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     app.vehicle_profile_confirmed = None
                     self._sync_failure(app, 'vehicle_limits', error)
             self.vehicle_sync_tasks.pop(resource, None)
+            await self._async_publish_snapshot()
             if desired != app.vehicle_profile:
                 self._schedule_vehicle_sync()
 
@@ -224,6 +277,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     app.goal_at = None
                     self._sync_failure(app, "goal", error)
             self.goal_sync_tasks.pop(resource, None)
+            await self._async_publish_snapshot()
             if revision != app.goal_sync_revision or desired != current:
                 self._schedule_goal_sync()
 
@@ -263,8 +317,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     self.app.battery_limits_confirmed = None
                     self.app.battery_limits_confirmed_at = None
                     self._sync_failure(self.app, "battery_limits", error)
-                snapshot = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
-                self.async_set_updated_data({**(self.data or {}), **snapshot})
+                await self._async_publish_snapshot()
             self.battery_sync_task = None
             if revision != self.battery_sync_revision or desired != current:
                 self._schedule_battery_sync()
@@ -299,6 +352,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     else:
                         self.app.apply_eos_forecast(result, now, error)
             await self.hass.async_add_executor_job(apply)
+            await self._async_publish_snapshot()
 
     def _schedule_accounting_refresh(self):
         """Refresh accounting data without holding the device-control lock."""
@@ -316,24 +370,33 @@ class EnergyCoordinator(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(
                 detached.refresh_eos, self.app.config.eos,
                 self.app.config.options["battery_resource"], datetime.now(timezone.utc))
-        except Exception:
-            _LOGGER.exception("EOS accounting refresh failed")
+        except Exception as error:
+            self.report_failure('accounting_refresh', error, 'accounting')
             return
         async with self.work_lock:
             if (self.closing or self.accounting is not ledger or ledger.settings != settings
                     or self.accounting_revision != revision):
                 return
-            for key in ("last_eos_attempt", "eos_battery", "eos_error",
-                        "last_pv_attempt", "pv_tariff", "pv_error"):
+            for key in ("last_eos_attempt", "eos_battery", "eos_error", "eos_failure_details",
+                        "last_pv_attempt", "pv_tariff", "pv_error", "pv_failure_details"):
                 setattr(ledger, key, getattr(detached, key))
+            self.report_success('accounting_refresh')
+            for key in ('eos_error', 'pv_error'):
+                if getattr(ledger, key):
+                    self.report_notice('accounting/' + key, key, getattr(ledger, key.replace('_error', '_failure_details')))
+                else:
+                    self.report_success('accounting/' + key)
 
     async def async_change(self, *, enabled=None, settings=None):
+        area = 'api/control' if enabled is not None else 'api/settings'
         async with self.work_lock:
             if self.closing:
                 raise ValueError("Integration is stopping")
             def change(settings=settings):
                 with self.app.lock:
                     now = datetime.now(timezone.utc)
+                    if settings is not None:
+                        settings = settings_payload(settings, self.app.config.zone)
                     previous_goals = [(vehicle, self._desired_goal(vehicle, now))
                                       for vehicle in self._vehicle_controllers()]
                     previous_limits = ((self.app.battery_sync_managed(), self.app.battery_limits_request())
@@ -370,7 +433,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     return self.app.snapshot(datetime.now(timezone.utc))
             try:
                 result = await self.hass.async_add_executor_job(change)
-            except Exception:
+            except Exception as error:
+                self.report_failure(area, error, 'invalid_settings' if isinstance(error, ValueError) else 'change_unconfirmed')
                 # A failed release already disarms the core; expose its pending
                 # state immediately instead of showing an obsolete enabled switch.
                 result = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
@@ -378,6 +442,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 raise
             self._schedule_battery_sync()
             self._schedule_goal_sync()
+            self.report_success(area)
             self.async_set_updated_data(result)
 
     def _accounting(self):
@@ -409,23 +474,37 @@ class EnergyCoordinator(DataUpdateCoordinator):
         key = (result["period"],result["date"],result["started"],repr(result["settings"]),repr(result["effective"]),repr(result.get("pv_tariff")))
         cached = self.accounting_cache.get(key)
         if cached is not None and monotonic()-cached[0] < 600:
-            return merge_reconstruction(result,deepcopy(cached[1]))
+            return self._accounting_result(merge_reconstruction(result,deepcopy(cached[1])))
         vehicles = [(identity,app.config) for identity,app,_ in getattr(self.app,"controllers",[])]
         try:
             historical = await self.hass.async_add_executor_job(
                 reconstruct,self.app.config,deepcopy(result),datetime.now(timezone.utc),vehicles)
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError) as error:
             result["historical_error"] = True
-            return result
+            self.report_failure('accounting_history', error, 'history_unavailable')
+            return self._accounting_result(result)
+        self.report_success('accounting_history')
         if len(self.accounting_cache) >= 32:
             self.accounting_cache.pop(next(iter(self.accounting_cache)))
         self.accounting_cache[key] = (monotonic(),historical)
-        return merge_reconstruction(result,deepcopy(historical))
+        return self._accounting_result(merge_reconstruction(result,deepcopy(historical)))
+
+    def _accounting_result(self, result):
+        if result['period'] == 'day' and result['date'] == datetime.now(self.app.config.zone).date().isoformat():
+            self.day_historical = deepcopy(result)
+        options = self.app.config.options
+        consumers = ['house'] + (['heat'] if options.get('heat_entity') else []) + (['car'] if options.get('wallbox_type') != 'none' else [])
+        return report_values(result, consumers)
 
     async def async_weather_forecast(self, values):
         if values or self.closing:
             raise ValueError('Invalid weather forecast request')
-        return await self.weather_forecast.async_read(self.app.config.options)
+        result = await self.weather_forecast.async_read(self.app.config.options)
+        if result['status'] != 'available':
+            self.report_notice('weather_forecast', result['status'], result.get('error_details'))
+        else:
+            self.report_success('weather_forecast')
+        return result
 
     async def async_history(self):
         # An unresponsive history database must not block control operations.
@@ -437,18 +516,22 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self.influx_at = monotonic()
                 try:
                     rows = await self.hass.async_add_executor_job(influx_series, self.app.config)
-                except Exception:
+                except Exception as error:
                     self.influx_error = True
+                    self.report_failure('influx_history', error, 'history_unavailable')
                 else:
                     self.influx_rows = rows
                     self.influx_error = False
+                    self.report_success('influx_history')
             async with self.work_lock:
                 if self.closing:
                     raise ValueError("Integration is stopping")
                 def read():
                     now = datetime.now(timezone.utc)
                     result = {"local": self.app.history.read(now),
-                              "influx": self.influx_rows, "influx_error": self.influx_error}
+                              "influx": self.influx_rows, "influx_error": self.influx_error,
+                              "status":'local_history' if not self.app.config.influx.url else
+                                  'fetch_failed' if self.influx_error else 'history_available' if self.influx_rows else 'no_samples'}
                     if callable(getattr(type(self.app), "vehicle_histories", None)):
                         result["vehicles"] = self.app.vehicle_histories(now)
                     return result

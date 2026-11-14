@@ -29,12 +29,8 @@ test('presence labels are translated in German and English',()=>{
 });
 
 test('normal EOS planning has a distinct status and preserves recovery priorities',()=>{
-  const value={armed:true,vehicle_planning:'plan_pending',errors:{eos:'TimeoutError'}};
-  assert.equal(context.controlStatus(value),'control.planning_vehicle');
-  assert.equal(context.controlStatus({...value,vehicle_planning:'goal_pending'}),'control.syncing_vehicle');
-  assert.equal(context.controlStatus({...value,vehicles:[{vehicle_planning:null},{vehicle_planning:'limits_pending'}]}),'control.syncing_vehicle');
-  assert.equal(context.controlStatus({...value,eos_cache:{ev1:{remaining_s:240}}}),'control.cached_eos');
-  assert.equal(context.controlStatus({...value,control_waiting:true}),'control.waiting');
-  assert.equal(context.controlStatus({...value,armed:false}),'control.read_only');
-  assert.equal(context.controlStatus({...value,vehicle_planning:null}),'control.active');
+  for(const status of ['planning_vehicle','syncing_vehicle','cached_eos','waiting','read_only','active'])
+    assert.equal(context.controlStatus({control_status:status}),'control.'+status);
+  // Technical flags cannot override the backend's decision in the browser.
+  assert.equal(context.controlStatus({control_status:'waiting',armed:true,vehicle_planning:null}),'control.waiting');
 });

@@ -2,12 +2,14 @@
 import json
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .clients import ENTITY, EOS, Influx
 from .domain import instant, number
 from .drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
+from .failures import BackendError
 
 DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "weekdays": [0, 1, 2, 3, 4], "target_soc": 80, "pv_target_soc": 80,
@@ -18,35 +20,59 @@ DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "battery_pv_surplus_w": 150}
 
 
+def settings_payload(raw, zone):
+    """Interpret form input in the installation zone; retain the native ISO API."""
+    if 'departure_local' not in raw:
+        return raw
+    result = dict(raw)
+    local = result.pop('departure_local')
+    if 'departure' in result or not isinstance(local, str):
+        raise BackendError('Invalid local departure', reason='invalid_departure', fields=('departure',))
+    if not local:
+        result['departure'] = ''
+        return result
+    try:
+        parsed = datetime.fromisoformat(local)
+        if parsed.tzinfo is not None:
+            raise ValueError('Local input must not contain a timezone')
+        departure = parsed.replace(tzinfo=zone)
+        if departure.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) != parsed:
+            raise ValueError('Local departure does not exist')
+    except ValueError as error:
+        raise BackendError('Invalid local departure', reason='invalid_departure', fields=('departure',)) from error
+    result['departure'] = departure.isoformat()
+    return result
+
+
 def daily_settings(raw, interval):
     if not isinstance(raw, dict) or raw.keys() - DAILY.keys():
-        raise ValueError("Unbekannte Alltagseinstellung")
+        raise BackendError("Unbekannte Alltagseinstellung", reason='unknown_fields')
     values = {**DAILY, "regulation_interval_s": interval, **raw}
     for key in ("pv", "fast", "battery_pv_support", "battery_pv_start", "phase_auto"):
         if type(values[key]) is not bool:
-            raise ValueError(f"Ungültige Einstellung: {key}")
+            raise BackendError(f"Ungültige Einstellung: {key}", reason='invalid_type', fields=(key,))
     for key, low, high in (("target_soc", 1, 100), ("pv_target_soc", 1, 100),
                            ("reserve_w", 0, 500), ("regulation_interval_s", 5, 120),
                            ("battery_min_soc", 0, 99), ("battery_max_soc", 1, 100),
                            ("battery_pv_min_soc", 0, 98), ("battery_pv_wait_s", 10, 600),
                            ("battery_pv_surplus_w", 1, 5000)):
         if type(values[key]) is not int or not low <= values[key] <= high:
-            raise ValueError(f"Ungültiger Bereich: {key}")
+            raise BackendError(f"Ungültiger Bereich: {key}", reason='out_of_range', fields=(key,))
     if values["battery_min_soc"] >= values["battery_max_soc"]:
-        raise ValueError("Battery minimum must be below maximum SoC")
+        raise BackendError("Battery minimum must be below maximum SoC", reason='battery_bounds', fields=('battery_min_soc','battery_max_soc'))
     if values["schedule"] not in ("off", "once", "weekly"):
-        raise ValueError("Ungültiger Zeitplan")
+        raise BackendError("Ungültiger Zeitplan", reason='invalid_schedule', fields=('schedule',))
     if (not isinstance(values["departure"], str)
             or (values["schedule"] == "once" and not instant(values["departure"]))):
-        raise ValueError("Einmaliger Termin benötigt Datum und Zeitzone")
+        raise BackendError("Einmaliger Termin benötigt Datum und Zeitzone", reason='invalid_departure', fields=('departure',))
     if not isinstance(values["departure_time"], str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", values["departure_time"]):
-        raise ValueError("Ungültige Abfahrtszeit")
+        raise BackendError("Ungültige Abfahrtszeit", reason='invalid_departure_time', fields=('departure_time',))
     days = values["weekdays"]
     if not isinstance(days, list) or any(type(day) is not int or not 0 <= day <= 6 for day in days):
-        raise ValueError("Ungültige Wochentage")
+        raise BackendError("Ungültige Wochentage", reason='invalid_weekdays', fields=('weekdays',))
     values["weekdays"] = sorted(set(days))
     if values["schedule"] == "weekly" and not days:
-        raise ValueError("Mindestens einen Wochentag auswählen")
+        raise BackendError("Mindestens einen Wochentag auswählen", reason='invalid_weekdays', fields=('weekdays',))
     return values
 
 

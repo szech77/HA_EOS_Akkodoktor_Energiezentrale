@@ -92,6 +92,13 @@ Referenzen: [Dependabot-Konfiguration](https://docs.github.com/en/code-security/
   Tokens über `pull_request_target` ausführen.
 - Native HA-Übersetzungen liegen in `translations`, Panel-Texte in `energy/i18n`.
   Deutsch und Englisch pflegen; Englisch bleibt der Rückfall.
+- Fachliche Berechnungen, Statusbewertungen und Warnungen im Backend halten.
+  Das Frontend übermittelt Eingaben und übernimmt Darstellung und Formatierung.
+  Backend-Warnungen und -Fehler müssen unabhängig von Browserabrufen protokolliert
+  werden; gemeinsame Kennungen für Anzeige, Log und Diagnosedaten verwenden.
+  Unveränderte Probleme deduplizieren, Ursachenwechsel und Behebungen erfassen.
+  Browserfehler nur als feste Codes über die authentifizierte API melden;
+  keine privaten Fehlermeldungen oder Messdaten übernehmen. Siehe `LOGGING.md`.
 
 ## Prüfung vor Abschluss
 

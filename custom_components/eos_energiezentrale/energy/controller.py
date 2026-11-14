@@ -17,6 +17,7 @@ from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
+from .status import failure_details
 from .pv_support import PVSupport
 
 
@@ -44,6 +45,7 @@ class Controller:
         self.forecast_failure_since = None
         self.forecast_failure = None
         self.errors = {}
+        self.error_details = {}
         self.control_step = "startup"
         self.last_failure = None
         self.goal = None
@@ -86,7 +88,7 @@ class Controller:
         try:
             store(enabled)
         except Exception as error:
-            self.errors["control_persistence"] = type(error).__name__
+            self.record_failure("control_persistence", error)
             raise
         self.errors.pop("control_persistence", None)
 
@@ -140,7 +142,7 @@ class Controller:
                     self.tick(datetime.now(timezone.utc), started)
                     self.errors.pop("runtime", None)
                 except Exception as error:
-                    self.errors["runtime"] = type(error).__name__
+                    self.record_failure("runtime", error)
                     if self.armed and self.owned:
                         try:
                             self.release(self.ha.states(), datetime.now(timezone.utc))
@@ -181,7 +183,7 @@ class Controller:
         except Exception as error:
             self.battery_limits_confirmed = None
             self.battery_limits_confirmed_at = None
-            self.errors["battery_limits"] = type(error).__name__
+            self.record_failure("battery_limits", error)
         else:
             self.battery_limits_confirmed = desired
             self.battery_limits_confirmed_at = now
@@ -257,12 +259,13 @@ class Controller:
                 self.plan = candidate
             if incomplete:
                 self.errors["eos"] = "PlanIncomplete"
+                self.error_details['eos'] = {'exception': 'PlanIncomplete'}
             else:
                 self.errors.pop("eos", None)
         except Exception as error:
             for resource in resources:
                 self.eos_failure_since.setdefault(resource,now)
-            self.errors["eos"] = type(error).__name__
+            self.record_failure("eos", error)
 
     def apply_eos_forecast(self, solution, now, error=None):
         try:
@@ -277,6 +280,7 @@ class Controller:
             if self.forecast_failure_since is None or now < self.forecast_failure_since:
                 self.forecast_failure_since = now
             self.forecast_failure = type(error).__name__
+            self.error_details['forecast'] = failure_details(error)
             self.report_forecast_availability(now)
 
     def report_forecast_availability(self, now):
@@ -344,7 +348,7 @@ class Controller:
                 self.goal, self.goal_at = goal, now
                 self.errors.pop("goal", None)
             except Exception as error:
-                self.errors["goal"] = type(error).__name__
+                self.record_failure("goal", error)
         return goal is not None and goal == self.goal and self.goal_at is not None
 
     def update_vehicle(self, box, now, clock):
@@ -371,7 +375,7 @@ class Controller:
             try:
                 self.config.eos.set_vehicle_charging_limits(self.config.options['vehicle_resource'], *profile)
             except Exception as error:
-                self.errors['vehicle_limits'] = type(error).__name__
+                self.record_failure('vehicle_limits', error)
                 self.vehicle_profile_confirmed = None
             else:
                 if self.vehicle_profile_confirmed != profile:
@@ -388,7 +392,7 @@ class Controller:
             self.pv_session = False
             self.pv_support.reset()
             self.candidate = self.phase_target = None
-            self.errors['wallbox'] = type(error).__name__
+            self.record_failure('wallbox', error)
             if not box.plugged:
                 self.errors['wallbox_stop'] = 'StopUnconfirmed'
                 return
@@ -697,6 +701,10 @@ class Controller:
                        max_soc=self.config.daily['battery_max_soc'], net_demand_w=demand,
                        required_discharge_w=required)
 
+    def record_failure(self, area, error):
+        self.errors[area] = type(error).__name__
+        self.error_details[area] = failure_details(error)
+
     def vehicle_plan_ready(self, now):
         """Only use a generation sufficiently newer than confirmed EV inputs."""
         if self.goal_at is None or (optional_charger(self.config.wallbox) and
@@ -755,7 +763,7 @@ class Controller:
                     "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "eos_cache": {resource:{"remaining_s":max(0,300-(now-failed).total_seconds())} for resource,failed in self.eos_failure_since.items() if resource in self.resource_plans and (now-failed).total_seconds()<300 and self.order_for(resource,now) is not None},
-                    "errors": dict(self.errors), "last_failure": self.last_failure, "zone": opts["timezone"],
+                    "errors": dict(self.errors), "error_details": dict(self.error_details), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "plugins": {"battery":describe(self.config.battery),"wallbox":describe(self.config.wallbox)},

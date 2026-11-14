@@ -9,6 +9,7 @@ from datetime import datetime
 from .contracts import Measurement, PluginContractError
 from .clients import reading
 from .sanitiser import bounded
+from .domain import instant, number
 
 SOURCES = {
     "solar": ("pv_entity", "power", "W", 45),
@@ -73,7 +74,14 @@ def resolve_sources(options, states, providers, now, keys=None):
                 if key == "heat_load": opts["heat_load_scale"] = "percent"
                 source = {"type": "plugin", "name": driver.info.name}
                 break
-        sources[key] = {"source": source, "available": bool(source and reading(rows, entity, now, kind, age) is not None)}
+        available = bool(source and reading(rows, entity, now, kind, age) is not None)
+        row = rows.get(entity, {})
+        stamp = instant(row.get('last_reported') or row.get('last_updated'))
+        reason = (None if available else 'not_configured' if source is None else
+            'state_unavailable' if number(row.get('state')) is None else
+            'sample_missing' if stamp is None else 'future_sample' if now < stamp else
+            'stale' if (now-stamp).total_seconds() >= age else 'unit_invalid')
+        sources[key] = {"source": source, "available": available, 'reason':reason, 'max_age_s':age}
     required = {"solar", "grid", "house_total", "price"}
     if options.get("wallbox_type") != "none": required.add("car_soc")
     if opts.get("heat_entity"): required.add("heat")

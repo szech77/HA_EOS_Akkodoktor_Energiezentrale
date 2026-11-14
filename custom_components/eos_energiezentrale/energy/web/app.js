@@ -120,6 +120,20 @@ let historyRefreshing = false;
 const clientId=globalThis.crypto?.randomUUID?.()??`${Date.now()}-${Math.random()}`;
 let requestId = 0;
 const pendingRequests = new Map();
+const clientFailures = new Map();
+const resolvedClientFailures = new Set();
+function clientIssue(code,action,active=true) {
+  const key=action+'/'+code;
+  if(active?clientFailures.has(key):!clientFailures.has(key)&&resolvedClientFailures.has(key))return;
+  if(active){clientFailures.set(key,{code,action});resolvedClientFailures.delete(key);}
+  else {clientFailures.delete(key);resolvedClientFailures.add(key);}
+  console[active?'warn':'info']('EOS UI '+(active?'issue':'recovered')+': '+key);
+  if(window.parent!==window)window.parent.postMessage({channel:'eos-energy-client-event',code,action,active},location.origin);
+}
+function clientRecovered(action,codes=null) {
+  const issues=codes?codes.map(code=>({code,action})):[...clientFailures.values()].filter(issue=>issue.action===action);
+  for(const issue of issues)clientIssue(issue.code,action,false);
+}
 window.addEventListener('message', event => {
   if (event.source !== window.parent || event.origin !== location.origin
       || event.data?.channel !== 'eos-energy-response'
@@ -129,29 +143,32 @@ window.addEventListener('message', event => {
   clearTimeout(pending.timer);
   pendingRequests.delete(event.data.id);
   if (event.data.error) pending.reject(requestError(event.data.error,pending.action));
-  else pending.resolve(event.data.result);
+  else {clientRecovered(pending.action);pending.resolve(event.data.result);}
 });
 function requestError(code,action) {
   const safeCode=typeof code==='string'&&/^[a-z_]{1,64}$/.test(code)?code:'request_failed';
   const error=Error(`${t(`action.${action}`)}: ${language.messages[`error.${safeCode}`]??t('error.request')}`);
+  const clientCode=['timeout','bridge_not_ready','request_failed','connection_lost','unknown_command','asset_mismatch','unauthorized'].includes(safeCode)
+    ? safeCode : language.messages[`error.${safeCode}`] ? null : 'request_failed';
+  if(clientCode)clientIssue(clientCode,action);
   error.code=safeCode;error.action=action;return error;
 }
 
 function showStartupError(stage,error) {
+  clientIssue(error?.code??'ui_render_failed','interface');
   byId('notice').textContent=`${t(`startup.${stage}`)}. ${error?.code?error.message:t('startup.unexpected')}`;
   const retry=byId('startup-retry');if(retry){retry.textContent=t('startup.retry');retry.hidden=false;}
   if(byId('startup-details'))byId('startup-details').hidden=false;
   if(byId('startup-details-title'))byId('startup-details-title').textContent=t('startup.details');
   if(byId('startup-detail'))byId('startup-detail').textContent=[stage,error?.code??error?.name??'Error',error?.asset??'',error?.code?'':String(error?.message??'').slice(0,200)].filter(Boolean).join(' · ');
   for(const id of ['overview','detail','settings','usage'])if(byId(id))byId(id).hidden=true;
-  console.error('EOS UI failed during '+stage,error);
 }
 
 async function api(path, body) {
   if (window.parent === window) throw requestError('ingress_only',path.split('?')[0]);
   const id = ++requestId,action=path.split('?')[0];
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pendingRequests.delete(id); reject(requestError('timeout',action)); }, 30000);
+    const timer = setTimeout(() => { pendingRequests.delete(id); clientIssue('timeout',action); reject(requestError('timeout',action)); }, 30000);
     pendingRequests.set(id, {resolve, reject, timer, action});
     window.parent.postMessage({channel:'eos-energy-request', id, client:clientId, action:path.split('?')[0], values:body ?? {}}, location.origin);
   });
@@ -174,31 +191,18 @@ function actualPoints(key) {
 }
 
 function nextPlan(key,source=snapshot) {
-  const now = windowNow();
-  const current = source.live[key + '_mode'];
-  return (source.plan?.[key] ?? []).find(item => Date.parse(item.time) > now && item.mode !== current);
+  return source.next_mode?.[key];
 }
 
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
 
 function solarRemaining() {
-  const energy = (snapshot.pv_daily_forecast ?? EosChartData.dailySolar(snapshot.forecast,windowNow(),snapshot.zone))[0]?.kwh;
+  const energy = snapshot.pv_daily_forecast?.[0]?.kwh;
   return valid(energy) ? `${decimal(energy)} ${t('unit.kwh')}` : null;
 }
 
 function solarTodayEnergy() {
-  const now = windowNow();
-  const date = localDay(now);
-  const points = actualPoints('solar').filter(row => localDay(row.time) === date);
-  let wh = 0, covered = 0;
-  for (let i = 1; i < points.length; i++) {
-    const duration = Date.parse(points[i].time) - Date.parse(points[i - 1].time);
-    if (duration > 0 && duration <= 360000) {
-      wh += (points[i].solar + points[i - 1].solar) / 2 * duration / 3600000;
-      covered += duration;
-    }
-  }
-  return covered ? wh / 1000 : null;
+  return snapshot.pv_today_kwh ?? null;
 }
 
 function solarToday() {
@@ -207,11 +211,10 @@ function solarToday() {
 }
 
 function solarForecastCards(now) {
-  const days=snapshot.pv_daily_forecast ?? EosChartData.dailySolar(snapshot.forecast,now,snapshot.zone);
-  const measured=solarTodayEnergy();
+  const days=snapshot.pv_forecast_totals ?? [];
   return days.map((row,i)=>{
-    const totalToday=i===0 && valid(measured) && valid(row.kwh);
-    const value=valid(row.kwh) ? `${totalToday ? '≈ ' : ''}${decimal(row.kwh+(totalToday ? measured : 0))} ${t('unit.kwh')}` : '—';
+    const totalToday=row.includes_measured;
+    const value=valid(row.total_kwh) ? `${totalToday ? '≈ ' : ''}${decimal(row.total_kwh)} ${t('unit.kwh')}` : '—';
     return [t(['metric.pv_forecast_today','metric.pv_forecast_tomorrow','metric.pv_forecast_day_after'][i]),value,
       !valid(row.kwh) ? t('metric.forecast_missing') : totalToday ? t('metric.forecast_today_total')+(row.complete ? '' : ' · '+t('metric.forecast_partial'))
       : i===0 ? t('metric.forecast_remaining_only') : row.complete ? t('metric.forecast_complete') : t('metric.forecast_partial')];
@@ -234,13 +237,7 @@ function socBarCount(soc) {
 }
 
 function controlStatus(value) {
-  if(value.control_waiting)return t('control.waiting');
-  if(!value.armed)return t('control.read_only');
-  if(Object.keys(value.eos_cache??{}).length)return t('control.cached_eos');
-  const pending=(value.vehicles?.length?value.vehicles:[value]).map(vehicle=>vehicle.vehicle_planning);
-  if(pending.includes('goal_pending')||pending.includes('limits_pending'))return t('control.syncing_vehicle');
-  if(pending.includes('plan_pending'))return t('control.planning_vehicle');
-  return t('control.active');
+  return t(`control.${value.control_status??'read_only'}`);
 }
 
 function carIcon(soc) {
@@ -335,8 +332,7 @@ function renderFlow() {
     }
     if (key === 'battery') {
       const knownSoc=valid(soc) && soc>=0 && soc<=100;
-      const minimum=snapshot.settings.battery_min_soc;
-      const low=knownSoc && valid(minimum) && soc<=minimum;
+      const low=snapshot.battery_low===true;
       const filled=knownSoc ? Math.ceil(soc/20) : 0;
       node.classList.toggle('battery-low',low);
       node.querySelectorAll('.battery-bar').forEach((bar,index)=>bar.classList.toggle('filled',index<filled));
@@ -532,44 +528,16 @@ chartsRoot.addEventListener('keydown',event=>{
   const current=activeProbe?.id===chart.dataset.chart ? activeProbe.ratio : .5;
   showProbe(chart.dataset.chart,event.key==='Home' ? 0 : event.key==='End' ? 1 : current+(event.key==='ArrowRight' ? 1 : -1)/576);
 });
-function intervals(rows, start, end, gapLimit) {
-  const ordered = rows.filter(row => row.stamp < end).sort((a,b) => a.stamp - b.stamp);
-  const result = [];
-  let cursor = start;
-  const append = (from, to, mode) => {
-    if (from >= to) return;
-    const prior = result.at(-1);
-    if (prior?.mode === mode && prior.end === from) prior.end = to;
-    else result.push({start:from,end:to,mode});
-  };
-  ordered.forEach(({stamp, mode}, index) => {
-    const from = Math.max(start, stamp);
-    const to = Math.min(end, ordered[index + 1]?.stamp ?? end, stamp + gapLimit);
-    if (from >= to) return;
-    append(cursor,from,null);
-    append(from,to,mode);
-    cursor = to;
-  });
-  append(cursor,end,null);
-  return result;
-}
-
 function timeline(key, now) {
-  const plans = snapshot.plan[key] ?? [];
-  const historical = history.local.map(row => ({stamp:Date.parse(row.time),mode:row[key === 'car' ? 'car_actual_mode' : 'battery_mode']}));
-  const future = plans.map(item => ({stamp:Date.parse(item.time),mode:item.mode}));
-  const planEnd = snapshot.plan_end ? Math.min(now + day, Date.parse(snapshot.plan_end)) : now + day;
-  const planned = planEnd > now ? intervals(future,now,planEnd,Infinity) : [];
-  if (planEnd < now + day) planned.push({start:Math.max(now, planEnd),end:now + day,mode:null});
-  const all = [...intervals(historical,now-day,now,120000), ...planned];
+  const all = snapshot.mode_timeline?.[key] ?? [];
   const legend = new Map();
-  const bands = all.map(({start,end,mode}) => {
+  const bands = all.map(({start,end,mode,kind}) => {
     const color = Object.hasOwn(modes, mode) ? modes[mode][1] : 'edge';
     const label = mode ? modeLabel(mode) : t('timeline.no_data');
     legend.set(label,color);
-    const info = t('timeline.interval', {kind:t(start < now ? 'timeline.history' : 'timeline.plan'),
+    const info = t('timeline.interval', {kind:t(`timeline.${kind}`),
       start:time(start), end:time(end), mode:label});
-    return `<button type="button" class="mode-segment${start >= now ? ' future' : ''}" style="--duration:${(end-start)/day};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
+    return `<button type="button" class="mode-segment${kind==='plan' ? ' future' : ''}" style="--duration:${(end-start)/day};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
   }).join('');
   return `<h2>${key === 'car' ? th('timeline.car_title') : th('timeline.battery_title')}</h2>
     <div class="mode-halves"><span>${th('timeline.history_range')}</span><span>${th('timeline.plan_range')}</span></div>
@@ -633,7 +601,7 @@ function detail(key) {
     + (withPlan ? chart(t('chart.soc'),key+'_soc',1,'%',key,now) : '')
     + (['battery','car','grid','heat'].includes(key) ? chart(t('chart.price'),'price',1,t('unit.price'),'heat',now) : '');
   if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
-  const upcoming = (snapshot.plan[key] ?? []).filter(item => Date.parse(item.time) > now).slice(0,5);
+  const upcoming = snapshot.upcoming_plan?.[key] ?? [];
   byId('plan').hidden = !withPlan && key !== 'heat' && key !== 'house';
   byId('plan').innerHTML = withPlan
     ? `<h2>${th('plan.next')}</h2>${upcoming.length ? '<dl>'+upcoming.map(item => `<dt>${html(time(item.time))}</dt><dd>${html(modeLabel(item.mode))}</dd>`).join('')+'</dl>' : `<p>${th('plan.no_valid')}</p>`}`
@@ -686,12 +654,10 @@ function settings() {
   byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
   byId('control').disabled = !formReady;
   const limits = snapshot.battery_limits;
-  byId('battery-limits-status').textContent = snapshot.errors.battery_limits ? t('settings.battery_limits_failed')
-    : limits?.confirmed ? t('settings.battery_limits_confirmed', {
-      minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc})
-    : limits?.managed ? t('settings.battery_limits_pending') : t('settings.battery_limits_unmanaged');
-  byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${snapshot.errors.eos ? th('status.fetch_failed') : snapshot.plan.battery?.length || snapshot.plan.car?.length ? th('status.plan_available') : th('status.no_plan')}</dd>
-    <dt>InfluxDB</dt><dd>${!snapshot.influx_configured ? th('status.local_history') : history.influx_error ? th('status.fetch_failed') : history.influx.length ? th('status.history_available') : th('status.no_samples')}</dd>`;
+  byId('battery-limits-status').textContent = t(`settings.battery_limits_${snapshot.battery_limits_status??'unmanaged'}`, {
+      minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc});
+  byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${th(`status.${snapshot.eos_status??'connecting'}`)}</dd>
+    <dt>InfluxDB</dt><dd>${th(`status.${history.status??'connecting'}`)}</dd>`;
   for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}${(plugin.measurements??[]).length?' · '+plugin.measurements.map(key=>th(`measurement.${key}`)).join(', '):''}</dd>`;}
   byId('connections').innerHTML+=batteryGroupDetails(snapshot.battery_group);
   const wallbox=snapshot.vehicles?.find(item=>item.id===selector.value)?.plugins?.wallbox??snapshot.plugins?.wallbox;
@@ -700,28 +666,14 @@ function settings() {
 }
 function render() {
   try {
-    renderView();byId('startup-retry').hidden=true;byId('startup-details').hidden=true;return true;
+    renderView();byId('startup-retry').hidden=true;byId('startup-details').hidden=true;clientRecovered('interface',['ui_render_failed','asset_mismatch']);return true;
   }catch(error){showStartupError('view',error);return false;}
 }
 
-function sourceConfigurationNotice(configuration, translate) {
-  const notices = [];
-  for (const kind of ['missing','unavailable']) {
-    const names = (configuration?.[kind] ?? []).map(key => translate(`measurement.${key}`));
-    if (names.length) notices.push(translate(`notice.sources_${kind}`,{values:names.join(', ')}));
-  }
-  return notices.join(' · ');
-}
-
-function vehicleSocNotices(vehicles, translate) {
-  return (vehicles ?? []).slice(1).map(vehicle => {
-    const report = vehicle.source_configuration;
-    const notice = sourceConfigurationNotice({
-      missing:(report?.missing ?? []).filter(key => key === 'car_soc'),
-      unavailable:(report?.unavailable ?? []).filter(key => key === 'car_soc')
-    },translate);
-    return notice ? `${vehicle.name}: ${notice}` : '';
-  }).filter(Boolean).join(' · ');
+function noticeText(notice, translate=t) {
+  const values=(notice.measurements??[]).map(key=>translate('measurement.'+key)).join(', ');
+  const message=translate(notice.message,{values});
+  return (notice.vehicle_name?notice.vehicle_name+': ':'')+message;
 }
 
 function renderView() {
@@ -734,36 +686,29 @@ function renderView() {
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
-  const errors = Object.keys(snapshot.errors);
-  const errorAreas = {eos:Object.keys(snapshot.eos_cache??{}).length?'notice.eos_cached':'notice.eos',accounting:'notice.accounting',device_pending:'notice.device_pending',goal:'notice.goal',runtime:'notice.runtime',forecast:'notice.forecast',
-    release:'notice.release',battery_limits:'notice.battery_limits',vehicle_limits:'notice.vehicle_limits',wallbox:'notice.wallbox',wallbox_stop:'notice.wallbox_stop',control_persistence:'notice.control_persistence',connection:'notice.connection'};
-  const vehicleWarnings = (snapshot.vehicles ?? []).slice(1).flatMap(vehicle =>
-    Object.keys(vehicle.errors ?? {}).filter(key => ['wallbox','wallbox_stop','vehicle_limits','goal'].includes(key))
-      .map(key => `${vehicle.name}: ${t(errorAreas[key])}`));
-  const warnings = [...errors.map(key => errorAreas[key] ? t(errorAreas[key]) : key.toUpperCase()), ...vehicleWarnings];
+  const warnings = (snapshot.notices??[]).map(notice=>noticeText(notice));
+  if(connectionFailure)warnings.push(t('notice.connection'));
   if(forecastOpenFailure)warnings.push(t('forecast.open_failed'));
   byId('notice').textContent = warnings.length ? `${t('notice.check')} · ${warnings.join(', ')}` : '';
-  const sourceNotice = [sourceConfigurationNotice(snapshot.source_configuration,t),
-    vehicleSocNotices(snapshot.vehicles,t)].filter(Boolean).join(' · ');
-  if (sourceNotice) byId('notice').textContent += `${warnings.length?' · ':''}${sourceNotice}`;
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();
   else detail(route);
   forecastView?.update();
 }
+let connectionFailure=false;
 async function refresh() {
   if (refreshing) return;
   refreshing = true;
-  try { snapshot = await api('snapshot'); }
-  catch { snapshot = {...snapshot,errors:{...snapshot.errors,connection:true}}; }
+  try { snapshot = await api('snapshot'); connectionFailure=false; }
+  catch { connectionFailure=true; }
   finally { refreshing = false; render(); }
 }
 async function refreshHistory() {
   if (historyRefreshing) return;
   historyRefreshing = true;
-  try { history = await api('history'); dayAccounting=await api('accounting',{period:'day',date:localDay(windowNow())}); }
-  catch { history.influx_error = true; }
+  try { history = await api('history'); snapshot.accounting=await api('accounting',{period:'day',date:localDay(windowNow())}); }
+  catch { /* API failures are reported by the authenticated bridge. */ }
   finally { historyRefreshing = false; render(); }
 }
 let forecastView=null;
@@ -798,8 +743,10 @@ async function openWeatherForecast(){
     if(!byId('weather-dialog')||!byId('forecast-close')||!byId('forecast-body'))throw requestError('asset_mismatch','interface');
     forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
     forecastView.open();
+    clientIssue('forecast_open_failed','interface',false);
   }catch{
     forecastOpenFailure=true;
+    clientIssue('forecast_open_failed','interface');
   }finally{
     button.disabled=false;render();
   }
@@ -811,13 +758,9 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   const values = {};
   for (const name of ['target_soc','pv_target_soc','reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
-  if (values.battery_min_soc >= values.battery_max_soc) {
-    byId('saved').textContent = t('settings.battery_limits_invalid');
-    return;
-  }
   for (const name of ['pv','fast','battery_pv_support','battery_pv_start','phase_auto']) values[name] = form.elements[name].checked;
   for (const name of ['schedule','departure_time']) values[name] = form.elements[name].value;
-  values.departure = form.elements.departure.value ? new Date(form.elements.departure.value).toISOString() : '';
+  values.departure_local = form.elements.departure.value;
   values.weekdays = [...form.querySelectorAll('[name=day]:checked')].map(input => Number(input.value));
   if (snapshot.vehicles?.length) values.vehicle_id=byId('vehicle-selector').value;
   try { await api('settings',values); byId('saved').textContent = t('settings.saved'); await refresh(); }
@@ -867,6 +810,7 @@ async function start() {
     element.setAttribute('aria-label', t(element.dataset.i18nAria));
   });
   initializeBilling();
+  document.addEventListener?.('invalid',event=>clientIssue('invalid_input',event.target.form?.id==='cost-settings'?'accounting':'settings'),true);
   window.addEventListener('hashchange',render);
   if(!render())return;
   refresh();

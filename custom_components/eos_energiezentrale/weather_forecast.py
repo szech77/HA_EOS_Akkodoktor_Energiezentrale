@@ -8,6 +8,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .energy.domain import instant, number
 from .energy.presentation import WEATHER_CONDITIONS, weather_source
+from .energy.status import failure_details
 
 
 def bounded(value, minimum, maximum):
@@ -73,8 +74,8 @@ class WeatherForecast:
                     payload=response.get(entity) if isinstance(response,dict) else None
                     raw=payload.get('forecast') if isinstance(payload,dict) else None
                     if not isinstance(raw,list): return {**result,'status':'unavailable'}
-                except (HomeAssistantError,OSError,TimeoutError,ValueError,TypeError):
-                    return {**result,'status':'unavailable'}
+                except (HomeAssistantError,OSError,TimeoutError,ValueError,TypeError) as error:
+                    return {**result,'status':'unavailable','error_details':failure_details(error)}
                 fetched=datetime.now(timezone.utc).isoformat()
                 self.cached=(key,monotonic(),raw,fetched)
             rows=hourly_rows(raw,unit,rain_unit,datetime.now(timezone.utc))

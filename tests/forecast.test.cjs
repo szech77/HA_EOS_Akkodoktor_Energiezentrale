@@ -1,23 +1,24 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const forecast=require('../custom_components/eos_energiezentrale/energy/web/forecast.js');
+const backend=require('./backend.cjs');
 const start=Date.parse('2026-11-12T07:00:00Z'),hour=3600000;
 const slot=(from,to,solar)=>({time:new Date(start+from*hour).toISOString(),end:new Date(start+to*hour).toISOString(),solar});
 
 test('PV energy clips the exact next 24 hours and never counts overlapping intervals twice',()=>{
  const slots=forecast.solarSlots([slot(0,2,4000),slot(-1,1,2000),slot(2,30,1000)],start);
- assert.deepEqual(forecast.solarSummary(slots),{kwh:28,peak:4,complete:true,covered:24*hour});
+ assert.deepEqual(backend('pvSummary',[slot(0,2,4000),slot(-1,1,2000),slot(2,30,1000)],{now:start}),{kwh:28,peak:4,complete:true,covered:24*hour});
  assert.equal(slots[0].start,start);assert.equal(slots.at(-1).end,start+24*hour);
 });
 test('missing and invalid PV remains unknown while measured forecast zero is a covered interval',()=>{
  const slots=forecast.solarSlots([slot(0,1,0),slot(1,2,null),slot(2,3,NaN),slot(3,4,-1),slot(4,5,'1000')],start);
- assert.deepEqual(forecast.solarSummary(slots),{kwh:0,peak:0,complete:false,covered:hour});
+ assert.deepEqual(backend('pvSummary',[slot(0,1,0),slot(1,2,null),slot(2,3,NaN),slot(3,4,-1),slot(4,5,'1000')],{now:start}),{kwh:0,peak:0,complete:false,covered:hour});
  assert.equal(forecast.valueAt(slots,start+2*hour),undefined);
- assert.equal(forecast.solarSummary([]).kwh,null);
+ assert.equal(backend('pvSummary',[],{now:start}).kwh,null);
 });
 test('24 elapsed hours stay 24 hours across daylight-saving transitions',()=>{
  for(const date of ['2026-03-29T00:00:00Z','2026-10-25T00:00:00Z']){
   const stamp=Date.parse(date),rows=[{time:date,end:new Date(stamp+25*hour).toISOString(),solar:1000}];
-  assert.equal(forecast.solarSummary(forecast.solarSlots(rows,stamp)).kwh,24);
+  assert.equal(backend('pvSummary',rows,{now:stamp}).kwh,24);
  }
 });
 
@@ -36,6 +37,7 @@ function fixture(request,code='de'){
  const language=JSON.parse(fs.readFileSync(path.join(__dirname,`../custom_components/eos_energiezentrale/energy/i18n/${code}.json`),'utf8'));
  const ids=Object.fromEntries(['weather-dialog','forecast-body','forecast-title','forecast-close','flow-weather'].map(id=>[id,new Element()]));
  const snapshot={zone:'Europe/Berlin',live:{weather:{condition:'sunny',temperature:8,unit:'°C'}},forecast:[slot(0,24,1000)]};
+ Object.defineProperty(snapshot,'pv_next24',{get:()=>backend('pvSummary',snapshot.forecast,{now:Date.parse(snapshot.pv_next24_start??'')||start})});
  let plots=[];
  Object.defineProperty(ids['forecast-body'],'innerHTML',{set(value){
   this.markup=value;
@@ -54,6 +56,18 @@ function fixture(request,code='de'){
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const weather={status:'available',temperature_unit:'°C',source:'<provider>',rows:[{
  time:new Date(start).toISOString(),end:new Date(start+hour).toISOString(),temperature:0,precipitation:0,condition:'sunny',precipitation_probability:0}]};
+
+test('the PV window and summary follow backend time instead of browser time',async()=>{
+ const f=fixture(async()=>weather);
+ f.snapshot.pv_next24_start=new Date(start+hour).toISOString();
+ f.view.open();await flush();
+ assert.match(f.markup(),/23 kWh/);
+ f.ids['forecast-hour'].handlers.input({target:{value:'0'}});
+ assert.equal(f.plots()[0].parts['.forecast-probe'].attributes.x1,0);
+ f.snapshot.pv_next24_start=new Date(start+2*hour).toISOString();f.view.update();
+ assert.match(f.markup(),/22 kWh/);
+ assert.equal(f.plots()[0].parts['.forecast-probe'].attributes.x1,0);
+});
 
 test('dialog opens weather above PV, shares a probe, and renders German and English without injecting provider names',async()=>{
  for(const code of ['de','en']){

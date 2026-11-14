@@ -7,6 +7,7 @@ from copy import deepcopy
 from math import isclose
 
 from .domain import number
+from .failures import BackendError
 
 
 def profiled(device):
@@ -21,7 +22,7 @@ def limits_patch(device,desired):
             patch['nominal_capacity_wh']=patch.pop('capacity_wh')
         return patch
     if not isinstance(device.get('profile_adjustment',{}),dict):
-        raise ValueError('Invalid EOS battery profile adjustment')
+        raise BackendError('Invalid EOS battery profile adjustment', reason='profile_invalid', fields=('profile_adjustment',))
     adjustments={}
     for old,new in (('capacity_wh','nominal_capacity_wh'),('max_charge_power_w','max_charge_power_w'),
                     ('max_discharge_power_w','max_discharge_power_w')):
@@ -29,7 +30,7 @@ def limits_patch(device,desired):
             value=patch.pop(old)
             # The profile API requires strictly positive power adjustments.
             # Zero must stay unconfirmed, never become a fictitious 1 W limit.
-            if value<=0: raise ValueError('EOS profile power limits must be positive')
+            if value<=0: raise BackendError('EOS profile power limits must be positive', reason='profile_nonpositive_power', fields=(new,))
             adjustments[new]=value
     if adjustments: patch['profile_adjustment']=adjustments
     return patch
@@ -42,14 +43,16 @@ def matches(device,desired):
 
 
 def confirmed(device,desired):
-    if not matches(device,desired): raise ValueError('EOS did not confirm battery settings')
+    if not matches(device,desired):
+        raise BackendError('EOS did not confirm battery settings', reason='settings_unconfirmed', fields=desired.keys())
     if profiled(device):
         # Merely echoing an adjustment does not prove it is usable: the chosen
         # profile may be unavailable or cap the effective power to another value.
         for key,value in desired.get('profile_adjustment',{}).items():
             actual=number(device.get('effective_'+key))
             if actual is None or not isclose(actual,value,rel_tol=1e-9,abs_tol=1e-6):
-                raise ValueError('EOS effective battery profile limits differ or are unavailable')
+                raise BackendError('EOS effective battery profile limits differ or are unavailable',
+                    reason='effective_limits_unavailable' if actual is None else 'effective_limits_differ', fields=(key,))
 
 
 def updated_collection(devices,resource,patch):
