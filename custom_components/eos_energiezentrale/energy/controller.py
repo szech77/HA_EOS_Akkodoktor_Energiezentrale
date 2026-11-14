@@ -493,8 +493,7 @@ class Controller:
             self.ha.publish_soc(self.soc, measured)
             self.last_soc_publish = published
         synchronized = self.sync_goal(now, clock, departure) if car_enabled else False
-        vehicle_plan=self.plan_for(opts["vehicle_resource"],now)
-        generated = instant(vehicle_plan.get("generated_at")) if isinstance(vehicle_plan, dict) else None
+        plan_ready = synchronized and self.vehicle_plan_ready(now)
         planned = 0
         maximum_power = min(11000, opts["max_current_a"] * 690)
         if optional_charger(self.config.wallbox):
@@ -503,17 +502,13 @@ class Controller:
             maximum_power = 0
         if daily["fast"] and self.soc is not None and self.soc < daily["target_soc"]:
             planned = maximum_power
-        elif (synchronized and (not optional_charger(self.config.wallbox) or
-                               self.vehicle_profile == self.vehicle_profile_confirmed)
-              and generated and (generated - max(self.goal_at, self.vehicle_profile_at or self.goal_at)).total_seconds() >= 120
+        elif (plan_ready
               and car_order and car_order.mode in {"GRID_SUPPORT_IMPORT", "FORCED_CHARGE"}
               and self.soc is not None and self.soc < daily["target_soc"]):
             planned = maximum_power * car_order.factor
         pv = (self.soc is not None and not daily["fast"] and
               ((daily["pv"] and self.soc < daily["pv_target_soc"]) or
-               (not daily["pv"] and synchronized and generated
-                and (not optional_charger(self.config.wallbox) or self.vehicle_profile == self.vehicle_profile_confirmed)
-                and (generated - max(self.goal_at, self.vehicle_profile_at or self.goal_at)).total_seconds() >= 120
+               (not daily["pv"] and plan_ready
                 and car_order and car_order.mode == "NON_EXPORT" and self.soc < daily["target_soc"])))
         if not (pv and planned == 0):
             self.pv_session = False
@@ -702,6 +697,34 @@ class Controller:
                        max_soc=self.config.daily['battery_max_soc'], net_demand_w=demand,
                        required_discharge_w=required)
 
+    def vehicle_plan_ready(self, now):
+        """Only use a generation sufficiently newer than confirmed EV inputs."""
+        if self.goal_at is None or (optional_charger(self.config.wallbox) and
+                (self.vehicle_profile is None or self.vehicle_profile != self.vehicle_profile_confirmed)):
+            return False
+        plan = self.plan_for(self.config.options["vehicle_resource"], now)
+        generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
+        return bool(generated and
+                    (generated - max(self.goal_at, self.vehicle_profile_at or self.goal_at)).total_seconds() >= 120)
+
+    def vehicle_planning_state(self, now):
+        """Describe normal synchronization separately from API failures."""
+        daily = self.config.daily
+        if (not self.armed or self.config.options.get("wallbox_type") == "none"
+                or daily["fast"] or self.vehicle_connected is False
+                or (self.vehicle_profile is not None and not self.vehicle_profile[-1])
+                or (self.soc is not None and self.soc >= daily["target_soc"])):
+            return None
+        departure = next_departure(daily, now, self.config.zone)
+        if departure is None:
+            return None
+        if self.goal != (daily["target_soc"], departure) or self.goal_at is None:
+            return "goal_pending"
+        if optional_charger(self.config.wallbox) and (self.vehicle_profile is None or
+                self.vehicle_profile != self.vehicle_profile_confirmed):
+            return "limits_pending"
+        return None if self.vehicle_plan_ready(now) else "plan_pending"
+
     def snapshot(self, now):
         with self.lock:
             # A pending background retry must not delay the warning threshold.
@@ -721,6 +744,7 @@ class Controller:
                         "required_w":self.pv_support.required_w},
                     "vehicle_limits": {"profile":self.vehicle_profile,
                         "confirmed":self.vehicle_profile is not None and self.vehicle_profile == self.vehicle_profile_confirmed},
+                    "vehicle_planning": self.vehicle_planning_state(now),
                     "power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
                     "heat_load_configured":bool(opts.get("heat_load_entity")), "live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {

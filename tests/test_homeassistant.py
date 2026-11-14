@@ -1382,6 +1382,80 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(EnergyBinarySensor(coordinator,"problem").is_on)
         self.assertTrue(Configuration(dict(DEFAULTS),ha,self.directory).battery_limits_managed)
 
+    async def test_vehicle_form_preserves_unchanged_battery_confirmation_and_retry_interval(self):
+        from datetime import timedelta
+        from time import monotonic
+        from custom_components.eos_energiezentrale.energy.fleet import create_controller
+        for fleet in (False, True):
+            with self.subTest(fleet=fleet):
+                options = {**DEFAULTS, "vehicles": json.dumps([{"id":"car", "resource":"ev1"}]) if fleet else "[]"}
+                app = create_controller(Mock(), options, self.directory)
+                app.config.update({**app.config.daily, "battery_min_soc":30}, manage_battery_limits=True)
+                app.config.eos = Mock()
+                now = datetime.now(timezone.utc)
+                app.battery_limits_confirmed = app.battery_limits_request()
+                app.battery_limits_confirmed_at = now
+                app.armed, app.restore_pending, app.goal_sync_ready = True, False, True
+                coordinator = EnergyCoordinator(self.hass, self.entry, app)
+                coordinator.battery_sync_last = monotonic()
+                coordinator.battery_sync_last_revision = coordinator.battery_sync_revision
+                departure = now + timedelta(hours=3)
+                values = {**app.config.daily, "target_soc":75, "schedule":"once", "departure":departure.isoformat(),
+                          **({"vehicle_id":"car"} if fleet else {})}
+                await coordinator.async_change(settings=values)
+                self.assertTrue(coordinator.data["battery_limits"]["confirmed"])
+                self.assertEqual(app.battery_limits_confirmed_at, now)
+                self.assertEqual(coordinator.battery_sync_revision, 0)
+                self.assertIsNone(coordinator.battery_sync_task)
+                app.config.eos.set_battery_limits.assert_not_called()
+                self.assertEqual(coordinator.data["vehicle_planning"], "goal_pending")
+                await asyncio.gather(*coordinator.goal_sync_tasks.values())
+                app.config.eos.set_vehicle_goal.assert_called_once_with("ev1",75,departure)
+
+    async def test_first_save_of_default_battery_bounds_still_enables_sync(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.eos = Mock()
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        self.assertFalse(app.battery_sync_managed())
+        await coordinator.async_change(settings={"battery_min_soc":app.config.daily["battery_min_soc"]})
+        await coordinator.battery_sync_task
+        self.assertTrue(app.battery_sync_managed())
+        app.config.eos.set_battery_limits.assert_called_once_with("battery1", *app.battery_limits_request())
+
+    async def test_eos_sync_failure_log_excludes_exception_details_and_repeated_retries(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        with self.assertLogs("custom_components.eos_energiezentrale.coordinator", level="WARNING") as logs:
+            for _ in range(2):
+                EnergyCoordinator._sync_failure(app, "vehicle_limits", OSError("http://private-host/test-secret"))
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("vehicle_limits", logs.output[0])
+        self.assertIn("OSError", logs.output[0])
+        self.assertNotIn("private-host", logs.output[0])
+        self.assertNotIn("test-secret", logs.output[0])
+
+    async def test_vehicle_edit_keeps_pending_battery_sync_result_valid(self):
+        from threading import Event
+        started, finish = Event(), Event()
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.eos = Mock()
+        def sync(*_args):
+            started.set()
+            if not finish.wait(5):
+                raise TimeoutError("test did not release EOS battery limits")
+        app.config.eos.set_battery_limits.side_effect = sync
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        try:
+            await coordinator.async_change(settings={"battery_min_soc":30})
+            task = coordinator.battery_sync_task
+            self.assertTrue(await asyncio.to_thread(started.wait, 2))
+            await asyncio.wait_for(coordinator.async_change(settings={**app.config.daily, "target_soc":75}), timeout=2)
+            self.assertEqual(coordinator.battery_sync_revision, 1)
+        finally:
+            finish.set()
+        await asyncio.wait_for(task, timeout=3)
+        self.assertTrue(coordinator.data["battery_limits"]["confirmed"])
+        app.config.eos.set_battery_limits.assert_called_once_with("battery1",30,100)
+
     async def test_slow_battery_sync_does_not_block_changes_and_newest_limits_win(self):
         from threading import Event
         started, finish = Event(), Event()

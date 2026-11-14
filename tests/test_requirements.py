@@ -79,12 +79,35 @@ class ControllerRequirements(unittest.TestCase):
             self.ha.states.return_value = self.states(when=now)
             self.app.tick(now, offset)
             self.box.charge.assert_not_called()
+            self.assertEqual(self.app.snapshot(now)["vehicle_planning"], "plan_pending")
+            self.assertEqual(self.app.errors, {})
         self.eos.set_vehicle_goal.assert_called_once_with("ev1", 70, departure)
+        # Wall-clock time alone cannot make an old generation reflect new inputs.
+        later = NOW + timedelta(minutes=5)
+        self.assertEqual(self.app.snapshot(later)["vehicle_planning"], "plan_pending")
         now = NOW + timedelta(seconds=134)
         self.eos.plan.return_value = self.plan(now)
         self.ha.states.return_value = self.states(when=now)
         self.app.tick(now, 134)
         self.box.charge.assert_called_once_with(7.9, self.box.read.return_value)
+        self.assertIsNone(self.app.snapshot(now)["vehicle_planning"])
+
+    def test_vehicle_planning_distinguishes_sync_and_plan_wait_without_hiding_failures(self):
+        departure = NOW + timedelta(hours=4)
+        self.config.daily = daily_settings({"schedule":"once", "departure":departure.isoformat(), "target_soc":70},20)
+        self.app.armed = True
+        self.assertEqual(self.app.snapshot(NOW)["vehicle_planning"], "goal_pending")
+        self.app.goal, self.app.goal_at = (70, departure), NOW
+        self.box.features.optional_connection = True
+        self.app.vehicle_profile = (11040,1380,(0.,1.),True)
+        self.assertEqual(self.app.snapshot(NOW)["vehicle_planning"], "limits_pending")
+        self.app.errors["vehicle_limits"] = "TimeoutError"
+        self.assertIn("vehicle_limits",self.app.snapshot(NOW)["errors"])
+        self.app.vehicle_profile_confirmed = self.app.vehicle_profile
+        self.app.vehicle_profile_at = NOW
+        self.assertEqual(self.app.snapshot(NOW)["vehicle_planning"], "plan_pending")
+        self.app.vehicle_connected = False
+        self.assertIsNone(self.app.snapshot(NOW)["vehicle_planning"])
 
     def test_running_charge_tracks_new_eos_power_without_waiting_for_wallbox_report(self):
         self.config.daily=daily_settings({"target_soc":70,"phase_auto":False},20)
