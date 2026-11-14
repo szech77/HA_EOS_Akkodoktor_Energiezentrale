@@ -13,11 +13,12 @@ from ..clients import NoRedirect, base_url
 from ..contracts import WallboxDriver, WallboxFeatures, WallboxReading, PluginInfo, PluginField
 from ..plugin_parameters import parameters
 from ..sanitiser import bounded
+from ..failures import HardwareAPIError
 
 STATUS_KEYS=('car','err','frc','alw','amp','ama','adi','cbl','var','nrg','psm','pnp','pha','fsp','mca')
 
 
-class GoEAPIError(OSError):
+class GoEAPIError(HardwareAPIError):
     """Device errors without private response content or network locations."""
 
 
@@ -133,7 +134,9 @@ class GoEHTTPv2(WallboxDriver):
 
     def _read(self,states,now):
         try: return self._observe(now)[0]
-        except GoEAPIError:
+        except GoEAPIError as error:
+            from ..plugin_diagnostics import partial_read_failure
+            partial_read_failure(self, error, 'telemetry')
             return WallboxReading(None,'unavailable',False,None,None,None,None,None)
 
     def _pause(self,state):

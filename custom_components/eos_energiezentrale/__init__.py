@@ -14,6 +14,7 @@ from .coordinator import EnergyCoordinator
 from .energy.fleet import create_controller
 from .frontend import async_register_frontend, async_remove_panel
 from .validation import validate_options
+from .configuration_logging import configuration_failure, configuration_success
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,9 +46,12 @@ async def async_setup_entry(hass, entry):
     try:
         app = await hass.async_add_executor_job(create)
     except (ValueError, TypeError, KeyError) as error:
+        configuration_failure(hass, 'entry_setup', error)
         raise ConfigEntryError("Invalid energy controller configuration") from error
     except OSError as error:
+        configuration_failure(hass, 'entry_setup', error)
         raise ConfigEntryNotReady("Cannot initialize energy controller") from error
+    configuration_success(hass, 'entry_setup')
     coordinator = EnergyCoordinator(hass, entry, app)
     entry.runtime_data = coordinator
     await coordinator.async_config_entry_first_refresh()

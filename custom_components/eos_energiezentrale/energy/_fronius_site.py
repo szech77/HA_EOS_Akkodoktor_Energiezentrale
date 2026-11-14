@@ -76,11 +76,14 @@ class FroniusSite:
         self.control_states={}
 
     def read(self,states,now):
+        from .plugin_diagnostics import report_plugin_read
         snapshots=[]
         battery_values=[]
         solars,acs=[],[]
-        for device in self.devices:
+        for index,device in enumerate(self.devices,1):
             driver=device.driver
+            driver._partial_read_failures=[]
+            caught=None
             reading=None
             try:
                 if device.battery:
@@ -89,13 +92,21 @@ class FroniusSite:
                     ac=driver._ac_power()
                 else:
                     solar,ac=driver._generation()
-            except (OSError,ValueError):
+            except (OSError,ValueError) as error:
+                caught=error
                 driver._invalidate()
                 solar=ac=None
             if device.battery:
                 battery_values.append((device,reading))
             solars.append(solar);acs.append(ac)
+            values={'solar':solar,'inverter_ac':ac}
+            if device.battery:
+                values.update(battery_soc=reading.soc if reading else None,
+                    battery_charge=reading.charge if reading else None,battery_discharge=reading.discharge if reading else None)
+            report_plugin_read(driver,[key for key,value in values.items() if value is None],
+                               error=caught,scope=f'device/{index}')
             snapshots.append({'name':device.name,'battery':device.battery,'capacity_wh':device.capacity_wh,
+                              'telemetry_status':driver.telemetry_status,
                               'solar':solar,'ac':ac,'soc':reading.soc if reading else None,
                               'available':solar is not None and ac is not None and
                                  (not device.battery or reading is not None and
@@ -113,11 +124,15 @@ class FroniusSite:
         solar=total(solars)
         extra={'solar':Measurement(solar,now if solar is not None else None)}
         if 'grid' in self.primary.measurement_keys:
+            caught=None
             try:
                 grid=self.primary._grid_power()
-            except (OSError,ValueError):
+            except (OSError,ValueError) as error:
+                caught=error
                 self.primary.grid_model=None
                 grid=None
+            report_plugin_read(self.primary,['grid'] if grid is None else [],error=caught,stage='grid',
+                               scope='device/1',group='grid',include_partial=False)
             ac=total(acs)
             house=ac+grid if ac is not None and grid is not None else None
             if house is not None and not 0<=house<=1000000: house=None

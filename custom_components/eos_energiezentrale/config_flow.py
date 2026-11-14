@@ -9,6 +9,7 @@ from homeassistant.helpers import selector
 from .const import DEFAULTS, DOMAIN, GROUPS
 from .energy.clients import request
 from .validation import validate_options
+from .configuration_logging import configuration_failure, configuration_success
 from .plugin_forms import PluginFormMixin, plugin_choices, async_plugin_object, configured
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
@@ -80,15 +81,18 @@ def connection_values(base, submitted):
     return values
 
 
-async def check(hass, values, connection=False):
+async def check(hass, values, connection=False, stage='validation'):
     try:
         validate_options(values)
         if connection:
             await hass.async_add_executor_job(request, values["eos_url"].rstrip("/") + "/v1/config")
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError) as error:
+        configuration_failure(hass, stage, error)
         return {"base": "invalid_config"}
-    except OSError:
+    except OSError as error:
+        configuration_failure(hass, stage, error)
         return {"base": "cannot_connect"}
+    configuration_success(hass, stage)
     return {}
 
 
@@ -112,8 +116,9 @@ class ConfigFlow(DeviceFormMixin, PluginFormMixin, config_entries.ConfigFlow, do
                 user_input = {**user_input, "influx_password": ""}
             try:
                 values = connection_values(self.values,user_input) if group == 'connection' else {**self.values, **user_input}
-                errors = await check(self.hass, values, group == "connection")
-            except (ValueError,TypeError,KeyError):
+                errors = await check(self.hass, values, group == "connection", stage=group)
+            except (ValueError,TypeError,KeyError) as error:
+                configuration_failure(self, group, error)
                 errors={'base':'invalid_config'}
             if not errors:
                 self.values = values
@@ -164,8 +169,9 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         if user_input is not None:
             try:
                 if group == 'connection': values=connection_values(base,user_input)
-                errors = await check(self.hass, values, group == "connection")
-            except (ValueError,TypeError,KeyError):
+                errors = await check(self.hass, values, group == "connection", stage=group)
+            except (ValueError,TypeError,KeyError) as error:
+                configuration_failure(self, group, error)
                 errors={'base':'invalid_config'}
             if not errors:
                 return self.async_create_entry(title="", data=values)
@@ -245,7 +251,9 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
                 return await self.async_step_device_delete()
             plugin = user_input.get("wallbox_type")
             if plugin not in WALLBOX_DRIVERS or plugin=="none":
+                configuration_failure(self, 'vehicle_plugin', ValueError('Invalid wallbox selection'))
                 return self.async_abort(reason="invalid_plugin")
+            configuration_success(self, 'vehicle_plugin')
             self._vehicle_plugin = plugin
             return await self.async_step_vehicle_parameters()
         old=next((row for row in self._vehicle_rows() if row['id']==self._editing_vehicle),{})
@@ -285,12 +293,14 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         if user_input is not None:
             row={key:user_input.get(key,"") for key in ("id","name","resource","soc_entity","soc_scale","capacity_wh","charging_efficiency","max_current_a")}
             if identity is not None and row["id"]!=identity:
+                configuration_failure(self, 'vehicle_parameters', ValueError('Vehicle identity changed'), plugin_id)
                 errors={"base":"invalid_config"}
             try:
                 raw = user_input.get("wallbox_parameters")
                 if raw is None: raw={field.key:user_input["wallbox_"+field.key] for field in factory.configuration if "wallbox_"+field.key in user_input}
                 row.update(wallbox_type=plugin_id,wallbox_parameters=configured(factory,raw))
-            except (ValueError,KeyError,TypeError):
+            except (ValueError,KeyError,TypeError) as error:
+                configuration_failure(self, 'vehicle_parameters', error, plugin_id)
                 errors={"base":"invalid_config"}
             updated=[row if item["id"]==identity else item for item in rows]
             if identity is None:
@@ -298,6 +308,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
             values={**self._vehicle_values(),"vehicles":json.dumps(updated)}
             errors=errors or await check(self.hass,values)
             if not errors:
+                configuration_success(self, 'vehicle_parameters')
                 return self.async_create_entry(title="",data=values)
             defaults.update(user_input)
         fields={}

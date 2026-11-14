@@ -120,20 +120,6 @@ let historyRefreshing = false;
 const clientId=globalThis.crypto?.randomUUID?.()??`${Date.now()}-${Math.random()}`;
 let requestId = 0;
 const pendingRequests = new Map();
-const clientFailures = new Map();
-const resolvedClientFailures = new Set();
-function clientIssue(code,action,active=true) {
-  const key=action+'/'+code;
-  if(active?clientFailures.has(key):!clientFailures.has(key)&&resolvedClientFailures.has(key))return;
-  if(active){clientFailures.set(key,{code,action});resolvedClientFailures.delete(key);}
-  else {clientFailures.delete(key);resolvedClientFailures.add(key);}
-  console[active?'warn':'info']('EOS UI '+(active?'issue':'recovered')+': '+key);
-  if(window.parent!==window)window.parent.postMessage({channel:'eos-energy-client-event',code,action,active},location.origin);
-}
-function clientRecovered(action,codes=null) {
-  const issues=codes?codes.map(code=>({code,action})):[...clientFailures.values()].filter(issue=>issue.action===action);
-  for(const issue of issues)clientIssue(issue.code,action,false);
-}
 window.addEventListener('message', event => {
   if (event.source !== window.parent || event.origin !== location.origin
       || event.data?.channel !== 'eos-energy-response'
@@ -143,19 +129,16 @@ window.addEventListener('message', event => {
   clearTimeout(pending.timer);
   pendingRequests.delete(event.data.id);
   if (event.data.error) pending.reject(requestError(event.data.error,pending.action));
-  else {clientRecovered(pending.action);pending.resolve(event.data.result);}
+  else pending.resolve(event.data.result);
 });
 function requestError(code,action) {
   const safeCode=typeof code==='string'&&/^[a-z_]{1,64}$/.test(code)?code:'request_failed';
   const error=Error(`${t(`action.${action}`)}: ${language.messages[`error.${safeCode}`]??t('error.request')}`);
-  const clientCode=['timeout','bridge_not_ready','request_failed','connection_lost','unknown_command','asset_mismatch','unauthorized'].includes(safeCode)
-    ? safeCode : language.messages[`error.${safeCode}`] ? null : 'request_failed';
-  if(clientCode)clientIssue(clientCode,action);
   error.code=safeCode;error.action=action;return error;
 }
 
 function showStartupError(stage,error) {
-  clientIssue(error?.code??'ui_render_failed','interface');
+  console.error('EOS UI failed during '+stage,error?.code??error?.name??'Error');
   byId('notice').textContent=`${t(`startup.${stage}`)}. ${error?.code?error.message:t('startup.unexpected')}`;
   const retry=byId('startup-retry');if(retry){retry.textContent=t('startup.retry');retry.hidden=false;}
   if(byId('startup-details'))byId('startup-details').hidden=false;
@@ -168,7 +151,7 @@ async function api(path, body) {
   if (window.parent === window) throw requestError('ingress_only',path.split('?')[0]);
   const id = ++requestId,action=path.split('?')[0];
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pendingRequests.delete(id); clientIssue('timeout',action); reject(requestError('timeout',action)); }, 30000);
+    const timer = setTimeout(() => { pendingRequests.delete(id); reject(requestError('timeout',action)); }, 30000);
     pendingRequests.set(id, {resolve, reject, timer, action});
     window.parent.postMessage({channel:'eos-energy-request', id, client:clientId, action:path.split('?')[0], values:body ?? {}}, location.origin);
   });
@@ -666,7 +649,7 @@ function settings() {
 }
 function render() {
   try {
-    renderView();byId('startup-retry').hidden=true;byId('startup-details').hidden=true;clientRecovered('interface',['ui_render_failed','asset_mismatch']);return true;
+    renderView();byId('startup-retry').hidden=true;byId('startup-details').hidden=true;return true;
   }catch(error){showStartupError('view',error);return false;}
 }
 
@@ -743,10 +726,8 @@ async function openWeatherForecast(){
     if(!byId('weather-dialog')||!byId('forecast-close')||!byId('forecast-body'))throw requestError('asset_mismatch','interface');
     forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
     forecastView.open();
-    clientIssue('forecast_open_failed','interface',false);
   }catch{
     forecastOpenFailure=true;
-    clientIssue('forecast_open_failed','interface');
   }finally{
     button.disabled=false;render();
   }
@@ -810,7 +791,6 @@ async function start() {
     element.setAttribute('aria-label', t(element.dataset.i18nAria));
   });
   initializeBilling();
-  document.addEventListener?.('invalid',event=>clientIssue('invalid_input',event.target.form?.id==='cost-settings'?'accounting':'settings'),true);
   window.addEventListener('hashchange',render);
   if(!render())return;
   refresh();

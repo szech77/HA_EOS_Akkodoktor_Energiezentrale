@@ -97,8 +97,9 @@ Referenzen: [Dependabot-Konfiguration](https://docs.github.com/en/code-security/
   Backend-Warnungen und -Fehler müssen unabhängig von Browserabrufen protokolliert
   werden; gemeinsame Kennungen für Anzeige, Log und Diagnosedaten verwenden.
   Unveränderte Probleme deduplizieren, Ursachenwechsel und Behebungen erfassen.
-  Browserfehler nur als feste Codes über die authentifizierte API melden;
-  keine privaten Fehlermeldungen oder Messdaten übernehmen. Siehe `LOGGING.md`.
+  Browserfehler bleiben im Browser und werden weder an das Backend gemeldet noch
+  nach Verbindungsaufbau nachgeliefert. Plugin-Lesefehler, unvollständige Rückgaben
+  und Konfigurationsfehler im Backend protokollieren. Siehe `LOGGING.md`.
 
 ## Prüfung vor Abschluss
 

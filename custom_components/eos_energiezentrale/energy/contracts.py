@@ -64,10 +64,13 @@ class InverterDriver(ABC):
 
     def read(self, states: dict, now: datetime) -> InverterReading:
         from .measurement_sources import checked_measurements
-        value = self._read(states, now)
-        if not isinstance(value, InverterReading):
-            raise PluginContractError("Inverter plugin must return InverterReading")
-        return replace(value, measurements=checked_measurements(value.measurements, self.measurement_keys, now))
+        from .plugin_diagnostics import checked_plugin_read
+        def collect():
+            value = self._read(states, now)
+            if not isinstance(value, InverterReading):
+                raise PluginContractError("Inverter plugin must return InverterReading")
+            return replace(value, measurements=checked_measurements(value.measurements, self.measurement_keys, now)), value
+        return checked_plugin_read(self, now, collect)
 
     @abstractmethod
     def _read(self, states: dict, now: datetime) -> InverterReading: ...
@@ -138,8 +141,12 @@ class BatteryDriver(ABC):
     def read(self, states: dict, now: datetime) -> BatteryReading:
         from .sanitiser import battery_reading
         from .measurement_sources import checked_measurements
-        result = battery_reading(self._read(states,now),now,soc_max_age=self.soc_max_age)
-        return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now))
+        from .plugin_diagnostics import checked_plugin_read
+        def collect():
+            raw = self._read(states,now)
+            result = battery_reading(raw,now,soc_max_age=self.soc_max_age)
+            return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now)), raw
+        return checked_plugin_read(self, now, collect)
 
     def apply(self, command: BatteryCommand, states: dict) -> None:
         from .sanitiser import battery_command
@@ -174,8 +181,12 @@ class WallboxDriver(ABC):
     def read(self, states: dict, now: datetime) -> WallboxReading:
         from .sanitiser import wallbox_reading
         from .measurement_sources import checked_measurements
-        result = wallbox_reading(self._read(states,now),now)
-        return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now))
+        from .plugin_diagnostics import checked_plugin_read
+        def collect():
+            raw = self._read(states,now)
+            result = wallbox_reading(raw,now)
+            return replace(result, measurements=checked_measurements(result.measurements, self.measurement_keys, now)), raw
+        return checked_plugin_read(self, now, collect)
 
     def pause(self, state: WallboxReading) -> None:
         from .sanitiser import wallbox_reading
