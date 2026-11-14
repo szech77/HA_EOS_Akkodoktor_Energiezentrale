@@ -2,8 +2,12 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const root=path.join(__dirname,'../custom_components/eos_energiezentrale/energy');
 const script=fs.readFileSync(path.join(root,'web/app.js'),'utf8');
 const context={};
-vm.runInNewContext(script.slice(script.indexOf('function sourceConfigurationNotice('),script.indexOf('function renderView()')),context);
-const notice=context.sourceConfigurationNotice;
+vm.runInNewContext(script.slice(script.indexOf('function noticeText('),script.indexOf('function renderView()')),context);
+const backend=require('./backend.cjs');
+const notice=(configuration,translate)=>backend('view',{source_configuration:configuration}).notices
+  .map(value=>context.noticeText(value,translate)).join(' · ');
+const vehicleNotices=(vehicles,translate)=>backend('view',{vehicles}).notices.filter(value=>value.scope!=='system')
+  .map(value=>context.noticeText(value,translate)).join(' · ');
 function translate(lang){
  const messages=JSON.parse(fs.readFileSync(path.join(root,`i18n/${lang}.json`),'utf8')).messages;
  return (key,values={})=>{
@@ -27,7 +31,7 @@ test('healthy sources and older snapshots show no configuration warning',()=>{
  assert.equal(notice({missing:[],unavailable:[]},translate('de')),'');
 });
 test('a missing SoC on another vehicle names that vehicle without duplicating shared sources',()=>{
- const text=context.vehicleSocNotices([
+ const text=vehicleNotices([
   {name:'First',source_configuration:{unavailable:['car_soc']}},
   {name:'Second',source_configuration:{unavailable:['car_soc','grid']}}
  ],translate('en'));
@@ -35,8 +39,8 @@ test('a missing SoC on another vehicle names that vehicle without duplicating sh
  assert.doesNotMatch(text,/First|Grid connection power/);
 });
 test('SoC grace periods and available unchanged values have no vehicle notice',()=>{
- assert.equal(context.vehicleSocNotices(undefined,translate('de')),'');
- assert.equal(context.vehicleSocNotices([{},
+ assert.equal(vehicleNotices(undefined,translate('de')),'');
+ assert.equal(vehicleNotices([{},
   {name:'Second',source_configuration:{sources:{car_soc:{available:false}},missing:[],unavailable:[]}}
  ],translate('de')),'');
 });

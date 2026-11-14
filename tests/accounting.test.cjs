@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const script=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/accounting.js'),'utf8');
+const backend=require('./backend.cjs');
 function fixture(){
   const context=vm.createContext({Intl,Date,structuredClone,Number,window:{innerWidth:390},
     language:{locale:'de-DE'},snapshot:{zone:'Europe/Berlin'},
@@ -9,6 +10,14 @@ function fixture(){
     t:(key,values={})=>({'billing.average_unit_price':'Ø {price}','unit.price':'ct/kWh'}[key]??key)
       .replace(/\{(\w+)\}/g,(_match,name)=>values[name]??''),price:value=>value+' ct/kWh'});
   vm.runInContext(script,context);
+  context.backendAmount=value=>backend('amount',value);
+  context.backendReport=value=>backend('report',value);
+  let rawAmount,rawEntry,rawReport;
+  Object.defineProperty(context,'amount',{get:()=>context.backendAmount(rawAmount),set:value=>{rawAmount=value;}});
+  Object.defineProperty(context,'entry',{get:()=>context.backendReport({consumers:{entry:rawEntry}}).consumers.entry,set:value=>{rawEntry=value;}});
+  Object.defineProperty(context.snapshot,'accounting',{get:()=>rawReport?backend('report',rawReport,{
+    historical:context.historical,consumers:['house','heat','car'].filter(key=>key==='house'||context.consumerEnabled?.(key))}):null,set:value=>{rawReport=value;}});
+  vm.runInContext("let rawBillingData;Object.defineProperty(billing,'data',{get:()=>rawBillingData?backendReport(rawBillingData):null,set:value=>{rawBillingData=value;}})",context);
   return context;
 }
 
@@ -159,11 +168,11 @@ test('the short unit-price label is translated in German and English',()=>{
   const ctx=fixture();
   const messages=JSON.parse(fs.readFileSync(path.join(__dirname,`../custom_components/eos_energiezentrale/energy/i18n/${language}.json`),'utf8')).messages;
   ctx.t=(key,values={})=>messages[key].replace(/\{(\w+)\}/g,(_match,name)=>values[name]??'');
-  const label=vm.runInContext('averageCostLabel({kwh:4,cost_eur:1,cost_unknown_kwh:0})',ctx);
+  const label=vm.runInContext('averageCostLabel(backendAmount({kwh:4,cost_eur:1,cost_unknown_kwh:0}))',ctx);
   assert.equal(label,language==='de'?'Ø 25 ct/kWh':'Avg 25 ct/kWh');
-  const estimatedLabel=vm.runInContext('averageCostLabel({kwh:4,cost_eur:.6,cost_unknown_kwh:2})',ctx);
+  const estimatedLabel=vm.runInContext('averageCostLabel(backendAmount({kwh:4,cost_eur:.6,cost_unknown_kwh:2}))',ctx);
   assert.equal(estimatedLabel,language==='de'?'Ø ≈ 30 ct/kWh':'Avg ≈ 30 ct/kWh');
-  const note=vm.runInContext('estimatedAverageNote({kwh:4,cost_eur:.6,cost_unknown_kwh:2})',ctx);
+  const note=vm.runInContext('estimatedAverageNote(backendAmount({kwh:4,cost_eur:.6,cost_unknown_kwh:2}))',ctx);
   assert.match(note,language==='de'?/geschätzt/:/estimated/);
  }
 });
@@ -191,19 +200,19 @@ test('repeated DST hours remain separate with distinct timezone labels',()=>{
 });
 test('unknown energy costs are never presented as free',()=>{
  const ctx=fixture();
- assert.equal(vm.runInContext('costValue({kwh:5,cost_eur:0,cost_unknown_kwh:5})',ctx),'—');
- assert.ok(vm.runInContext('costValue({kwh:5,cost_eur:1,cost_unknown_kwh:2})',ctx).startsWith('≈'));
- assert.ok(!vm.runInContext('costValue({kwh:5,cost_eur:-1,cost_unknown_kwh:0})',ctx).startsWith('≈'));
+ assert.equal(vm.runInContext('costValue(backendAmount({kwh:5,cost_eur:0,cost_unknown_kwh:5}))',ctx),'—');
+ assert.ok(vm.runInContext('costValue(backendAmount({kwh:5,cost_eur:1,cost_unknown_kwh:2}))',ctx).startsWith('≈'));
+ assert.ok(!vm.runInContext('costValue(backendAmount({kwh:5,cost_eur:-1,cost_unknown_kwh:0}))',ctx).startsWith('≈'));
 });
 
 
 test('cost totals and per-kWh prices cannot be confused for small consumption',()=>{
  const ctx=fixture();
  const amount='{kwh:.03,cost_eur:.009,cost_unknown_kwh:0}';
- assert.match(vm.runInContext('costValue('+amount+')',ctx),/0,009/);
- assert.equal(vm.runInContext('averageCost('+amount+')',ctx),'30 ct/kWh');
- assert.equal(vm.runInContext('averageCost({kwh:1,cost_eur:0,cost_unknown_kwh:1})',ctx),'—');
- assert.match(vm.runInContext('costValue({kwh:5,cost_eur:.01,cost_unknown_kwh:4.9})',ctx),/billing.known_portion/);
+ assert.match(vm.runInContext('costValue(backendAmount('+amount+'))',ctx),/0,009/);
+ assert.equal(vm.runInContext('averageCost(backendAmount('+amount+'))',ctx),'30 ct/kWh');
+ assert.equal(vm.runInContext('averageCost(backendAmount({kwh:1,cost_eur:0,cost_unknown_kwh:1}))',ctx),'—');
+ assert.match(vm.runInContext('costValue(backendAmount({kwh:5,cost_eur:.01,cost_unknown_kwh:4.9}))',ctx),/billing.known_portion/);
 });
 
 test('a fully unpriced day never shows zero euros as its total cost',()=>{
@@ -229,4 +238,20 @@ test('the reported heat pump PV share is sub-cent cost, not a zero tariff',()=>{
  assert.ok(vm.runInContext('money(.000001)',ctx).startsWith('< '));
  assert.ok(vm.runInContext('money(-.000001)',ctx).startsWith('> '));
  assert.match(vm.runInContext('money(0)',ctx),/^0,00/);
+});
+
+test('the browser renders the backend price without deriving a replacement from raw totals',()=>{
+ const ctx=fixture();
+ assert.equal(vm.runInContext('averageCost({average_price_ct:42,estimated:false,kwh:999,cost_eur:0,cost_unknown_kwh:0})',ctx),'42 ct/kWh');
+ assert.equal(vm.runInContext('averageCost({kwh:2,cost_eur:1,cost_unknown_kwh:0})',ctx),'—');
+});
+
+test('overview uses backend totals and never merges browser-held historical reports',()=>{
+ const {ctx,elements}=uiFixture();
+ const value={kwh:2,cost_eur:1,cost_unknown_kwh:0,cost_available:true,cost_partial:false,estimated:false,average_price_ct:50,sources:{}};
+ ctx.snapshot={accounting:{consumers:{house:{total:amount(999,999)}},overview:{consumers:{house:value},total:value}}};
+ ctx.historical={historical_consumers:{house:amount(999,999)}};
+ vm.runInContext('dayBalance()',ctx);
+ assert.match(elements['day-balance'].innerHTML,/2 kWh.*Ø 50 ct\/kWh/);
+ assert.doesNotMatch(elements['day-balance'].innerHTML,/999/);
 });

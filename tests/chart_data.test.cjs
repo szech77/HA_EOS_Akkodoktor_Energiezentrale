@@ -21,7 +21,8 @@ test('Forecast values follow interval boundaries, including slots already in pro
   assert.equal(at(series,now,now),null);
 });
 
-const {dailySolar}=require('../custom_components/eos_energiezentrale/energy/web/chart-data.js');
+const backend=require('./backend.cjs');
+const dailySolar=(rows,now,zone)=>backend('dailySolar',rows,{now,zone});
 test('Daily PV energy clips midnight slots, avoids overlap and marks missing days',()=>{
   const now=Date.parse('2026-11-09T22:00:00Z'); // 23:00 Berlin
   const rows=[{time:'2026-11-09T22:00:00Z',end:'2026-11-10T00:00:00Z',solar:2000},

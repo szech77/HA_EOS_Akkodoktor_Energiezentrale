@@ -1,15 +1,18 @@
 """Bounded HTTP clients for Home Assistant, EOS and InfluxDB 1.x."""
 import base64
 import json
+import logging
 import re
 from datetime import timedelta
 from threading import Lock, RLock
+from time import monotonic
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from weakref import WeakValueDictionary
 
 from .domain import instant, number
 from ._eos_battery import accounting_values,confirmed,limits_patch,matches,profiled,updated_collection
+from .failures import BackendError
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -22,6 +25,7 @@ MAX_RESPONSE = 8_000_000
 ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+\Z")
 _configuration_locks = WeakValueDictionary()
 _configuration_locks_guard = Lock()
+_LOGGER = logging.getLogger(__name__)
 
 
 def configuration_lock(url):
@@ -54,11 +58,24 @@ def request(url, *, method="GET", payload=None, headers=None):
     if payload is not None:
         data = json.dumps(payload, allow_nan=False).encode()
         headers["Content-Type"] = "application/json"
-    with OPENER.open(Request(url, data=data, headers=headers, method=method), timeout=5) as response:
-        body = response.read(MAX_RESPONSE + 1)
-    if len(body) > MAX_RESPONSE:
-        raise ValueError("Antwort zu groß")
-    return json.loads(body)
+    operation = {'/v1/config':'eos_config', '/v1/config/devices/batteries':'eos_battery_config',
+        '/v1/config/devices/electric_vehicles':'eos_vehicle_config', '/v1/energy-management/plan':'eos_plan',
+        '/v1/energy-management/optimization/solution/GENETIC':'eos_solution', '/query':'influx_history'}.get(urlsplit(url).path, 'http')
+    verb = method if method in {'GET','PUT','POST','PATCH','DELETE'} else 'HTTP'
+    started = monotonic()
+    _LOGGER.debug('Backend request started: operation=%s method=%s', operation, verb)
+    try:
+        with OPENER.open(Request(url, data=data, headers=headers, method=method), timeout=5) as response:
+            body = response.read(MAX_RESPONSE + 1)
+        if len(body) > MAX_RESPONSE:
+            raise ValueError("Antwort zu groß")
+        result = json.loads(body)
+    except Exception as error:
+        _LOGGER.debug('Backend request failed: operation=%s exception=%s elapsed_ms=%d',
+                      operation, type(error).__name__, (monotonic()-started)*1000)
+        raise
+    _LOGGER.debug('Backend request completed: operation=%s elapsed_ms=%d', operation, (monotonic()-started)*1000)
+    return result
 
 
 def reading(states, entity, now, kind, max_age=None):
@@ -156,7 +173,7 @@ class EOS:
         batteries = configuration.get("devices", {}).get("batteries")
         if (not isinstance(batteries, dict) or resource not in batteries
                 or not isinstance(batteries[resource], dict)):
-            raise ValueError("Configured stationary battery is missing in EOS")
+            raise BackendError("Configured stationary battery is missing in EOS", reason='resource_missing')
         desired = {"min_soc_percentage": minimum, "max_soc_percentage": maximum}
         if capacity_wh is not None:
             desired['capacity_wh']=capacity_wh
@@ -187,7 +204,7 @@ class EOS:
             configuration = request(self.url + '/v1/config')
             vehicles = configuration.get('devices',{}).get('electric_vehicles')
             if not isinstance(vehicles,dict) or not isinstance(vehicles.get(resource),dict):
-                raise ValueError('Configured vehicle is missing in EOS')
+                raise BackendError('Configured vehicle is missing in EOS', reason='resource_missing')
             desired = {'charge_rates':list(rates) if active else [0.]}
             if maximum is not None: desired['max_charge_power_w']=maximum
             if minimum is not None: desired['min_charge_power_w']=minimum
@@ -211,7 +228,7 @@ class EOS:
         configuration = request(self.url + "/v1/config")
         vehicles = configuration["devices"]["electric_vehicles"]
         if resource not in vehicles or not isinstance(vehicles[resource], dict):
-            raise ValueError("Fahrzeug fehlt in EOS")
+            raise BackendError("Fahrzeug fehlt in EOS", reason='resource_missing')
         current = vehicles[resource]
         desired = {"min_soc_percentage": target, "max_soc_percentage": target,
                    "min_soc_deadline_datetime": departure.isoformat() if departure else None}
@@ -225,7 +242,7 @@ class EOS:
         if (confirmed.get("min_soc_percentage") != target or confirmed.get("max_soc_percentage") != target
                 or instant(confirmed.get("min_soc_deadline_datetime")) != departure
                 or (departure is None and confirmed.get("min_soc_max_duration_h") is not None)):
-            raise ValueError("EOS hat das Ladeziel nicht bestätigt")
+            raise BackendError("EOS hat das Ladeziel nicht bestätigt", reason='goal_unconfirmed', fields=desired.keys())
 
 
 class Influx:

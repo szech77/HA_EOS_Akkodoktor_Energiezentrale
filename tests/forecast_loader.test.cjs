@@ -2,10 +2,10 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const script=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/app.js'),'utf8');
 function fixture(){
  const ids={'flow-weather':{disabled:false},'weather-dialog':{},'forecast-close':{},'forecast-body':{}};
- const calls={scripts:[],opened:0,renders:0},options={fail:false,brokenDialog:false,stall:false};
+ const calls={scripts:[],opened:0,renders:0,issues:[]},options={fail:false,brokenDialog:false,stall:false};
  const ctx={URL,Date,Promise,setTimeout,clearTimeout,location:{href:'https://ha.test/static/index.html?v=old'},
   appScriptUrl:'https://ha.test/static/app.js?v=new-build',snapshot:{},language:{locale:'de'},t:key=>key,html:String,decimal:String,
-  api(){},byId:id=>ids[id],render(){calls.renders++;},requestError:code=>Object.assign(new Error('safe error'),{code}),
+  api(){},clientIssue:(...values)=>calls.issues.push(values),byId:id=>ids[id],render(){calls.renders++;},requestError:code=>Object.assign(new Error('safe error'),{code}),
   document:{createElement:()=>({remove(){}}),head:{append(node){calls.scripts.push(node);if(options.stall)return;
    queueMicrotask(()=>{if(options.fail)node.onerror();else{ctx.EosForecast={create(){return {open(){if(options.brokenDialog)throw Error('dialog unavailable');calls.opened++;}};}};node.onload();}});
   }}}};
@@ -32,8 +32,10 @@ test('concurrent module requests are coalesced and repeated clicks cannot create
 
 test('a failed module load leaves the overview alive and the next click can retry',async()=>{
  const f=fixture();f.options.fail=true;await f.ctx.openWeatherForecast();
+ assert.deepEqual(f.calls.issues[0],['forecast_open_failed','interface']);
  assert.equal(f.failed(),true);assert.equal(f.ids['flow-weather'].disabled,false);assert.equal(f.calls.renders,1);
  f.options.fail=false;await f.ctx.openWeatherForecast();
+ assert.deepEqual(f.calls.issues.at(-1),['forecast_open_failed','interface',false]);
  assert.equal(f.failed(),false);assert.equal(f.calls.opened,1);assert.equal(f.calls.scripts.length,2);
 });
 

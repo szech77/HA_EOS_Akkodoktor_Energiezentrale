@@ -275,6 +275,14 @@ class LanguageTests(unittest.TestCase):
         from dataclasses import fields
         from custom_components.eos_energiezentrale.energy.contracts import BatteryFeatures, WallboxFeatures
         keys.update("plugin.feature."+field.name for model in (BatteryFeatures,WallboxFeatures) for field in fields(model))
+        from custom_components.eos_energiezentrale.energy.status import (
+            CONTROL_STATUSES, BATTERY_LIMIT_STATUSES, CONNECTION_STATUSES, ERROR_MESSAGES)
+        keys.update('control.'+key for key in CONTROL_STATUSES)
+        keys.update('settings.battery_limits_'+key for key in BATTERY_LIMIT_STATUSES)
+        keys.update('status.'+key for key in CONNECTION_STATUSES)
+        keys.update(ERROR_MESSAGES.values())
+        keys.update(('notice.unknown', 'notice.eos_cached', 'notice.sources_missing',
+                     'notice.sources_unavailable', 'timeline.history', 'timeline.plan'))
         self.assertEqual(keys - pack["messages"].keys(), set())
         self.assertEqual(pack["locale"], "en-GB")
         self.assertEqual(pack["messages"]["settings.save"], "Save")

@@ -96,3 +96,81 @@ def daily_pv_forecast(rows, now, zone):
         result.append({"date": day.isoformat(), "kwh": watt_seconds / 3600000 if covered else None,
                        "complete": covered >= (end-start).total_seconds(), "coveredMs": covered * 1000})
     return result
+
+
+def measured_pv_energy(local, influx, now, zone):
+    """Integrate measured samples only, with the same six-minute gap policy."""
+    from zoneinfo import ZoneInfo
+    local_zone = ZoneInfo(zone)
+    today = now.astimezone(local_zone).date()
+    local = [row for row in local if number(row.get('solar')) is not None and instant(row.get('time'))]
+    first = instant(local[0]['time']) if local else None
+    rows = [row for row in influx if number(row.get('solar')) is not None and
+            (stamp := instant(row.get('time'))) is not None and (first is None or stamp < first)] + local
+    points = [(instant(row['time']), number(row['solar'])) for row in rows
+              if instant(row['time']).astimezone(local_zone).date() == today and instant(row['time']) <= now]
+    covered, watt_seconds = 0, 0
+    for (before, left), (after, right) in zip(points, points[1:]):
+        seconds = (after - before).total_seconds()
+        if 0 < seconds <= 360:
+            covered += seconds
+            watt_seconds += (left + right) / 2 * seconds
+    return watt_seconds / 3600000 if covered else None
+
+
+def next24_pv_forecast(rows, now):
+    from datetime import timedelta
+    end, cursor = now + timedelta(days=1), now
+    slots = []
+    for row in rows:
+        start, stop, watts = instant(row.get('time')), instant(row.get('end')), number(row.get('solar'))
+        if start is not None and stop is not None and type(row.get('solar')) in (int, float) and watts is not None and watts >= 0 and stop > start:
+            slots.append((start, stop, watts))
+    covered, energy, peak = 0, 0, None
+    for start, stop, watts in sorted(slots, key=lambda item:item[0]):
+        first, last = max(now, cursor, start), min(end, stop)
+        seconds = (last-first).total_seconds()
+        if seconds > 0:
+            covered += seconds
+            energy += watts * seconds / 3600000
+            peak = max(peak or 0, watts / 1000)
+            cursor = last
+    return {'kwh':energy if covered else None, 'peak':peak, 'complete':covered >= 86400, 'covered':covered*1000}
+
+
+def mode_timeline(data, rows, now):
+    """Classify history gaps and plan validity before drawing the mode track."""
+    from datetime import timedelta
+
+    def intervals(points, first, last, maximum_age, kind):
+        ordered = sorted(((stamp, mode) for stamp, mode in points if stamp is not None and stamp < last), key=lambda item:item[0])
+        result, cursor = [], first
+        def append(start, end, mode):
+            if start >= end:
+                return
+            start_ms, end_ms = start.timestamp()*1000, end.timestamp()*1000
+            if result and result[-1]['mode'] == mode and result[-1]['end'] == start_ms:
+                result[-1]['end'] = end_ms
+            else:
+                result.append({'start':start_ms, 'end':end_ms, 'mode':mode, 'kind':kind})
+        for index, (stamp, mode) in enumerate(ordered):
+            start = max(first, stamp)
+            end = min(last, ordered[index+1][0] if index+1 < len(ordered) else last,
+                      stamp+maximum_age if maximum_age is not None else last)
+            if start < end:
+                append(cursor, start, None)
+                append(start, end, mode)
+                cursor = end
+        append(cursor, last, None)
+        return result
+
+    result = {}
+    end = min(now+timedelta(days=1), instant(data.get('plan_end')) or now+timedelta(days=1))
+    for key in ('battery', 'car'):
+        historical = [(instant(row.get('time')), row.get('car_actual_mode' if key == 'car' else 'battery_mode')) for row in rows]
+        future = [(instant(row.get('time')), row.get('mode')) for row in data.get('plan', {}).get(key, [])]
+        result[key] = intervals(historical, now-timedelta(days=1), now, timedelta(seconds=120), 'history')
+        result[key] += intervals(future, now, max(now, end), None, 'plan')
+        if end < now+timedelta(days=1):
+            result[key] += intervals([], max(now,end), now+timedelta(days=1), None, 'plan')
+    return result

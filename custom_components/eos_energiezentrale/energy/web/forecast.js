@@ -14,11 +14,6 @@
       cursor=last;return [{start:first,end:last,value:row.value}];
     });
   }
-  function solarSummary(slots){
-    const covered=slots.reduce((sum,row)=>sum+row.end-row.start,0);
-    return {kwh:covered?slots.reduce((sum,row)=>sum+row.value*(row.end-row.start)/hour,0):null,
-      peak:slots.length?Math.max(...slots.map(row=>row.value)):null,complete:covered>=day,covered};
-  }
   function valueAt(rows,stamp){return rows.find(row=>row.start<=stamp&&stamp<row.end);}
   function weatherRows(rows,start){
     return (rows??[]).map(row=>({...row,start:Date.parse(row.time),end:Date.parse(row.end)}))
@@ -89,9 +84,11 @@
     function draw(){
       const focused=document.activeElement?.id;
       const snapshot=getSnapshot();
+      const backendStart=Date.parse(snapshot.pv_next24_start??'');
+      if(valid(backendStart)){start=backendStart;if(selected!==null)selected=Math.max(start,Math.min(start+day,selected));}
       solar=solarSlots(snapshot.forecast,start);weather=weatherRows(data?.rows,start);
-      pvKey=JSON.stringify(snapshot.forecast);
-      const summary=solarSummary(solar),current=snapshot.live?.weather;
+      pvKey=JSON.stringify([snapshot.forecast,snapshot.pv_next24_start]);
+      const summary=snapshot.pv_next24??{kwh:null,peak:null,complete:false},current=snapshot.live?.weather;
       const weatherBody=status==='loading'?`<p role="status">${text('forecast.loading')}</p>`:
         status!=='available'?`<p role="status">${text('forecast.'+status)}</p>`:weatherChart();
       document.getElementById('forecast-title').textContent=t('forecast.title');
@@ -138,8 +135,8 @@
     dialog.addEventListener('close',()=>{generation++;document.getElementById('flow-weather').focus();});
     dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const box=dialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)dialog.close();});
     return {open(){if(dialog.open)return;start=now();selected=null;data=null;dialog.showModal();load();},
-      update(){if(dialog.open&&JSON.stringify(getSnapshot().forecast)!==pvKey)draw();}};
+      update(){const snapshot=getSnapshot();if(dialog.open&&JSON.stringify([snapshot.forecast,snapshot.pv_next24_start])!==pvKey)draw();}};
   }
-  const api={solarSlots,solarSummary,valueAt,weatherRows,weatherIcon,create};
+  const api={solarSlots,valueAt,weatherRows,weatherIcon,create};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.EosForecast=api;
 })(globalThis);

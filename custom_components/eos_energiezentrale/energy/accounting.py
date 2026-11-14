@@ -61,8 +61,10 @@ class Accounting:
         self.eos_battery = None
         self.capacity_override = None
         self.eos_error = None
+        self.eos_failure_details = {}
         self.pv_tariff = None
         self.pv_error = None
+        self.pv_failure_details = {}
         self.last_pv_attempt = None
         with closing(self.connect()) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
@@ -109,8 +111,10 @@ class Accounting:
             self.eos_battery = {key: validated[key] for key in
                                 ("capacity_wh", "charge_efficiency", "discharge_efficiency")}
             self.eos_error = None
-        except (ValueError, OSError, TimeoutError, KeyError, TypeError):
+        except (ValueError, OSError, TimeoutError, KeyError, TypeError) as error:
             self.eos_error = "unavailable"
+            from .status import failure_details
+            self.eos_failure_details = failure_details(error)
 
     def refresh_tariff(self, eos, now):
         if self.settings["pv_price_source"] != "eos":
@@ -126,8 +130,10 @@ class Accounting:
                 raise ValueError("Invalid feed-in price")
             self.pv_tariff = tariff
             self.pv_error = None
-        except (ValueError, OSError, TimeoutError, KeyError, TypeError):
+        except (ValueError, OSError, TimeoutError, KeyError, TypeError) as error:
             self.pv_error = "unavailable"
+            from .status import failure_details
+            self.pv_failure_details = failure_details(error)
 
     def pv_price(self, when=None):
         if self.settings["pv_price_source"] == "manual":

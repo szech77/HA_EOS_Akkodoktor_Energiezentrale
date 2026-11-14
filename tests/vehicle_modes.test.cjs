@@ -2,10 +2,11 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const root=path.join(__dirname,'../custom_components/eos_energiezentrale/energy');
 const script=fs.readFileSync(path.join(root,'web/app.js'),'utf8');
 const now=Date.parse('2026-11-11T12:00:00Z');
+const backend=require('./backend.cjs');
 function fixture(vehicles,locale='de'){
  const messages=JSON.parse(fs.readFileSync(path.join(root,`i18n/${locale}.json`),'utf8')).messages;
  const html=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
- const ctx={snapshot:{vehicles,live:{battery_mode:'NON_EXPORT',car_mode:'IDLE'},plan:{},features:{car:true}},
+ const ctx={snapshot:backend('view',{vehicles,live:{battery_mode:'NON_EXPORT',car_mode:'IDLE'},plan:{},features:{car:true}},{now}),
   windowNow:()=>now,time:value=>value,html,t:key=>messages[key]??key,th:key=>html(messages[key]??key)};
  vm.createContext(ctx);
  vm.runInContext(script.slice(script.indexOf('const modes ='),script.indexOf('const day =')),ctx);

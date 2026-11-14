@@ -54,9 +54,14 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         app = Mock(lock=RLock(), armed=False, owned=False)
         app.config.daily = daily_settings({}, 20)
         app.config.options = dict(DEFAULTS)
+        from zoneinfo import ZoneInfo
+        app.config.zone = ZoneInfo(DEFAULTS['timezone'])
+        app.config.directory = self.directory
+        app.config.influx.url = None
         app.errors = {}
+        app.history.read.return_value = []
         app.snapshot.side_effect = lambda _: {"armed": app.armed, "live": {}, "errors": dict(app.errors),
-                                             "settings": dict(app.config.daily)}
+                                             "settings": dict(app.config.daily), 'zone':DEFAULTS['timezone']}
         self.entry.runtime_data = EnergyCoordinator(self.hass, self.entry, app)
         return self.entry.runtime_data, app
 
@@ -1091,6 +1096,70 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             connection.send_error.assert_called_once()
         app.set_armed.assert_not_called()
 
+    async def test_backend_source_warning_is_logged_without_a_frontend_request(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.tick = Mock()
+        app.source_configuration = {'unavailable':['solar'], 'sources':{
+            'solar':{'reason':'stale','max_age_s':45,'source':{'name':'private-sensor'}}}}
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
+            result = await self.hass.async_add_executor_job(coordinator._tick)
+        self.assertEqual(result['notices'][0]['code'],'sources_unavailable')
+        self.assertIn('stale', '\n'.join(logs.output))
+        self.assertNotIn('private-sensor', '\n'.join(logs.output))
+
+    async def test_plan_fetch_failure_is_logged_immediately_with_safe_http_context(self):
+        from urllib.error import HTTPError
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.eos = Mock()
+        app.config.eos.plan.side_effect = HTTPError('http://private-host',503,'test-secret',{},None)
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
+            await coordinator._async_poll_eos('plan')
+        self.assertEqual(coordinator.data['notices'][0]['code'],'eos')
+        self.assertIn('503', logs.output[0])
+        self.assertIn('HTTPError', logs.output[0])
+        self.assertNotIn('private-host','\n'.join(logs.output))
+        self.assertNotIn('test-secret','\n'.join(logs.output))
+
+    async def test_invalid_settings_log_backend_reason_and_do_not_modify_bounds(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        self.entry.runtime_data = coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
+            result = await self.invoke({'action':'settings','values':{'battery_min_soc':90,'battery_max_soc':80}})
+        result.send_error.assert_called_once()
+        self.assertEqual(len(logs.output),1,logs.output)
+        self.assertIn('battery_bounds',logs.output[0])
+        self.assertEqual(app.config.daily['battery_min_soc'],20)
+        issue = next(item for item in coordinator.issue_log.diagnostics()['active'] if item['scope'] == 'api/settings')
+        self.assertEqual(issue['details']['fields'],['battery_max_soc','battery_min_soc'])
+
+    async def test_browser_events_are_logged_and_arbitrary_text_is_rejected(self):
+        coordinator,_ = self.controller()
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='INFO') as logs:
+            for active in (True,False):
+                result = await self.invoke({'action':'client_event','values':{'events':[
+                    {'code':'connection_lost','action':'snapshot','active':active}]}})
+                result.send_result.assert_called_once()
+        self.assertIn('connection_lost',logs.output[0])
+        self.assertIn('resolved',logs.output[-1])
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
+            result = await self.invoke({'action':'client_event','values':{'events':[
+                {'code':'connection_lost','action':'snapshot','active':True,'message':'test-secret'}]}})
+        result.send_error.assert_called_once()
+        self.assertNotIn('test-secret', '\n'.join(logs.output))
+
+    async def test_departure_local_api_input_is_normalized_by_backend(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.eos = Mock()
+        self.entry.runtime_data = coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        result = await self.invoke({'action':'settings','values':{
+            'schedule':'once','departure_local':'2026-11-14T07:30','target_soc':75}})
+        result.send_result.assert_called_once()
+        self.assertEqual(coordinator.data['settings']['departure'],'2026-11-14T07:30:00+01:00')
+        self.assertNotIn('departure_local',app.config.daily)
+
     async def test_weather_forecast_request_is_read_only_and_rejects_source_overrides(self):
         coordinator,app=self.controller()
         with patch.object(coordinator.weather_forecast,'async_read',return_value={'status':'empty','rows':[]}) as read:
@@ -1424,10 +1493,13 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
 
     async def test_eos_sync_failure_log_excludes_exception_details_and_repeated_retries(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
         with self.assertLogs("custom_components.eos_energiezentrale.coordinator", level="WARNING") as logs:
             for _ in range(2):
                 EnergyCoordinator._sync_failure(app, "vehicle_limits", OSError("http://private-host/test-secret"))
-        self.assertEqual(len(logs.output), 1)
+                coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        self.assertEqual(len(logs.output), 1, logs.output)
         self.assertIn("vehicle_limits", logs.output[0])
         self.assertIn("OSError", logs.output[0])
         self.assertNotIn("private-host", logs.output[0])

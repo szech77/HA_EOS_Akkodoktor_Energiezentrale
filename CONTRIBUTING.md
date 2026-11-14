@@ -45,6 +45,14 @@ modellierte Regelungslogik, Treiberverträge, EOS-/Influx-Clients und den Verlau
 Der Coordinator serialisiert Polling, Steuerbefehle, Einstellungen und Stoppen.
 Blockierende HTTP-, Datei- und SQLite-Zugriffe dürfen nicht in den Eventloop.
 
+Fachliche Berechnungen, Statusbewertungen und Warnungsentscheidungen gehören ins
+Backend, einschließlich der Anzeigewerte für Energie und Kosten. Das Frontend
+übermittelt Eingaben, übersetzt/formatiert Backendwerte und zeichnet die Oberfläche.
+Angezeigte Warnungen und Fehler benötigen dieselbe Kennung im Backend-Log;
+unveränderte Zustände werden gedrosselt, Ursachenwechsel und Behebungen erfasst.
+Browserfehler werden über den authentifizierten Meldekanal erfasst. Details und
+die Grenze bei Verbindungsabbrüchen stehen in [LOGGING.md](LOGGING.md).
+
 Gerätebefehle benötigen passende Domänen und Bestätigungen. Ausschalten und Fehler
 müssen neue Regelbefehle verhindern; eine unbestätigte Rückgabe darf nicht als Erfolg
 erscheinen. Neue Hardware erweitert die Registries und erhält fachliche Tests.
