@@ -21,6 +21,30 @@ bisherigen Ebene. Ausgewählte Batterieprofile und zusätzliche Einstellungen
 `effective_*`- und `measurement_*`-Ausgaben werden beim Schreiben weggelassen;
 EOS berechnet sie selbst erneut.
 
+## Nach dem Speichern einer Einzelladung
+
+Ein geändertes Ladeziel wird zunächst an EOS übertragen und bestätigt. Für die
+geplante Fahrzeugladung wird anschließend eine Plan-Generation benötigt, deren
+`generated_at` mindestens 120 Sekunden nach der letzten Bestätigung des Ladeziels
+und der Fahrzeug-Ladegrenzen liegt. Ein älterer Plan wird durch bloßen Zeitablauf
+nicht passend. Die Dauer hängt deshalb auch vom Optimierungsintervall in EOS ab;
+die Energiezentrale fragt Pläne im HA-Betrieb alle 15 Sekunden ab.
+
+Das Panel unterscheidet die Übertragung der Fahrzeugvorgaben vom Warten auf diese
+Plan-Generation. Das Speichern unveränderter Speichergrenzen erhält deren
+Bestätigung und laufende Abgleiche. Die erstmalige Übernahme der Grenzen bleibt
+auch dann aktiv, wenn die Standardwerte unverändert gespeichert werden.
+
+Ein fehlgeschlagener Ziel- oder Grenzenabgleich wird nach 30 Sekunden erneut
+versucht; bestätigte Speicher- und Fahrzeuggrenzen werden alle 60 Sekunden
+nachgeprüft. Kommunikations- und Bestätigungsfehler bleiben Warnungen.
+Fehlgeschlagene Abgleiche werden beim ersten Auftreten mit Vorgang und
+Fehlerklasse im HA-Protokoll festgehalten, ohne private Fehlermeldungen.
+Die EOS-Ersatzplan-Warnung entsteht durch einen fehlgeschlagenen Planabruf, nicht
+allein durch eine laufende Neuberechnung. Ein vorhandener gültiger Plan darf
+dann höchstens fünf Minuten weiterverwendet werden. Fehlende oder veraltete
+PV-Messwerte bleiben ebenfalls sichtbar und werden nicht durch null ersetzt.
+
 ## Wenn eine Bestätigung weiterhin fehlt
 
 Die Energiezentrale prüft nach einem Update sowohl die übernommene Anpassung als
@@ -85,3 +109,21 @@ resolved effective capacity/efficiencies at the profile reference point; missing
 values remain unavailable, while the existing ledger retains its last valid data.
 Tests cover both API contracts; validation against the customer's running EOS
 instance remains outstanding.
+
+After saving a one-time charging goal, EOS must confirm the new inputs and publish
+a plan whose `generated_at` is at least 120 seconds after the last goal/charger
+limits confirmation. Elapsed wall-clock time does not make an older generation
+usable. Actual waiting time therefore also depends on EOS's optimization interval;
+HA polls plans every 15 seconds. The panel distinguishes syncing vehicle settings
+from waiting for the updated plan. Unchanged battery bounds retain their existing
+confirmation and pending sync; saving default bounds for the first time still
+enables synchronization.
+
+Failed goal/limits requests retry after 30 seconds; confirmed battery and charger
+limits are rechecked every 60 seconds. Real communication/readback failures remain
+warnings. Failed synchronizations log their operation and exception class on first
+occurrence, without private exception messages. The cached-plan warning means a
+plan fetch failed, rather than simply that a new optimization is running.
+A valid cached plan can be used for at most
+five minutes. Missing/stale PV readings remain visible and are never replaced
+with zero.

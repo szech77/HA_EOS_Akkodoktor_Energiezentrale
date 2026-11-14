@@ -131,6 +131,15 @@ class EnergyCoordinator(DataUpdateCoordinator):
         departure = next_departure(app.config.daily, now, app.config.zone)
         return (app.config.daily["target_soc"], departure) if departure else None
 
+    @staticmethod
+    def _sync_failure(app, area, error):
+        kind = type(error).__name__
+        if app.errors.get(area) != kind:
+            # Keep the failing operation after recovery, without exception text
+            # that may contain URLs, credentials or private configuration.
+            _LOGGER.warning("EOS %s synchronization failed (%s)", area, kind)
+        app.errors[area] = kind
+
     def _schedule_vehicle_sync(self):
         if self.closing:
             return
@@ -168,7 +177,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     app.errors.pop('vehicle_limits', None)
                 else:
                     app.vehicle_profile_confirmed = None
-                    app.errors['vehicle_limits'] = type(error).__name__
+                    self._sync_failure(app, 'vehicle_limits', error)
             self.vehicle_sync_tasks.pop(resource, None)
             if desired != app.vehicle_profile:
                 self._schedule_vehicle_sync()
@@ -213,7 +222,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     app.errors.pop("goal", None)
                 else:
                     app.goal_at = None
-                    app.errors["goal"] = type(error).__name__
+                    self._sync_failure(app, "goal", error)
             self.goal_sync_tasks.pop(resource, None)
             if revision != app.goal_sync_revision or desired != current:
                 self._schedule_goal_sync()
@@ -253,7 +262,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 else:
                     self.app.battery_limits_confirmed = None
                     self.app.battery_limits_confirmed_at = None
-                    self.app.errors["battery_limits"] = type(error).__name__
+                    self._sync_failure(self.app, "battery_limits", error)
                 snapshot = await self.hass.async_add_executor_job(self.app.snapshot, datetime.now(timezone.utc))
                 self.async_set_updated_data({**(self.data or {}), **snapshot})
             self.battery_sync_task = None
@@ -327,6 +336,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     now = datetime.now(timezone.utc)
                     previous_goals = [(vehicle, self._desired_goal(vehicle, now))
                                       for vehicle in self._vehicle_controllers()]
+                    previous_limits = ((self.app.battery_sync_managed(), self.app.battery_limits_request())
+                                       if isinstance(self.app, Controller) else None)
+                    manage_limits = bool(settings and settings.keys() & {"battery_min_soc", "battery_max_soc"})
                     if enabled is not None:
                         self.app.set_armed(enabled)
                     if settings is not None and "vehicle_id" in settings:
@@ -334,24 +346,23 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         if not hasattr(self.app,"change_vehicle_settings"):
                             raise ValueError("No vehicle fleet configured")
                         self.app.change_vehicle_settings(identity,{key:value for key,value in settings.items() if key!="vehicle_id"})
-                        if settings.keys() & {"battery_min_soc", "battery_max_soc"}:
-                            self.battery_sync_revision += 1
-                            self.app.battery_limits_confirmed = None
-                            self.app.battery_limits_confirmed_at = None
                         settings=None
                     if settings is not None:
                         values = daily_settings({**self.app.config.daily, **settings},
                                                 self.app.config.options["regulation_interval_s"])
-                        manage_limits = bool(settings.keys() & {"battery_min_soc", "battery_max_soc"})
                         self.app.config.update(values, manage_battery_limits=manage_limits)
-                        if manage_limits:
-                            self.battery_sync_revision += 1
-                            self.app.battery_limits_confirmed = None
-                            self.app.battery_limits_confirmed_at = None
                         if hasattr(self.app,"persist_primary_settings"):
                             self.app.persist_primary_settings()
-                        if manage_limits:
-                            self.app.sync_battery_limits(datetime.now(timezone.utc), monotonic(), force=True)
+                    # The panel submits battery bounds with every vehicle edit.
+                    # Preserve an existing confirmation (and any in-flight sync)
+                    # when only the departure or target changed. The first explicit
+                    # save still opts into managed limits, even for default bounds.
+                    if manage_limits and (previous_limits is None or previous_limits !=
+                            (self.app.battery_sync_managed(), self.app.battery_limits_request())):
+                        self.battery_sync_revision += 1
+                        self.app.battery_limits_confirmed = None
+                        self.app.battery_limits_confirmed_at = None
+                        self.app.sync_battery_limits(now, monotonic(), force=True)
                     for vehicle, previous in previous_goals:
                         if previous != self._desired_goal(vehicle, now):
                             vehicle.goal_sync_revision += 1

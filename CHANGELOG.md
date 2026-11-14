@@ -3,6 +3,26 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.5 - 2026-11-14
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Beim Speichern von Fahrzeugvorgaben die Bestätigung unveränderter Speichergrenzen und laufende Abgleiche erhalten. Ein neues Ladeziel löst keinen zusätzlichen Speicherabgleich aus; die erstmalige Übernahme und tatsächlich geänderte Grenzen werden weiterhin synchronisiert.
+- Die Übertragung neuer Fahrzeugvorgaben und das Warten auf eine aktualisierte EOS-Fahrzeugplanung als eigenen Status anzeigen. Die bestehende Freigabe anhand des Plan-Erzeugungszeitpunkts bleibt erhalten; echte API-Fehler, Ersatzplan-Warnungen und fehlende Messwerte bleiben sichtbar. Wartezeiten und Wiederholungsintervalle dokumentieren.
+- Fehlgeschlagene EOS-Abgleiche von Ladeziel, Fahrzeug- und Speichergrenzen mit Vorgang und Fehlerklasse im HA-Protokoll festhalten. Gleiche laufende Fehler nicht bei jedem Wiederholungsversuch erneut protokollieren; private Fehlermeldungen, Adressen und Konfigurationswerte ausschließen.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.3 - 2026-11-13
 
 ### Features

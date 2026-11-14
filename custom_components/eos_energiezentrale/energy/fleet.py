@@ -333,7 +333,9 @@ class FleetController(Controller):
 
     def snapshot(self,now):
         result=Controller.snapshot(self,now)
-        result["vehicles"]=self.vehicle_snapshots
+        controllers={identity:app for identity,app,_ in self.controllers}
+        result["vehicles"]=[{**payload,"vehicle_planning":controllers[payload["id"]].vehicle_planning_state(now)}
+                            for payload in self.vehicle_snapshots]
         result['live']['car_connected']=any(vehicle['live'].get('car_connected') is not False for vehicle in self.vehicle_snapshots)
         result['live']['car_available']=any(vehicle['live'].get('car_available') for vehicle in self.vehicle_snapshots)
         references=[vehicle.get("power_reference",{}).get("car") for vehicle in self.vehicle_snapshots]

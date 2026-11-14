@@ -22,7 +22,19 @@ test('presence labels are translated in German and English',()=>{
   for(const language of ['de','en']){
     const messages=JSON.parse(fs.readFileSync(path.join(root,`i18n/${language}.json`),'utf8')).messages;
     for(const key of ['vehicle.disconnected','vehicle.unavailable','plugin.feature.optional_connection',
-        'notice.wallbox','notice.wallbox_stop','notice.vehicle_limits'])
+        'notice.wallbox','notice.wallbox_stop','notice.vehicle_limits',
+        'control.syncing_vehicle','control.planning_vehicle'])
       assert.equal(typeof messages[key],'string');
   }
+});
+
+test('normal EOS planning has a distinct status and preserves recovery priorities',()=>{
+  const value={armed:true,vehicle_planning:'plan_pending',errors:{eos:'TimeoutError'}};
+  assert.equal(context.controlStatus(value),'control.planning_vehicle');
+  assert.equal(context.controlStatus({...value,vehicle_planning:'goal_pending'}),'control.syncing_vehicle');
+  assert.equal(context.controlStatus({...value,vehicles:[{vehicle_planning:null},{vehicle_planning:'limits_pending'}]}),'control.syncing_vehicle');
+  assert.equal(context.controlStatus({...value,eos_cache:{ev1:{remaining_s:240}}}),'control.cached_eos');
+  assert.equal(context.controlStatus({...value,control_waiting:true}),'control.waiting');
+  assert.equal(context.controlStatus({...value,armed:false}),'control.read_only');
+  assert.equal(context.controlStatus({...value,vehicle_planning:null}),'control.active');
 });

@@ -233,6 +233,16 @@ function socBarCount(soc) {
   return valid(soc) && soc>=0 && soc<=100 ? Math.ceil(soc/20) : null;
 }
 
+function controlStatus(value) {
+  if(value.control_waiting)return t('control.waiting');
+  if(!value.armed)return t('control.read_only');
+  if(Object.keys(value.eos_cache??{}).length)return t('control.cached_eos');
+  const pending=(value.vehicles?.length?value.vehicles:[value]).map(vehicle=>vehicle.vehicle_planning);
+  if(pending.includes('goal_pending')||pending.includes('limits_pending'))return t('control.syncing_vehicle');
+  if(pending.includes('plan_pending'))return t('control.planning_vehicle');
+  return t('control.active');
+}
+
 function carIcon(soc) {
   const filled=socBarCount(soc);
   const bars=Array.from({length:5},(_,index)=>`<rect class="car-soc-bar${filled!==null && index<filled ? ' filled' : ''}" x="${(6.4+index*2.2).toFixed(1)}" y="10.8" width="1.5" height="4.4" rx=".35"/>`).join('');
@@ -403,7 +413,7 @@ function overview() {
     weatherNode.setAttribute('aria-label', description+' · '+t('forecast.open'));
     weatherNode.title = description+' · '+t('forecast.open');
   }
-  byId('connection').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? Object.keys(snapshot.eos_cache ?? {}).length ? t('control.cached_eos') : t('control.active') : t('control.read_only');
+  byId('connection').textContent = controlStatus(snapshot);
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
   byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
@@ -672,7 +682,7 @@ function settings() {
     fillForm();
     formReady = true;
   }
-  byId('ownership').textContent = snapshot.control_waiting ? t('control.waiting') : snapshot.armed ? Object.keys(snapshot.eos_cache ?? {}).length ? t('control.cached_eos') : t('control.active') : t('control.read_only');
+  byId('ownership').textContent = controlStatus(snapshot);
   byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
   byId('control').disabled = !formReady;
   const limits = snapshot.battery_limits;

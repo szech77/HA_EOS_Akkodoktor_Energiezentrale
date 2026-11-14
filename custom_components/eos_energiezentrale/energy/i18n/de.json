@@ -98,6 +98,8 @@
     "control.taken": "Steuerung freigegeben",
     "control.released": "Steuerung zurückgegeben",
     "control.active": "Steuerung aktiv",
+    "control.syncing_vehicle": "Aktiv · Fahrzeugvorgaben werden an EOS übertragen",
+    "control.planning_vehicle": "Aktiv · wartet auf aktualisierte EOS-Fahrzeugplanung",
     "control.read_only": "Lesemodus",
     "mode.idle": "Halten",
     "mode.pv": "PV-Laden",

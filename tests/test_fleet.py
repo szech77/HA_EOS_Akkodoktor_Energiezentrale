@@ -71,6 +71,18 @@ class FleetRequirements(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(ValueError):
                 validate_options({**DEFAULTS,"vehicles":json.dumps(rows)})
 
+    def test_new_secondary_goal_updates_planning_status_before_next_device_poll(self):
+        app,_,_,_=self.setup_fleet()
+        app.tick(NOW,0)
+        app.armed = True
+        second = app.controllers[1][1]
+        second.armed = True
+        app.change_vehicle_settings("second",{"schedule":"once", "departure":(NOW+timedelta(hours=3)).isoformat()})
+        snapshot = app.snapshot(NOW)
+        self.assertIsNone(snapshot["vehicles"][0]["vehicle_planning"])
+        self.assertEqual(snapshot["vehicles"][1]["vehicle_planning"], "goal_pending")
+        self.assertIsNone(app.vehicle_snapshots[1]["vehicle_planning"])
+
     def test_active_vehicle_list_replaces_unused_legacy_resource_for_json_and_decoded_options(self):
         rows=definitions()
         for raw in (rows,json.dumps(rows)):

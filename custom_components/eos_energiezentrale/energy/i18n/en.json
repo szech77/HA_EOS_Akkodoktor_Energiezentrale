@@ -98,6 +98,8 @@
     "control.taken": "Control enabled",
     "control.released": "Control released",
     "control.active": "Control active",
+    "control.syncing_vehicle": "Active · syncing vehicle settings with EOS",
+    "control.planning_vehicle": "Active · waiting for an updated EOS vehicle plan",
     "control.read_only": "Read-only mode",
     "mode.idle": "Hold",
     "mode.pv": "Solar charging",
