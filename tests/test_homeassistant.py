@@ -967,6 +967,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         from custom_components.eos_energiezentrale.config_flow import schema_for
         flow=ConfigFlow()
         self.assertEqual(flow.values["wallbox_type"],"none")
+        self.assertEqual(flow.values['vehicle_resource'],'')
         self.assertEqual(flow.values["heat_entity"],"")
         validate_options(flow.values)
         config=Configuration(flow.values,Mock(),self.directory)
@@ -975,6 +976,46 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         submitted={key:flow.values[key] for key in GROUPS["sensors"]
                    if key not in {"heat_entity","car_soc_entity","heat_load_entity"}}
         fields(submitted)
+
+    async def test_setup_connection_accepts_omitted_vehicle_resource_without_a_vehicle(self):
+        from custom_components.eos_energiezentrale.config_flow import schema_for, vol
+        flow=ConfigFlow();flow.hass=self.hass;flow.context={'source':'user'}
+        schema=schema_for('connection',flow.values)
+        marker=next(key for key in schema.schema if str(key)=='vehicle_resource')
+        self.assertIsInstance(marker,vol.Optional)
+        submitted={key:flow.values[key] for key in GROUPS['connection'] if key!='vehicle_resource'}
+        submitted=schema(submitted)
+        self.assertNotIn('vehicle_resource',submitted)
+        with patch('custom_components.eos_energiezentrale.config_flow.request',return_value={}):
+            result=await flow._step('connection',submitted)
+        self.assertEqual(result['step_id'],'sensors')
+        self.assertEqual(flow.values['vehicle_resource'],'')
+
+    async def test_no_vehicle_options_can_clear_unused_resource_explicitly_or_by_omission(self):
+        from custom_components.eos_energiezentrale.config_flow import vol
+        self.hass.config_entries.async_update_entry(self.entry,options={'wallbox_type':'none'})
+        for submitted in ({'vehicle_resource':''},{'battery_resource':'battery1'}):
+            flow=OptionsFlow();flow.hass=self.hass;flow.handler=self.entry.entry_id
+            flow.context={'entry_id':self.entry.entry_id}
+            form=await flow.async_step_connection()
+            marker=next(key for key in form['data_schema'].schema if str(key)=='vehicle_resource')
+            self.assertIsInstance(marker,vol.Optional)
+            with patch('custom_components.eos_energiezentrale.config_flow.request',return_value={}):
+                result=await flow.async_step_connection(submitted)
+            self.assertEqual(result['type'],'create_entry')
+            self.assertEqual(result['data']['vehicle_resource'],'')
+
+    async def test_no_vehicle_coordinator_never_schedules_vehicle_or_goal_sync(self):
+        options={**DEFAULTS,'wallbox_type':'none','vehicle_resource':''}
+        config=Configuration(options,Mock(),self.directory)
+        app=Controller(Mock(),config);app.armed=True
+        app.goal_sync_ready=True
+        # Stale in-memory profile data must not override the absent-vehicle setting.
+        app.vehicle_profile=(11000,690,(1.,),True)
+        coordinator=EnergyCoordinator(self.hass,self.entry,app)
+        coordinator._schedule_goal_sync();coordinator._schedule_vehicle_sync()
+        self.assertFalse(coordinator.goal_sync_tasks)
+        self.assertFalse(coordinator.vehicle_sync_tasks)
 
     async def test_config_wizard_preserves_selected_hardware_and_limits(self):
         flow = ConfigFlow()
@@ -1342,6 +1383,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         result=await flow.async_step_vehicle_remove({"vehicle_id":"vehicle1"})
         self.assertEqual(json.loads(result["data"]["vehicles"]),[])
         self.assertEqual(result["data"]["wallbox_type"],"none")
+        self.assertEqual(result['data']['vehicle_resource'],'')
 
     async def test_background_forecast_poll_uses_warning_grace_and_clears_on_recovery(self):
         from datetime import timedelta

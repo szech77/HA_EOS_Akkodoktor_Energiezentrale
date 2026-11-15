@@ -205,7 +205,10 @@ class Controller:
         return self.resource_plans.get(resource,self.plan if failed is None else None)
 
     def order_for(self,resource,now):
-        if resource == self.config.options['vehicle_resource'] and self.vehicle_connected is False:
+        if not resource:
+            return None
+        if (self.config.options.get('wallbox_type')!='none'
+                and resource == self.config.options.get('vehicle_resource') and self.vehicle_connected is False):
             return None
         plan=self.plan_for(resource,now)
         order=current_instruction(plan,resource,now)
@@ -332,6 +335,8 @@ class Controller:
             report[status] = sorted([*report[status], 'car_soc'])
 
     def sync_goal(self, now, clock, departure):
+        if self.config.options.get('wallbox_type')=='none':
+            return False
         daily = self.config.daily
         ready = (not optional_charger(self.config.wallbox) or
                  self.vehicle_profile is not None and self.vehicle_profile[-1])
@@ -454,7 +459,7 @@ class Controller:
                            wallbox_ids if isinstance(wallbox_ids,Mapping) else {},now)
         self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if self.armed else None,command_at=self.last_write)
         battery_order = self.order_for(opts["battery_resource"], now)
-        car_order = self.order_for(opts["vehicle_resource"], now)
+        car_order = self.order_for(opts["vehicle_resource"], now) if car_enabled else None
         live["battery_mode"] = battery_order.mode if battery_order else None
         live["car_mode"] = car_order.mode if car_order else None
         live["car_actual_mode"] = ("NON_EXPORT" if box.charging and self.pv_session
@@ -493,7 +498,7 @@ class Controller:
             self.restore_pending = False
         self.owned = True
         published = (round(self.soc, 4) if self.soc is not None else None, measured)
-        if published != self.last_soc_publish:
+        if car_enabled and published != self.last_soc_publish:
             self.ha.publish_soc(self.soc, measured)
             self.last_soc_publish = published
         synchronized = self.sync_goal(now, clock, departure) if car_enabled else False
@@ -707,6 +712,8 @@ class Controller:
 
     def vehicle_plan_ready(self, now):
         """Only use a generation sufficiently newer than confirmed EV inputs."""
+        if self.config.options.get('wallbox_type')=='none':
+            return False
         if self.goal_at is None or (optional_charger(self.config.wallbox) and
                 (self.vehicle_profile is None or self.vehicle_profile != self.vehicle_profile_confirmed)):
             return False
@@ -774,5 +781,5 @@ class Controller:
                     "forecast": self.forecast if current else [], "pv_daily_forecast": daily_pv_forecast(self.forecast if current else [], now, opts["timezone"]), "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}
                                    for item in plan_series(self.plan_for(opts[resource],now), opts[resource])]
-                             if self.order_for(opts[resource],now) is not None and (key != "car" or opts.get("wallbox_type") != "none") else [] for key, resource in (("battery", "battery_resource"),
+                             if (key != "car" or opts.get("wallbox_type") != "none") and self.order_for(opts[resource],now) is not None else [] for key, resource in (("battery", "battery_resource"),
                                                                         ("car", "vehicle_resource"))}}

@@ -57,7 +57,7 @@ def schema_for(group, values):
         marker = vol.Optional if optional_source or key in {"influx_url", "influx_user", "influx_password", "influx_password_env"} else vol.Required
         # Password fields must not send the saved credential back as a form default.
         omit_default = key == "influx_password" or (optional_source and not default)
-        if key in SENSOR_OPTIONS:
+        if key in SENSOR_OPTIONS or key=='vehicle_resource' and values.get('wallbox_type')=='none':
             # Suggested values remain visible, but clearing an optional picker
             # must not reinsert the old entity through schema defaults.
             fields[vol.Optional(key, description={"suggested_value": default} if default else {})] = field
@@ -70,6 +70,8 @@ def connection_values(base, submitted):
     """Keep vehicle EOS assignments in the existing device list only."""
     values={**base,**submitted}
     values.pop('vehicle_resources',None)
+    if base.get('wallbox_type')=='none' and not json.loads(base.get('vehicles','[]')):
+        values['vehicle_resource']=submitted.get('vehicle_resource','')
     if 'vehicle_resources' in submitted:
         rows=json.loads(base.get('vehicles','[]'))
         resources=submitted['vehicle_resources']
@@ -100,7 +102,7 @@ class ConfigFlow(DeviceFormMixin, PluginFormMixin, config_entries.ConfigFlow, do
     VERSION = 1
 
     def __init__(self):
-        self.values = {**DEFAULTS, "devices":"[]", "wallbox_type":"none", "heat_entity":"", "car_soc_entity":""}
+        self.values = {**DEFAULTS, "devices":"[]", "wallbox_type":"none", "vehicle_resource":"", "heat_entity":"", "car_soc_entity":""}
 
     async def async_step_user(self, user_input=None):
         await self.async_set_unique_id(DOMAIN)
@@ -236,6 +238,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         values={**self._vehicle_values(),"vehicles":json.dumps(rows)}
         if not rows:
             values["wallbox_type"]="none"
+            values["vehicle_resource"]=""
         return self.async_create_entry(title="",data=values)
 
     async def async_step_vehicle_add(self,user_input=None):

@@ -197,7 +197,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
             return
         for app in self._vehicle_controllers():
             desired = app.vehicle_profile
-            if desired is None:
+            if desired is None or app.config.options.get('wallbox_type')=='none':
                 continue
             resource = app.config.options['vehicle_resource']
             task = self.vehicle_sync_tasks.get(resource)

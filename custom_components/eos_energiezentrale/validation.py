@@ -7,6 +7,7 @@ from .energy.clients import ENTITY, EOS, Influx
 from .energy.domain import number
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
+from .energy.resources import validate_resources
 
 
 def validate_options(options):
@@ -39,14 +40,7 @@ def validate_options(options):
         raise ValueError("Invalid PV reference power")
     if not 0 <= options["battery_min_soc"] < options["battery_max_soc"] <= 100:
         raise ValueError("Invalid battery limits")
-    vehicles=options.get('vehicles','[]')
-    fleet=bool(json.loads(vehicles) if isinstance(vehicles,str) else vehicles)
-    # List entries are validated below; the legacy EV assignment is unused.
-    for key in (("battery_resource",) if fleet else ("battery_resource", "vehicle_resource")):
-        if not isinstance(options[key],str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", options[key]):
-            raise ValueError("Invalid resource")
-    if not fleet and options["battery_resource"] == options["vehicle_resource"]:
-        raise ValueError("Resources must be different")
+    validate_resources(options)
     if type(options["allow_battery_export"]) is not bool:
         raise ValueError("Invalid export permission")
     for key, low, high in (("display_transition_s",0,120),("sensor_alignment_s",1,60),("command_settle_s",5,300),("display_hold_s",60,86400),("capacity_wh", 1000, 300000), ("charging_efficiency", .1, 1),

@@ -10,6 +10,7 @@ from .clients import ENTITY, EOS, Influx
 from .domain import instant, number
 from .drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .failures import BackendError
+from .resources import validate_resources
 
 DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "weekdays": [0, 1, 2, 3, 4], "target_soc": 80, "pv_target_soc": 80,
@@ -98,6 +99,7 @@ def influx_credential(options, environment=None):
 
 class Configuration:
     def __init__(self, options, ha, directory):
+        options={**options,'vehicle_resource':options.get('vehicle_resource','')}
         self.options = options
         self.zone = ZoneInfo(options["timezone"])
         for key in ("pv_entity", "house_entity", "grid_entity", "heat_entity", "price_entity", "car_soc_entity", "heat_load_entity"):
@@ -107,9 +109,7 @@ class Configuration:
                 raise ValueError(f"Ungültige Sensorentität: {key}")
         if not 0 <= options["battery_min_soc"] < options["battery_max_soc"] <= 100:
             raise ValueError("Ungültige Speichergrenzen")
-        for key in ("battery_resource", "vehicle_resource"):
-            if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", options[key]):
-                raise ValueError("Ungültige EOS-Ressource")
+        validate_resources(options)
         for key, low, high in (("capacity_wh", 1000, 300000), ("charging_efficiency", 0.1, 1),
                                ("grid_limit_w", 1380, 100000), ("max_current_a", 6, 32),
                                ("phase_wait_s", 10, 600), ("regulation_interval_s", 5, 120)):
