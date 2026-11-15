@@ -11,6 +11,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
+- Bei ungültiger Victron-Modbus-Konfiguration das betroffene Feld mit konkreten Vorgaben auf Deutsch und Englisch anzeigen, etwa fehlende Rückgabewerte bei aktivierter ESS-Steuerung, ungültige Wirkungsgrade, Portnummern oder Leistungsgrenzen. Geräteverwaltung und Plugin-Einstellungen nutzen dieselben sicheren Meldungen; Fehler weiterhin im Backend protokollieren.
 - Dezimalwerte in nativen Plugin-Einstellungen zulassen. Die von Home Assistant vorbelegte Ganzzahl-Schrittweite durch freie Dezimaleingabe ersetzen, damit etwa Victron-Wirkungsgrade von 0,95 gespeichert werden können. Fachliche Wertebereiche und Ganzzahlvorgaben werden weiterhin unverändert im Backend geprüft.
 
 ### Breaking Changes

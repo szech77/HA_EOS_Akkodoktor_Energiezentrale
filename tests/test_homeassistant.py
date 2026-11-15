@@ -34,6 +34,29 @@ from test_energy import temporary_project_directory
 
 
 class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
+    async def test_victron_forms_show_specific_parameter_errors_in_both_configuration_paths(self):
+        for params,key in (({'port':502.5},'port'),({'host':'http://private-host'},'host'),
+            ({'charge_efficiency':95},'charge_efficiency'),({'discharge_efficiency':0},'discharge_efficiency'),
+            ({'control_enabled':True},'release_charge_current'),
+            ({'control_enabled':True,'release_charge_current':-1},'release_discharge_power'),
+            ({'control_enabled':True,'release_charge_current':''},'release_charge_current'),
+            ({'max_discharge_power':4501},'max_discharge_power')):
+            for path in ('device','hardware'):
+                with self.subTest(params=params,path=path):
+                    flow=ConfigFlow();flow.hass=self.hass;flow.context={'language':'de'}
+                    raw={'host':'gx.test',**params}
+                    with patch('socket.create_connection') as connect:
+                        if path=='device':
+                            flow._device_kind='battery';flow._device_plugin='victron_modbus';flow._editing_device=None
+                            result=await flow.async_step_device_parameters({'id':'device1','name':'Victron','grid_source':True,
+                                'capacity_wh':32000,'charge_w':5000,'discharge_w':5000,'parameters':raw})
+                        else:
+                            flow._hardware_values={**flow.values,'battery_type':'victron_modbus','devices':'null'}
+                            result=await flow.async_step_hardware_parameters({'battery_parameters':raw,'wallbox_parameters':{}})
+                        connect.assert_not_called()
+                    self.assertEqual(result['errors'],{'base':'victron_'+key})
+                    self.assertEqual(result['type'],'form')
+
     async def asyncSetUp(self):
         self.directory_context = temporary_project_directory()
         self.directory = self.directory_context.__enter__()

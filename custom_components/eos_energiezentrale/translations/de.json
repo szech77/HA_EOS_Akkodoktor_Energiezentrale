@@ -133,7 +133,25 @@
     },
     "error": {
       "cannot_connect": "EOS-Verbindung fehlgeschlagen",
-      "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen"
+      "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen",
+      "victron_host": "GX-Hostname / IP: einen gültigen Hostnamen oder eine IP-Adresse ohne http://, Pfad oder Port eingeben.",
+      "victron_port": "GX-Modbus-TCP-Port: eine ganze Zahl von 1 bis 65535 eingeben (Standard: 502).",
+      "victron_phases": "Systemphasen: 1 oder 3 auswählen.",
+      "victron_max_charge_current": "Erlaubter Ladestrom: eine ganze Zahl von 1 bis 32766 A DC eingeben.",
+      "victron_max_discharge_power": "Erlaubte Wechselrichterleistung: 10 bis 327660 W in 10-W-Schritten eingeben.",
+      "victron_release_setpoint": "Nativer Netzsollwert bei Rückgabe: eine ganze Zahl von -1000000 bis 1000000 W eingeben.",
+      "victron_release_charge_current": "Nativer Ladestrom bei Rückgabe: bei aktivierter ESS-Steuerung erforderlich. Eine ganze Zahl von -1 bis 32766 A DC eingeben; -1 bedeutet unbegrenzt.",
+      "victron_release_discharge_power": "Native Wechselrichtergrenze bei Rückgabe: bei aktivierter ESS-Steuerung erforderlich. Einen endlichen Wert von 0 bis 327660 W in 10-W-Schritten eingeben.",
+      "victron_charge_efficiency": "AC/DC-Ladewirkungsgrad: eine Zahl von 0,1 bis 1 eingeben (z. B. 0,95 für 95 %).",
+      "victron_discharge_efficiency": "DC/AC-Entladewirkungsgrad: eine Zahl von 0,1 bis 1 eingeben (z. B. 0,95 für 95 %).",
+      "victron_parameters": "Victron-Parameter enthalten unbekannte Felder oder sind kein gültiges Konfigurationsobjekt.",
+      "victron_grid_meter_enabled": "Gemeinsame Netz- und Verbrauchsmessungen bereitstellen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_read_consumption": "Gesamten AC-Verbrauch auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_dc_pv_enabled": "DC-gekoppelte PV auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_ac_pv_input_enabled": "AC-PV am Netzeingang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_ac_pv_output_enabled": "AC-PV am Wechselrichterausgang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden."
     },
     "abort": {
       "already_configured": "Bereits eingerichtet",
@@ -383,7 +401,25 @@
     },
     "error": {
       "cannot_connect": "EOS-Verbindung fehlgeschlagen",
-      "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen"
+      "invalid_config": "Adressen, Grenzen und Treiberparameter prüfen",
+      "victron_host": "GX-Hostname / IP: einen gültigen Hostnamen oder eine IP-Adresse ohne http://, Pfad oder Port eingeben.",
+      "victron_port": "GX-Modbus-TCP-Port: eine ganze Zahl von 1 bis 65535 eingeben (Standard: 502).",
+      "victron_phases": "Systemphasen: 1 oder 3 auswählen.",
+      "victron_max_charge_current": "Erlaubter Ladestrom: eine ganze Zahl von 1 bis 32766 A DC eingeben.",
+      "victron_max_discharge_power": "Erlaubte Wechselrichterleistung: 10 bis 327660 W in 10-W-Schritten eingeben.",
+      "victron_release_setpoint": "Nativer Netzsollwert bei Rückgabe: eine ganze Zahl von -1000000 bis 1000000 W eingeben.",
+      "victron_release_charge_current": "Nativer Ladestrom bei Rückgabe: bei aktivierter ESS-Steuerung erforderlich. Eine ganze Zahl von -1 bis 32766 A DC eingeben; -1 bedeutet unbegrenzt.",
+      "victron_release_discharge_power": "Native Wechselrichtergrenze bei Rückgabe: bei aktivierter ESS-Steuerung erforderlich. Einen endlichen Wert von 0 bis 327660 W in 10-W-Schritten eingeben.",
+      "victron_charge_efficiency": "AC/DC-Ladewirkungsgrad: eine Zahl von 0,1 bis 1 eingeben (z. B. 0,95 für 95 %).",
+      "victron_discharge_efficiency": "DC/AC-Entladewirkungsgrad: eine Zahl von 0,1 bis 1 eingeben (z. B. 0,95 für 95 %).",
+      "victron_parameters": "Victron-Parameter enthalten unbekannte Felder oder sind kein gültiges Konfigurationsobjekt.",
+      "victron_grid_meter_enabled": "Gemeinsame Netz- und Verbrauchsmessungen bereitstellen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_read_consumption": "Gesamten AC-Verbrauch auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_dc_pv_enabled": "DC-gekoppelte PV auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_ac_pv_input_enabled": "AC-PV am Netzeingang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_ac_pv_output_enabled": "AC-PV am Wechselrichterausgang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden."
     },
     "abort": {
       "no_vehicles": "Kein Fahrzeug vorhanden",

@@ -8,6 +8,15 @@ from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.plugin_parameters import parameters
 from .flow_translations import _translations, flow_language
 from .configuration_logging import configuration_failure, configuration_success
+from .energy.failures import PluginParameterError
+
+
+def plugin_configuration_error(plugin, error):
+    """Expose translated, fixed parameter errors without raw exception content."""
+    if plugin=='victron_modbus' and isinstance(error,PluginParameterError):
+        keys={field.key for field in BATTERY_DRIVERS['victron_modbus'].configuration}
+        return {'base':'victron_'+error.parameter if error.parameter in keys else 'victron_parameters'}
+    return {'base':'invalid_config'}
 
 
 def plugin_choices(registry,include_none=True):
@@ -124,7 +133,7 @@ class PluginFormMixin:
                 return await self._step("hardware",payload)
             except (ValueError,KeyError,TypeError) as error:
                 configuration_failure(self, 'hardware_parameters', error, selected_plugin)
-                errors={"base":"invalid_config"}
+                errors=plugin_configuration_error(selected_plugin,error)
         fields = {}
         for kind,registry in (("battery",BATTERY_DRIVERS),("wallbox",WALLBOX_DRIVERS)):
             if kind=="wallbox" and self._fleet_configured(): continue
