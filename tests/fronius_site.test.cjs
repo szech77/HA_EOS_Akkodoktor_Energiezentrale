@@ -16,7 +16,7 @@ test('group diagnostics identify PV-only units, storage SoC and combined capacit
   const result=ctx.batteryGroupDetails({inverter_count:2,battery_count:1,capacity_wh:10000,devices:[
    {name:'primary',battery:true,soc:0,solar:2000,ac:-500,available:true},
    {name:'roof',battery:false,solar:1200,ac:1200,available:true}]});
-  assert.match(result,/10 kWh/);assert.match(result,/SoC 0 %/);assert.match(result,/AC − 0.5 kW/);
+  assert.match(result,/10 kWh/);assert.match(result,/SoC: <strong>0 %/);assert.match(result,/AC[^:]*: <strong>− 0.5 kW/);
   assert.match(result,/roof/);assert.match(result,language==='de'?/Nur PV/:/PV only/);
  }
 });
@@ -26,7 +26,22 @@ test('missing measurements stay unknown and device names are escaped',()=>{
  const result=ctx.batteryGroupDetails({inverter_count:2,battery_count:2,devices:[
   {name:'<device>',battery:true,soc:null,solar:null,ac:null,available:false}]});
  assert.match(result,/&lt;device&gt;/);assert.doesNotMatch(result,/<device>/);
- assert.match(result,/SoC —/);assert.match(result,/Messwerte unvollständig/);
+ assert.match(result,/SoC: <strong>—/);assert.match(result,/Messwerte unvollständig/);
+});
+
+test('Victron shows its declared consumption and grid values without an unsupported AC placeholder',()=>{
+ for(const language of ['de','en']){
+  const ctx=fixture(language);
+  const result=ctx.batteryGroupDetails({inverter_count:1,battery_count:1,devices:[
+   {name:'Victron',battery:true,soc:100,available:true,measurements:{solar:250,house_total:408,grid:0}}]});
+  assert.match(result,language==='de'?/PV-Leistung/:/PV power/);
+  assert.match(result,language==='de'?/Hausverbrauch/:/House consumption/);
+  assert.match(result,/0.408 kW/);assert.match(result,/0 kW/);
+  assert.doesNotMatch(result,/Wechselrichter AC|Inverter AC|—/);
+  const missing=ctx.batteryGroupDetails({inverter_count:1,battery_count:0,devices:[
+   {name:'PV',battery:false,available:false,measurements:{solar:0,inverter_ac:null}}]});
+  assert.match(missing,language==='de'?/Wechselrichter AC-Leistung: <strong>—/:/Inverter AC power: <strong>—/);
+ }
 });
 
 test('mixed plugin names are escaped and the pooled EOS approximation is visible',()=>{

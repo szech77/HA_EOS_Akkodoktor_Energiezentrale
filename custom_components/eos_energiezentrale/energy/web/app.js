@@ -616,7 +616,13 @@ function fillForm() {
 function batteryGroupDetails(group) {
   if(!group)return '';
   return `<dt>${th('plugin.fronius_site')}</dt><dd>${th('plugin.site_summary',{inverters:group.inverter_count,batteries:group.battery_count})}${valid(group.capacity_wh)?' · '+th('plugin.site_capacity',{capacity:decimal(group.capacity_wh/1000,2)+' '+t('unit.kwh')}):''}</dd>`+
-    (group.devices??[]).map(device=>`<dt>${html(device.name==='primary'?t('plugin.primary_inverter'):device.name)}</dt><dd>${device.plugin?html(device.plugin.name)+' · ':''}${th(device.battery?'plugin.site_storage':'plugin.site_pv')} · PV ${html(power(device.solar))} · AC ${valid(device.ac)&&device.ac<0?'− ':''}${html(power(device.ac))}${device.battery?' · SoC '+html(percent(device.soc)):''} · ${th(device.available?'plugin.site_available':'plugin.site_unavailable')}</dd>`).join('')+
+    (group.devices??[]).map(device=>{
+      const measurements=device.measurements??{solar:device.solar,inverter_ac:device.ac};
+      const labels={solar:th('measurement.solar'),inverter_ac:th('measurement.inverter_ac'),house_total:th('measurement.house_total'),grid:th('measurement.grid')};
+      const values=Object.entries(measurements).map(([key,value])=>`<span>${labels[key]??html(key)}: <strong>${valid(value)&&value<0?'− ':''}${html(power(value))}</strong></span>`);
+      if(device.battery)values.push(`<span>${th('measurement.battery_soc')}: <strong>${html(percent(device.soc))}</strong></span>`);
+      return `<dt>${html(device.name==='primary'?t('plugin.primary_inverter'):device.name)}</dt><dd><div>${device.plugin?html(device.plugin.name)+' · ':''}${th(device.battery?'plugin.site_storage':'plugin.site_pv')} · ${th(device.available?'plugin.site_available':'plugin.site_unavailable')}</div><div class="device-measurements">${values.join('')}</div></dd>`;
+    }).join('')+
     (group.approximate?`<dt>${th('plugin.pool_approximation')}</dt><dd>${th('plugin.pool_limitations')}</dd>`:'')+
     (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');
 }

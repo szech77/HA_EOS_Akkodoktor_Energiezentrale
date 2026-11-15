@@ -276,3 +276,5 @@
   opacity: .5;
   filter: grayscale(1);
 }
+#eos-energy-design .device-measurements {display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px;}
+#eos-energy-design .device-measurements strong {white-space:nowrap;}
