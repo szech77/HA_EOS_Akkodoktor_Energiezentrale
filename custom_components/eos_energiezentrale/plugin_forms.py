@@ -32,7 +32,10 @@ def plugin_object(factory,supplied=None,labels=None,choice_labels=None):
                      if translated else list(field.choices))
             control = selector.SelectSelector(selector.SelectSelectorConfig(
                 options=options,translation_key=f'{translation_key}_{field.key}'))
-        elif field.kind=="number": control = selector.NumberSelector(selector.NumberSelectorConfig(mode=selector.NumberSelectorMode.BOX))
+        elif field.kind=="number":
+            # HA defaults to step=1, which rejects fractional plugin parameters in the browser.
+            # Hardware-specific ranges and integer constraints remain backend validations.
+            control = selector.NumberSelector(selector.NumberSelectorConfig(mode=selector.NumberSelectorMode.BOX,step='any'))
         else:
             control = selector.TextSelector(selector.TextSelectorConfig(multiline=field.kind=="json"))
             if field.kind=="json" and isinstance(value,dict): value = json.dumps(value,ensure_ascii=False)
