@@ -62,7 +62,7 @@ class VictronModbus(BatteryDriver):
                                   ('release_setpoint',-1000000,1000000,1),
                                   ('release_charge_current',-1,32766,1),('release_discharge_power',0,327660,10)):
             value=v[key]
-            if value is None:
+            if value in (None,''):
                 if self.enabled: raise PluginParameterError('Explicit Victron release limits are required',key)
             elif not low<=value<=high or value/step!=int(value/step): raise PluginParameterError('Invalid Victron limit',key)
         self.features=BatteryFeatures(self.enabled,self.enabled,self.enabled,self.enabled and v['grid_discharge_supported'])

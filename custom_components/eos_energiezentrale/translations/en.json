@@ -133,7 +133,25 @@
     },
     "error": {
       "cannot_connect": "EOS connection failed",
-      "invalid_config": "Check URLs, limits and driver parameters"
+      "invalid_config": "Check URLs, limits and driver parameters",
+      "victron_host": "GX hostname / IP: enter a valid hostname or IP address, without http://, path or port.",
+      "victron_port": "GX Modbus TCP port: enter an integer from 1 to 65535 (default: 502).",
+      "victron_phases": "System phases: select 1 or 3.",
+      "victron_max_charge_current": "Allowed charge current: enter a whole number from 1 to 32766 A DC.",
+      "victron_max_discharge_power": "Allowed inverter power: enter 10 to 327660 W in steps of 10 W.",
+      "victron_release_setpoint": "Native grid setpoint on release: enter a whole number from -1000000 to 1000000 W.",
+      "victron_release_charge_current": "Native charge current on release: required when ESS control is enabled. Enter a whole number from -1 to 32766 A DC; -1 means unlimited.",
+      "victron_release_discharge_power": "Native inverter limit on release: required when ESS control is enabled. Enter a finite value from 0 to 327660 W in steps of 10 W.",
+      "victron_charge_efficiency": "AC/DC charge efficiency: enter a number from 0.1 to 1 (for example 0.95 for 95%).",
+      "victron_discharge_efficiency": "DC/AC discharge efficiency: enter a number from 0.1 to 1 (for example 0.95 for 95%).",
+      "victron_parameters": "Victron parameters contain unknown fields or are not a valid configuration object.",
+      "victron_grid_meter_enabled": "Provide common grid / consumption measurements: use a valid on/off selection.",
+      "victron_read_consumption": "Read system AC consumption: use a valid on/off selection.",
+      "victron_dc_pv_enabled": "Read DC-coupled PV: use a valid on/off selection.",
+      "victron_ac_pv_input_enabled": "Read AC PV on grid input: use a valid on/off selection.",
+      "victron_ac_pv_output_enabled": "Read AC PV on inverter output: use a valid on/off selection.",
+      "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
+      "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection."
     },
     "abort": {
       "already_configured": "Already configured",
@@ -383,7 +401,25 @@
     },
     "error": {
       "cannot_connect": "EOS connection failed",
-      "invalid_config": "Check URLs, limits and driver parameters"
+      "invalid_config": "Check URLs, limits and driver parameters",
+      "victron_host": "GX hostname / IP: enter a valid hostname or IP address, without http://, path or port.",
+      "victron_port": "GX Modbus TCP port: enter an integer from 1 to 65535 (default: 502).",
+      "victron_phases": "System phases: select 1 or 3.",
+      "victron_max_charge_current": "Allowed charge current: enter a whole number from 1 to 32766 A DC.",
+      "victron_max_discharge_power": "Allowed inverter power: enter 10 to 327660 W in steps of 10 W.",
+      "victron_release_setpoint": "Native grid setpoint on release: enter a whole number from -1000000 to 1000000 W.",
+      "victron_release_charge_current": "Native charge current on release: required when ESS control is enabled. Enter a whole number from -1 to 32766 A DC; -1 means unlimited.",
+      "victron_release_discharge_power": "Native inverter limit on release: required when ESS control is enabled. Enter a finite value from 0 to 327660 W in steps of 10 W.",
+      "victron_charge_efficiency": "AC/DC charge efficiency: enter a number from 0.1 to 1 (for example 0.95 for 95%).",
+      "victron_discharge_efficiency": "DC/AC discharge efficiency: enter a number from 0.1 to 1 (for example 0.95 for 95%).",
+      "victron_parameters": "Victron parameters contain unknown fields or are not a valid configuration object.",
+      "victron_grid_meter_enabled": "Provide common grid / consumption measurements: use a valid on/off selection.",
+      "victron_read_consumption": "Read system AC consumption: use a valid on/off selection.",
+      "victron_dc_pv_enabled": "Read DC-coupled PV: use a valid on/off selection.",
+      "victron_ac_pv_input_enabled": "Read AC PV on grid input: use a valid on/off selection.",
+      "victron_ac_pv_output_enabled": "Read AC PV on inverter output: use a valid on/off selection.",
+      "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
+      "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection."
     },
     "abort": {
       "no_vehicles": "No vehicle configured",

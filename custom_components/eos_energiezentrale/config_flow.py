@@ -10,7 +10,7 @@ from .const import DEFAULTS, DOMAIN, GROUPS
 from .energy.clients import request
 from .validation import validate_options
 from .configuration_logging import configuration_failure, configuration_success
-from .plugin_forms import PluginFormMixin, plugin_choices, async_plugin_object, configured
+from .plugin_forms import PluginFormMixin, plugin_choices, async_plugin_object, configured, plugin_configuration_error
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
 from .device_forms import DeviceFormMixin
@@ -90,7 +90,7 @@ async def check(hass, values, connection=False, stage='validation'):
             await hass.async_add_executor_job(request, values["eos_url"].rstrip("/") + "/v1/config")
     except (ValueError, TypeError, KeyError) as error:
         configuration_failure(hass, stage, error)
-        return {"base": "invalid_config"}
+        return plugin_configuration_error(getattr(error,'plugin_identifier',None),error)
     except OSError as error:
         configuration_failure(hass, stage, error)
         return {"base": "cannot_connect"}

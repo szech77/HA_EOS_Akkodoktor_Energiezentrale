@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from custom_components.eos_energiezentrale.energy.drivers import BATTERY_DRIVERS, INVERTER_DRIVERS, WALLBOX_DRIVERS
-from custom_components.eos_energiezentrale.plugin_forms import plugin_object, configured
+from custom_components.eos_energiezentrale.plugin_forms import plugin_object, configured, plugin_configuration_error
+from custom_components.eos_energiezentrale.energy.failures import PluginParameterError
 
 
 def test_all_bundled_plugin_fields_and_choices_have_german_and_english_translations():
@@ -51,3 +52,17 @@ def test_victron_fractional_efficiencies_save_while_hardware_constraints_stay_en
     assert values['charge_efficiency']==.95 and values['discharge_efficiency']==.955
     for change in ({'charge_efficiency':1.01},{'discharge_efficiency':0},{'port':502.5}):
         with pytest.raises(ValueError): configured(factory,values | change)
+
+
+def test_victron_parameter_errors_have_safe_messages_for_every_field_in_both_languages():
+    factory=BATTERY_DRIVERS['victron_modbus']
+    root=Path(__file__).resolve().parents[1]/'custom_components'/'eos_energiezentrale'
+    for language in ('de','en'):
+        text=json.loads((root/f'translations/{language}.json').read_text(encoding='utf-8'))
+        for key in [field.key for field in factory.configuration]+[None]:
+            result=plugin_configuration_error('victron_modbus',PluginParameterError('private-host/test-secret',key))
+            assert result['base']!='invalid_config'
+            for area in ('config','options'):
+                assert text[area]['error'][result['base']].strip()
+            assert 'private-host' not in json.dumps(result) and 'test-secret' not in json.dumps(result)
+    assert plugin_configuration_error('generic',ValueError('private'))=={'base':'invalid_config'}

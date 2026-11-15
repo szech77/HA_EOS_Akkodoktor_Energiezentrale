@@ -5,7 +5,7 @@ import probatio as vol
 from homeassistant.helpers import selector
 
 from .energy.devices import DeviceSite, REGISTRIES, device_rows
-from .plugin_forms import configured, plugin_choices, async_plugin_object
+from .plugin_forms import configured, plugin_choices, async_plugin_object, plugin_configuration_error
 from .flow_menus import show_menu
 from .configuration_logging import configuration_failure, configuration_success
 
@@ -174,7 +174,7 @@ class DeviceFormMixin:
                 return await self._save_devices(updated)
             except (ValueError,TypeError,KeyError) as error:
                 configuration_failure(self, 'device_parameters', error, factory.info.identifier)
-                errors={'base':'invalid_config'}
+                errors=plugin_configuration_error(factory.info.identifier,error)
         displayed={**defaults,**(user_input or {})}
         fields={vol.Required(key,default=displayed[key]):str for key in ('id','name')}
         fields[vol.Required('grid_source',default=displayed['grid_source'])]=selector.BooleanSelector()
