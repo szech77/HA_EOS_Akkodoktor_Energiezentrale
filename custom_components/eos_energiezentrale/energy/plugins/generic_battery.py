@@ -2,10 +2,12 @@
 from math import floor
 
 from ..contracts import BatteryDriver, BatteryFeatures, BatteryReading, PluginInfo, PluginField, Measurement
-from ..clients import reading, report_time
+from ..clients import report_time
 from ..domain import number
 from ..device_io import confirmed_state
 from ..plugin_parameters import parameters
+from ..plugin_diagnostics import entity_reading, plugin_operation
+from ..failures import PluginParameterError
 
 
 class GenericBattery(BatteryDriver):
@@ -37,24 +39,26 @@ class GenericBattery(BatteryDriver):
         self.soc_scale = values["soc_scale"]
         self.modes = values["mode_map"]
         if self.modes.keys() != {"auto","limits","block_discharge","grid_charge","grid_discharge"} or any(not isinstance(value,str) or not 1<=len(value)<=80 or any(ord(c)<32 for c in value) for value in self.modes.values()):
-            raise ValueError("Invalid battery mode mapping")
+            raise PluginParameterError("Invalid battery mode mapping",'mode_map')
 
     def _read(self,states,now):
-        soc = reading(states,self.ids["soc"],now,"soc",120)
-        unit = states.get(self.ids["soc"],{}).get("attributes",{}).get("unit_of_measurement")
-        if unit not in ({None,"1"} if self.soc_scale=="factor" else {None,"%"}): soc = None
+        self._source_problems={}
+        soc = entity_reading(self,states,now,'soc','soc',120,('battery_soc',),
+            {None,'1'} if self.soc_scale=='factor' else {None,'%'})
         if soc is not None and self.soc_scale=="factor": soc *= 100
-        return BatteryReading(soc,reading(states,self.ids["charge_power"],now,"power",120),
-                              reading(states,self.ids["discharge_power"],now,"power",120),
+        return BatteryReading(soc,entity_reading(self,states,now,'charge_power','power',120,('battery_charge',)),
+                              entity_reading(self,states,now,'discharge_power','power',120,('battery_discharge',)),
                               report_time(states,self.ids["soc"]),
                               report_time(states,self.ids["charge_power"]),
                               report_time(states,self.ids["discharge_power"]),
-                              {key:Measurement(reading(states,self.ids[key],now,'power',45),report_time(states,self.ids[key]))
+                              {key:Measurement(entity_reading(self,states,now,key,'power',45,(key,)),report_time(states,self.ids[key]))
                                for key in ('solar','inverter_ac','grid') if key in self.ids})
 
+    @plugin_operation('power_limits')
     def power_limits(self,states):
         result=[]
         for key in ('pv_limit','discharge_limit'):
+            self._operation_context={'stage':'control_bounds','parameter':'charge_limit' if key=='pv_limit' else key}
             attrs=self.ha.state(self.ids[key]).get('attributes',{})
             scale={'W':1,'kW':1000}.get(attrs.get('unit_of_measurement'))
             maximum=number(attrs.get('max'))
@@ -64,16 +68,19 @@ class GenericBattery(BatteryDriver):
         return tuple(result)
 
     def _mode(self,mode):
+        self._operation_context={'stage':'mode_option','parameter':'mode_map'}
         entity = self.ids["mode"]
         desired = self.modes[mode]
         row = self.ha.state(entity)
         if desired not in row.get("attributes",{}).get("options",[]):
             raise ValueError("Configured battery mode is not an available option")
         if row.get("state") != desired:
+            self._operation_context={'stage':'write_confirmation','parameter':'mode'}
             self.ha.set(entity,desired)
             confirmed_state(self.ha,entity,lambda value:value.get("state")==desired)
 
     def _power(self,entity,watts):
+        self._operation_context={'stage':'control_bounds','parameter':'charge_limit' if entity==self.ids['pv_limit'] else 'discharge_limit'}
         row = self.ha.state(entity)
         attrs = row.get("attributes",{})
         scale = {"W":1,"kW":1000}.get(attrs.get("unit_of_measurement"))
@@ -84,9 +91,11 @@ class GenericBattery(BatteryDriver):
         if number(row.get("state")) is None:
             raise ValueError("Battery power limit unavailable")
         if abs(float(row["state"])-target)>=step/2:
+            self._operation_context['stage']='write_confirmation'
             self.ha.set(entity,target)
             confirmed_state(self.ha,entity,lambda value:number(value.get("state")) is not None and abs(float(value["state"])-target)<step/2)
 
+    @plugin_operation('apply')
     def _apply(self,command,states):
         charge = command.charge_w if command.mode!="grid_discharge" else 0
         discharge = command.discharge_w if command.mode not in {"block_discharge","grid_charge"} else 0
@@ -94,6 +103,7 @@ class GenericBattery(BatteryDriver):
         self._power(self.ids["discharge_limit"],discharge)
         self._mode(command.mode)
 
+    @plugin_operation('release')
     def _release(self,states):
         self._mode("auto")
 

@@ -1,8 +1,9 @@
 """Read-only inverter plugins, independent of storage control."""
 from ..contracts import InverterDriver, InverterReading, PluginField, PluginInfo, Measurement
-from ..clients import reading, report_time
+from ..clients import report_time
 from ..plugin_parameters import parameters
 from .fronius_modbus import FroniusModbus
+from ..plugin_diagnostics import entity_reading
 
 
 class FroniusInverter(InverterDriver):
@@ -48,7 +49,8 @@ class GenericInverter(InverterDriver):
         self.measurement_keys = tuple(key for key, value in self.ids.items() if value)
 
     def _read(self, states, now):
-        return InverterReading({key: Measurement(reading(states, entity, now, 'power', 45), report_time(states, entity))
+        self._source_problems={}
+        return InverterReading({key: Measurement(entity_reading(self,states,now,key,'power',45,(key,)), report_time(states, entity))
             for key, entity in self.ids.items() if entity})
 
 

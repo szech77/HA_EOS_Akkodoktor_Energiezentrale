@@ -152,6 +152,10 @@ class IssueLog:
             if item.get('missing_controls'):
                 safe['missing_controls'] = sorted(key for key in item['missing_controls'] if key in
                     {'phases','amps','step','maximum','max_phases','nominal_voltage'})
+            if item.get('control_problems'):
+                safe['control_problems'] = [{'parameter':row['parameter'],'reason':safe_kind(row.get('reason'))}
+                    for row in item['control_problems'] if row.get('parameter') in
+                    {'status','plugged','enable','current','phases','phase_feedback','step','maximum'}]
             if item.get('measurements'):
                 safe['measurements'] = sorted(key for key in item['measurements'] if key in MEASUREMENT_KEYS)
             if item.get('source_problems'):

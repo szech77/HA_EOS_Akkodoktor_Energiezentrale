@@ -19,6 +19,7 @@ class EntityWallbox(WallboxDriver):
                               instant(power.get("last_reported") or power.get("last_updated")))
 
     def _pause(self, state):
+        self._operation_context={'stage':'stop_request','parameter':'enable'}
         self.zero_sample = None
         self.zero_after = None
         self.phase_requested = None
@@ -26,6 +27,7 @@ class EntityWallbox(WallboxDriver):
             self.ha.set(self.ids["enable"], False)
 
     def _phase(self, phases, state):
+        self._operation_context={'stage':'phase_feedback','parameter':'phase_feedback' if self.ids.get('phase_feedback') else 'phases'}
         if self.phase_requested is not None:
             requested, timestamp = self.phase_requested
             if state.phases == requested:
@@ -40,6 +42,7 @@ class EntityWallbox(WallboxDriver):
             self.zero_after = None
             return True
         if state.enabled:
+            self._operation_context={'stage':'stop_request','parameter':'enable'}
             self.ha.set(self.ids["enable"], False)
             self.zero_after = datetime.now(timezone.utc)
             self.zero_sample = None
@@ -56,16 +59,19 @@ class EntityWallbox(WallboxDriver):
             return False
         if (state.sample - self.zero_sample).total_seconds() < 3:
             return False
+        self._operation_context={'stage':'phase_request','parameter':'phases'}
         self.ha.set(self.ids["phases"], str(phases) if self.ids["phases"].split(".")[0] in {"select","input_select"} else phases)
         self.phase_requested = (phases, state.sample)
         return False
 
     def _charge(self, amps, state):
+        self._operation_context={'stage':'write_confirmation','parameter':'current'}
         if state.amps is None or abs(state.amps - amps) >= 0.05:
             self.ha.set(self.ids["current"], amps)
             confirmed_state(self.ha, self.ids["current"], lambda row:
                             (value := number(row.get("state"))) is not None and abs(value - amps) < 0.05)
         if not state.enabled:
+            self._operation_context={'stage':'enable_request','parameter':'enable'}
             self.ha.set(self.ids["enable"], True)
 
 

@@ -1,6 +1,7 @@
 """Restricted HA entity commands and confirmation shared by plugins."""
 from time import monotonic, sleep
 from .clients import ENTITY
+from .failures import PluginParameterError
 
 class ScopedHardwareAdapter:
     """Expose only the configured entity IDs to a trusted hardware plugin.
@@ -33,14 +34,14 @@ class ScopedHardwareAdapter:
 
 def entities(defaults, supplied):
     if not isinstance(supplied, dict) or supplied.keys() - defaults.keys():
-        raise ValueError("Unbekannte Treiberparameter")
+        raise PluginParameterError("Unbekannte Treiberparameter")
     result = {**defaults, **supplied}
     for name, value in result.items():
         if not value and name == "grid_discharge":
             continue
         domain = defaults[name].split(".")[0] if defaults[name] else "number"
         if not isinstance(value, str) or not ENTITY.fullmatch(value) or not value.startswith(domain + "."):
-            raise ValueError(f"Ungültige Entität für {name}")
+            raise PluginParameterError('Invalid configured entity',name)
     return result
 
 
