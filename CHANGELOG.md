@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.6 - 2026-11-15
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Betrieb ohne E-Auto mit leerer oder fehlender EOS-Fahrzeugressource ermöglichen. Neue Einrichtungen starten ohne vorgegebene Fahrzeugressource; Konfiguration und Laufzeit verlangen sie nur für konfigurierte Fahrzeuge. Ohne E-Auto keine Fahrzeugplanung, Ladezielabgleiche oder SoC-Veröffentlichung ausführen; die Speicherregelung bleibt unabhängig.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.5 - 2026-11-14
 
 ### Features

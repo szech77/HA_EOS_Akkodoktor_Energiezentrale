@@ -679,6 +679,12 @@ Ein Klick auf **Energie** in der Mitte des Stromflussbilds öffnet alle verfügb
 
 Neue Einrichtungen starten ohne E-Auto und Wärmepumpe. Unter den Integrationsoptionen aktiviert ein ausgewählter Wärmepumpensensor die Wärmepumpe; ein leeres Feld entfernt sie. Für das E-Auto unter Hardware den Wallbox-Typ `nrgkick` auswählen, zum Deaktivieren `none`. Ohne diese Verbraucher entfallen ihre Knoten, Leitungen und Detailnavigation im Stromfluss. Der Hausverbrauch berücksichtigt nur konfigurierte Verbraucher. Ein konfigurierter, aber ausgefallener Sensor bleibt hingegen ein fehlender Messwert. Bestehende Einrichtungen behalten ihre bisherigen Einstellungen.
 
+Ohne E-Auto bzw. Wallbox (`none`) darf die **EOS-Fahrzeugressource** leer bleiben.
+Es erfolgen dann keine Fahrzeugplanung, Fahrzeugabgleiche oder SoC-Veröffentlichungen;
+PV, Hausverbrauch, Speicher und eine konfigurierte Wärmepumpe arbeiten unabhängig
+weiter. Sobald ein Fahrzeug konfiguriert wird, benötigt es eine gültige, eigene
+EOS-Ressource; Fahrzeug- und Speicherressource müssen unterschiedlich sein.
+
 ### Mehrere Fahrzeuge und Wallboxen
 
 Unter **Integration → Konfigurieren → Fahrzeuge und Wallboxen** können Ladepunkte
