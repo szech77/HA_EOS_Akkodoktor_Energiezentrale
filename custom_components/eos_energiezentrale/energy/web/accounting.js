@@ -1,5 +1,20 @@
 /* Consumption reports include explicit estimates, never control/display-held power. */
-const billing = {period:'month',date:null,data:null,key:null,loading:false,at:0,error:null};
+const billingPeriods = ['day','month','year'];
+const billingPeriodKey = 'eos-energiezentrale.billing-period';
+function savedBillingPeriod() {
+  try {
+    const value=window.localStorage.getItem(billingPeriodKey);
+    if(billingPeriods.includes(value))return value;
+  } catch { /* Browser storage may be disabled. */ }
+  return 'month';
+}
+const billing = {period:savedBillingPeriod(),date:null,data:null,key:null,loading:false,at:0,error:null};
+function selectBillingPeriod(value) {
+  if(!billingPeriods.includes(value))return false;
+  billing.period=value;
+  try {window.localStorage.setItem(billingPeriodKey,value);} catch { /* Keep the in-memory selection. */ }
+  return true;
+}
 const sourceColors = {pv:'#f2c94c',battery:'#55c7cb',grid:'#5794f2',unknown:'#8995a5'};
 const money = value => {
   const tiny = value !== 0 && Math.abs(value) < .0001;
@@ -121,12 +136,12 @@ function usageDetail(key, fetch=true) {
 }
 
 function initializeBilling() {
-  byId('billing-period').addEventListener('change',event=>{billing.period=event.target.value;void fetchBilling(true);});
+  byId('billing-period').addEventListener('change',event=>{if(selectBillingPeriod(event.target.value))void fetchBilling(true);});
   byId('billing-date').addEventListener('change',event=>{if(event.target.value){billing.date=event.target.value;void fetchBilling(true);}});
   window.addEventListener('resize',()=>{if(route.startsWith('usage/'))usageDetail(route.slice(6),false);});
   byId('usage').addEventListener('click',event=>{
     const navigation=event.target.closest('[data-billing-move]'),bin=event.target.closest('[data-billing-bin]');
-    if(bin&&billing.period!=='day'){billing.date=bin.dataset.billingBin;billing.period=billing.period==='year'?'month':'day';void fetchBilling(true);return;}
+    if(bin&&billing.period!=='day'){billing.date=bin.dataset.billingBin;selectBillingPeriod(billing.period==='year'?'month':'day');void fetchBilling(true);return;}
     if(!navigation)return;
     const move=navigation.dataset.billingMove;
     if(move==='now')billing.date=localDay(windowNow());

@@ -799,6 +799,7 @@ Ohne ausreichende bewertete Energiemenge oder ohne Verbrauch bleibt der Preis
 Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** eine eigene Auswertung:
 
 - **Tag:** stündliche Werte; **Monat:** Tageswerte; **Jahr:** Monatswerte.
+- Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert und wird beim nächsten Öffnen wiederhergestellt. Ohne verfügbaren Browserspeicher bleibt die Auswahl für die laufende Sitzung erhalten.
 - Pfeile wechseln den Zeitraum; **Aktuell** springt in den aktuellen Zeitraum.
 - Ein Tages-/Monatsbalken öffnet die nächstfeinere Ansicht. Die Datumswahl ermöglicht direkte Sprünge.
 - Getrennte gestapelte Diagramme zeigen kWh und Euro nach PV, Akku, Netz und unbekannter Quelle.
