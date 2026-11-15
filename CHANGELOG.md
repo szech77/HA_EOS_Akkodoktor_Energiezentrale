@@ -7,7 +7,7 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Features
 
-- Keine.
+- Den zuletzt gewählten Zeitraum der Kostenauswertung (Tag, Monat oder Jahr) lokal im Browser merken und beim erneuten Öffnen wiederherstellen. Auch der Wechsel über Diagrammbalken wird gespeichert; ohne verfügbaren Browserspeicher bleibt die Bedienung möglich.
 
 ### Bugfixes
 
