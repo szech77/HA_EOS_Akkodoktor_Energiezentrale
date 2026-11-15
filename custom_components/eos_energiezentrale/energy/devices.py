@@ -121,6 +121,8 @@ class DeviceSite(BatteryDriver):
                 return measurements[key].value if key in measurements else None
             snapshots.append({'name':row['name'],'id':row['id'],'battery':row['kind']=='battery',
                 'capacity_wh':row.get('capacity_wh'),'solar':get('solar'),'ac':get('inverter_ac'),
+                'measurements':{key:get(key) for key in ('solar','inverter_ac','house_total','grid')
+                                if key in driver.measurement_keys},
                 'soc':value.soc if isinstance(value,BatteryReading) else None,
                 'read_error':read_error,'read_diagnostics':deepcopy(getattr(driver,'read_diagnostics',None)),
                 'telemetry_status':deepcopy(getattr(driver,'telemetry_status',[])),

@@ -173,6 +173,7 @@ def test_direct_consumption_flows_through_device_manager_and_duplicate_gx_is_rej
              'capacity_wh':10000,'charge_w':5000,'discharge_w':5000,'grid_source':True}
         site=DeviceSite(None,[row])
         assert site.read({},NOW).measurements['house_total'].value==6000
+        assert site.site_summary['devices'][0]['measurements']=={'solar':2000,'house_total':6000,'grid':1000}
         site.apply(command('grid_charge',2000,0),{})
         assert target(server)==3000
         with pytest.raises(ValueError):DeviceSite(None,[row,{**row,'id':'second'}])
@@ -192,6 +193,7 @@ def test_device_read_failure_identifies_register_and_clears_after_recovery(addre
         assert sample.soc is None and sample.measurements['solar'].value is None
         failed=site.site_summary['devices'][0]
         assert not failed['available'] and failed['read_error']=='ModbusError'
+        assert failed['measurements']=={'solar':None,'house_total':None,'grid':None}
         assert failed['read_diagnostics']['failure']=={'type':'ModbusError','stage':stage,
             'unit':100,'address':address,'count':count,'exception_code':None}
         server.registers[address]=original
