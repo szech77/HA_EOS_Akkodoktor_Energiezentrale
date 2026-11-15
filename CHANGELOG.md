@@ -20,6 +20,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 - Alle drei Victron-Plugins gezielt auf Fehlerprotokollierung prüfen und ergänzen: fehlende HA-Entitäten, falsche Einheiten und veraltete Messungen unterscheiden; Fehler beim Ermitteln von Leistungsgrenzen, bei ESS-Prüfungen, Schreibbestätigungen und Gerätefreigaben mit Plugin, Vorgang und sicherem Register- bzw. Parameterkontext protokollieren. Steuerfehler erst nach erfolgreichem entsprechenden Vorgang auflösen; Konfigurationsfehler mit betroffenen Feldnamen kennzeichnen.
 
+- Deye-Modbus, Generic-Speicher/-Wechselrichter/-Wallbox und Fronius über HA um konkrete Lese-, Konfigurations- und Steuerfehlerkontexte ergänzen. Deye-Registerfehler und abgelehnte Teilwerte sowie fehlgeschlagene Aktivierung und Rücksetzung getrennt erfassen. HA-Quellenursachen und feste Steuerparameter erhalten; Fronius-Wartefristen und noch unbestätigte Phasenumschaltungen korrekt im Fehlerverlauf berücksichtigen. Gültige Nullwerte und abgewählte optionale Quellen weiterhin akzeptieren.
+
 ### Breaking Changes
 
 - Keine.

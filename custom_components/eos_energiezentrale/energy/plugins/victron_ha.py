@@ -7,7 +7,7 @@ from ..contracts import BatteryDriver,BatteryFeatures,BatteryReading,PluginInfo,
 from ..device_io import confirmed_state,DeviceNotReady
 from ..domain import number
 from ..plugin_parameters import parameters
-from ..plugin_diagnostics import plugin_operation
+from ..plugin_diagnostics import plugin_operation, entity_reading
 from ..failures import PluginParameterError
 
 
@@ -62,20 +62,7 @@ class VictronHA(BatteryDriver):
         self.measurement_keys=BatteryDriver.measurement_keys+tuple(key for key in ('grid','solar','house_total','inverter_ac') if self.ids[key])
 
     def _source(self,states,now,key,kind,age,measurements):
-        entity=self.ids[key];row=states.get(entity,{})
-        value=reading(states,entity,now,kind,age)
-        stamp=report_time(states,entity)
-        unit=row.get('attributes',{}).get('unit_of_measurement')
-        if kind=='soc' and unit!='%': value=None
-        if value is None:
-            reason=('entity_missing' if entity not in states else
-                'state_unavailable' if row.get('state') in (None,'unknown','unavailable') else
-                'invalid_value' if number(row.get('state')) is None else
-                'sample_missing' if stamp is None else 'future_sample' if stamp>now else
-                'stale' if (now-stamp).total_seconds()>=age else 'unit_invalid')
-            for measurement in measurements:
-                self._source_problems[measurement]={'reason':reason,'max_age_s':age}
-        return value
+        return entity_reading(self,states,now,key,kind,age,measurements,{'%'} if kind=='soc' else None)
 
     def _read(self,states,now):
         self._source_problems={}

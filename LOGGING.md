@@ -81,6 +81,22 @@ unterschiedliche Ursachen erkennbar. Ein erfolgreicher Leseabruf bestätigt kein
 fehlgeschlagenen Steuerbefehl; erst der erfolgreiche jeweilige Vorgang behebt ihn.
 Diese Prüfung nutzt simulierte GX-/HA-Antworten und ersetzt keinen Hardwaretest.
 
+Deye-Modbus protokolliert für Speicher und PV-Wechselrichter den fehlgeschlagenen
+Leseabschnitt, die konfigurierte Unit-ID, Registeradresse, Anzahl und gegebenenfalls
+den Modbus-Ausnahme-Code. Ungültige Teilwerte behalten ihre Feldadresse; gültige
+übrige Werte bleiben erhalten. Fernsteuerung, Leistungsgrenzen und Freigabe werden
+als eigene Vorgänge überwacht. Schlägt nach einer Aktivierung auch das Rücksetzen
+fehl, bleiben beide Ursachen getrennt sichtbar.
+
+Generic-Speicher, -Wechselrichter und -Wallbox sowie Fronius über HA unterscheiden
+fehlende Entitäten, nicht verfügbare Zustände, ungültige Einheiten und veraltete
+Messungen. Wallbox-Steuerdaten nennen nur feste Parameter wie `current` oder
+`phase_feedback`, niemals Entitätsnamen. Steuerfehler enthalten den jeweiligen
+Vorgang und Prüfschritt. Normales Warten auf Phasenrückmeldung bleibt fehlerfrei;
+eine zuvor fehlgeschlagene Umschaltung wird erst durch bestätigte Phasen behoben.
+Fronius behält seine Wartefrist für modusabhängige Leistungsentitäten bei und
+protokolliert sowohl das Warten als auch den Ablauf der Bestätigungsfrist.
+
 Fehler beim Laden von Plugins, bei der Integrationseinrichtung und in den nativen
 HA-Konfigurationsdialogen werden ebenfalls im Backend erfasst. Bei einem ungültigen
 Plugin-Parameter wird dessen Feldname statt seines Inhalts protokolliert. Aktive
@@ -127,6 +143,19 @@ the Modbus register or fixed HA control parameter and validation step. Missing
 entities, unavailable states, invalid units and stale samples have distinct causes.
 A successful read cannot resolve a failed command; only that operation's success
 resolves it. Simulated GX/HA regression tests do not replace hardware testing.
+
+Deye storage and PV drivers include the failed read stage, configured unit ID,
+register address/count and Modbus exception code when available. Invalid partial
+values retain their field address while other valid readings remain available.
+Remote control, power limits and release have separate incidents. A failed
+activation and a failed cleanup retain both causes independently.
+
+Generic storage/inverter/wallbox drivers and Fronius HA distinguish missing entities,
+unavailable states, invalid units and stale samples. Wallbox control diagnostics
+use fixed parameter names, never entity IDs. Command failures include the operation
+and validation step. Normal pending phase feedback is not an error and cannot
+resolve a previously failed switch. Fronius retains its mode-dependent limit wait
+period and logs both the pending control and confirmation timeout.
 
 Browser-only failures stay in the browser. They are neither queued nor forwarded
 to the backend after reconnect/restart. Old reports from cached previous panels are

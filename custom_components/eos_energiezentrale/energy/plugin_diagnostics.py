@@ -3,6 +3,26 @@ from datetime import datetime
 from functools import wraps
 from .contracts import BatteryReading, WallboxReading, PluginInfo
 from .status import IssueLog, failure_details
+from .clients import reading, report_time
+from .domain import number
+
+
+def entity_reading(plugin, states, now, key, kind, age, measurements, units=None):
+    """Keep the original HA read contract and retain only its safe failure cause."""
+    entity=plugin.ids[key];row=states.get(entity,{})
+    value=reading(states,entity,now,kind,age)
+    stamp=report_time(states,entity)
+    if units is not None and row.get('attributes',{}).get('unit_of_measurement') not in units:
+        value=None
+    if value is None:
+        reason=('entity_missing' if entity not in states else
+            'state_unavailable' if row.get('state') in (None,'unknown','unavailable') else
+            'invalid_value' if number(row.get('state')) is None else
+            'sample_missing' if stamp is None else 'future_sample' if stamp>now else
+            'stale' if (now-stamp).total_seconds()>=age else 'unit_invalid')
+        for measurement in measurements:
+            plugin._source_problems[measurement]={'reason':reason,'max_age_s':age}
+    return value
 
 
 def partial_read_failure(plugin, error, stage):
@@ -11,7 +31,7 @@ def partial_read_failure(plugin, error, stage):
         failures.append({**failure_details(error), 'stage':stage})
 
 
-def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=(), stage=None, scope=None, group='read', status=None, include_partial=True, context=None, failure_code='plugin_read_failed', severity='warning'):
+def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=(), control_problems=(), stage=None, scope=None, group='read', status=None, include_partial=True, context=None, failure_code='plugin_read_failed', severity='warning'):
     info = getattr(plugin, 'info', None)
     if not isinstance(info, PluginInfo) or info.identifier in {'none','devices'}:
         return
@@ -36,7 +56,8 @@ def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=
             'plugin_measurements_incomplete' if missing or controls else None)
     log.update(group, [{'id':group, 'code':code, 'plugin':info.identifier, 'severity':severity,
         'scope':scope or getattr(plugin, 'diagnostic_scope', 'plugin/' + info.kind),
-        'measurements':sorted(missing), 'missing_controls':sorted(controls), 'source_problems':list(problems), 'details':details}]
+        'measurements':sorted(missing), 'missing_controls':sorted(controls), 'source_problems':list(problems),
+        'control_problems':list(control_problems), 'details':details}]
         if code else [])
     plugin.telemetry_status = log.diagnostics()['active']
 
@@ -46,15 +67,23 @@ def plugin_operation(operation):
     def decorate(method):
         @wraps(method)
         def checked(plugin, *args, **kwargs):
+            previous=getattr(plugin,'_operation_context',{})
             plugin._operation_context = {}
             scope = getattr(plugin, 'diagnostic_scope', 'plugin/' + plugin.info.kind) + '/' + operation
             try:
                 result = method(plugin, *args, **kwargs)
             except Exception as error:
+                context=getattr(error,'_plugin_failure_context',None)
+                if context is None:
+                    error._plugin_failure_context=context=dict(plugin._operation_context)
                 report_plugin_read(plugin, error=error, group=operation, scope=scope, include_partial=False,
-                    context={'stage':operation, **plugin._operation_context}, failure_code='plugin_operation_failed', severity='error')
+                    context={'stage':operation, **context}, failure_code='plugin_operation_failed', severity='error')
                 raise
-            report_plugin_read(plugin, group=operation, context={}, include_partial=False)
+            finally:
+                plugin._operation_context=previous
+            # False means that phase feedback is still pending, not confirmed.
+            if result is not False:
+                report_plugin_read(plugin, group=operation, context={}, include_partial=False)
             return result
         return checked
     return decorate
@@ -103,5 +132,7 @@ def checked_plugin_read(plugin, now, collect):
             'sample_missing' if not isinstance(stamp, datetime) or stamp.utcoffset() is None else
             'future_sample' if stamp > now else 'stale' if (now-stamp).total_seconds() >= age else 'invalid_value')
         problems.append({'measurement':key,'reason':reason,'max_age_s':age})
-    report_plugin_read(plugin, missing, controls=controls, problems=problems, status=status)
+    report_plugin_read(plugin, missing, controls=controls, problems=problems, status=status,
+        control_problems=getattr(plugin,'_control_problems',()) if controls or status in {'unknown','unavailable','error'} else (),
+        context=next((problem for problem in problems if 'address' in problem),None))
     return result
