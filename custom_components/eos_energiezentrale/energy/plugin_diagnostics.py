@@ -1,5 +1,6 @@
 """Plugin read incidents, including partial/empty returns, without private data."""
 from datetime import datetime
+from functools import wraps
 from .contracts import BatteryReading, WallboxReading, PluginInfo
 from .status import IssueLog, failure_details
 
@@ -10,7 +11,7 @@ def partial_read_failure(plugin, error, stage):
         failures.append({**failure_details(error), 'stage':stage})
 
 
-def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=(), stage=None, scope=None, group='read', status=None, include_partial=True):
+def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=(), stage=None, scope=None, group='read', status=None, include_partial=True, context=None, failure_code='plugin_read_failed', severity='warning'):
     info = getattr(plugin, 'info', None)
     if not isinstance(info, PluginInfo) or info.identifier in {'none','devices'}:
         return
@@ -23,19 +24,40 @@ def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=
         details = dict(partial[0])
     if stage:
         details['stage'] = stage
-    context = getattr(plugin, 'read_diagnostics', None)
-    if isinstance(context, dict) and isinstance(context.get('failure'), dict):
-        details.update({key:context['failure'][key] for key in ('stage','unit','address','count','exception_code')
-                        if key in context['failure']})
-    code = ('plugin_read_failed' if error is not None or partial else
+    if context is None:
+        diagnostics = getattr(plugin, 'read_diagnostics', None)
+        context = diagnostics.get('failure') if isinstance(diagnostics, dict) else None
+    if isinstance(context, dict):
+        details.update({key:context[key] for key in ('stage','parameter','unit','address','count','exception_code')
+                        if key in context})
+    code = (failure_code if error is not None or partial else
             'plugin_device_error' if status == 'error' else
             'plugin_unavailable' if status in {'unknown','unavailable'} else
             'plugin_measurements_incomplete' if missing or controls else None)
-    log.update(group, [{'id':group, 'code':code, 'plugin':info.identifier,
+    log.update(group, [{'id':group, 'code':code, 'plugin':info.identifier, 'severity':severity,
         'scope':scope or getattr(plugin, 'diagnostic_scope', 'plugin/' + info.kind),
         'measurements':sorted(missing), 'missing_controls':sorted(controls), 'source_problems':list(problems), 'details':details}]
         if code else [])
     plugin.telemetry_status = log.diagnostics()['active']
+
+
+def plugin_operation(operation):
+    """Preserve command behavior while logging per-device failures and recovery."""
+    def decorate(method):
+        @wraps(method)
+        def checked(plugin, *args, **kwargs):
+            plugin._operation_context = {}
+            scope = getattr(plugin, 'diagnostic_scope', 'plugin/' + plugin.info.kind) + '/' + operation
+            try:
+                result = method(plugin, *args, **kwargs)
+            except Exception as error:
+                report_plugin_read(plugin, error=error, group=operation, scope=scope, include_partial=False,
+                    context={'stage':operation, **plugin._operation_context}, failure_code='plugin_operation_failed', severity='error')
+                raise
+            report_plugin_read(plugin, group=operation, context={}, include_partial=False)
+            return result
+        return checked
+    return decorate
 
 
 def checked_plugin_read(plugin, now, collect):
@@ -62,6 +84,10 @@ def checked_plugin_read(plugin, now, collect):
                getattr(result.measurements.get(key), 'value', None)) is None}
     problems = []
     for key in sorted(missing):
+        source_problem = getattr(plugin, '_source_problems', {}).get(key)
+        if source_problem:
+            problems.append({'measurement':key, **source_problem})
+            continue
         if key in core:
             attribute = {'battery_soc':'soc','battery_charge':'charge','battery_discharge':'discharge','car':'watts'}[key]
             value = getattr(raw, attribute)

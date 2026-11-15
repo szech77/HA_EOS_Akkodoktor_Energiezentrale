@@ -71,6 +71,16 @@ Anzahl und Ausnahme-Code übernommen, soweit vorhanden. Wiederholungen werden pr
 Plugin-Instanz dedupliziert; ein wieder erfolgreicher Abruf erzeugt einen INFO-Eintrag.
 Dies gilt auch für die bisherige Fronius-Speichergruppe.
 
+Alle drei Victron-Plugins (`victron_modbus`, `victron_ha`, `victron_gx`) erfassen
+zusätzlich Fehler beim Ermitteln der Leistungsgrenzen, bei ESS-Steuerbefehlen und
+bei der Gerätefreigabe als `plugin_operation_failed` mit eigenem Vorgang im Ort
+(z. B. `device/1/apply`). Modbusfehler enthalten den aktuellen Registerkontext,
+HA-basierte Fehler den festen Steuerparameter und Prüfschritt. Fehlende Entitäten,
+nicht verfügbare Zustände, falsche Einheiten und veraltete Messungen bleiben als
+unterschiedliche Ursachen erkennbar. Ein erfolgreicher Leseabruf bestätigt keinen
+fehlgeschlagenen Steuerbefehl; erst der erfolgreiche jeweilige Vorgang behebt ihn.
+Diese Prüfung nutzt simulierte GX-/HA-Antworten und ersetzt keinen Hardwaretest.
+
 Fehler beim Laden von Plugins, bei der Integrationseinrichtung und in den nativen
 HA-Konfigurationsdialogen werden ebenfalls im Backend erfasst. Bei einem ungültigen
 Plugin-Parameter wird dessen Feldname statt seines Inhalts protokolliert. Aktive
@@ -109,6 +119,14 @@ charger controls are logged per instance, with plugin ID, ordinal scope and safe
 protocol context. Valid zero readings and disabled optional sources remain valid.
 Native configuration forms, plugin registration and integration setup log rejected
 configurations with parameter names, never parameter values.
+
+All three Victron plugins (`victron_modbus`, `victron_ha`, `victron_gx`) also log
+power-limit, ESS command and release failures as `plugin_operation_failed`, with
+the operation in the scope (for example `device/1/apply`). Safe details identify
+the Modbus register or fixed HA control parameter and validation step. Missing
+entities, unavailable states, invalid units and stale samples have distinct causes.
+A successful read cannot resolve a failed command; only that operation's success
+resolves it. Simulated GX/HA regression tests do not replace hardware testing.
 
 Browser-only failures stay in the browser. They are neither queued nor forwarded
 to the backend after reconnect/restart. Old reports from cached previous panels are
