@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.17.7 - 2026-11-15
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Dezimalwerte in nativen Plugin-Einstellungen zulassen. Die von Home Assistant vorbelegte Ganzzahl-Schrittweite durch freie Dezimaleingabe ersetzen, damit etwa Victron-Wirkungsgrade von 0,95 gespeichert werden können. Fachliche Wertebereiche und Ganzzahlvorgaben werden weiterhin unverändert im Backend geprüft.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.6 - 2026-11-15
 
 ### Features

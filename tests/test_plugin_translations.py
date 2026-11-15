@@ -1,9 +1,10 @@
 """Every bundled plugin's native form can be translated without changing values."""
 import json
 from pathlib import Path
+import pytest
 
 from custom_components.eos_energiezentrale.energy.drivers import BATTERY_DRIVERS, INVERTER_DRIVERS, WALLBOX_DRIVERS
-from custom_components.eos_energiezentrale.plugin_forms import plugin_object
+from custom_components.eos_energiezentrale.plugin_forms import plugin_object, configured
 
 
 def test_all_bundled_plugin_fields_and_choices_have_german_and_english_translations():
@@ -30,3 +31,23 @@ def test_all_bundled_plugin_fields_and_choices_have_german_and_english_translati
                         assert set(options)==set(field.choices)
                         assert choice['options']==list(field.choices)
                         assert all(label.strip() for label in options.values())
+
+
+def test_native_plugin_numbers_allow_decimals_without_rounding_defaults():
+    for registry in (BATTERY_DRIVERS,INVERTER_DRIVERS,WALLBOX_DRIVERS):
+        for factory in registry.values():
+            control,defaults=plugin_object(factory)
+            fields=control.serialize()['selector']['object']['fields']
+            for field in factory.configuration:
+                if field.kind=='number':
+                    assert fields[field.key]['selector']['number']['step']=='any'
+                    if field.default is not None:
+                        assert defaults[field.key]==field.default
+
+
+def test_victron_fractional_efficiencies_save_while_hardware_constraints_stay_enforced():
+    factory=BATTERY_DRIVERS['victron_modbus']
+    values=configured(factory,{'host':'gx.test','charge_efficiency':.95,'discharge_efficiency':.955})
+    assert values['charge_efficiency']==.95 and values['discharge_efficiency']==.955
+    for change in ({'charge_efficiency':1.01},{'discharge_efficiency':0},{'port':502.5}):
+        with pytest.raises(ValueError): configured(factory,values | change)
