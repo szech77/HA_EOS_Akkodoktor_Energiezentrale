@@ -7,6 +7,8 @@ from ..contracts import BatteryDriver,BatteryFeatures,BatteryReading,PluginInfo,
 from ..device_io import confirmed_state,DeviceNotReady
 from ..domain import number
 from ..plugin_parameters import parameters
+from ..plugin_diagnostics import plugin_operation
+from ..failures import PluginParameterError
 
 
 class VictronHA(BatteryDriver):
@@ -44,31 +46,50 @@ class VictronHA(BatteryDriver):
         self.enabled=self.values['control_enabled']
         self.provides_site_consumption=bool(self.ids['house_total'])
         for key in ('charge_efficiency','discharge_efficiency'):
-            if not .1<=self.values[key]<=1: raise ValueError('Invalid Victron efficiency')
-        if not -1000000<=self.values['release_setpoint']<=1000000: raise ValueError('Invalid release setpoint')
+            if not .1<=self.values[key]<=1: raise PluginParameterError('Invalid Victron efficiency',key)
+        if not -1000000<=self.values['release_setpoint']<=1000000: raise PluginParameterError('Invalid release setpoint','release_setpoint')
         if self.enabled:
-            if any(not self.ids[key] for key in ('grid','ess_mode','grid_setpoint','charge_limit','discharge_limit')):
-                raise ValueError('Victron ESS control entities are required')
-            if any(self.values[key] is None or not -1<=self.values[key]<=1000000 for key in ('release_charge_limit','release_discharge_limit')):
-                raise ValueError('Explicit native release limits are required')
-        controls=[self.ids[key] for key in ('grid_setpoint','charge_limit','discharge_limit') if self.ids[key]]
-        if len(controls)!=len(set(controls)): raise ValueError('Victron controls must be distinct')
+            for key in ('grid','ess_mode','grid_setpoint','charge_limit','discharge_limit'):
+                if not self.ids[key]: raise PluginParameterError('Victron ESS control entities are required',key)
+            for key in ('release_charge_limit','release_discharge_limit'):
+                if self.values[key] is None or not -1<=self.values[key]<=1000000: raise PluginParameterError('Explicit native release limits are required',key)
+        controls=set()
+        for key in ('grid_setpoint','charge_limit','discharge_limit'):
+            if self.ids[key] and self.ids[key] in controls: raise PluginParameterError('Victron controls must be distinct',key)
+            if self.ids[key]: controls.add(self.ids[key])
         self.features=BatteryFeatures(charge_limit=self.enabled,discharge_limit=self.enabled,grid_charge=self.enabled,
                                       grid_discharge=self.enabled and self.values['grid_discharge_supported'])
         self.measurement_keys=BatteryDriver.measurement_keys+tuple(key for key in ('grid','solar','house_total','inverter_ac') if self.ids[key])
 
+    def _source(self,states,now,key,kind,age,measurements):
+        entity=self.ids[key];row=states.get(entity,{})
+        value=reading(states,entity,now,kind,age)
+        stamp=report_time(states,entity)
+        unit=row.get('attributes',{}).get('unit_of_measurement')
+        if kind=='soc' and unit!='%': value=None
+        if value is None:
+            reason=('entity_missing' if entity not in states else
+                'state_unavailable' if row.get('state') in (None,'unknown','unavailable') else
+                'invalid_value' if number(row.get('state')) is None else
+                'sample_missing' if stamp is None else 'future_sample' if stamp>now else
+                'stale' if (now-stamp).total_seconds()>=age else 'unit_invalid')
+            for measurement in measurements:
+                self._source_problems[measurement]={'reason':reason,'max_age_s':age}
+        return value
+
     def _read(self,states,now):
-        soc=reading(states,self.ids['soc'],now,'soc',self.soc_max_age)
-        if states.get(self.ids['soc'],{}).get('attributes',{}).get('unit_of_measurement')!='%': soc=None
-        power=reading(states,self.ids['battery_power'],now,'power',120)
+        self._source_problems={}
+        soc=self._source(states,now,'soc','soc',self.soc_max_age,('battery_soc',))
+        power=self._source(states,now,'battery_power','power',120,('battery_charge','battery_discharge'))
         sample=report_time(states,self.ids['battery_power'])
         return BatteryReading(soc,max(0,power)/self.values['charge_efficiency'] if power is not None else None,
             max(0,-power)*self.values['discharge_efficiency'] if power is not None else None,
             report_time(states,self.ids['soc']),sample,sample,
-            {key:Measurement(reading(states,self.ids[key],now,'power',45),report_time(states,self.ids[key]))
+            {key:Measurement(self._source(states,now,key,'power',45,(key,)),report_time(states,self.ids[key]))
              for key in ('grid','solar','house_total','inverter_ac') if self.ids[key]})
 
     def _number(self,key):
+        self._operation_context={'stage':'control_state','parameter':key}
         entity=self.ids[key];row=self.ha.state(entity);attrs=row.get('attributes',{})
         value,low,high,step=(number(row.get('state')),number(attrs.get('min')),number(attrs.get('max')),number(attrs.get('step')))
         if value is None: raise DeviceNotReady(entity)
@@ -78,12 +99,15 @@ class VictronHA(BatteryDriver):
 
     def _write(self,key,target,prepared=None):
         row,actual,low,high,step=prepared or self._number(key)
+        self._operation_context={'stage':'control_bounds','parameter':key}
         if not low-1e-6<=target<=high+1e-6: raise ValueError('Victron control target outside entity bounds')
         if abs(actual-target)<min(step/2,.0001): return
+        self._operation_context={'stage':'write_confirmation','parameter':key}
         entity=self.ids[key];self.ha.set(entity,target)
         confirmed_state(self.ha,entity,lambda value:number(value.get('state')) is not None and abs(float(value['state'])-target)<min(step/2,.0001))
 
     def _voltage(self,states,now):
+        self._operation_context={'stage':'control_state','parameter':'battery_voltage'}
         entity=self.ids['battery_voltage']
         row=states.get(entity,{})
         value=reading(states,entity,now,'voltage',120)
@@ -96,9 +120,12 @@ class VictronHA(BatteryDriver):
         unit=charge[0].get('attributes',{}).get('unit_of_measurement')
         scale=self._voltage(states,now)/self.values['charge_efficiency'] if unit=='A' else {'W':1,'kW':1000}.get(unit)
         outgoing={'W':1,'kW':1000}.get(discharge[0].get('attributes',{}).get('unit_of_measurement'))
-        if scale is None or outgoing is None: raise ValueError('Invalid Victron limit units')
+        if scale is None or outgoing is None:
+            self._operation_context={'stage':'control_units','parameter':'charge_limit' if scale is None else 'discharge_limit'}
+            raise ValueError('Invalid Victron limit units')
         return charge,discharge,scale,outgoing
 
+    @plugin_operation('power_limits')
     def power_limits(self,states):
         if not self.enabled: return None
         charge,discharge,incoming,outgoing=self._limits(states,datetime.now(timezone.utc))
@@ -109,20 +136,24 @@ class VictronHA(BatteryDriver):
         # Victron reserves -1 for unlimited. Rounding down must never produce it.
         return max(0,floor(min(control[3],watts/scale)/control[4]+1e-9)*control[4])
 
+    @plugin_operation('apply')
     def _apply(self,command,states):
         if not self.enabled: raise UnsupportedFeature('Victron is read-only')
         # Read one new state batch: stale input passed by a caller is never a write basis.
         states={entity:self.ha.state(entity) for entity in set(self.ids.values()) if entity}
         now=datetime.now(timezone.utc);reading_now=self.read(states,now)
+        self._operation_context={'stage':'telemetry'}
         grid=reading(states,self.ids['grid'],now,'power',45)
         if any(value is None for value in (reading_now.soc,reading_now.charge,reading_now.discharge,grid)):
             raise DeviceNotReady(self.ids['battery_power'])
         mode=self.ha.state(self.ids['ess_mode'])
+        self._operation_context={'stage':'ess_mode','parameter':'ess_mode'}
         if mode.get('state')!=self.values['ess_mode_option'] or mode.get('state') not in mode.get('attributes',{}).get('options',[]):
             raise ValueError('Victron requires the configured optimized ESS user mode')
         charge,discharge,incoming,outgoing=self._limits(states,now)
         setpoint=self._number('grid_setpoint')
         if setpoint[0].get('attributes',{}).get('unit_of_measurement')!='W': raise ValueError('Victron setpoint must use W')
+        self._operation_context={'stage':'dispatch'}
         if command.min_soc is None or command.max_soc is None: raise ValueError('Victron requires SoC bounds')
         charge_w=command.charge_w if reading_now.soc<command.max_soc else 0
         discharge_w=command.discharge_w if reading_now.soc>command.min_soc else 0
@@ -141,22 +172,26 @@ class VictronHA(BatteryDriver):
         if not setpoint[2]<=target<=setpoint[3]: raise ValueError('Victron setpoint cannot realise requested budget')
         # Validate all release values before taking ownership, including -1 sentinels.
         for key,control in (('release_charge_limit',charge),('release_discharge_limit',discharge),('release_setpoint',setpoint)):
+            self._operation_context={'stage':'release_bounds','parameter':key}
             if not control[2]<=self.values[key]<=control[3]: raise ValueError('Invalid Victron release value')
         self._write('charge_limit',charge_target,charge)
         self._write('discharge_limit',discharge_target,discharge)
         self._write('grid_setpoint',target,setpoint)
 
+    @plugin_operation('release')
     def _release(self,states):
         if not self.enabled: return
         # Explicit fallback values also work after a restart, when in-memory ownership is lost.
         controls={key:self._number(key) for key in ('grid_setpoint','charge_limit','discharge_limit')}
         values={'grid_setpoint':self.values['release_setpoint'],'charge_limit':self.values['release_charge_limit'],
                 'discharge_limit':self.values['release_discharge_limit']}
+        self._operation_context={'stage':'release_units'}
         if (controls['grid_setpoint'][0].get('attributes',{}).get('unit_of_measurement')!='W'
                 or controls['charge_limit'][0].get('attributes',{}).get('unit_of_measurement') not in {'A','W','kW'}
                 or controls['discharge_limit'][0].get('attributes',{}).get('unit_of_measurement') not in {'W','kW'}):
             raise ValueError('Invalid Victron release units')
         for key,control in controls.items():
+            self._operation_context={'stage':'release_bounds','parameter':key}
             if not control[2]<=values[key]<=control[3]: raise ValueError('Invalid Victron release value')
         self._write('grid_setpoint',values['grid_setpoint'],controls['grid_setpoint'])
         for key in ('charge_limit','discharge_limit'): self._write(key,values[key],controls[key])

@@ -14,6 +14,8 @@ from time import monotonic
 from .._modbus_tcp import ModbusTCP,ModbusError,checked_host
 from ..contracts import BatteryDriver,BatteryFeatures,BatteryReading,Measurement,PluginField,PluginInfo
 from ..plugin_parameters import parameters
+from ..plugin_diagnostics import plugin_operation
+from ..failures import PluginParameterError
 
 
 def signed(word):
@@ -46,22 +48,23 @@ class VictronModbus(BatteryDriver):
 
     def __init__(self,ha,params):
         self.values=v=parameters(self.configuration,params)
-        host=checked_host(v['host'])
-        if v['port']!=int(v['port']) or not 1<=v['port']<=65535: raise ValueError('Invalid Modbus port')
+        try: host=checked_host(v['host'])
+        except ValueError as error: raise PluginParameterError('Invalid Modbus host','host') from error
+        if v['port']!=int(v['port']) or not 1<=v['port']<=65535: raise PluginParameterError('Invalid Modbus port','port')
         self.client=ModbusTCP(host,int(v['port']),100)
         self.phases=int(v['phases']);self.enabled=v['control_enabled']
         self.read_diagnostics={'phases':self.phases,
             **{key:v[key] for key in ('control_enabled','grid_meter_enabled','read_consumption',
                 'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None}
         for key in ('charge_efficiency','discharge_efficiency'):
-            if not .1<=v[key]<=1: raise ValueError('Invalid Victron efficiency')
+            if not .1<=v[key]<=1: raise PluginParameterError('Invalid Victron efficiency',key)
         for key,low,high,step in (('max_charge_current',1,32766,1),('max_discharge_power',10,327660,10),
                                   ('release_setpoint',-1000000,1000000,1),
                                   ('release_charge_current',-1,32766,1),('release_discharge_power',0,327660,10)):
             value=v[key]
             if value is None:
-                if self.enabled: raise ValueError('Explicit Victron release limits are required')
-            elif not low<=value<=high or value/step!=int(value/step): raise ValueError('Invalid Victron limit')
+                if self.enabled: raise PluginParameterError('Explicit Victron release limits are required',key)
+            elif not low<=value<=high or value/step!=int(value/step): raise PluginParameterError('Invalid Victron limit',key)
         self.features=BatteryFeatures(self.enabled,self.enabled,self.enabled,self.enabled and v['grid_discharge_supported'])
         self.provides_site_consumption=v['grid_meter_enabled'] and v['read_consumption']
         self.pv_sources=tuple((address,count) for key,address,count in (
@@ -79,7 +82,11 @@ class VictronModbus(BatteryDriver):
     def _registers(self,address,count,stage):
         # Keep protocol context only; never retain returned words or raw errors.
         self._read_context={'stage':stage,'unit':100,'address':address,'count':count}
-        return self.client.read(address,count)
+        self._operation_context=dict(self._read_context)
+        try: return self.client.read(address,count)
+        except OSError as error:
+            self._operation_context['exception_code']=getattr(error,'exception_code',None)
+            raise
 
     def _identity(self):
         serial=struct.pack('>6H',*self._registers(800,6,'identity')).decode('ascii',errors='replace')
@@ -118,6 +125,7 @@ class VictronModbus(BatteryDriver):
             values['house_total']=self._power(817,self.phases)
         if monotonic()-start>10:
             self._read_context={'stage':'snapshot_timeout'}
+            self._operation_context=dict(self._read_context)
             raise ModbusError('GX telemetry snapshot took too long')
         charge=max(0,power)/self.values['charge_efficiency']
         discharge=max(0,-power)*self.values['discharge_efficiency']
@@ -135,28 +143,36 @@ class VictronModbus(BatteryDriver):
             raise
         return sample
 
+    @plugin_operation('power_limits')
     def power_limits(self,states):
         if not self.enabled: return None
         self._identity();voltage,_,_=self._battery()
         return min(1000000,self.values['max_charge_current']*voltage/self.values['charge_efficiency']),self.values['max_discharge_power']
 
     def _guard(self,*,grid=False):
-        settings=self.client.read(2900,3)
+        settings=self._registers(2900,3,'ess_mode')
         if settings[2] not in (1,2) or settings[0] not in (*range(2,9),10,11,12):
             raise ModbusError('GX requires optimized ESS Mode 2')
-        if self.client.read(5423,1)[0]!=0: raise ModbusError('Dynamic ESS must be disabled')
-        if grid and self.client.read(826,1)[0]!=1: raise ModbusError('GX grid input is not connected')
+        if self._registers(5423,1,'dynamic_ess')[0]!=0: raise ModbusError('Dynamic ESS must be disabled')
+        if grid and self._registers(826,1,'grid_connection')[0]!=1: raise ModbusError('GX grid input is not connected')
 
     def _write(self,address,words):
-        if self.client.read(address,len(words))!=words: self.client.write(address,words)
+        if self._registers(address,len(words),'control_readback')!=words:
+            self._operation_context={'stage':'write_confirmation','unit':100,'address':address,'count':len(words)}
+            try: self.client.write(address,words)
+            except OSError as error:
+                self._operation_context['exception_code']=getattr(error,'exception_code',None)
+                raise
 
     def _setpoint(self,watts):
         raw=int(watts)&0xffffffff
         self._write(2716,[raw>>16,raw&65535])
 
+    @plugin_operation('apply')
     def _apply(self,command,states):
         voltage,sample=self._telemetry(datetime.now(timezone.utc),control=True)
         self._guard(grid=True)
+        self._operation_context={'stage':'dispatch'}
         if command.min_soc is None or command.max_soc is None: raise ValueError('Victron requires SoC bounds')
         charge=command.charge_w if sample.soc<command.max_soc else 0
         discharge=command.discharge_w if sample.soc>command.min_soc else 0
@@ -176,6 +192,7 @@ class VictronModbus(BatteryDriver):
         self._write(2704,[outgoing//10])
         self._setpoint(target)
 
+    @plugin_operation('release')
     def _release(self,states):
         if not self.enabled: return
         self._identity();self._guard()

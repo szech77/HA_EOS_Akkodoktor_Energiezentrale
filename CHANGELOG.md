@@ -18,6 +18,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 - Alle Backend-Warnungen unabhängig vom geöffneten Panel mit gemeinsamen Kennungen, sicheren Fehlerursachen, HTTP-Status und begrenztem Aufrufpfad protokollieren. Ursachenwechsel und Behebungen festhalten, unveränderte Fehler deduplizieren und die letzten 50 Übergänge in Diagnosedaten bereitstellen. HTTP-Abrufzeiten bei DEBUG erfassen. Browserfehler ausschließlich lokal behandeln; keine Nachlieferung nach HA-Neustarts. Bereits gepufferte Meldungen alter Panels ohne Logeintrag verwerfen.
 - Plugin-Lesefehler, intern abgefangene Teilfehler, unvollständige oder ungültige Rückgaben und fehlende Wallbox-Steuerdaten an der gemeinsamen Leseschnittstelle protokollieren, auch bei anderweitig ausgewählten HA-Messquellen. Plugin und Geräteposition, betroffene Messwerttypen, Fehlerklasse und gegebenenfalls Modbus-Registerkontext ausgeben; Nullwerte und abgewählte optionale Quellen erhalten. Native Konfigurationsdialoge und fehlgeschlagene Integrationseinrichtung mit sicheren Ursachen und Parameterbezeichnungen protokollieren; keine Werte, Adressen oder Zugangsdaten übernehmen.
 
+- Alle drei Victron-Plugins gezielt auf Fehlerprotokollierung prüfen und ergänzen: fehlende HA-Entitäten, falsche Einheiten und veraltete Messungen unterscheiden; Fehler beim Ermitteln von Leistungsgrenzen, bei ESS-Prüfungen, Schreibbestätigungen und Gerätefreigaben mit Plugin, Vorgang und sicherem Register- bzw. Parameterkontext protokollieren. Steuerfehler erst nach erfolgreichem entsprechenden Vorgang auflösen; Konfigurationsfehler mit betroffenen Feldnamen kennzeichnen.
+
 ### Breaking Changes
 
 - Keine.
