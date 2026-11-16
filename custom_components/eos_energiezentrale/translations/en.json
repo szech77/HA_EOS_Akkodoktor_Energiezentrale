@@ -153,7 +153,7 @@
       "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
       "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection.",
       "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX.",
-      "victron_firmware_version": "Enter a valid Venus OS version, e.g. v3.66 or v3.70~42. Leave empty for automatic detection; control requires this value if the firmware register is unavailable."
+      "victron_firmware_version": "Enter a valid Venus OS version, e.g. v3.66 or v3.70~42. Leave empty for automatic detection or the assumed default 3.50–3.69. A detected version always takes precedence."
     },
     "abort": {
       "already_configured": "Already configured",
@@ -423,7 +423,7 @@
       "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
       "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection.",
       "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX.",
-      "victron_firmware_version": "Enter a valid Venus OS version, e.g. v3.66 or v3.70~42. Leave empty for automatic detection; control requires this value if the firmware register is unavailable."
+      "victron_firmware_version": "Enter a valid Venus OS version, e.g. v3.66 or v3.70~42. Leave empty for automatic detection or the assumed default 3.50–3.69. A detected version always takes precedence."
     },
     "abort": {
       "no_vehicles": "No vehicle configured",

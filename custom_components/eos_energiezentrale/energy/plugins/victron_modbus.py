@@ -148,17 +148,19 @@ class VictronModbus(BatteryDriver):
                 details.update(register_status='valid',source='detected',
                     detected=f'v{firmware>>8:x}.{firmware&255:02x}'+(f'~{beta:x}' if beta else ''))
                 details['version']=details['detected']
-        if self._firmware is None and self._configured_firmware:
-            self._firmware,details['version']=self._configured_firmware
-            details['source']='configured'
+        if self._firmware is None:
+            if self._configured_firmware:
+                self._firmware,details['version']=self._configured_firmware
+                details['source']='configured'
+            else:
+                # Explicit compatibility default, not a detected exact version.
+                self._firmware=0x0350
+                details.update(version='v3.50–v3.69',source='assumed')
         notice=(details['register_status'],details['source'],details['version'])
         if notice!=self._firmware_notice:
             if details['register_status']!='valid' or self._firmware_notice is not None:
                 _LOGGER.info('victron_modbus firmware_status: register=%s source=%s version=%s',*notice)
             self._firmware_notice=notice
-        if control and self._firmware is None:
-            self._firmware_error('firmware_version_required',
-                'Configure Venus OS version to select the correct ESS registers',parameter='firmware_version')
         if control and self._firmware<0x0350 and not self.values['legacy_control_enabled']:
             self._firmware_error('firmware_legacy_opt_in_required','Older Venus OS requires explicit legacy ESS control permission')
         if control:

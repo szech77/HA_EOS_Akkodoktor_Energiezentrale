@@ -10,14 +10,14 @@ from custom_components.eos_energiezentrale.energy.drivers import BATTERY_DRIVERS
 from test_victron_modbus import gx,command,NOW,target
 
 
-def test_reserved_firmware_register_does_not_hide_valid_measurements_or_invent_a_version():
+def test_reserved_firmware_register_does_not_hide_measurements_and_labels_assumed_range():
     with gx(control_enabled=False) as (driver,server,_):
         server.registers.update({834:65535,835:65535})
         sample=driver.read({},NOW)
         assert sample.soc==60 and sample.measurements['solar'].value==2000
         assert driver.read_diagnostics['failure'] is None
         assert driver.read_diagnostics['firmware']=={
-            'version':None,'source':'unknown','configured':None,'detected':None,
+            'version':'v3.50–v3.69','source':'assumed','configured':None,'detected':None,
             'register_status':'reserved','raw_words':[65535,65535]}
         assert not server.writes and not driver.telemetry_status
 
@@ -36,20 +36,23 @@ def test_explicit_version_selects_correct_ess_registers_when_firmware_is_reserve
         assert driver.read_diagnostics['firmware']['detected'] is None
 
 
-def test_unknown_firmware_blocks_every_control_path_before_any_write_and_names_configuration():
-    with gx(legacy_control_enabled=True) as (driver,server,_):
+def test_missing_firmware_defaults_to_modern_control_without_configuration_or_legacy_opt_in():
+    with gx() as (driver,server,_):
         server.registers.update({834:65535,835:65535})
-        for run in (lambda:driver.power_limits({}),lambda:driver.apply(command(),{}),lambda:driver.release({})):
-            with pytest.raises(ModbusError,match='Configure Venus OS version'):run()
-        assert not server.writes
-        assert all(issue['details']['stage']=='firmware_version_required' for issue in driver.telemetry_status)
-        assert all(issue['details']['parameter']=='firmware_version' for issue in driver.telemetry_status)
+        assert driver.power_limits({})==(5000,5000)
+        driver.apply(command('grid_charge',2000,0),{})
+        assert (2716,[0,3000]) in server.writes
+        driver.release({})
+        assert target(server)==50
+        assert not any(address==2700 for _,_,address,_ in server.requests)
+        assert not driver.telemetry_status
         assert driver.read({},NOW).soc==60
 
 
 @pytest.mark.parametrize('code',[2,10,11,None])
-def test_only_explicit_unsupported_firmware_register_allows_manual_version_fallback(code):
-    with gx(firmware_version='v3.66') as (driver,server,_):
+@pytest.mark.parametrize('version',[None,'v3.66'])
+def test_only_explicit_unsupported_firmware_register_allows_version_fallback(code,version):
+    with gx(firmware_version=version) as (driver,server,_):
         original=driver.client.read
         def read(address,count):
             if address==834:
@@ -63,6 +66,7 @@ def test_only_explicit_unsupported_firmware_register_allows_manual_version_fallb
                 assert target(server)==3000
                 assert driver.read_diagnostics['firmware']['register_status']=='unsupported'
                 assert driver.read_diagnostics['firmware']['raw_words'] is None
+                assert driver.read_diagnostics['firmware']['source']==('configured' if version else 'assumed')
             else:
                 with pytest.raises(OSError):driver.read({},NOW)
                 with pytest.raises(OSError):driver.apply(command(),{})
@@ -81,6 +85,17 @@ def test_detected_firmware_takes_precedence_and_reports_both_versions_after_upgr
         assert driver.read_diagnostics['firmware']=={
             'version':'v3.74~42','source':'detected','configured':'v3.66','detected':'v3.74~42',
             'register_status':'valid','raw_words':[0x0374,0x42]}
+
+
+def test_detected_version_replaces_assumed_range_when_it_becomes_available():
+    with gx() as (driver,server,_):
+        server.registers.update({834:65535,835:65535})
+        driver.read({},NOW)
+        assert driver.read_diagnostics['firmware']['source']=='assumed'
+        server.registers.update({834:0x0374,835:0})
+        driver.read({},NOW)
+        assert driver.read_diagnostics['firmware']['version']=='v3.74'
+        assert driver.read_diagnostics['firmware']['source']=='detected'
 
 
 def test_manual_newer_version_cannot_override_detected_legacy_firmware_without_opt_in():
