@@ -18,6 +18,9 @@ def device_diagnostics(data):
             'available':device.get('available'),'read_error':device.get('read_error'),
             'configuration':{key:details[key] for key in ('phases','control_enabled','legacy_control_enabled','grid_meter_enabled',
                 'read_consumption','dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled') if key in details},
+            **({'firmware':{key:details['firmware'][key] for key in (
+                'version','source','detected','configured','register_status','raw_words') if key in details['firmware']}}
+                if isinstance(details.get('firmware'),dict) else {}),
             'failure':{key:failure[key] for key in ('type','stage','unit','address','count','exception_code')
                 if key in failure} if isinstance(failure,dict) else None})
     return result

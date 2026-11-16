@@ -25,6 +25,15 @@ def signed(word):
     return word-65536 if word>=32768 else word
 
 
+def configured_firmware(value):
+    if value in (None,''):return None
+    match=re.fullmatch(r'v?([1-9])\.([0-9]{1,2})(?:~([0-9]{1,2}))?',value)
+    if not match:raise PluginParameterError('Expected Venus OS version such as v3.66','firmware_version')
+    major,minor,beta=match.groups()
+    version=f'v{major}.{int(minor):02d}'+(f'~{int(beta)}' if beta is not None else '')
+    return int(major+f'{int(minor):02d}',16),version
+
+
 class VictronModbus(BatteryDriver):
     info=PluginInfo('victron_modbus','Victron GX direct Modbus TCP','battery')
     uses_dispatch_context=True
@@ -32,6 +41,7 @@ class VictronModbus(BatteryDriver):
     configuration=(
         PluginField('host','GX hostname / IP','text'),
         PluginField('port','GX Modbus TCP port','number',default=502),
+        PluginField('firmware_version','Venus OS version if automatic detection is unavailable (e.g. v3.66)','text',required=False),
         PluginField('phases','System phases','choice',default='3',choices=('1','3')),
         PluginField('grid_meter_enabled','Provide common grid / consumption measurements','boolean',default=True),
         PluginField('read_consumption','Read system AC consumption','boolean',default=True),
@@ -58,9 +68,12 @@ class VictronModbus(BatteryDriver):
         self.client=ModbusTCP(host,int(v['port']),100)
         self.phases=int(v['phases']);self.enabled=v['control_enabled']
         self._firmware=None;self._legacy_warning=False;self._legacy_guard_warning=False
+        self._configured_firmware=configured_firmware(v['firmware_version'])
+        self._firmware_notice=None
         self.read_diagnostics={'phases':self.phases,
             **{key:v[key] for key in ('control_enabled','legacy_control_enabled','grid_meter_enabled','read_consumption',
-                'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None}
+                'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None,
+            'firmware':self._firmware_diagnostics()}
         for key in ('charge_efficiency','discharge_efficiency'):
             if not .1<=v[key]<=1: raise PluginParameterError('Invalid Victron efficiency',key)
         for key,low,high,step in (('max_charge_current',1,32766,1),('max_discharge_power',10,327660,10),
@@ -93,23 +106,61 @@ class VictronModbus(BatteryDriver):
             self._operation_context['exception_code']=getattr(error,'exception_code',None)
             raise
 
+    def _firmware_diagnostics(self):
+        return {'version':None,'source':'unknown','detected':None,
+            'configured':self._configured_firmware[1] if self._configured_firmware else None,
+            'register_status':'unread','raw_words':None}
+
+    def _firmware_error(self,stage,message,*,parameter=None):
+        self._read_context={'stage':stage,'unit':100,'address':834,'count':2}
+        if parameter:self._read_context['parameter']=parameter
+        self._operation_context=dict(self._read_context)
+        raise ModbusError(message)
+
     def _identity(self,*,control=False):
+        self._firmware=None
+        details=self.read_diagnostics['firmware']=self._firmware_diagnostics()
         serial=struct.pack('>6H',*self._registers(800,6,'identity')).decode('ascii',errors='replace')
         if not re.fullmatch('[0-9a-fA-F]{12}',serial):
             raise ModbusError('Expected Victron GX system serial')
-        # GX publishes a 32-bit version: BCD major/minor in the high word,
-        # beta/revision in the low word. Older releases can provide telemetry
-        # without the volatile ESS setpoint introduced in Venus OS 3.50.
-        firmware,_=self._registers(834,2,'firmware')
-        if not 0x0100<=firmware<=0x0999 or any((firmware>>shift)&15>9 for shift in (0,4,8)):
-            self._read_context['stage']='firmware_invalid'
-            self._operation_context=dict(self._read_context)
-            raise ModbusError('Invalid GX firmware version')
-        self._firmware=firmware
-        if control and firmware<0x0350 and not self.values['legacy_control_enabled']:
-            self._read_context['stage']='firmware_legacy_opt_in_required'
-            self._operation_context=dict(self._read_context)
-            raise ModbusError('Older Venus OS requires explicit legacy ESS control permission')
+        # Register 834/835 was added in Venus 3.70, independently of the
+        # volatile ESS setpoint introduced in 3.50. Older reserved ranges
+        # return 0xffff words; this is not an old firmware version.
+        try:
+            words=self._registers(834,2,'firmware')
+        except ModbusError as error:
+            details['register_status']='unsupported' if error.exception_code==2 else 'transport_error'
+            if error.exception_code!=2:raise
+        except OSError:
+            details['register_status']='transport_error'
+            raise
+        else:
+            details['raw_words']=list(words)
+            if words==[65535,65535]:
+                details['register_status']='reserved'
+            else:
+                firmware,beta=words
+                if (not 0x0100<=firmware<=0x0999 or any((firmware>>shift)&15>9 for shift in (0,4,8))
+                        or beta>0x99 or any((beta>>shift)&15>9 for shift in (0,4))):
+                    details['register_status']='invalid'
+                    self._firmware_error('firmware_invalid','Invalid GX firmware version')
+                self._firmware=firmware
+                details.update(register_status='valid',source='detected',
+                    detected=f'v{firmware>>8:x}.{firmware&255:02x}'+(f'~{beta:x}' if beta else ''))
+                details['version']=details['detected']
+        if self._firmware is None and self._configured_firmware:
+            self._firmware,details['version']=self._configured_firmware
+            details['source']='configured'
+        notice=(details['register_status'],details['source'],details['version'])
+        if notice!=self._firmware_notice:
+            if details['register_status']!='valid' or self._firmware_notice is not None:
+                _LOGGER.info('victron_modbus firmware_status: register=%s source=%s version=%s',*notice)
+            self._firmware_notice=notice
+        if control and self._firmware is None:
+            self._firmware_error('firmware_version_required',
+                'Configure Venus OS version to select the correct ESS registers',parameter='firmware_version')
+        if control and self._firmware<0x0350 and not self.values['legacy_control_enabled']:
+            self._firmware_error('firmware_legacy_opt_in_required','Older Venus OS requires explicit legacy ESS control permission')
         if control:
             # Do not take control if the configured native return value cannot
             # later be restored using the selected firmware's register format.

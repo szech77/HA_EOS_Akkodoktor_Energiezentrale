@@ -152,7 +152,8 @@
       "victron_ac_pv_output_enabled": "Read AC PV on inverter output: use a valid on/off selection.",
       "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
       "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection.",
-      "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX."
+      "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX.",
+      "victron_firmware_version": "Enter a valid Venus OS version, e.g. v3.66 or v3.70~42. Leave empty for automatic detection; control requires this value if the firmware register is unavailable."
     },
     "abort": {
       "already_configured": "Already configured",
@@ -421,7 +422,8 @@
       "victron_ac_pv_output_enabled": "Read AC PV on inverter output: use a valid on/off selection.",
       "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
       "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection.",
-      "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX."
+      "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX.",
+      "victron_firmware_version": "Enter a valid Venus OS version, e.g. v3.66 or v3.70~42. Leave empty for automatic detection; control requires this value if the firmware register is unavailable."
     },
     "abort": {
       "no_vehicles": "No vehicle configured",
@@ -854,6 +856,9 @@
         },
         "port": {
           "name": "GX Modbus TCP port"
+        },
+        "firmware_version": {
+          "name": "Venus OS version if automatic detection is unavailable (e.g. v3.66)"
         },
         "phases": {
           "name": "System phases"

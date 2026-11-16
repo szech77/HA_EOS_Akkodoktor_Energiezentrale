@@ -152,7 +152,8 @@
       "victron_ac_pv_output_enabled": "AC-PV am Wechselrichterausgang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden.",
-      "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen."
+      "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen.",
+      "victron_firmware_version": "Eine gültige Venus-OS-Version eintragen, z. B. v3.66 oder v3.70~42. Leer lassen für automatische Erkennung; bei fehlendem Firmware-Register ist die Angabe für die Steuerung erforderlich."
     },
     "abort": {
       "already_configured": "Bereits eingerichtet",
@@ -421,7 +422,8 @@
       "victron_ac_pv_output_enabled": "AC-PV am Wechselrichterausgang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden.",
-      "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen."
+      "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen.",
+      "victron_firmware_version": "Eine gültige Venus-OS-Version eintragen, z. B. v3.66 oder v3.70~42. Leer lassen für automatische Erkennung; bei fehlendem Firmware-Register ist die Angabe für die Steuerung erforderlich."
     },
     "abort": {
       "no_vehicles": "Kein Fahrzeug vorhanden",
@@ -854,6 +856,9 @@
         },
         "port": {
           "name": "GX-Modbus-TCP-Port"
+        },
+        "firmware_version": {
+          "name": "Venus-OS-Version bei fehlender automatischer Erkennung (z. B. v3.66)"
         },
         "phases": {
           "name": "Phasenanzahl der Anlage"

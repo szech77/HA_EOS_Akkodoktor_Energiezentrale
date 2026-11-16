@@ -621,7 +621,9 @@ function batteryGroupDetails(group) {
       const labels={solar:th('measurement.solar'),inverter_ac:th('measurement.inverter_ac'),house_total:th('measurement.house_total'),grid:th('measurement.grid')};
       const values=Object.entries(measurements).map(([key,value])=>`<span>${labels[key]??html(key)}: <strong>${valid(value)&&value<0?'− ':''}${html(power(value))}</strong></span>`);
       if(device.battery)values.push(`<span>${th('measurement.battery_soc')}: <strong>${html(percent(device.soc))}</strong></span>`);
-      return `<dt>${html(device.name==='primary'?t('plugin.primary_inverter'):device.name)}</dt><dd><div>${device.plugin?html(device.plugin.name)+' · ':''}${th(device.battery?'plugin.site_storage':'plugin.site_pv')} · ${th(device.available?'plugin.site_available':'plugin.site_unavailable')}</div><div class="device-measurements">${values.join('')}</div></dd>`;
+      const firmware=device.read_diagnostics?.firmware;
+      const firmwareDetails=firmware?`<div>${th('plugin.firmware')}: <strong>${html(firmware.version??t('plugin.firmware_unknown'))}</strong> (${th('plugin.firmware_source_'+firmware.source)}) · ${th('plugin.firmware_register')}: ${th('plugin.firmware_register_'+firmware.register_status)}${Array.isArray(firmware.raw_words)?' ['+html(firmware.raw_words.map(word=>'0x'+word.toString(16).toUpperCase().padStart(4,'0')).join(' '))+']':''}</div>`:'';
+      return `<dt>${html(device.name==='primary'?t('plugin.primary_inverter'):device.name)}</dt><dd><div>${device.plugin?html(device.plugin.name)+' · ':''}${th(device.battery?'plugin.site_storage':'plugin.site_pv')} · ${th(device.available?'plugin.site_available':'plugin.site_unavailable')}</div><div class="device-measurements">${values.join('')}</div>${firmwareDetails}</dd>`;
     }).join('')+
     (group.approximate?`<dt>${th('plugin.pool_approximation')}</dt><dd>${th('plugin.pool_limitations')}</dd>`:'')+
     (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');

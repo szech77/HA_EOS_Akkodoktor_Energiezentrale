@@ -376,6 +376,18 @@
     "forecast.updated": "Weather retrieved",
     "forecast.refresh": "Refresh",
     "action.weather_forecast": "Weather forecast",
-    "forecast.open_failed": "The weather/PV forecast could not be opened. Click the weather icon again or reload the interface."
+    "forecast.open_failed": "The weather/PV forecast could not be opened. Click the weather icon again or reload the interface.",
+    "plugin.firmware": "Venus OS",
+    "plugin.firmware_unknown": "unknown",
+    "plugin.firmware_source_detected": "automatically detected",
+    "plugin.firmware_source_configured": "manually configured",
+    "plugin.firmware_source_unknown": "no version available",
+    "plugin.firmware_register": "firmware register",
+    "plugin.firmware_register_valid": "available",
+    "plugin.firmware_register_reserved": "reserved, no version available",
+    "plugin.firmware_register_unsupported": "unsupported",
+    "plugin.firmware_register_invalid": "invalid value",
+    "plugin.firmware_register_unread": "not queried yet",
+    "plugin.firmware_register_transport_error": "query failed"
   }
 }
