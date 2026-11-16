@@ -255,3 +255,45 @@ test('overview uses backend totals and never merges browser-held historical repo
  assert.match(elements['day-balance'].innerHTML,/2 kWh.*Ø 50 ct\/kWh/);
  assert.doesNotMatch(elements['day-balance'].innerHTML,/999/);
 });
+
+test('the overview opens a total consumption report even without optional consumers',()=>{
+ const {ctx,elements}=uiFixture();
+ ctx.consumerEnabled=()=>false;
+ ctx.snapshot.accounting={consumers:{house:{total:amount(4,1)}}};
+ vm.runInContext('dayBalance()',ctx);
+ assert.match(elements['day-balance'].innerHTML,/href="#usage\/total"[^>]*><span>billing.total_consumption<\/span>/);
+ assert.equal(vm.runInContext("billingRoute('usage/total')",ctx),true);
+ assert.equal(vm.runInContext("billingRoute('usage/heat')",ctx),false);
+ assert.equal(vm.runInContext("billingRoute('usage/invalid')",ctx),false);
+});
+
+test('total consumption renders backend totals, costs and charts for every period',()=>{
+ for(const period of ['day','month','year']){
+  const {ctx,elements}=uiFixture();
+  const stamp=period==='day'?'2026-02-01T00:00:00+00:00':period==='month'?'2026-02-01':'2026-02';
+  // Deliberately different raw consumers: the UI must render only backend totals.
+  ctx.report={date:'2026-02-01',end:'2026-03-01',hours:[stamp],
+   consumers:{house:{total:amount(999,999),bins:[]}},
+   total:{total:ctx.backendAmount(amount(4,1)),bins:[{time:stamp,...ctx.backendAmount(amount(4,1))}]}};
+  ctx.backendReport=value=>value;
+  ctx.cards=values=>{ctx.kpis=values;return '';};ctx.period=period;
+  vm.runInContext("billing.data=report;billing.period=period;billing.date=report.date;usageDetail('total',false)",ctx);
+  assert.equal(elements['usage-title'].textContent,'billing.total_consumption · billing.title');
+  assert.equal(elements['usage-back'].href,'#overview');
+  assert.equal(ctx.kpis[0][1],'4 kWh');
+  assert.match(ctx.kpis[1][1],/1,00/);
+  assert.match(ctx.kpis[1][2],/Ø 25 ct\/kWh/);
+  assert.match(elements['usage-charts'].innerHTML,/<title>[^<]*4 kWh[^<]*Ø 25 ct\/kWh/);
+  assert.match(elements['usage-table'].innerHTML,/25 ct\/kWh/);
+  assert.doesNotMatch(elements['usage-charts'].innerHTML,/999 kWh|999,00/);
+ }
+});
+
+test('total consumption is labelled in German and English',()=>{
+ for(const [language,label] of [['de','Gesamtverbrauch'],['en','Total consumption']]){
+  const ctx=fixture();
+  const messages=JSON.parse(fs.readFileSync(path.join(__dirname,`../custom_components/eos_energiezentrale/energy/i18n/${language}.json`),'utf8')).messages;
+  ctx.t=key=>messages[key];
+  assert.equal(vm.runInContext("billingName('total')",ctx),label);
+ }
+});

@@ -35,14 +35,34 @@ def amount_values(amount):
 def report_values(report, consumers=('house', 'heat', 'car')):
     result = deepcopy(report)
     total = empty()
+    bins = {}
     overview = {}
+    unbinned = {'seconds': 0, 'estimated_seconds': 0}
+
+    def combine(target, amount):
+        # Consumers run concurrently; their observation times must not be added.
+        seconds = max(target.get('seconds', 0), amount.get('seconds', 0))
+        estimated = max(target.get('estimated_seconds', 0), amount.get('estimated_seconds', 0))
+        add(target, complete_sources(amount))
+        target.update(seconds=seconds, estimated_seconds=estimated)
+
     for key, entry in result.get('consumers', {}).items():
         if key in consumers:
             add(total, complete_sources(entry['total']))
+            for row in entry.get('bins', []):
+                combine(bins.setdefault(row['time'], empty()), row)
+            # Cached daily history may supply totals without their chart bins.
+            for field in unbinned:
+                missing = entry['total'].get(field, 0) - sum(row.get(field, 0) for row in entry.get('bins', []))
+                unbinned[field] = max(unbinned[field], missing)
             overview[key] = amount_values(entry['total'])
         entry['total'] = amount_values(entry['total'])
         entry['bins'] = [amount_values(row) for row in entry.get('bins', [])]
+    for field, missing in unbinned.items():
+        total[field] = sum(row[field] for row in bins.values()) + missing
     result['overview'] = {'consumers': overview, 'total': amount_values(total)}
+    result['total'] = {'total': amount_values(total),
+                       'bins': [amount_values({'time': key, **bins[key]}) for key in sorted(bins)]}
     return result
 
 

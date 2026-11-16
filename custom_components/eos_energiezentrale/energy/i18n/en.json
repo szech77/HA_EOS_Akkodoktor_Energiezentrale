@@ -220,6 +220,7 @@
     "control.cached_eos": "Active · cached EOS plan, up to 5 minutes",
     "billing.today": "Today · consumption & costs",
     "billing.total": "Total",
+    "billing.total_consumption": "Total consumption",
     "billing.observed": "From measurements and marked estimates",
     "billing.estimated_duration": "Estimated portion: {hours} h",
     "billing.partial": "Gaps up to 6 hours are interpolated between readings (≈). Longer consumption gaps remain open; the known battery price is retained. Unpriced costs remain a subtotal.",

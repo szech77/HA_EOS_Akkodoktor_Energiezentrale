@@ -222,6 +222,12 @@ class EnergyAccountingRequirements(TestCase):
         self.assertAlmostEqual(result["consumers"]["house"]["total"]["kwh"],.09)
         self.assertAlmostEqual(result["consumers"]["house"]["total"]["seconds"],180)
         self.assertTrue(result["reconstructed"])
+        from custom_components.eos_energiezentrale.energy.report_values import report_values
+        total = report_values(result)['total']
+        self.assertAlmostEqual(total['total']['kwh'], .18)
+        self.assertAlmostEqual(total['total']['cost_eur'], .027)
+        self.assertAlmostEqual(sum(row['kwh'] for row in total['bins']), .18)
+        self.assertAlmostEqual(total['total']['seconds'], 180)
 
     def test_influx_range_is_validated_before_interpolating_query(self):
         from urllib.parse import parse_qs,urlsplit
