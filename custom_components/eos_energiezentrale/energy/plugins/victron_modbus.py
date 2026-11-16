@@ -1,4 +1,4 @@
-"""Direct GX system registers / ESS Mode 2, Venus OS >= 3.50.
+"""Direct GX system telemetry, with ESS Mode 2 control on Venus OS >= 3.50.
 
 Register types/scales: Victron CCGX-Modbus-TCP-register-list-3.81.xlsx.
 https://www.victronenergy.com/live/ess:ess_mode_2_and_3
@@ -88,13 +88,22 @@ class VictronModbus(BatteryDriver):
             self._operation_context['exception_code']=getattr(error,'exception_code',None)
             raise
 
-    def _identity(self):
+    def _identity(self,*,control=False):
         serial=struct.pack('>6H',*self._registers(800,6,'identity')).decode('ascii',errors='replace')
         if not re.fullmatch('[0-9a-fA-F]{12}',serial):
             raise ModbusError('Expected Victron GX system serial')
-        firmware=self._registers(834,1,'firmware')[0]
-        if not 0x0350<=firmware<=0x0999:
-            raise ModbusError('Expected Victron GX system / Venus OS >= 3.50')
+        # GX publishes a 32-bit version: BCD major/minor in the high word,
+        # beta/revision in the low word. Older releases can provide telemetry
+        # without the volatile ESS setpoint introduced in Venus OS 3.50.
+        firmware,_=self._registers(834,2,'firmware')
+        if not 0x0100<=firmware<=0x0999 or any((firmware>>shift)&15>9 for shift in (0,4,8)):
+            self._read_context['stage']='firmware_invalid'
+            self._operation_context=dict(self._read_context)
+            raise ModbusError('Invalid GX firmware version')
+        if control and firmware<0x0350:
+            self._read_context['stage']='firmware_control_unsupported'
+            self._operation_context=dict(self._read_context)
+            raise ModbusError('ESS control requires Venus OS >= 3.50; telemetry remains supported')
 
     def _battery(self):
         voltage,_,power,soc=self._registers(840,4,'battery')
@@ -114,7 +123,7 @@ class VictronModbus(BatteryDriver):
         return sum(values)
 
     def _telemetry(self,now,*,control=False):
-        start=monotonic();self._identity()
+        start=monotonic();self._identity(control=control)
         voltage,power,soc=self._battery()
         values={}
         if self.pv_sources:
@@ -146,7 +155,7 @@ class VictronModbus(BatteryDriver):
     @plugin_operation('power_limits')
     def power_limits(self,states):
         if not self.enabled: return None
-        self._identity();voltage,_,_=self._battery()
+        self._identity(control=True);voltage,_,_=self._battery()
         return min(1000000,self.values['max_charge_current']*voltage/self.values['charge_efficiency']),self.values['max_discharge_power']
 
     def _guard(self,*,grid=False):
@@ -195,7 +204,7 @@ class VictronModbus(BatteryDriver):
     @plugin_operation('release')
     def _release(self,states):
         if not self.enabled: return
-        self._identity();self._guard()
+        self._identity(control=True);self._guard()
         # Explicit finite native power avoids the ambiguous -1 / 0.1 scaling
         # of legacy register 2704; no volatile process ownership is required.
         self._setpoint(self.values['release_setpoint'])
