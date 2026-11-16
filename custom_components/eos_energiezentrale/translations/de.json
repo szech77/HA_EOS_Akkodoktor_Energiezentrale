@@ -153,7 +153,7 @@
       "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen.",
-      "victron_firmware_version": "Eine gültige Venus-OS-Version eintragen, z. B. v3.66 oder v3.70~42. Leer lassen für automatische Erkennung; bei fehlendem Firmware-Register ist die Angabe für die Steuerung erforderlich."
+      "victron_firmware_version": "Eine gültige Venus-OS-Version eintragen, z. B. v3.66 oder v3.70~42. Leer lassen für automatische Erkennung bzw. die Standardannahme 3.50–3.69. Eine gelesene Version hat immer Vorrang."
     },
     "abort": {
       "already_configured": "Bereits eingerichtet",
@@ -423,7 +423,7 @@
       "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen.",
-      "victron_firmware_version": "Eine gültige Venus-OS-Version eintragen, z. B. v3.66 oder v3.70~42. Leer lassen für automatische Erkennung; bei fehlendem Firmware-Register ist die Angabe für die Steuerung erforderlich."
+      "victron_firmware_version": "Eine gültige Venus-OS-Version eintragen, z. B. v3.66 oder v3.70~42. Leer lassen für automatische Erkennung bzw. die Standardannahme 3.50–3.69. Eine gelesene Version hat immer Vorrang."
     },
     "abort": {
       "no_vehicles": "Kein Fahrzeug vorhanden",

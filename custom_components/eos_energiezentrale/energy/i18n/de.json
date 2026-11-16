@@ -388,6 +388,7 @@
     "plugin.firmware_register_unsupported": "nicht unterstützt",
     "plugin.firmware_register_invalid": "ungültiger Wert",
     "plugin.firmware_register_unread": "noch nicht abgefragt",
-    "plugin.firmware_register_transport_error": "Abfrage fehlgeschlagen"
+    "plugin.firmware_register_transport_error": "Abfrage fehlgeschlagen",
+    "plugin.firmware_source_assumed": "Standardannahme"
   }
 }

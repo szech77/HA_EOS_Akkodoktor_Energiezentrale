@@ -38,6 +38,9 @@ test('Victron firmware diagnostics show backend version, source and raw register
   assert.match(manual,/Venus OS: <strong>v3.66/);
   assert.match(manual,language==='de'?/manuell angegeben/:/manually configured/);
   assert.match(manual,/0xFFFF 0xFFFF/);
+  const assumed=render({version:'v3.50–v3.69',source:'assumed',register_status:'reserved',raw_words:[65535,65535]});
+  assert.match(assumed,/v3.50–v3.69/);
+  assert.match(assumed,language==='de'?/Standardannahme/:/assumed default/);
   const detected=render({version:'v3.74~42',source:'detected',register_status:'valid',raw_words:[0x0374,0x42]});
   assert.match(detected,/v3.74~42/);
   assert.match(detected,language==='de'?/automatisch erkannt/:/automatically detected/);

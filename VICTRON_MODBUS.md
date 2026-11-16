@@ -37,15 +37,18 @@ ausgewählten Messregister gültig antworten. Reservierte Firmwarewörter oder
 Modbus-Ausnahmecode 2 für dieses optionale Register sind erlaubt; andere
 Kommunikationsfehler und ungültige Versionscodierungen bleiben Fehler.
 
-Für die Steuerung eine fehlende Erkennung im Plugin-Feld **„Venus-OS-Version
-bei fehlender automatischer Erkennung“** ergänzen, beispielsweise **`v3.66`**.
-Die Version am GX unter Firmware nachsehen; nicht aus einem reservierten Wert
-ableiten. Eine tatsächlich erkannte Version hat Vorrang vor der manuellen
-Ersatzangabe. Ohne beide Angaben bleibt Steuerung einschließlich Rückgabe mit
-`firmware_version_required` gesperrt. Für v3.66 ist keine Legacy-Freigabe nötig.
+Die Auswahl hat eine feste Reihenfolge: **gelesene Version → manuelle Angabe →
+Standardannahme 3.50–3.69**. Bei fehlender Erkennung kann im Plugin-Feld
+**„Venus-OS-Version bei fehlender automatischer Erkennung“** die am GX geprüfte
+Version eingetragen werden, beispielsweise **`v3.66`**. Eine tatsächlich gelesene
+Version hat immer Vorrang, auch wenn weiterhin eine andere Version konfiguriert
+ist. Ohne beide Angaben verwendet das Plugin für Steuerung und Rückgabe den
+modernen Sollwert 2716/2717. Es behauptet dabei keine genaue Firmwareversion,
+sondern zeigt **`v3.50–v3.69` / Standardannahme** an. Für Anlagen vor 3.50 die
+tatsächliche Version manuell angeben und zusätzlich Legacy-Steuerung freigeben.
 
 Die Gerätdiagnose unter Einstellungen zeigt **Venus OS**, die Herkunft der
-Version (automatisch/manuell/unbekannt), den Registerstatus und vorhandene
+Version (automatisch/manuell/Standardannahme bzw. noch unbekannt), den Registerstatus und vorhandene
 Firmwarewörter in Hexadezimaldarstellung. Im HA-Diagnoseexport stehen diese Werte
 unter `devices[].firmware`: `version`, `source`, `detected`, `configured`,
 `register_status` und `raw_words`. Hostadressen und Seriennummern bleiben verborgen.
@@ -179,8 +182,8 @@ Port, Seriennummer, Kapazität, Messwerte und rohe Fehlermeldungen fehlen bewuss
 - `firmware` / 834–835: Firmwarefeld konnte nicht gelesen werden; Verbindung und
   Registerverfügbarkeit prüfen. Reservierte oder ausdrücklich nicht unterstützte
   Firmware-Register verhindern keine Messung. `firmware_invalid`: ungültige
-  Versionscodierung. `firmware_version_required`: Für die Steuerung fehlt eine
-  erkannte oder manuell angegebene Version.
+  Versionscodierung. Fehlt nur die Versionsangabe, gilt die manuelle Angabe oder
+  die Standardannahme 3.50–3.69.
   `firmware_legacy_opt_in_required`: Legacy-Freigabe für Steuerung vor 3.50 fehlt.
 - `legacy_setpoint_range` / 2700: Sollwert oder nativer Rückgabesollwert liegt
   außerhalb von −32768 bis 32767 W; kein Schreibzugriff erfolgt.
@@ -211,10 +214,13 @@ as v3.66 may return reserved words `0xFFFF/0xFFFF`. This does not imply missing
 measurement or ESS setpoint registers. Reserved words and an explicit illegal
 register response (code 2) allow telemetry without a known version. Transport
 failures, other exception codes and malformed version data still fail.
-For control, enter the actual version in the optional **Venus OS version if
-automatic detection is unavailable** field, e.g. `v3.66`. Detected versions take
-precedence over this fallback. Unknown versions block all control operations
-with `firmware_version_required`. Version 3.66 uses 2716/2717 without legacy opt-in.
+Selection order is **detected version → configured version → assumed default
+3.50–3.69**. The optional **Venus OS version if automatic detection is unavailable**
+field can supply an actual checked version, e.g. `v3.66`. A detected version always
+takes precedence, even if another version remains configured. Without either
+value, control and release use modern registers 2716/2717. Diagnostics explicitly
+show `v3.50–v3.69` with source `assumed`, rather than claiming an exact version.
+For firmware before 3.50, configure its actual version and enable legacy control.
 
 Settings display the effective version, its source, register status and raw
 firmware words. Downloaded HA diagnostics expose `devices[].firmware` with
