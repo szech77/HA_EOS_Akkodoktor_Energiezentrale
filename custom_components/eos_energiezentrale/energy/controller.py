@@ -10,7 +10,7 @@ from time import monotonic
 from .clients import reading
 from .domain import (BatteryCommand, battery_command, current_for_power, current_instruction, estimate_soc,
                      house_only, instant, next_departure, plan_series, pv_budget)
-from .history import History, forecast_rows
+from .history import History, forecast_rows, forecast_vehicle_resource, vehicle_forecast
 from .display import DisplayValues
 from .presentation import daily_pv_forecast, heat_utilization, power_references, weather_display
 from .plugin_registry import describe
@@ -42,6 +42,7 @@ class Controller:
         self.resource_plans = {}
         self.eos_failure_since = {}
         self.forecast = []
+        self.forecast_vehicle_resource = None
         self.forecast_failure_since = None
         self.forecast_failure = None
         self.errors = {}
@@ -275,11 +276,13 @@ class Controller:
             if error is not None:
                 raise error
             self.forecast = forecast_rows(solution, now)
+            self.forecast_vehicle_resource = forecast_vehicle_resource(solution)
             self.forecast_failure_since = None
             self.forecast_failure = None
             self.errors.pop("forecast", None)
         except Exception as error:
             self.forecast = []
+            self.forecast_vehicle_resource = None
             if self.forecast_failure_since is None or now < self.forecast_failure_since:
                 self.forecast_failure_since = now
             self.forecast_failure = type(error).__name__
@@ -748,6 +751,8 @@ class Controller:
             plan = self.plan_for(opts["battery_resource"],now)
             generated = instant(plan.get("generated_at")) if isinstance(plan, dict) else None
             current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
+            vehicle_resource=opts.get('vehicle_resource') if opts.get('wallbox_type')!='none' else None
+            forecast=vehicle_forecast(self.forecast,self.forecast_vehicle_resource,vehicle_resource) if current else []
             driver=getattr(self.config.battery,'driver',self.config.battery)
             plugin_reads={kind:getattr(value,'telemetry_status',[]) for kind,value in
                           (('battery',driver),('wallbox',self.config.wallbox))}
@@ -778,7 +783,7 @@ class Controller:
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "plugins": {"battery":describe(self.config.battery),"wallbox":describe(self.config.wallbox)},
                     "influx_configured": bool(self.config.influx.url),
-                    "forecast": self.forecast if current else [], "pv_daily_forecast": daily_pv_forecast(self.forecast if current else [], now, opts["timezone"]), "plan_end": plan_end.isoformat() if plan_end else None,
+                    "forecast": forecast, "pv_daily_forecast": daily_pv_forecast(self.forecast if current else [], now, opts["timezone"]), "plan_end": plan_end.isoformat() if plan_end else None,
                     "plan": {key: [{"time": item.when.isoformat(), "mode": item.mode, "factor": item.factor}
                                    for item in plan_series(self.plan_for(opts[resource],now), opts[resource])]
                              if (key != "car" or opts.get("wallbox_type") != "none") and self.order_for(opts[resource],now) is not None else [] for key, resource in (("battery", "battery_resource"),

@@ -7,6 +7,27 @@ from datetime import timedelta
 from .domain import house_only, instant, number
 
 
+def forecast_vehicle_resource(solution):
+    """Resolve the owner of GENETIC's single EV curve from its recorded IDs."""
+    if not isinstance(solution,dict):return None
+    params=solution.get('parameters')
+    params=params if isinstance(params,dict) else {}
+    identifiers=[]
+    for block in (params.get('ev'),params.get('eauto'),solution.get('ev_obj'),solution.get('eauto_obj')):
+        if not isinstance(block,dict) or 'device_id' not in block:continue
+        value=block['device_id']
+        if not isinstance(value,str) or not value.strip():return None
+        identifiers.append(value)
+    owners=set(identifiers)
+    return next(iter(owners)) if len(owners)==1 else None
+
+
+def vehicle_forecast(rows,owner,resource):
+    """Never expose a shared/foreign EV curve as this vehicle's prediction."""
+    include=bool(owner) and owner==resource
+    return [{key:value for key,value in row.items() if include or key not in {'car','car_soc'}} for row in rows]
+
+
 def forecast_rows(solution, now):
     if not isinstance(solution, dict):
         return []
@@ -23,15 +44,19 @@ def forecast_rows(solution, now):
         series = mapping.get(key)
         return number(series[index]) if isinstance(series, list) and index < len(series) else None
 
+    def soc_at(key,index):
+        value=at(result,key,index)
+        return value if value is not None and 0<=value<=100 else None
+
     def power_from_soc(settings, key, index, bidirectional=False):
-        start_soc, end_soc = at(result, key, index), at(result, key, index + 1)
+        start_soc, end_soc = soc_at(key,index), soc_at(key,index+1)
         capacity = number(settings.get("capacity_wh"))
-        if start_soc is None or end_soc is None or not capacity:
+        if start_soc is None or end_soc is None or capacity is None or capacity<=0:
             return None
         delta = (end_soc - start_soc) * capacity / 100 / hours
         efficiency = number(settings.get("charging_efficiency"))
         if delta >= 0:
-            return delta / efficiency if efficiency else None
+            return delta / efficiency if efficiency is not None and 0<efficiency<=1 else None
         return delta * (number(settings.get("discharging_efficiency")) or 1) if bidirectional else 0
 
     rows = []
@@ -50,9 +75,9 @@ def forecast_rows(solution, now):
                "price": price * 100000 if price is not None else None,
                "grid": (grid_import - export) / hours if grid_import is not None and export is not None else None,
                "battery": power_from_soc(battery, "battery_soc_per_hour", i, True),
-               "battery_soc": at(result, "battery_soc_per_hour", i),
+               "battery_soc": soc_at("battery_soc_per_hour",i),
                "car": power_from_soc(ev, "ev_soc_per_hour", i),
-               "car_soc": at(result, "ev_soc_per_hour", i)}
+               "car_soc": soc_at("ev_soc_per_hour",i)}
         if any(value is not None for key, value in row.items() if key not in {"time", "end"}):
             rows.append(row)
     return rows
