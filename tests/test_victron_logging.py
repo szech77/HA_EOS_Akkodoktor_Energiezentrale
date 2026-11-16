@@ -16,7 +16,7 @@ from test_victron_modbus import gx, command
 import test_victron_ha as shared
 
 
-@pytest.mark.parametrize('address,stage,count',[(800,'identity',6),(834,'firmware',1),(840,'battery',4),
+@pytest.mark.parametrize('address,stage,count',[(800,'identity',6),(834,'firmware_invalid',2),(840,'battery',4),
     (850,'dc_pv',1),(808,'ac_pv_output',3),(811,'ac_pv_input',3),(820,'grid',3),(817,'consumption',3)])
 def test_modbus_device_failure_logs_context_once_then_recovers(address,stage,count,caplog):
     caplog.set_level(logging.INFO,logger='custom_components.eos_energiezentrale')

@@ -7,7 +7,10 @@ unverändert verfügbar. Die synchronen Modbus-Abfragen laufen im HA-Executor.
 
 ## Voraussetzungen und Einrichtung
 
-1. Venus OS **3.50 oder neuer**, GX mit Systemdienst und unterstützten Registern.
+1. GX mit Venus OS, Systemdienst und unterstützten Registern. Auch Versionen
+   **vor 3.50** können Messwerte liefern; maßgeblich sind die tatsächlich
+   verfügbaren und gültigen ausgewählten Messregister. ESS-Steuerung benötigt
+   weiterhin **3.50 oder neuer**.
    Am GX unter **Einstellungen → Dienste → Modbus TCP** den Dienst aktivieren.
    Nur im vertrauenswürdigen lokalen Netz verwenden; keine Internetfreigabe.
 2. Unter **Inbetriebnahme → Geräte → Gerät hinzufügen → Speicher/Hybrid-Wechselrichter**
@@ -31,6 +34,14 @@ jede braucht eine passende lokale Netzmessung für ihren ESS-Regelkreis. Die
 übergreifende EOS-Planung bleibt eine gemeinsame Speicher-Näherung.
 
 ## ESS-Steuerung einschalten
+
+Die Steuerung einschließlich Geräterückgabe setzt Venus OS **ab 3.50** voraus.
+Ältere Versionen bleiben lesend nutzbar. Bei eingeschalteter Steuerfreigabe werden
+Steuervorgänge dort vor dem ersten Schreiben mit `firmware_control_unsupported`
+abgewiesen; der Messwertabruf bleibt möglich. Den Schalter für ESS-Steuerung auf
+älteren Versionen ausgeschaltet lassen. Es gibt keinen automatischen Rückfall
+auf die persistenten Sollwertregister 2700/2703: Wiederholte Änderungen würden
+Flash-Schreibzugriffe und VRM-Protokollierung verursachen.
 
 Vorausgesetzt werden eingerichtetes ESS, **aktives DVCC**, funktionierende
 Netzmessung und Netzbetrieb. DVCC wird vom Plugin nicht eingeschaltet und kann
@@ -71,7 +82,7 @@ Ausfallstrategie sind weiter erforderlich.
 
 | Funktion | Register (Unit-ID 100, direkte Adressen) | Format |
 | --- | --- | --- |
-| GX-Identität / Firmware | 800–805 / 834 | MAC-Seriennummer / hexadezimale Version |
+| GX-Identität / Firmware | 800–805 / 834–835 | MAC-Seriennummer / 32-Bit-Version, BCD-Haupt-/Nebenversion im hohen Wort, Revision im niedrigen Wort |
 | Akkuspannung / DC-Leistung / SoC | 840 / 842 / 843 | 0,1 V / signed W, positiv Laden / % |
 | DC-PV | 850 | W |
 | AC-PV Ausgang / Eingang | 808–810 / 811–813 | W je konfigurierter Phase |
@@ -124,7 +135,11 @@ Modbus-Ausnahmecode. Nach erfolgreichem Lesen wird der Fehler gelöscht. Host,
 Port, Seriennummer, Kapazität, Messwerte und rohe Fehlermeldungen fehlen bewusst.
 
 - `identity` / 800: Verbindung, aktivierten Modbus-TCP-Dienst und Systemdienst
-  auf Unit-ID 100 prüfen. `firmware` / 834: Venus OS ab 3.50 erforderlich.
+  auf Unit-ID 100 prüfen.
+- `firmware` / 834–835: Firmwarefeld konnte nicht gelesen werden; Verbindung und
+  Registerverfügbarkeit prüfen. `firmware_invalid`: ungültige Versionscodierung.
+  `firmware_control_unsupported`: Messungen auf älterem Venus OS möglich, aber
+  Steuerung und Geräterückgabe benötigen Venus OS ab 3.50.
 - `battery` / 840–843: Akkuspannung, Leistung und SoC am GX prüfen.
 - `dc_pv` / 850, `ac_pv_input` / 811–813, `ac_pv_output` / 808–810:
   eingeschaltete Quellen mit der tatsächlichen Installation abgleichen.
@@ -147,7 +162,9 @@ dieser Fehler ist getrennt von der Victron-Leseverbindung zu untersuchen.
 
 ## English setup
 
-Enable Modbus TCP on a GX running Venus OS 3.50 or newer. Add **Victron GX direct
+Enable Modbus TCP on a GX running Venus OS. Versions before 3.50 can supply
+telemetry when all selected system registers are available and valid; missing
+or invalid registers still reject the snapshot. Add **Victron GX direct
 Modbus TCP** as one storage device in EOS; configure its host/port, one or three
 phases and only the installed DC/AC PV sources. System/ESS Unit-ID is fixed at 100.
 No HA sensor entities or other Victron integration are required. Mark the device
@@ -156,6 +173,11 @@ Do not count a GX installation or its PV sources twice.
 
 Read-only is the default. Control requires optimized ESS Mode 2, DVCC enabled,
 grid-connected operation, working grid measurements and Dynamic ESS disabled.
+Control and release additionally require Venus OS 3.50 or newer. On older
+versions, control operations fail before any write with the logged stage
+`firmware_control_unsupported`; telemetry remains available. Leave control
+disabled on these versions. There is no fallback to persistent legacy setpoint
+registers 2700/2703, to avoid repeated flash writes and VRM logging.
 DVCC enablement cannot be independently verified through these registers; check
 it on the GX before enabling control. Other controllers must not write the same
 settings. No ESS mode or protection settings are changed.
@@ -192,9 +214,12 @@ availability and read error type. Victron also reports phase/source/control
 selection under `configuration` and the failed stage, unit, register range and
 optional numeric Modbus exception code under `failure`. A successful read clears
 the error. Hosts, ports, serials, capacities, measurements and raw errors are
-excluded. Stages identify identity (800), firmware (834), battery (840–843), DC PV
+excluded. Stages identify identity (800), firmware (834–835), battery (840–843), DC PV
 (850), AC-input PV (811–813), AC-output PV (808–810), grid (820–822), consumption
 (817–819), or a snapshot exceeding ten seconds (`snapshot_timeout`).
+The full 32-bit firmware field is read with BCD major/minor in the high word and
+revision in the low word. Invalid firmware encoding is reported as
+`firmware_invalid`, separately from transport errors and unsupported control.
 
 Check the GX's last Modbus TCP error as well: code 2 means an illegal register
 address, 10 an unavailable gateway path and 11 an unknown target device. Any failed

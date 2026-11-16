@@ -18,7 +18,7 @@ from test_fronius_modbus import inverter
 def gx(**options):
     with inverter() as (_,server):
         server.registers={800+i:value for i,value in enumerate(struct.unpack('>6H',b'c0619ab01234'))}
-        server.registers.update({834:0x0350,840:500,841:0,842:0,843:60,850:2000,826:1,
+        server.registers.update({834:0x0350,835:0,840:500,841:0,842:0,843:60,850:2000,826:1,
             2704:450,2705:60,2716:0,2717:50,2900:10,2901:200,2902:1,5423:0})
         for address in range(808,823):server.registers[address]=0
         server.registers.update({808:400,811:600,817:1000,818:2000,819:3000,820:1000})
@@ -69,6 +69,55 @@ def test_read_only_default_has_no_control_and_release_never_writes():
         with pytest.raises(UnsupportedFeature):driver.apply(command(),{})
         driver.release({})
         assert not server.requests and not server.writes
+
+
+@pytest.mark.parametrize('firmware',[0x0174,0x0260,0x0290,0x0300,0x0334,0x0349])
+def test_older_gx_versions_supply_all_selected_measurements_without_control_registers(firmware):
+    with gx(control_enabled=False,ac_pv_input_enabled=True,ac_pv_output_enabled=True) as (driver,server,_):
+        server.registers[834]=firmware
+        # No legacy setpoint or Dynamic ESS register is needed for telemetry.
+        for address in (2700,2703,2716,2717,5423):server.registers.pop(address,None)
+        sample=driver.read({},NOW)
+        assert sample.soc==60
+        assert {key:item.value for key,item in sample.measurements.items()}=={
+            'solar':3000,'grid':1000,'house_total':6000}
+        assert (3,100,834,2) in server.requests
+        assert all(address<2700 for _,_,address,_ in server.requests)
+        driver.release({})
+        assert not server.writes and driver.read_diagnostics['failure'] is None
+
+
+def test_legacy_firmware_blocks_all_control_paths_before_writes_but_still_reads(caplog):
+    with gx() as (driver,server,_):
+        server.registers[834]=0x0349
+        assert driver.read({},NOW).soc==60
+        for operation in (lambda:driver.power_limits({}),lambda:driver.apply(command(),{}),lambda:driver.release({})):
+            with pytest.raises(ModbusError,match='ESS control requires Venus OS >= 3.50'):
+                operation()
+        assert not server.writes
+        assert 'firmware_control_unsupported' in caplog.text
+        assert driver.read({},NOW).soc==60
+        # A later firmware upgrade restores control without bypassing guards.
+        server.registers[834]=0x0350
+        driver.apply(command('grid_charge',2000,0),{})
+        assert target(server)==3000
+
+
+@pytest.mark.parametrize('firmware',[0,0xffff,0x03fa,0x0a00])
+def test_malformed_firmware_is_not_accepted_as_legacy_telemetry(firmware):
+    with gx(control_enabled=False) as (driver,server,_):
+        server.registers[834]=firmware
+        with pytest.raises(ModbusError,match='Invalid GX firmware'):
+            driver.read({},NOW)
+        assert driver.read_diagnostics['failure']['stage']=='firmware_invalid'
+        assert not server.writes
+
+
+def test_beta_revision_word_does_not_change_the_major_minor_control_threshold():
+    with gx() as (driver,server,_):
+        server.registers[835]=42
+        driver.apply(command('grid_charge',2000,0),{})
+        assert target(server)==3000
 
 
 @pytest.mark.parametrize('mode,charge,discharge,grid,battery,amps,outgoing,expected',[
@@ -180,7 +229,7 @@ def test_direct_consumption_flows_through_device_manager_and_duplicate_gx_is_rej
 
 
 @pytest.mark.parametrize('address,invalid,stage,count',[
-    (800,0,'identity',6),(834,0x0349,'firmware',1),(840,0,'battery',4),
+    (800,0,'identity',6),(834,0,'firmware_invalid',2),(840,0,'battery',4),
     (850,65535,'dc_pv',1),(820,32767,'grid',3),(817,65535,'consumption',3),
 ])
 def test_device_read_failure_identifies_register_and_clears_after_recovery(address,invalid,stage,count):

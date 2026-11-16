@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.18.1 - 2026-11-16
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Victron-GX-Messwerte auch mit Venus OS vor 3.50 lesen, sofern die ausgewählten Systemregister verfügbar und gültig sind. Das Firmwarefeld vollständig über Register 834/835 lesen und ungültige Versionscodierungen weiterhin ablehnen. ESS-Steuerung und Geräterückgabe bleiben wegen des erst ab 3.50 verfügbaren flüchtigen Netzsollwerts auf neuere Versionen begrenzt; ältere Versionen vor jedem Schreibzugriff mit der Logkennung `firmware_control_unsupported` ablehnen. Die Kennung `firmware_invalid` unterscheidet ungültige Firmwaredaten von Kommunikationsfehlern.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.18.0 - 2026-11-16
 
 ### Features
