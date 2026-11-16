@@ -151,7 +151,8 @@
       "victron_ac_pv_input_enabled": "Read AC PV on grid input: use a valid on/off selection.",
       "victron_ac_pv_output_enabled": "Read AC PV on inverter output: use a valid on/off selection.",
       "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
-      "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection."
+      "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection.",
+      "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX."
     },
     "abort": {
       "already_configured": "Already configured",
@@ -419,7 +420,8 @@
       "victron_ac_pv_input_enabled": "Read AC PV on grid input: use a valid on/off selection.",
       "victron_ac_pv_output_enabled": "Read AC PV on inverter output: use a valid on/off selection.",
       "victron_control_enabled": "Enable ESS Mode 2 control (requires DVCC): use a valid on/off selection.",
-      "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection."
+      "victron_grid_discharge_supported": "Allow forced battery export: use a valid on/off selection.",
+      "victron_legacy_control_enabled": "Legacy ESS control: use a valid on/off selection and confirm Dynamic ESS is disabled on the GX."
     },
     "abort": {
       "no_vehicles": "No vehicle configured",
@@ -873,6 +875,9 @@
         },
         "control_enabled": {
           "name": "Enable ESS Mode 2 control (requires DVCC)"
+        },
+        "legacy_control_enabled": {
+          "name": "Allow ESS control before Venus OS 3.50 (persistent writes; confirm Dynamic ESS is off)"
         },
         "max_charge_current": {
           "name": "Allowed system charge current (A DC)"

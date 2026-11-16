@@ -9,8 +9,8 @@ unverändert verfügbar. Die synchronen Modbus-Abfragen laufen im HA-Executor.
 
 1. GX mit Venus OS, Systemdienst und unterstützten Registern. Auch Versionen
    **vor 3.50** können Messwerte liefern; maßgeblich sind die tatsächlich
-   verfügbaren und gültigen ausgewählten Messregister. ESS-Steuerung benötigt
-   weiterhin **3.50 oder neuer**.
+   verfügbaren und gültigen ausgewählten Messregister. Für ESS-Steuerung vor
+   **3.50** ist zusätzlich die unten beschriebene Legacy-Freigabe erforderlich.
    Am GX unter **Einstellungen → Dienste → Modbus TCP** den Dienst aktivieren.
    Nur im vertrauenswürdigen lokalen Netz verwenden; keine Internetfreigabe.
 2. Unter **Inbetriebnahme → Geräte → Gerät hinzufügen → Speicher/Hybrid-Wechselrichter**
@@ -35,13 +35,21 @@ jede braucht eine passende lokale Netzmessung für ihren ESS-Regelkreis. Die
 
 ## ESS-Steuerung einschalten
 
-Die Steuerung einschließlich Geräterückgabe setzt Venus OS **ab 3.50** voraus.
-Ältere Versionen bleiben lesend nutzbar. Bei eingeschalteter Steuerfreigabe werden
-Steuervorgänge dort vor dem ersten Schreiben mit `firmware_control_unsupported`
-abgewiesen; der Messwertabruf bleibt möglich. Den Schalter für ESS-Steuerung auf
-älteren Versionen ausgeschaltet lassen. Es gibt keinen automatischen Rückfall
-auf die persistenten Sollwertregister 2700/2703: Wiederholte Änderungen würden
-Flash-Schreibzugriffe und VRM-Protokollierung verursachen.
+Ab Venus OS **3.50** verwendet die Steuerung den flüchtigen Sollwert 2716/2717.
+Für ältere Versionen zusätzlich **„ESS-Steuerung vor Venus OS 3.50 erlauben“**
+aktivieren und damit bestätigen, dass **Dynamic ESS am GX ausgeschaltet** ist.
+Die Freigabe ist standardmäßig aus; ohne sie bleibt Lesen möglich, Steuerung und
+Geräterückgabe werden mit `firmware_legacy_opt_in_required` abgewiesen.
+
+Der ältere Steuerpfad verwendet Register **2700**, mit ganzzahligen Sollwerten
+von **−32768 bis 32767 W**. Auch der native Rückgabesollwert muss in diesen Bereich
+passen; andernfalls wird die Steuerung vor dem ersten Schreiben abgelehnt
+(`legacy_setpoint_range`). Es gibt keine stille Begrenzung oder Rundung auf
+das gröber aufgelöste Register 2703. Geänderte alte Sollwerte werden dauerhaft
+gespeichert und können Flash-Schreibzugriffe und VRM-Protokollierung verursachen;
+unveränderte Werte werden nicht erneut geschrieben. `legacy_persistent_setpoint`
+weist im Backend einmal pro Plugin-Instanz darauf hin. Ein Update auf 3.50 oder
+neuer vermeidet diese Legacy-Sollwertschreibzugriffe.
 
 Vorausgesetzt werden eingerichtetes ESS, **aktives DVCC**, funktionierende
 Netzmessung und Netzbetrieb. DVCC wird vom Plugin nicht eingeschaltet und kann
@@ -49,7 +57,12 @@ Netzmessung und Netzbetrieb. DVCC wird vom Plugin nicht eingeschaltet und kann
 bestätigt daher, dass DVCC am GX geprüft wurde. Dynamic ESS und andere Regler für
 dieselben Stellwerte abschalten. Das Plugin prüft Dynamic-ESS-Modus 5423 = 0,
 ESS/Hub4-Modus 2902 = 1 oder 2 und optimierte BatteryLife-Zustände; es ändert
-diese Einstellungen nicht und wechselt nicht in Mode 3.
+diese Einstellungen nicht und wechselt nicht in Mode 3. Fehlt Register 5423 auf
+einem alten Server nachweislich (Modbus-Ausnahmecode 2), gilt ausschließlich nach
+Legacy-Freigabe die manuelle Bestätigung „Dynamic ESS ausgeschaltet“; dies wird
+als `legacy_dynamic_ess_manual` protokolliert. Ein aktiver Dynamic-ESS-Modus,
+Timeouts, andere Ausnahmecodes oder ein fehlendes Register ab 3.50 verhindern
+weiterhin Befehle. Externe Regler müssen auch auf alten Versionen ausgeschaltet sein.
 
 - `max_charge_current`: maximaler systemweiter DVCC-Ladestrom in **A DC**.
 - `max_discharge_power`: zulässige Entladeleistung in **W**, in 10-W-Schritten.
@@ -72,9 +85,9 @@ die weiteren Befehle. Eine gescheiterte Rückgabe bleibt als Fehler sichtbar.
 Die Rückgabe benötigt keine Akku-Leistungsmessung, prüft aber weiterhin GX und
 ESS/Dynamic ESS, damit fremde Regelmodi nicht überschrieben werden.
 
-Der flüchtige Netzsollwert 2716/2717 vermeidet wiederholte persistente Writes
-auf die alten Sollwertregister. Bei einem Kommunikationsausfall gibt es über
-diesen Weg jedoch **keinen garantierten automatischen Timeout** der Stellwerte.
+Der flüchtige Netzsollwert 2716/2717 ab 3.50 vermeidet wiederholte persistente
+Writes auf die alten Sollwertregister. Bei einem Kommunikationsausfall gibt es
+über beide Steuerpfade **keinen garantierten automatischen Timeout** der Stellwerte.
 Sie können am GX bestehen bleiben; Geräte-/BMS-Schutz und eine passende lokale
 Ausfallstrategie sind weiter erforderlich.
 
@@ -91,6 +104,7 @@ Ausfallstrategie sind weiter erforderlich.
 | Aktiver Eingang | 826 | 1 = Netz, vor Steuerbefehlen erforderlich |
 | Entladegrenze / DVCC-Ladestrom | 2704 / 2705 | W = signed Register × 10 / ganze A |
 | Flüchtiger Netzsollwert | 2716–2717 | signed 32-Bit W, höchstes Wort zuerst |
+| Älterer Netzsollwert, vor 3.50 mit Legacy-Freigabe | 2700 | signed 16-Bit W, persistent |
 
 Die verwendeten Leistungs-Messregister sind 16 Bit: Akkuleistung und Netzleistung
 je Phase müssen strikt zwischen −32768 und 32766 W liegen; PV/Verbrauch je Phase
@@ -138,8 +152,9 @@ Port, Seriennummer, Kapazität, Messwerte und rohe Fehlermeldungen fehlen bewuss
   auf Unit-ID 100 prüfen.
 - `firmware` / 834–835: Firmwarefeld konnte nicht gelesen werden; Verbindung und
   Registerverfügbarkeit prüfen. `firmware_invalid`: ungültige Versionscodierung.
-  `firmware_control_unsupported`: Messungen auf älterem Venus OS möglich, aber
-  Steuerung und Geräterückgabe benötigen Venus OS ab 3.50.
+  `firmware_legacy_opt_in_required`: Legacy-Freigabe für Steuerung vor 3.50 fehlt.
+- `legacy_setpoint_range` / 2700: Sollwert oder nativer Rückgabesollwert liegt
+  außerhalb von −32768 bis 32767 W; kein Schreibzugriff erfolgt.
 - `battery` / 840–843: Akkuspannung, Leistung und SoC am GX prüfen.
 - `dc_pv` / 850, `ac_pv_input` / 811–813, `ac_pv_output` / 808–810:
   eingeschaltete Quellen mit der tatsächlichen Installation abgleichen.
@@ -173,11 +188,21 @@ Do not count a GX installation or its PV sources twice.
 
 Read-only is the default. Control requires optimized ESS Mode 2, DVCC enabled,
 grid-connected operation, working grid measurements and Dynamic ESS disabled.
-Control and release additionally require Venus OS 3.50 or newer. On older
-versions, control operations fail before any write with the logged stage
-`firmware_control_unsupported`; telemetry remains available. Leave control
-disabled on these versions. There is no fallback to persistent legacy setpoint
-registers 2700/2703, to avoid repeated flash writes and VRM logging.
+Control and release before Venus OS 3.50 require the additional legacy-control
+opt-in, which confirms that Dynamic ESS is disabled on the GX. Without it,
+operations fail with `firmware_legacy_opt_in_required`; telemetry remains available.
+Legacy control uses persistent register 2700 in whole watts (−32768 to 32767).
+The target and native return value are checked before changing any limits;
+overflow fails with `legacy_setpoint_range`, without clamping, wrapping or
+coarse rounding through register 2703. Unchanged values are not rewritten.
+Changed legacy setpoints can cause flash writes and VRM logging; the backend
+logs `legacy_persistent_setpoint` once per plugin instance. Venus OS 3.50 and
+newer continue to use volatile 32-bit registers 2716/2717.
+Only an explicit illegal-register response (code 2) for Dynamic ESS register
+5423 on older firmware may use the legacy opt-in's manual confirmation instead;
+the backend logs `legacy_dynamic_ess_manual`. Active Dynamic ESS, transport
+failures, other exception codes and missing registers on modern firmware still
+block control. Other controllers must be disabled on legacy systems as well.
 DVCC enablement cannot be independently verified through these registers; check
 it on the GX before enabling control. Other controllers must not write the same
 settings. No ESS mode or protection settings are changed.

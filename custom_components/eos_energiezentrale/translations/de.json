@@ -151,7 +151,8 @@
       "victron_ac_pv_input_enabled": "AC-PV am Netzeingang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_ac_pv_output_enabled": "AC-PV am Wechselrichterausgang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
-      "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden."
+      "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen."
     },
     "abort": {
       "already_configured": "Bereits eingerichtet",
@@ -419,7 +420,8 @@
       "victron_ac_pv_input_enabled": "AC-PV am Netzeingang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_ac_pv_output_enabled": "AC-PV am Wechselrichterausgang auslesen: eine gültige Ein-/Aus-Auswahl verwenden.",
       "victron_control_enabled": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich): eine gültige Ein-/Aus-Auswahl verwenden.",
-      "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden."
+      "victron_grid_discharge_supported": "Erzwungene Speichereinspeisung erlauben: eine gültige Ein-/Aus-Auswahl verwenden.",
+      "victron_legacy_control_enabled": "Legacy-ESS-Steuerung: Eine gültige Ein-/Aus-Auswahl verwenden und Dynamic ESS am GX als ausgeschaltet bestätigen."
     },
     "abort": {
       "no_vehicles": "Kein Fahrzeug vorhanden",
@@ -873,6 +875,9 @@
         },
         "control_enabled": {
           "name": "ESS-Mode-2-Steuerung aktivieren (DVCC erforderlich)"
+        },
+        "legacy_control_enabled": {
+          "name": "ESS-Steuerung vor Venus OS 3.50 erlauben (dauerhafte Schreibzugriffe; Dynamic ESS als ausgeschaltet bestätigen)"
         },
         "max_charge_current": {
           "name": "Zulässiger Gesamtladestrom (A DC)"

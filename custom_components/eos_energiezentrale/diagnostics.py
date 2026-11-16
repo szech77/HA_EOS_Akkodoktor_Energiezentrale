@@ -16,7 +16,7 @@ def device_diagnostics(data):
         result.append({'device':index,'plugin':device.get('plugin',{}).get('identifier'),
             **({'telemetry_status':device['telemetry_status']} if 'telemetry_status' in device else {}),
             'available':device.get('available'),'read_error':device.get('read_error'),
-            'configuration':{key:details[key] for key in ('phases','control_enabled','grid_meter_enabled',
+            'configuration':{key:details[key] for key in ('phases','control_enabled','legacy_control_enabled','grid_meter_enabled',
                 'read_consumption','dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled') if key in details},
             'failure':{key:failure[key] for key in ('type','stage','unit','address','count','exception_code')
                 if key in failure} if isinstance(failure,dict) else None})

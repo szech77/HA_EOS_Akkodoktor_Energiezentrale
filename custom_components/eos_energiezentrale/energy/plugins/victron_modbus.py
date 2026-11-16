@@ -1,4 +1,4 @@
-"""Direct GX system telemetry, with ESS Mode 2 control on Venus OS >= 3.50.
+"""Direct GX system telemetry and version-aware ESS Mode 2 control.
 
 Register types/scales: Victron CCGX-Modbus-TCP-register-list-3.81.xlsx.
 https://www.victronenergy.com/live/ess:ess_mode_2_and_3
@@ -6,6 +6,7 @@ No Mode 3, firmware changes, MQTT or Home Assistant entity dependency.
 """
 from datetime import datetime,timezone
 import ipaddress
+import logging
 from math import ceil,floor
 import re
 import struct
@@ -16,6 +17,8 @@ from ..contracts import BatteryDriver,BatteryFeatures,BatteryReading,Measurement
 from ..plugin_parameters import parameters
 from ..plugin_diagnostics import plugin_operation
 from ..failures import PluginParameterError
+
+_LOGGER=logging.getLogger(__name__)
 
 
 def signed(word):
@@ -36,6 +39,7 @@ class VictronModbus(BatteryDriver):
         PluginField('ac_pv_input_enabled','Read AC PV on grid input','boolean',default=False),
         PluginField('ac_pv_output_enabled','Read AC PV on inverter output','boolean',default=False),
         PluginField('control_enabled','Enable ESS Mode 2 control (requires DVCC)','boolean',default=False),
+        PluginField('legacy_control_enabled','Allow ESS control before Venus OS 3.50 (persistent writes; confirm Dynamic ESS is off)','boolean',default=False),
         PluginField('max_charge_current','Allowed system charge current (A DC)','number',default=100),
         PluginField('max_discharge_power','Allowed inverter power (W, steps of 10)','number',default=5000),
         PluginField('release_setpoint','Native grid setpoint on release (W)','number',default=50),
@@ -53,8 +57,9 @@ class VictronModbus(BatteryDriver):
         if v['port']!=int(v['port']) or not 1<=v['port']<=65535: raise PluginParameterError('Invalid Modbus port','port')
         self.client=ModbusTCP(host,int(v['port']),100)
         self.phases=int(v['phases']);self.enabled=v['control_enabled']
+        self._firmware=None;self._legacy_warning=False;self._legacy_guard_warning=False
         self.read_diagnostics={'phases':self.phases,
-            **{key:v[key] for key in ('control_enabled','grid_meter_enabled','read_consumption',
+            **{key:v[key] for key in ('control_enabled','legacy_control_enabled','grid_meter_enabled','read_consumption',
                 'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None}
         for key in ('charge_efficiency','discharge_efficiency'):
             if not .1<=v[key]<=1: raise PluginParameterError('Invalid Victron efficiency',key)
@@ -100,10 +105,15 @@ class VictronModbus(BatteryDriver):
             self._read_context['stage']='firmware_invalid'
             self._operation_context=dict(self._read_context)
             raise ModbusError('Invalid GX firmware version')
-        if control and firmware<0x0350:
-            self._read_context['stage']='firmware_control_unsupported'
+        self._firmware=firmware
+        if control and firmware<0x0350 and not self.values['legacy_control_enabled']:
+            self._read_context['stage']='firmware_legacy_opt_in_required'
             self._operation_context=dict(self._read_context)
-            raise ModbusError('ESS control requires Venus OS >= 3.50; telemetry remains supported')
+            raise ModbusError('Older Venus OS requires explicit legacy ESS control permission')
+        if control:
+            # Do not take control if the configured native return value cannot
+            # later be restored using the selected firmware's register format.
+            self._setpoint_command(self.values['release_setpoint'],parameter='release_setpoint')
 
     def _battery(self):
         voltage,_,power,soc=self._registers(840,4,'battery')
@@ -162,7 +172,20 @@ class VictronModbus(BatteryDriver):
         settings=self._registers(2900,3,'ess_mode')
         if settings[2] not in (1,2) or settings[0] not in (*range(2,9),10,11,12):
             raise ModbusError('GX requires optimized ESS Mode 2')
-        if self._registers(5423,1,'dynamic_ess')[0]!=0: raise ModbusError('Dynamic ESS must be disabled')
+        try:
+            dynamic_ess=self._registers(5423,1,'dynamic_ess')[0]
+        except ModbusError as error:
+            # Some older servers predate this register even though ESS exists.
+            # Only the explicit legacy opt-in confirms Dynamic ESS off manually.
+            # Never reinterpret transport errors, unknown units or modern
+            # missing registers as confirmation that another controller is off.
+            if not (error.exception_code==2 and self._firmware<0x0350 and self.values['legacy_control_enabled']):
+                raise
+            if not self._legacy_guard_warning:
+                _LOGGER.warning('victron_modbus legacy_dynamic_ess_manual: register 5423 unavailable; using explicit configuration confirmation that Dynamic ESS is disabled')
+                self._legacy_guard_warning=True
+        else:
+            if dynamic_ess!=0: raise ModbusError('Dynamic ESS must be disabled')
         if grid and self._registers(826,1,'grid_connection')[0]!=1: raise ModbusError('GX grid input is not connected')
 
     def _write(self,address,words):
@@ -173,9 +196,22 @@ class VictronModbus(BatteryDriver):
                 self._operation_context['exception_code']=getattr(error,'exception_code',None)
                 raise
 
-    def _setpoint(self,watts):
+    def _setpoint_command(self,watts,*,parameter=None):
+        if self._firmware<0x0350:
+            if not -32768<=watts<=32767:
+                self._operation_context={'stage':'legacy_setpoint_range','unit':100,'address':2700,'count':1}
+                if parameter:self._operation_context['parameter']=parameter
+                raise ModbusError('Legacy GX grid setpoint must fit signed 16-bit watts')
+            return 2700,[int(watts)&65535]
         raw=int(watts)&0xffffffff
-        self._write(2716,[raw>>16,raw&65535])
+        return 2716,[raw>>16,raw&65535]
+
+    def _setpoint(self,watts):
+        address,words=self._setpoint_command(watts)
+        if address==2700 and not self._legacy_warning:
+            _LOGGER.warning('victron_modbus legacy_persistent_setpoint: ESS uses register 2700 before Venus OS 3.50; changed setpoints are persistent and may cause flash writes and VRM logging')
+            self._legacy_warning=True
+        self._write(address,words)
 
     @plugin_operation('apply')
     def _apply(self,command,states):
@@ -197,6 +233,7 @@ class VictronModbus(BatteryDriver):
         else: desired=min(outgoing,max(0,demand))-min(incoming,max(0,-demand))
         target=ceil(demand-desired)
         if not -1000000<=target<=1000000: raise ValueError('GX setpoint outside supported range')
+        self._setpoint_command(target)  # Reject legacy overflow before changing any limits.
         self._write(2705,[amps])
         self._write(2704,[outgoing//10])
         self._setpoint(target)
