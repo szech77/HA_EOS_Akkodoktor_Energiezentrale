@@ -11,6 +11,7 @@ from .domain import instant, number
 from .drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .failures import BackendError
 from .resources import validate_resources
+from .charge_plans import validate_calendar, validate_plans
 
 DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "weekdays": [0, 1, 2, 3, 4], "target_soc": 80, "pv_target_soc": 80,
@@ -18,11 +19,15 @@ DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "phase_auto": True, "regulation_interval_s": None,
          "battery_min_soc": 20, "battery_max_soc": 100,
          "battery_pv_start": False, "battery_pv_min_soc": 50, "battery_pv_wait_s": 60,
-         "battery_pv_surplus_w": 150}
+         "battery_pv_surplus_w": 150, "charge_plans": None,
+         "holiday_state": "", "holiday_locality": "", "holiday_catholic": False}
 
 
 def settings_payload(raw, zone):
     """Interpret form input in the installation zone; retain the native ISO API."""
+    if isinstance(raw.get('charge_plans'), list):
+        raw = {**raw, 'charge_plans': [settings_payload(row, zone) if isinstance(row, dict) else row
+                                     for row in raw['charge_plans']]}
     if 'departure_local' not in raw:
         return raw
     result = dict(raw)
@@ -74,7 +79,18 @@ def daily_settings(raw, interval):
     values["weekdays"] = sorted(set(days))
     if values["schedule"] == "weekly" and not days:
         raise BackendError("Mindestens einen Wochentag auswählen", reason='invalid_weekdays', fields=('weekdays',))
+    validate_calendar(values)
+    values['charge_plans'] = validate_plans(values['charge_plans'])
     return values
+
+
+def changed_settings(previous, changes, interval):
+    """Reject obsolete single-plan edits once the goal list is in use."""
+    legacy = {'schedule', 'departure', 'departure_time', 'weekdays'}
+    if previous.get('charge_plans') is not None and changes.keys() & legacy and 'charge_plans' not in changes:
+        raise BackendError('Edit charging goals in the vehicle panel', reason='invalid_schedule',
+                           fields=('charge_plans',))
+    return daily_settings({**previous, **changes}, interval)
 
 
 def save(path, value):

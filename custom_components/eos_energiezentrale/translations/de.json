@@ -505,13 +505,13 @@
         "name": "PV-Ladestart Überschuss- und Defizitschwelle"
       },
       "battery_pv_min_soc": {
-        "name": "Speicher-Untergrenze für PV-Ladestart"
+        "name": "Hausspeicher-Untergrenze für PV-Ladestart"
       },
       "battery_pv_wait_s": {
         "name": "Überschusswartezeit vor PV-Ladestart"
       },
       "target_soc": {
-        "name": "Ziel-SoC zur Abfahrt"
+        "name": "Standard-/Schnelllade-Ziel-SoC"
       },
       "pv_target_soc": {
         "name": "PV-Ziel-SoC"

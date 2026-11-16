@@ -8,14 +8,15 @@ from .clients import reading
 from .controller import Controller
 from .domain import BatteryCommand, battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
-from .settings import Configuration, daily_settings, save
+from .settings import Configuration, changed_settings, daily_settings, save
 from .history import History
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
 
 SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
-                           'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w'}
+                           'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w',
+                           'reserve_w', 'regulation_interval_s', 'holiday_state', 'holiday_locality', 'holiday_catholic'}
 
 
 def vehicle_options(options):
@@ -154,8 +155,10 @@ class FleetController(Controller):
             controller.support_driver = self.battery_driver
             self.controllers.append((identity,controller,proxy))
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
+        self.share_general_settings()
 
     def _share_plan(self,child):
+        child.eos_run=self.eos_run
         child.plan=self.plan
         child.resource_plans=self.resource_plans
         child.eos_failure_since=self.eos_failure_since
@@ -167,6 +170,10 @@ class FleetController(Controller):
     def persist_primary_settings(self):
         save(self.primary_settings_path,{**self.config.daily,"fast":False})
 
+    def share_general_settings(self):
+        for _, app, _ in self.controllers:
+            app.config.daily.update({key: self.config.daily[key] for key in SHARED_BATTERY_SETTINGS})
+
     def change_vehicle_settings(self,identity,values):
         controller=next((app for key,app,_ in self.controllers if key==identity),None)
         if controller is None:
@@ -175,7 +182,7 @@ class FleetController(Controller):
         shared={key:values[key] for key in SHARED_BATTERY_SETTINGS if key in values}
         specific={key:value for key,value in values.items() if key not in shared}
         shared_checked=daily_settings({**self.config.daily,**shared},self.config.options["regulation_interval_s"])
-        merged=daily_settings({**controller.config.daily,**specific},controller.config.options["regulation_interval_s"])
+        merged=changed_settings(controller.config.daily,specific,controller.config.options["regulation_interval_s"])
         controller.config.update(merged)
         if controller is self:
             self.persist_primary_settings()
@@ -228,7 +235,9 @@ class FleetController(Controller):
                         self.targets[key]=max(0,target)
             finally:
                 self.owned=any(child.owned for _,child,_ in self.controllers)
-            payload=Controller.snapshot(app,now)
+            pv_count=sum(child.config.daily['pv'] and not child.config.daily['fast']
+                         and child.vehicle_connected is not False for _,child,_ in self.controllers)
+            payload=Controller.snapshot(app,now,pv_share=1/max(1,pv_count))
             # Controller.snapshot binds the EV curve to this child's resource.
             vehicle_history=self.primary_history if app is self else app.history
             if app is self:
@@ -270,6 +279,8 @@ class FleetController(Controller):
             elif (retained:=self.fleet_display_values.retained("house",now)) is not None:
                 self.display["house"]=retained
         times=report_times(rows,opts,self.battery_driver.ids,{},now)
+        if self.live['solar'] is None and (retained := self.pv_availability.retained(now)) is not None:
+            self.display['solar'] = retained
         car_times=[instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")) for _,_,proxy in self.controllers]
         times["car"]=min(car_times) if all(car_times) else None
         commands=[app.last_write for _,app,_ in self.controllers if app.last_write is not None]
@@ -334,10 +345,15 @@ class FleetController(Controller):
                 for identity,app,_ in self.controllers}
 
     def snapshot(self,now):
+        from .charge_plans import plan_view
         result=Controller.snapshot(self,now)
         controllers={identity:app for identity,app,_ in self.controllers}
         result["vehicles"]=[{**payload,"vehicle_planning":controllers[payload["id"]].vehicle_planning_state(now),
-                             "errors":dict(controllers[payload["id"]].errors),
+                             "source_configuration":self.pv_availability.decorate(deepcopy(payload['source_configuration']),now),
+                             "charge_plan_view":plan_view(controllers[payload['id']].config.daily,now,self.config.zone),
+                             "charge_target_soc":controllers[payload['id']].goal_target(now),
+                             "eos_run":controllers[payload['id']].eos_run_state(now),
+                             "errors":controllers[payload["id"]].visible_errors(now),
                              "error_details":dict(controllers[payload["id"]].error_details),
                              "settings":dict(controllers[payload["id"]].config.daily)}
                             for payload in self.vehicle_snapshots]

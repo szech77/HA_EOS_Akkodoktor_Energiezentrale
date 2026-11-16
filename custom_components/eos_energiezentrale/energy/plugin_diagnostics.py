@@ -3,13 +3,16 @@ from datetime import datetime
 from functools import wraps
 from .contracts import BatteryReading, WallboxReading, PluginInfo
 from .status import IssueLog, failure_details
-from .clients import reading, report_time
+from .clients import reading, report_time, measurement_max_age
 from .domain import number
 
 
 def entity_reading(plugin, states, now, key, kind, age, measurements, units=None):
     """Keep the original HA read contract and retain only its safe failure cause."""
     entity=plugin.ids[key];row=states.get(entity,{})
+    if kind == 'power' and tuple(measurements) == ('solar',):
+        kind = 'solar'
+    age = measurement_max_age(kind, row.get('state'), age, row.get('attributes',{}).get('unit_of_measurement'))
     value=reading(states,entity,now,kind,age)
     stamp=report_time(states,entity)
     if units is not None and row.get('attributes',{}).get('unit_of_measurement') not in units:
@@ -128,6 +131,7 @@ def checked_plugin_read(plugin, now, collect):
             value, stamp = getattr(item, 'value', None), getattr(item, 'sample', None)
             from .measurement_sources import SOURCES
             age = SOURCES[key][3] if key in SOURCES else 120
+        age = measurement_max_age(key, value, age)
         reason = ('not_reported' if value is None else
             'sample_missing' if not isinstance(stamp, datetime) or stamp.utcoffset() is None else
             'future_sample' if stamp > now else 'stale' if (now-stamp).total_seconds() >= age else 'invalid_value')

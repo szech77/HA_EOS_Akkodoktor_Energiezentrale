@@ -62,6 +62,25 @@
         <div id="charts"></div>
       </section>
       <section class="plan-panel" id="plan"></section>
+      <section id="vehicle-settings" class="plan-panel" hidden>
+        <h2 data-i18n="plans.title"></h2>
+        <form id="vehicle-daily">
+          <label id="vehicle-selector-label" hidden><span data-i18n="settings.vehicle"></span><select id="vehicle-selector"></select></label>
+          <div class="checks">
+            <label><input name="pv" type="checkbox"><span data-i18n="settings.pv"></span></label>
+            <label><input name="fast" type="checkbox"><span data-i18n="settings.fast"></span></label>
+            <label><input name="phase_auto" type="checkbox"><span data-i18n="settings.phase_auto"></span></label>
+          </div>
+          <div class="fields">
+            <label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required></label>
+            <label><span data-i18n="plans.fast_target"></span><input name="fast_target_soc" type="number" min="1" max="100" required></label>
+          </div>
+          <h3 data-i18n="plans.goals"></h3><p class="footnote" data-i18n="plans.selection_note"></p>
+          <div id="charge-plans" class="charge-plans"></div>
+          <button type="button" id="add-charge-plan" data-i18n="plans.add"></button>
+          <div class="form-footer"><button type="submit" class="save" data-i18n="settings.save"></button><output id="vehicle-saved" role="status"></output></div>
+        </form>
+      </section>
     </section>
     <section id="usage" hidden>
       <a class="back" id="usage-back" data-i18n="nav.back"></a>
@@ -96,30 +115,6 @@
         <div class="form-footer"><button type="submit" class="save" data-i18n="settings.save"></button><output id="cost-saved" role="status"></output></div></form>
       </details>
       <form id="daily">
-        <label id="vehicle-selector-label" hidden><span data-i18n="settings.vehicle"></span><select id="vehicle-selector"></select></label>
-        <div data-optional="car">
-        <h2 data-i18n="settings.auto_pv"></h2>
-        <div class="checks">
-          <label><input name="pv" type="checkbox"><span data-i18n="settings.pv"></span></label>
-          <label><input name="fast" type="checkbox"><span data-i18n="settings.fast"></span></label>
-          <label><input name="phase_auto" type="checkbox"><span data-i18n="settings.phase_auto"></span></label>
-        </div>
-        <div class="fields">
-          <label><span data-i18n="settings.schedule"></span><select name="schedule"><option value="off" data-i18n="settings.off"></option><option value="weekly" data-i18n="settings.weekly"></option><option value="once" data-i18n="settings.once"></option></select></label>
-          <label data-schedule="weekly"><span data-i18n="settings.departure_time"></span><input name="departure_time" type="time"></label>
-          <label data-schedule="once"><span data-i18n="settings.departure"></span><input name="departure" type="datetime-local"></label>
-          <label><span data-i18n="settings.target_soc"></span><input name="target_soc" type="number" min="1" max="100" required></label>
-          <label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required></label>
-          <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" required></label>
-          <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" required></label>
-        </div>
-        <fieldset data-schedule="weekly"><legend data-i18n="settings.weekdays"></legend><div class="checks">
-          <label><input name="day" value="0" type="checkbox"><span data-i18n="weekday.mon"></span></label><label><input name="day" value="1" type="checkbox"><span data-i18n="weekday.tue"></span></label>
-          <label><input name="day" value="2" type="checkbox"><span data-i18n="weekday.wed"></span></label><label><input name="day" value="3" type="checkbox"><span data-i18n="weekday.thu"></span></label>
-          <label><input name="day" value="4" type="checkbox"><span data-i18n="weekday.fri"></span></label><label><input name="day" value="5" type="checkbox"><span data-i18n="weekday.sat"></span></label>
-          <label><input name="day" value="6" type="checkbox"><span data-i18n="weekday.sun"></span></label>
-        </div></fieldset>
-        </div>
         <h2 data-i18n="device.battery"></h2>
         <div class="fields">
           <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
@@ -128,13 +123,21 @@
         <p class="footnote" data-i18n="settings.battery_limits_info"></p>
         <p id="battery-limits-status" class="footnote" role="status"></p>
         <label class="check" data-optional="car"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
+        <h2 data-optional="car" data-i18n="settings.general_car"></h2>
         <label class="check" data-optional="car"><input name="battery_pv_start" type="checkbox"><span data-i18n="settings.battery_pv_start"></span></label>
         <div class="fields" data-optional="car">
+          <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" required></label>
+          <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" required></label>
           <label><span data-i18n="settings.battery_pv_min_soc"></span><input name="battery_pv_min_soc" type="number" min="0" max="98" step="1" required></label>
           <label><span data-i18n="settings.battery_pv_wait_s"></span><input name="battery_pv_wait_s" type="number" min="10" max="600" step="1" required></label>
           <label><span data-i18n="settings.battery_pv_surplus_w"></span><input name="battery_pv_surplus_w" type="number" min="1" max="5000" step="1" required></label>
         </div>
         <p class="footnote" data-optional="car" data-i18n="settings.battery_pv_info"></p>
+        <fieldset data-optional="car"><legend data-i18n="plans.holiday_settings"></legend><div class="fields">
+          <label><span data-i18n="plans.state"></span><select name="holiday_state"><option value="" data-i18n="plans.national"></option><option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option></select></label>
+          <label><span data-i18n="plans.locality"></span><select name="holiday_locality"><option value="" data-i18n="plans.no_locality"></option><option value="augsburg">Augsburg</option></select></label>
+        </div><label class="check"><input name="holiday_catholic" type="checkbox"><span data-i18n="plans.catholic"></span></label>
+        <p class="footnote" data-i18n="plans.region_note"></p></fieldset>
         <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
       </form>
       <section class="plan-panel">

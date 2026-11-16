@@ -3,6 +3,31 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.19.0 - 2026-11-16
+
+### Features
+
+- Allgemeine Einstellungen für Kosten, Hausspeicher und E-Auto-Regelparameter von der Ladeplanung in der Autoansicht trennen. Je Fahrzeug bis zu 32 aktivierbare Ladeziele mit einmaliger oder wiederkehrender Abfahrt, Wochentagen, zusätzlichen Feiertagen und eigenem Ziel-SoC speichern. Hinzufügen und Löschen mit Bestätigung unterstützen; bestehende Einzelpläne übernehmen. Auswahl des nächsten Ziels, Zeitzonenbehandlung und Übergabe an EOS vollständig im Backend ausführen.
+- Deutsche Feiertage lokal anhand von Bundesland, Augsburger Sonderregelung und örtlich geltenden katholischen Feiertagen bestimmen. Dafür die neue Laufzeit- und Testabhängigkeit `holidays==0.108` verwenden. Deutsch und Englisch pflegen.
+- Ohne passende EOS-Fahrzeugkurve den gültigen aktuellen SoC für 24 Stunden fortschreiben. Bei aktiviertem PV-Laden mit bekannten Ladegrenzen und Prognosen für PV und Hauslast den möglichen SoC-Anstieg im Backend abschätzen, Ladeeffizienz, PV-Ziel, prognostizierte Speicherladung und weitere Fahrzeuge berücksichtigen. EOS-Kurve und lokale Schätzung in der Anzeige unterscheiden; lokale Schätzungen ausschließlich zur Visualisierung verwenden.
+
+### Bugfixes
+
+- Eine dauerhafte EOS-Fahrzeug-Nullkurve bei bekanntem positivem SoC als Platzhalter zurückweisen. In diesem Fall den aktuellen SoC fortschreiben oder bei aktiviertem PV-Laden den lokalen PV-Ersatzverlauf verwenden; reguläre EOS-Kurven und reale 0-%-Ausgangswerte erhalten. Rohdaten, Messwerte und Steuerpläne nicht verändern.
+- Gemeinsame E-Auto-Regelparameter und Feiertagsregion unmittelbar an alle Fahrzeugregler weitergeben. Ungültige Ladeziele und Feiertagseinstellungen mit strukturiertem Fehlergrund im Backend protokollieren.
+- In der gemeinsamen Autoansicht für jedes Fahrzeug ein eigenes SoC-Diagramm einschließlich Zukunftskurve anzeigen, auch bei nur einem Fahrzeug. Historie, Prognose und interaktive Diagrammmodelle je Fahrzeug trennen.
+- Unveränderte PV-Messwerte von 0 bis einschließlich 2 W bis zu 12 Stunden als gültig behandeln, einschließlich generischer HA-Plugins und der Quelldiagnose. Sensorwerte in kW vorher umrechnen. PV-Werte über 2 W und andere Leistungswerte weiterhin zeitnah auf Veraltung prüfen.
+- Zeitweise fehlende PV-Messwerte getrennt von ihrer Regelgültigkeit behandeln: Quellenwarnung nach fünf Minuten ohne gültigen Wert, nach zuletzt 0–2 W spätestens 12 Stunden nach diesem Messwert. Wiederholte Fehlversuche verlängern die Frist nicht. Den kleinen letzten Wert im Backend nur für die Anzeige mit Altersangabe erhalten; Modbus-N/A, fehlende Werte und ungültige Messungen nicht als frische Regelwerte verwenden. Auch die gemeinsame Fahrzeugansicht berücksichtigt diese PV-Warnfrist.
+- EOS-Health vor dem Planabruf abfragen und Berechnungen beziehungsweise das Warten auf einen aktuellen Plan mit Laufzeit im Kopfbereich anzeigen. Bei erreichbarem EOS temporäre Plan-, Prognose- und transportbedingte Synchronisationsfehler höchstens fünf Minuten zurückstellen; wiederholte Abfragen verlängern das Fenster nicht. Gerätestörungen, Konfigurationsfehler und explizite Plangültigkeitsgrenzen erhalten. Zustandswechsel im Backend protokollieren.
+
+### Breaking Changes
+
+- Nach dem ersten Speichern der Ladezielliste werden die bisherigen nativen Entitäten für Einzelzeitplan und Abfahrtsdatum/-zeit als nicht verfügbar markiert; Ladeziele werden im Fahrzeugpanel bearbeitet. Der bisherige Standard-Ziel-SoC bleibt als Schnellladeziel erhalten. Bis dahin funktionieren bestehende Einzelpläne und native Zeitplaneinstellungen weiter.
+
+### Security
+
+- Keine.
+
 ## 0.18.2 - 2026-11-16
 
 ### Features

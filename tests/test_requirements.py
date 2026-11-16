@@ -376,7 +376,10 @@ class ControllerRequirements(unittest.TestCase):
         self.app.tick(NOW, 0)
         result = self.app.snapshot(NOW)
         self.assertEqual(result["live"]["solar"], 7000)
-        self.assertEqual(result["forecast"], [])
+        self.assertEqual(self.app.forecast, [])
+        self.assertEqual(result['vehicle_forecast_source'], 'constant')
+        self.assertEqual({row['car_soc'] for row in result['forecast']}, {40})
+        self.assertTrue(all(set(row)=={'time','end','car_soc'} for row in result['forecast']))
         self.assertNotIn("forecast", result["errors"])
         self.assertIn("forecast", self.app.snapshot(NOW + timedelta(minutes=5))["errors"])
 

@@ -278,3 +278,10 @@
 }
 #eos-energy-design .device-measurements {display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px;}
 #eos-energy-design .device-measurements strong {white-space:nowrap;}
+
+#eos-energy-design .charge-plans {display:grid;gap:20px;margin:20px 0;}
+#eos-energy-design .charge-goal {margin:0;padding:18px;border:1px solid var(--edge);border-radius:14px;min-width:0;}
+#eos-energy-design .goal-header {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;}
+#eos-energy-design .delete-goal {color:var(--heat);background:transparent;}
+#eos-energy-design #vehicle-settings {margin-top:24px;}
+#eos-energy-design #vehicle-daily>.checks {margin:20px 0;}

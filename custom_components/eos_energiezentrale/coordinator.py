@@ -16,7 +16,7 @@ from .energy.clients import ENTITY
 from .energy.controller import Controller
 from .energy.domain import next_departure
 from .energy.drivers import DeviceNotReady
-from .energy.settings import daily_settings, settings_payload
+from .energy.settings import changed_settings, settings_payload
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
 from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline
@@ -54,6 +54,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.weather_forecast = WeatherForecast(hass)
         self.issue_log = IssueLog(_LOGGER)
         self.control_status = None
+        self.eos_run_status = None
         if isinstance(app, Controller):
             app.external_eos_polling = True
             app.external_battery_sync = True
@@ -113,7 +114,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 result['pv_today_kwh'] = None
                 if isinstance(self.app, Controller):
                     self.app.record_failure("accounting", error)
-            result["errors"] = dict(self.app.errors)
+            result["errors"] = self.app.visible_errors(now) if isinstance(self.app, Controller) else dict(self.app.errors)
             if isinstance(self.app, Controller):
                 result['error_details'] = dict(self.app.error_details)
             return self._present(result)
@@ -138,6 +139,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
         if result['control_status'] != self.control_status:
             _LOGGER.info('EOS control status: %s', result['control_status'])
             self.control_status = result['control_status']
+        run_status = result.get('eos_run', {}).get('state', 'unknown')
+        if run_status != self.eos_run_status:
+            _LOGGER.info('EOS calculation status: %s', run_status)
+            self.eos_run_status = run_status
         return result
 
     def async_set_updated_data(self, data):
@@ -184,7 +189,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         if app.vehicle_profile is not None and not app.vehicle_profile[-1]:
             return None
         departure = next_departure(app.config.daily, now, app.config.zone)
-        return (app.config.daily["target_soc"], departure) if departure else None
+        return (app.goal_target(now), departure) if departure else None
 
     @staticmethod
     def _sync_failure(app, area, error):
@@ -335,6 +340,17 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self._async_poll_eos(kind), "EOS " + kind + " polling")
 
     async def _async_poll_eos(self, kind):
+        if kind == 'plan':
+            try:
+                health = await self.hass.async_add_executor_job(self.app.config.eos.health)
+            except Exception:
+                health = None
+            async with self.work_lock:
+                if self.closing:
+                    return
+                await self.hass.async_add_executor_job(self.app.apply_eos_health, health, datetime.now(timezone.utc))
+                if self.data is not None:
+                    await self._async_publish_snapshot()
         started = datetime.now(timezone.utc)
         try:
             result = await self.hass.async_add_executor_job(getattr(self.app.config.eos, kind))
@@ -411,8 +427,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         self.app.change_vehicle_settings(identity,{key:value for key,value in settings.items() if key!="vehicle_id"})
                         settings=None
                     if settings is not None:
-                        values = daily_settings({**self.app.config.daily, **settings},
-                                                self.app.config.options["regulation_interval_s"])
+                        values = changed_settings(self.app.config.daily, settings,
+                                                  self.app.config.options["regulation_interval_s"])
                         self.app.config.update(values, manage_battery_limits=manage_limits)
                         if hasattr(self.app,"persist_primary_settings"):
                             self.app.persist_primary_settings()
@@ -426,6 +442,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         self.app.battery_limits_confirmed = None
                         self.app.battery_limits_confirmed_at = None
                         self.app.sync_battery_limits(now, monotonic(), force=True)
+                    if hasattr(self.app, 'share_general_settings'):
+                        self.app.share_general_settings()
                     for vehicle, previous in previous_goals:
                         if previous != self._desired_goal(vehicle, now):
                             vehicle.goal_sync_revision += 1
