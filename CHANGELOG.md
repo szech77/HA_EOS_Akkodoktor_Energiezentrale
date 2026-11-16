@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.18.2 - 2026-11-16
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Fahrzeug-SoC- und Ladeleistungsprognosen aus EOS auch in der Fahrzeugverwaltung anzeigen, einschließlich Anlagen mit nur einem E-Auto. Die EV-Kurve anhand der in der Optimierung gespeicherten `device_id` exakt der konfigurierten EOS-Fahrzeugressource zuordnen; auch nach Umordnung oder Wechsel der prognostizierten Ressource keine Kurve einem anderen Fahrzeug zuweisen. Fehlende, widersprüchliche oder fremde IDs bleiben ohne Fahrzeugprognose. Messwerte und gemeinsame PV-Prognosen erhalten; ungültige SoC-Werte bleiben Lücken, Leistungswerte benötigen gültige Kapazität und Ladeeffizienz. Deutsche und englische Hinweise aktualisieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.18.1 - 2026-11-16
 
 ### Features

@@ -211,7 +211,7 @@
     "fleet.vehicles": "E-Autos ({count})",
     "fleet.title": "Fahrzeuge und Ladepunkte",
     "fleet.total": "Gesamte Autoladeleistung",
-    "fleet.forecast_note": "Ein Fahrzeug auswählen, um SoC, EOS-Modi und Messwerte zu sehen. Die bisherige EOS-Lösung liefert keine eindeutig zugeordneten Leistungs-/SoC-Prognosen für mehrere Fahrzeuge; eine gemeinsame Kurve wird nicht einzelnen Autos zugewiesen.",
+    "fleet.forecast_note": "Ein Fahrzeug auswählen, um SoC, EOS-Modi, Messwerte und die zugeordnete Prognose zu sehen. Prognosen erscheinen nur, wenn EOS sie eindeutig für dieses Fahrzeug bereitstellt; fehlende Werte bleiben leer.",
     "battery.minimum_reached": "SoC-Untergrenze erreicht",
     "metric.aligned_age": "Zeitlich abgeglichen · vor {minutes} Min.",
     "mode.waiting_measurements": "Warte auf Netz- und Wallboxmessung",

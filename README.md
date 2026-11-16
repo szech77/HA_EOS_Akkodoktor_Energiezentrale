@@ -41,6 +41,9 @@ Linien zeigen Messwerte, gestrichelte Linien die Prognose.
 
 Die Fahrzeugansicht zeigt Ladeziel und Abfahrtszeit sowie die EOS-Lademodi,
 Wallbox-Leistung, PV-Produktion, SoC und Bezugspreise.
+Auch bei nur einem verwalteten Fahrzeug wird eine vorhandene EOS-SoC-Prognose
+angezeigt. Die gestrichelte Kurve gehört ausschließlich zum von EOS benannten
+Fahrzeug; aktuelle Messwerte bleiben davon unabhängig.
 
 ![E-Auto-Detailansicht mit Ladeziel, Moduszeitleiste, Wallbox-Leistung, SoC und Strompreis](docs/screenshots/vehicle.png)
 
@@ -697,6 +700,16 @@ Bis zu acht Fahrzeug-Wallbox-Paare sind möglich; für jedes Paar Name, stabile 
 eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, Kapazität und die fünf
 Wallbox-Entitäten angeben. Die Fahrzeuge müssen auch in EOS angelegt sein.
 Die Konfiguration erstellt oder überschreibt keine EOS-Gerätedefinitionen.
+
+SoC- und Ladeleistungsprognosen werden im Backend anhand der `device_id` in den
+EOS-Optimierungsparametern (`parameters.ev`) beziehungsweise im Ergebnis
+(`ev_obj`) der passenden EOS-`resource` zugeordnet. Das gilt auch für eine Liste
+mit nur einem Fahrzeug. Die GENETIC-Lösung liefert eine EV-Kurve pro Lauf;
+sie erscheint nur bei ihrem Fahrzeug. Fehlende, widersprüchliche oder fremde
+IDs werden nicht durch die Listenposition oder das erste Auto ersetzt. Für
+andere Fahrzeuge bleiben fehlende Prognosen leer. Ungültige SoC-Werte bleiben
+Lücken; die Ladeleistung benötigt zusätzlich gültige Kapazität und Ladeeffizienz.
+Eine SoC-Prognose überschreibt keine aktuellen Fahrzeugmesswerte.
 
 Unter **Inbetriebnahme → EOS-Verbindung** erscheint bei einer eingerichteten
 Fahrzeugliste für jedes Auto ein eigenes Ressourcenfeld, beschriftet mit Name und

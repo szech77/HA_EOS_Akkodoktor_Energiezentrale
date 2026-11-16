@@ -159,7 +159,10 @@ class FleetController(Controller):
         child.plan=self.plan
         child.resource_plans=self.resource_plans
         child.eos_failure_since=self.eos_failure_since
-        child.forecast=[{key:value for key,value in row.items() if key not in {"car","car_soc"}} for row in self.forecast]
+        child.forecast=[dict(row) for row in self.forecast]
+        child.forecast_vehicle_resource=self.forecast_vehicle_resource
+        child.forecast_failure_since=self.forecast_failure_since
+        child.forecast_failure=self.forecast_failure
 
     def persist_primary_settings(self):
         save(self.primary_settings_path,{**self.config.daily,"fast":False})
@@ -226,9 +229,7 @@ class FleetController(Controller):
             finally:
                 self.owned=any(child.owned for _,child,_ in self.controllers)
             payload=Controller.snapshot(app,now)
-            # The legacy EOS solution only identifies one EV curve. Never assign
-            # this curve to several vehicles without resource identifiers.
-            payload["forecast"]=[{k:v for k,v in row.items() if k not in {"car","car_soc"}} for row in payload["forecast"]]
+            # Controller.snapshot binds the EV curve to this child's resource.
             vehicle_history=self.primary_history if app is self else app.history
             if app is self:
                 vehicle_history.write(now,payload["live"])
