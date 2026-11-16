@@ -54,7 +54,10 @@ def test_entity_read_causes_are_precise_deduplicated_and_recover(entity_plugin,c
     if change=='missing': del ha.rows[entity]
     elif change=='unavailable': bad['state']='unavailable'
     elif change=='invalid': bad['state']='private-invalid-state'
-    elif change=='stale': bad['last_reported']=(NOW-timedelta(seconds=121)).isoformat()
+    elif change=='stale':
+        bad['last_reported']=(NOW-timedelta(seconds=121)).isoformat()
+        # An unchanged PV zero now has an explicit overnight allowance.
+        if measurement=='solar': bad['state']='1000'
     elif change=='future': bad['last_reported']=(NOW+timedelta(seconds=1)).isoformat()
     else: bad.pop('last_reported')
     caplog.set_level(logging.INFO,logger='custom_components.eos_energiezentrale')

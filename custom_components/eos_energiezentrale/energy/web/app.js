@@ -220,7 +220,9 @@ function socBarCount(soc) {
 }
 
 function controlStatus(value) {
-  return t(`control.${value.control_status??'read_only'}`);
+  const control=t(`control.${value.control_status??'read_only'}`),run=value.eos_run;
+  return ['calculating','updating'].includes(run?.state)
+    ? control+' · '+t(`eos.run_${run.state}`,{seconds:run.elapsed_s??0}) : control;
 }
 
 function carIcon(soc) {
@@ -407,7 +409,7 @@ function overview() {
 const chartModels = new Map();
 let activeProbe = null;
 
-function chart(title, key, divisor, unit, color, now, additional = []) {
+function chart(title, key, divisor, unit, color, now, additional = [], chartId = key) {
   const descriptors = [{key,label:key === 'solar' && additional.length ? t('chart.solar') : title,divisor,color},...additional];
   const series = descriptors.map(item => ({...item,
     actual:item.actual === false ? [] : EosChartData.points(actualPoints(item.key),item.key,now-day,now),
@@ -417,7 +419,7 @@ function chart(title, key, divisor, unit, color, now, additional = []) {
   if (!numbers.length) return `<section><h2>${html(title)} · ${html(unit)}</h2><p class="footnote">${th('chart.no_data')}</p></section>`;
   const min = key === 'price' ? Math.floor(Math.min(...numbers)-1) : Math.min(0,...numbers);
   const max = key.endsWith('_soc') ? 100 : Math.max(min+1,Math.ceil(Math.max(...numbers)+(key === 'price' ? 1 : 0)));
-  chartModels.set(key,{series,now,unit});
+  chartModels.set(chartId,{series,now,unit});
   const curve = (rows,item,gap,forecast) => {
     let previous;
     const path = rows.map(row => {
@@ -433,7 +435,7 @@ function chart(title, key, divisor, unit, color, now, additional = []) {
     `<span>${value ? `${value} ${th('chart.hour')}` : th('chart.now')}</span>`).join('');
   return `<section><h2>${html(title)} · ${html(unit)}</h2>
     <div class="series-legend">${series.map(item=>`<span><i style="--series:var(--${item.color})"></i>${html(item.label)}</span>`).join('')}</div>
-    <div class="chart" data-chart="${html(key)}">
+    <div class="chart" data-chart="${html(chartId)}">
       <div class="axis-y" aria-hidden="true"><span>${decimal(max)}</span><span>${decimal((max+min)/2)}</span><span>${decimal(min)}</span></div>
       <div class="interactive-plot">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" tabindex="0" role="img" aria-label="${th('chart.interactive_aria',{title})}">
@@ -529,7 +531,22 @@ function timeline(key, now) {
     <p class="mode-detail" id="mode-detail" aria-live="polite">${html(modeLabel(snapshot.live[key + '_mode']))}</p>`;
 }
 
+function vehicleSocChart(vehicle, now) {
+  const original=snapshot, originalHistory=history;
+  try {
+    snapshot=vehicle;
+    history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
+    return chart(vehicle.name+' · '+t('chart.soc'),'car_soc',1,'%','car',now,[],'vehicle_soc_'+vehicle.id)
+      + vehicleForecastNote(vehicle);
+  } finally {snapshot=original;history=originalHistory;}
+}
+function vehicleForecastNote(vehicle) {
+  const source=vehicle.vehicle_forecast_source;
+  return ['eos','pv_estimate','constant','unavailable'].includes(source)
+    ? `<p class="footnote">${th(`forecast.vehicle_${source}`)}</p>` : '';
+}
 function detail(key) {
+  byId('vehicle-settings').hidden=key!=='car'&&!key.startsWith('car/');
   byId('detail-kpis').classList.toggle('vehicle-inactive', (key === 'car' || key.startsWith('car/')) && !vehicleActive(snapshot));
   const usageLink=byId('usage-link');
   usageLink.hidden=!['house','car','heat'].includes(key)&&!key.startsWith('car/');
@@ -547,12 +564,14 @@ function detail(key) {
     } finally {snapshot=original;history=originalHistory;}
     return;
   }
+  if (key==='car') vehicleSettings();
   if (key==='car' && snapshot.vehicles?.length) {
     chartModels.clear();
     byId('detail-title').textContent=t('fleet.title');
     byId('detail-kpis').innerHTML=vehicleCards();
     byId('timeline').innerHTML='';
-    byId('charts').innerHTML=chart(t('fleet.total'),'car',1000,t('unit.kw'),'car',windowNow());
+    byId('charts').innerHTML=chart(t('fleet.total'),'car',1000,t('unit.kw'),'car',windowNow())
+      + snapshot.vehicles.map(vehicle=>vehicleSocChart(vehicle,windowNow())).join('');
     byId('plan').hidden=false;
     byId('plan').innerHTML=`<p>${th('fleet.forecast_note')}</p>`;
     return;
@@ -572,7 +591,7 @@ function detail(key) {
     grid:[[t('metric.direction'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : t('metric.import') : '—',t('metric.grid_connection')]],
     battery:[[t('chart.soc'),percent(displayed("battery_soc")),t('metric.measured')],[t('metric.eos_mode'),modeLabel(live.battery_mode),stateLabel('mode',live.battery_control)]],
     house:[[t('metric.house_total'),displayedPower("house_total"),t('metric.house_includes')]],
-    car:[[t('chart.soc'),percent(displayed("car_soc")),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
+    car:[[t('chart.soc'),percent(displayed("car_soc")),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.charge_target_soc ?? snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
     heat:[]
   };
   const inactiveCar = key === 'car' && !vehicleActive(snapshot);
@@ -581,7 +600,7 @@ function detail(key) {
   byId('timeline').innerHTML = withPlan ? timeline(key,now) : '';
   byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now,withPlan ? [{key:'solar',label:t('chart.solar'),divisor:1000,color:'solar'}] : [])
     + (key === 'house' ? chart(t('chart.house_total'),'house_total',1000,t('unit.kw'),'house',now) : '')
-    + (withPlan ? chart(t('chart.soc'),key+'_soc',1,'%',key,now) : '')
+    + (withPlan ? chart(t('chart.soc'),key+'_soc',1,'%',key,now)+(key==='car'?vehicleForecastNote(snapshot):'') : '')
     + (['battery','car','grid','heat'].includes(key) ? chart(t('chart.price'),'price',1,t('unit.price'),'heat',now) : '');
   if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
   const upcoming = snapshot.upcoming_plan?.[key] ?? [];
@@ -592,26 +611,81 @@ function detail(key) {
 }
 
 const form = byId('daily');
-function scheduleFields() {
-  const selected = form.elements.schedule.value;
-  form.querySelectorAll('[data-schedule]').forEach(element => { element.hidden = element.dataset.schedule !== selected; });
-  form.elements.departure.required = selected === 'once' && consumerEnabled('car');
-}
 function fillForm() {
-  const vehicle=snapshot.vehicles?.find(item=>item.id===byId("vehicle-selector").value);
-  const selected={...(vehicle?.settings ?? snapshot.settings),battery_min_soc:snapshot.settings.battery_min_soc,battery_max_soc:snapshot.settings.battery_max_soc,battery_pv_support:snapshot.settings.battery_pv_support};
-  for (const key of ['battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) selected[key]=snapshot.settings[key];
-  for (const [key,value] of Object.entries(selected)) {
-    const input = form.elements.namedItem(key);
+  for (const [key,value] of Object.entries(snapshot.settings)) {
+    const input=form.elements.namedItem(key);
     if (!input) continue;
-    if (input.type === 'checkbox') input.checked = value;
-    else if (key === 'departure') {
-      const parsed = new Date(value);
-      input.value = valid(parsed.getTime()) ? new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0,16) : '';
-    } else input.value = value;
+    if(input.type==='checkbox') input.checked=value;
+    else input.value=value;
   }
-  form.querySelectorAll('[name=day]').forEach(input => { input.checked = selected.weekdays?.includes(Number(input.value)) ?? false; });
-  scheduleFields();
+  holidayFields();
+}
+function holidayFields() {
+  const state=form.elements.holiday_state.value;
+  const locality=form.elements.holiday_locality;
+  locality.disabled=state!=='BY';
+  if(locality.disabled) locality.value='';
+  const catholic=form.elements.holiday_catholic;
+  catholic.disabled=!['BY','SN','TH'].includes(state);
+  if(catholic.disabled) catholic.checked=false;
+}
+const vehicleForm=byId('vehicle-daily');
+let vehicleFormKey=null;
+let chargePlanCounter=0;
+function vehicleSettings() {
+  const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
+  byId('vehicle-selector-label').hidden=!vehicles.length;
+  if(vehicles.map(item=>item.id).join(',')!==selector.dataset.vehicles) {
+    selector.innerHTML=vehicles.map(item=>`<option value="${html(item.id)}">${html(item.name)}</option>`).join('');
+    selector.dataset.vehicles=vehicles.map(item=>item.id).join(',');
+  }
+  const selected=vehicles.find(item=>item.id===selector.value)??snapshot;
+  const identity=selected.id??'primary';
+  const key=(location.hash??'')+':'+identity;
+  if(vehicleFormKey===key) return;
+  vehicleFormKey=key;
+  vehicleForm.dataset.vehicleId=selected.id??'';
+  for(const name of ['pv','fast','phase_auto']) vehicleForm.elements[name].checked=selected.settings[name];
+  vehicleForm.elements.pv_target_soc.value=selected.settings.pv_target_soc;
+  vehicleForm.elements.fast_target_soc.value=selected.settings.target_soc;
+  vehicleForm.elements.phase_auto.disabled=selected.plugins?.wallbox?.features?.phase_switching===false;
+  if(vehicleForm.elements.phase_auto.disabled)vehicleForm.elements.phase_auto.checked=false;
+  byId('charge-plans').innerHTML='';
+  for(const row of selected.charge_plan_view??[]) appendChargePlan(row);
+  byId('vehicle-saved').textContent='';
+}
+function appendChargePlan(row) {
+  const card=document.createElement('fieldset');
+  card.className='charge-goal';card.dataset.id=row.id;
+  card.innerHTML=`<legend>${th('plans.goal')}</legend><div class="goal-header">
+    <label class="check"><input name="active" type="checkbox" ${row.active?'checked':''}>${th('plans.active')}</label>
+    <button type="button" class="delete-goal">${th('plans.delete')}</button></div>
+    <div class="fields"><label>${th('settings.schedule')}<select name="schedule"><option value="once">${th('settings.once')}</option><option value="weekly">${th('settings.weekly')}</option></select></label>
+    <label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required value="${html(row.target_soc)}"></label>
+    <label data-goal-schedule="once">${th('settings.departure')}<input name="departure_local" type="datetime-local" value="${html(row.departure_local??'')}"></label>
+    <label data-goal-schedule="weekly">${th('settings.departure_time')}<input name="departure_time" type="time" value="${html(row.departure_time??'07:30')}"></label></div>
+    <div data-goal-schedule="weekly" class="checks">${['mon','tue','wed','thu','fri','sat','sun'].map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}
+    <label><input name="holidays" type="checkbox" ${row.holidays?'checked':''}>${th('plans.holidays')}</label></div>
+    <p class="footnote">${row.next_departure===undefined?th('plans.save_preview'):row.next_departure?th('plans.next',{date:time(row.next_departure)}):th('plans.no_next')}</p>`;
+  card.querySelector('[name=schedule]').value=row.schedule;
+  const update=()=>{
+    const mode=card.querySelector('[name=schedule]').value;
+    card.querySelectorAll('[data-goal-schedule]').forEach(item=>{item.hidden=item.dataset.goalSchedule!==mode;});
+    card.querySelector('[name=departure_local]').required=mode==='once';
+    card.querySelector('[name=departure_time]').required=mode==='weekly';
+  };
+  card.querySelector('[name=schedule]').addEventListener('change',update);
+  card.querySelector('.delete-goal').addEventListener('click',()=>{if(confirm(t('plans.delete_confirm')))card.remove();});
+  update();byId('charge-plans').append(card);
+}
+function chargePlanValues() {
+  return [...byId('charge-plans').querySelectorAll('.charge-goal')].map(card=>{
+    const value=name=>card.querySelector('[name='+name+']');
+    return {id:card.dataset.id,active:value('active').checked,schedule:value('schedule').value,
+      target_soc:Number(value('target_soc').value),departure_local:value('departure_local').value,
+      departure_time:value('departure_time').value,holidays:value('holidays').checked,
+      weekdays:[...card.querySelectorAll('[name=day]:checked')].map(input=>Number(input.value))};
+  });
 }
 function batteryGroupDetails(group) {
   if(!group)return '';
@@ -630,12 +704,6 @@ function batteryGroupDetails(group) {
 }
 
 function settings() {
-  const selector=byId('vehicle-selector');
-  byId('vehicle-selector-label').hidden=!snapshot.vehicles?.length;
-  if (snapshot.vehicles?.length && selector.options.length!==snapshot.vehicles.length) {
-    selector.innerHTML=snapshot.vehicles.map(vehicle=>`<option value="${html(vehicle.id)}">${html(vehicle.name)}</option>`).join('');
-    formReady=false;
-  }
   document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   if (!formReady && 'schedule' in snapshot.settings) {
     fillForm();
@@ -651,9 +719,7 @@ function settings() {
     <dt>InfluxDB</dt><dd>${th(`status.${history.status??'connecting'}`)}</dd>`;
   for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}${(plugin.measurements??[]).length?' · '+plugin.measurements.map(key=>th(`measurement.${key}`)).join(', '):''}</dd>`;}
   byId('connections').innerHTML+=batteryGroupDetails(snapshot.battery_group);
-  const wallbox=snapshot.vehicles?.find(item=>item.id===selector.value)?.plugins?.wallbox??snapshot.plugins?.wallbox;
-  form.elements.phase_auto.disabled=wallbox?.features?.phase_switching===false;
-  if(form.elements.phase_auto.disabled)form.elements.phase_auto.checked=false;
+
 }
 function render() {
   try {
@@ -741,18 +807,30 @@ async function openWeatherForecast(){
   }
 }
 byId('flow-weather').addEventListener('click',openWeatherForecast);
-byId('vehicle-selector').addEventListener('change',()=>{formReady=false;settings();});
-form.elements.schedule.addEventListener('change',scheduleFields);
+byId('vehicle-selector').addEventListener('change',()=>{vehicleFormKey=null;vehicleSettings();});
+form.elements.holiday_state.addEventListener('change',holidayFields);
+byId('add-charge-plan').addEventListener('click',()=>{
+  if(byId('charge-plans').querySelectorAll('.charge-goal').length>=32)return;
+  appendChargePlan({id:'plan_'+Date.now()+'_'+(++chargePlanCounter),active:true,schedule:'weekly',
+    target_soc:80,departure_time:'07:30',weekdays:[0,1,2,3,4],holidays:false});
+});
+vehicleForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const values={charge_plans:chargePlanValues()};
+  for(const name of ['pv','fast','phase_auto'])values[name]=vehicleForm.elements[name].checked;
+  values.pv_target_soc=Number(vehicleForm.elements.pv_target_soc.value);
+  values.target_soc=Number(vehicleForm.elements.fast_target_soc.value);
+  if(vehicleForm.dataset.vehicleId)values.vehicle_id=vehicleForm.dataset.vehicleId;
+  try{await api('settings',values);vehicleFormKey=null;await refresh();byId('vehicle-saved').textContent=t('settings.saved');}
+  catch(error){byId('vehicle-saved').textContent=error.message;}
+});
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const values = {};
-  for (const name of ['target_soc','pv_target_soc','reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
-  for (const name of ['pv','fast','battery_pv_support','battery_pv_start','phase_auto']) values[name] = form.elements[name].checked;
-  for (const name of ['schedule','departure_time']) values[name] = form.elements[name].value;
-  values.departure_local = form.elements.departure.value;
-  values.weekdays = [...form.querySelectorAll('[name=day]:checked')].map(input => Number(input.value));
-  if (snapshot.vehicles?.length) values.vehicle_id=byId('vehicle-selector').value;
-  try { await api('settings',values); byId('saved').textContent = t('settings.saved'); await refresh(); }
+  for (const name of ['reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
+  for (const name of ['battery_pv_support','battery_pv_start','holiday_catholic']) values[name] = form.elements[name].checked;
+  for (const name of ['holiday_state','holiday_locality']) values[name] = form.elements[name].value;
+  try { await api('settings',values); vehicleFormKey=null; byId('saved').textContent = t('settings.saved'); await refresh(); }
   catch (error) { byId('saved').textContent = error.message; }
 });
 byId('control').addEventListener('click', async () => {

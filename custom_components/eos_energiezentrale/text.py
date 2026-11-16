@@ -12,8 +12,14 @@ class EnergyText(EnergyEntity, TextEntity):
     _attr_native_max = 40
 
     @property
+    def available(self):
+        return super().available and (self.coordinator.data or {}).get('settings', {}).get('charge_plans') is None
+
+    @property
     def native_value(self):
         return (self.coordinator.data or {}).get("settings", {}).get(self.key)
 
     async def async_set_value(self, value):
+        if (self.coordinator.data or {}).get('settings', {}).get('charge_plans') is not None:
+            raise ValueError('Edit charging goals in the vehicle panel')
         await self.coordinator.async_change(settings={self.key: value})

@@ -505,13 +505,13 @@
         "name": "PV charging assistance surplus and deficit threshold"
       },
       "battery_pv_min_soc": {
-        "name": "Battery minimum SoC for PV charging assistance"
+        "name": "Home battery minimum SoC for PV charging starts"
       },
       "battery_pv_wait_s": {
         "name": "PV charging assistance surplus wait"
       },
       "target_soc": {
-        "name": "Departure target SoC"
+        "name": "Default / fast charging target SoC"
       },
       "pv_target_soc": {
         "name": "PV target SoC"

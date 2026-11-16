@@ -22,6 +22,7 @@ class NoRedirect(HTTPRedirectHandler):
 
 OPENER = build_opener(NoRedirect())
 MAX_RESPONSE = 8_000_000
+PV_IDLE_MAX_AGE_S = 12 * 3600
 ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+\Z")
 _configuration_locks = WeakValueDictionary()
 _configuration_locks_guard = Lock()
@@ -60,7 +61,8 @@ def request(url, *, method="GET", payload=None, headers=None):
         headers["Content-Type"] = "application/json"
     operation = {'/v1/config':'eos_config', '/v1/config/devices/batteries':'eos_battery_config',
         '/v1/config/devices/electric_vehicles':'eos_vehicle_config', '/v1/energy-management/plan':'eos_plan',
-        '/v1/energy-management/optimization/solution/GENETIC':'eos_solution', '/query':'influx_history'}.get(urlsplit(url).path, 'http')
+        '/v1/energy-management/optimization/solution/GENETIC':'eos_solution', '/v1/health':'eos_health',
+        '/query':'influx_history'}.get(urlsplit(url).path, 'http')
     verb = method if method in {'GET','PUT','POST','PATCH','DELETE'} else 'HTTP'
     started = monotonic()
     _LOGGER.debug('Backend request started: operation=%s method=%s', operation, verb)
@@ -78,17 +80,28 @@ def request(url, *, method="GET", payload=None, headers=None):
     return result
 
 
+def measurement_max_age(kind, value, max_age, unit='W'):
+    """Allow overnight PV noise up to 2 W, after normalizing the sensor unit."""
+    if kind != 'solar' or max_age is None:
+        return max_age
+    numeric = number(value)
+    scale = {'W': 1, 'kW': 1000}.get(unit) if isinstance(unit, str) else None
+    near_zero = numeric is not None and scale is not None and 0 <= numeric * scale <= 2
+    return PV_IDLE_MAX_AGE_S if near_zero else max_age
+
+
 def reading(states, entity, now, kind, max_age=None):
     row = states.get(entity, {})
     value = number(row.get("state"))
     unit = row.get("attributes", {}).get("unit_of_measurement")
     if value is None:
         return None
+    max_age = measurement_max_age(kind, value, max_age, unit)
     if max_age is not None:
         stamp = instant(row.get("last_reported") or row.get("last_updated"))
         if stamp is None or not 0 <= (now - stamp).total_seconds() < max_age:
             return None
-    scales = {"power": {"W": 1, "kW": 1000},
+    scales = {"power": {"W": 1, "kW": 1000}, "solar": {"W": 1, "kW": 1000},
               "price": {"EUR/kWh": 100, "€/kWh": 100, "ct/kWh": 1, "c/kWh": 1}}
     if kind in scales:
         scale = scales[kind].get(unit)
@@ -112,6 +125,9 @@ class EOS:
 
     def solution(self):
         return request(self.url + "/v1/energy-management/optimization/solution/GENETIC")
+
+    def health(self):
+        return request(self.url + '/v1/health')
 
     def feedin_accounting(self, now):
         configuration = request(self.url + "/v1/config")

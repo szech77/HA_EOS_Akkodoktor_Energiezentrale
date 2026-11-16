@@ -161,6 +161,45 @@ class FleetRequirements(unittest.TestCase):
         with self.assertRaises(ValueError):
             app.change_vehicle_settings("missing",{"target_soc":50})
 
+    def test_multiple_goals_stay_with_vehicle_and_general_calendar_is_shared(self):
+        app,ha,opts,directory=self.setup_fleet()
+        def goal(identity, target):
+            return {'id':identity,'schedule':'once','target_soc':target,
+                    'departure':(NOW+timedelta(hours=4)).isoformat()}
+        app.change_vehicle_settings('first',{'charge_plans':[goal('work',65)]})
+        app.change_vehicle_settings('second',{'charge_plans':[goal('trip',90)]})
+        app.config.update({**app.config.daily,'holiday_state':'BY','holiday_locality':'augsburg','reserve_w':100})
+        app.share_general_settings()
+        app.persist_primary_settings()
+        self.assertEqual([child.goal_target(NOW) for _,child,_ in app.controllers],[65,90])
+        for _,child,_ in app.controllers:
+            self.assertEqual(child.config.daily['holiday_locality'],'augsburg')
+            self.assertEqual(child.config.daily['reserve_w'],100)
+        restored=create_controller(ha,opts,directory)
+        self.assertEqual([child.goal_target(NOW) for _,child,_ in restored.controllers],[65,90])
+        app.tick(NOW,0)
+        payload=app.snapshot(NOW)['vehicles']
+        self.assertEqual([row['charge_target_soc'] for row in payload],[65,90])
+        self.assertEqual([row['charge_plan_view'][0]['id'] for row in payload],['work','trip'])
+
+    def test_shared_pv_gap_defers_warning_and_keeps_only_display_value(self):
+        from custom_components.eos_energiezentrale.energy.status import view_state
+        app,ha,opts,_=self.setup_fleet()
+        ha.rows[opts['pv_entity']]['state']='2'
+        app.tick(NOW,0)
+        now=NOW+timedelta(minutes=1)
+        for row in ha.rows.values():
+            row['last_reported']=row['last_updated']=now.isoformat()
+        ha.rows[opts['pv_entity']]['state']='unavailable'
+        app.tick(now,60)
+        result=app.snapshot(now)
+        self.assertIsNone(result['live']['solar'])
+        self.assertEqual(result['display']['solar'],{'value':2,'age_s':60})
+        self.assertFalse(any('solar' in row.get('measurements',[]) for row in view_state(result,now)['notices']))
+        self.assertFalse(result['source_configuration']['sources']['solar']['available'])
+        for vehicle in result['vehicles']:
+            self.assertIn('warning_after',vehicle['source_configuration']['sources']['solar'])
+
     def test_house_subtracts_all_vehicle_measurements_once(self):
         app,ha,opts,_=self.setup_fleet()
         ha.rows[opts["house_entity"]]["state"]="5000"

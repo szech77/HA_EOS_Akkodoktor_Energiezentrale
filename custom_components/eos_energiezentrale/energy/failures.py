@@ -3,13 +3,14 @@ REASONS = frozenset({'unknown_fields', 'invalid_type', 'out_of_range', 'battery_
     'invalid_schedule', 'invalid_departure', 'invalid_departure_time', 'invalid_weekdays',
     'profile_invalid', 'profile_nonpositive_power', 'settings_unconfirmed',
     'effective_limits_unavailable', 'effective_limits_differ', 'goal_unconfirmed', 'resource_missing',
-    'credential_unavailable', 'device_api_error'})
+    'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region'})
 FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_interval_s',
     'battery_min_soc', 'battery_max_soc', 'battery_pv_min_soc', 'battery_pv_wait_s', 'battery_pv_surplus_w',
     'pv', 'fast', 'battery_pv_support', 'battery_pv_start', 'phase_auto', 'schedule', 'departure',
     'departure_time', 'weekdays', 'capacity_wh', 'nominal_capacity_wh', 'max_charge_power_w',
     'max_discharge_power_w', 'min_charge_power_w', 'min_soc_percentage', 'max_soc_percentage',
-    'min_soc_deadline_datetime', 'min_soc_max_duration_h', 'charge_rates', 'profile_adjustment', 'password_env'})
+    'min_soc_deadline_datetime', 'min_soc_max_duration_h', 'charge_rates', 'profile_adjustment', 'password_env',
+    'charge_plans', 'holiday_state', 'holiday_locality', 'holiday_catholic'})
 
 
 class BackendError(ValueError):

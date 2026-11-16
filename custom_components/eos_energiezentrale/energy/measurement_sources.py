@@ -7,12 +7,12 @@ from collections.abc import Mapping
 from datetime import datetime
 
 from .contracts import Measurement, PluginContractError
-from .clients import reading
+from .clients import reading, measurement_max_age
 from .sanitiser import bounded
 from .domain import instant, number
 
 SOURCES = {
-    "solar": ("pv_entity", "power", "W", 45),
+    "solar": ("pv_entity", "solar", "W", 45),
     "grid": ("grid_entity", "power", "W", 45),
     "house_total": ("house_entity", "power", "W", 120),
     "heat": ("heat_entity", "power", "W", 120),
@@ -37,6 +37,7 @@ def checked_measurements(values, declared, now):
         value = bounded(item.value, low, high)
         stamp = item.sample
         age = SOURCES[key][3] if key in SOURCES else 120
+        age = measurement_max_age(key, value, age)
         if (not isinstance(stamp, datetime) or stamp.utcoffset() is None
                 or not 0 <= (now - stamp).total_seconds() < age):
             value = None
@@ -74,6 +75,8 @@ def resolve_sources(options, states, providers, now, keys=None):
                 if key == "heat_load": opts["heat_load_scale"] = "percent"
                 source = {"type": "plugin", "name": driver.info.name}
                 break
+        raw = rows.get(entity, {})
+        age = measurement_max_age(kind, raw.get('state'), age, raw.get('attributes', {}).get('unit_of_measurement'))
         available = bool(source and reading(rows, entity, now, kind, age) is not None)
         row = rows.get(entity, {})
         stamp = instant(row.get('last_reported') or row.get('last_updated'))

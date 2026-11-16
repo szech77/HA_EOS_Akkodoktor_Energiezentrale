@@ -19,7 +19,7 @@ ERROR_MESSAGES = {key: 'notice.' + key for key in (
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
 CONTROL_STATUSES = ('waiting', 'read_only', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
 BATTERY_LIMIT_STATUSES = ('failed', 'confirmed', 'pending', 'unmanaged')
-CONNECTION_STATUSES = ('fetch_failed', 'plan_available', 'no_plan', 'local_history', 'history_available', 'no_samples', 'connecting')
+CONNECTION_STATUSES = ('fetch_failed', 'plan_available', 'no_plan', 'local_history', 'history_available', 'no_samples', 'connecting', 'calculating', 'updating')
 
 
 def failure_details(error):
@@ -76,7 +76,9 @@ def view_state(data, now):
         report = source.get('source_configuration') or {}
         for kind in ('missing', 'unavailable'):
             measurements = [key for key in report.get(kind, []) if key in MEASUREMENT_KEYS
-                            and (scope == 'system' or key == 'car_soc')]
+                            and (scope == 'system' or key == 'car_soc')
+                            and not (kind == 'unavailable' and key == 'solar'
+                                and (instant(report.get('sources', {}).get(key, {}).get('warning_after')) or now) > now)]
             if measurements:
                 notices.append({'id': f'{scope}/sources_{kind}', 'code': f'sources_{kind}',
                     'message': f'notice.sources_{kind}', 'severity': 'warning', 'scope': scope,
@@ -91,7 +93,9 @@ def view_state(data, now):
         'read_only' if not data.get('armed') else 'cached_eos' if data.get('eos_cache') else
         'syncing_vehicle' if pending & {'goal_pending', 'limits_pending'} else
         'planning_vehicle' if 'plan_pending' in pending else 'active')
-    result['eos_status'] = ('fetch_failed' if data.get('errors', {}).get('eos') else
+    eos_run = (data.get('eos_run') or {}).get('state')
+    result['eos_status'] = (eos_run if eos_run in ('calculating', 'updating') else
+        'fetch_failed' if data.get('errors', {}).get('eos') else
         'plan_available' if any(data.get('plan', {}).values()) else 'no_plan')
     limits = data.get('battery_limits') or {}
     result['battery_limits_status'] = ('failed' if 'battery_limits' in data.get('errors', {}) else

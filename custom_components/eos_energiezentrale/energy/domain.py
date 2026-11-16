@@ -157,6 +157,10 @@ def estimate_soc(previous, measured, new_report, charging, previous_w, watts, se
 
 
 def next_departure(settings, now, zone):
+    if settings.get('charge_plans') is not None:
+        from .charge_plans import selected_goal
+        goal = selected_goal(settings, now, zone)
+        return goal[1] if goal else None
     if settings["schedule"] == "once":
         value = instant(settings["departure"])
         return value if value and value > now else None

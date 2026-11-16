@@ -19,6 +19,9 @@ from .measurement_sources import resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
 from .status import failure_details
 from .pv_support import PVSupport
+from .vehicle_projection import projected_vehicle_soc
+from .eos_status import EOSRunStatus
+from .pv_availability import PVAvailability
 
 
 class Controller:
@@ -34,6 +37,7 @@ class Controller:
         self.owned = False
         self.live = {}
         self.display = {}
+        self.pv_availability = PVAvailability()
         self.flow_display = {}
         settings=getattr(config,"options",{})
         self.flow_alignment=ChargeTransitionDisplay(settings.get("display_hold_s",900),settings.get("display_transition_s",30))
@@ -41,6 +45,7 @@ class Controller:
         self.plan = None
         self.resource_plans = {}
         self.eos_failure_since = {}
+        self.eos_run = EOSRunStatus()
         self.forecast = []
         self.forecast_vehicle_resource = None
         self.forecast_failure_since = None
@@ -223,6 +228,11 @@ class Controller:
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
             try:
+                health = self.config.eos.health()
+            except Exception:
+                health = None
+            self.apply_eos_health(health, now)
+            try:
                 candidate = self.config.eos.plan()
             except Exception as error:
                 self.apply_eos_plan(None, now, error)
@@ -236,6 +246,28 @@ class Controller:
                 self.apply_eos_forecast(None, now, error)
             else:
                 self.apply_eos_forecast(solution, now)
+
+    def apply_eos_health(self, health, now):
+        with self.lock:
+            self.eos_run.update(health, now)
+
+    def eos_run_state(self, now):
+        failures = list(self.eos_failure_since.values())
+        if self.forecast_failure_since is not None:
+            failures.append(self.forecast_failure_since)
+        return self.eos_run.snapshot(now, min(failures) if failures else None)
+
+    def visible_errors(self, now):
+        errors = dict(self.errors)
+        if self.eos_run_state(now)['grace']:
+            for area in ('eos', 'forecast'):
+                errors.pop(area, None)
+            for area in ('goal', 'battery_limits', 'vehicle_limits'):
+                details = self.error_details.get(area, {})
+                if (details.get('http_status') in (408, 409, 423, 429, 500, 502, 503, 504)
+                        or details.get('exception') in ('TimeoutError', 'URLError', 'ConnectionError')):
+                    errors.pop(area, None)
+        return errors
 
     def apply_eos_plan(self, candidate, now, error=None):
         resources = self.eos_resources()
@@ -337,13 +369,18 @@ class Controller:
             status = 'missing' if source['source'] is None else 'unavailable'
             report[status] = sorted([*report[status], 'car_soc'])
 
+    def goal_target(self, now):
+        from .charge_plans import selected_goal
+        goal = selected_goal(self.config.daily, now, self.config.zone)
+        return goal[0] if goal else self.config.daily['target_soc']
+
     def sync_goal(self, now, clock, departure):
         if self.config.options.get('wallbox_type')=='none':
             return False
         daily = self.config.daily
         ready = (not optional_charger(self.config.wallbox) or
                  self.vehicle_profile is not None and self.vehicle_profile[-1])
-        goal = (daily["target_soc"], departure) if departure and self.vehicle_connected is not False and ready else None
+        goal = (self.goal_target(now), departure) if departure and self.vehicle_connected is not False and ready else None
         if self.external_goal_sync:
             self.goal_sync_ready = True
             return goal is not None and goal == self.goal and self.goal_at is not None
@@ -432,9 +469,10 @@ class Controller:
         opts, states, self.source_configuration = resolve_sources(opts, states,
             ((self.config.battery, battery), (self.config.wallbox, box)), now)
         self.input_options = opts
+        self.pv_availability.observe(states, opts['pv_entity'], now)
         measured = self.update_soc(states, box, now)
         live = {key: reading(states, opts[source + "_entity"], now, kind, age)
-                for key, source, kind, age in (("solar", "pv", "power", 45), ("grid", "grid", "power", 45),
+                for key, source, kind, age in (("solar", "pv", "solar", 45), ("grid", "grid", "power", 45),
                                                ("house_total", "house", "power", 120), ("heat", "heat", "power", 120),
                                                ("price", "price", "price", 3600))}
         live.update(time=now.isoformat(), car=box.watts, battery_soc=battery.soc, car_soc=self.soc,
@@ -458,6 +496,8 @@ class Controller:
         self.display=self.display_values.update(states,live,opts,
             battery_ids if isinstance(battery_ids,Mapping) else {},
             wallbox_ids if isinstance(wallbox_ids,Mapping) else {},now)
+        if live['solar'] is None and (retained := self.pv_availability.retained(now)) is not None:
+            self.display['solar'] = retained
         times=report_times(states,opts,battery_ids if isinstance(battery_ids,Mapping) else {},
                            wallbox_ids if isinstance(wallbox_ids,Mapping) else {},now)
         self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if self.armed else None,command_at=self.last_write)
@@ -516,12 +556,12 @@ class Controller:
             planned = maximum_power
         elif (plan_ready
               and car_order and car_order.mode in {"GRID_SUPPORT_IMPORT", "FORCED_CHARGE"}
-              and self.soc is not None and self.soc < daily["target_soc"]):
+              and self.soc is not None and self.soc < self.goal_target(now)):
             planned = maximum_power * car_order.factor
         pv = (self.soc is not None and not daily["fast"] and
               ((daily["pv"] and self.soc < daily["pv_target_soc"]) or
                (not daily["pv"] and plan_ready
-                and car_order and car_order.mode == "NON_EXPORT" and self.soc < daily["target_soc"])))
+                and car_order and car_order.mode == "NON_EXPORT" and self.soc < self.goal_target(now))))
         if not (pv and planned == 0):
             self.pv_session = False
         self.control_step = "wallbox_control"
@@ -731,19 +771,20 @@ class Controller:
         if (not self.armed or self.config.options.get("wallbox_type") == "none"
                 or daily["fast"] or self.vehicle_connected is False
                 or (self.vehicle_profile is not None and not self.vehicle_profile[-1])
-                or (self.soc is not None and self.soc >= daily["target_soc"])):
+                or (self.soc is not None and self.soc >= self.goal_target(now))):
             return None
         departure = next_departure(daily, now, self.config.zone)
         if departure is None:
             return None
-        if self.goal != (daily["target_soc"], departure) or self.goal_at is None:
+        if self.goal != (self.goal_target(now), departure) or self.goal_at is None:
             return "goal_pending"
         if optional_charger(self.config.wallbox) and (self.vehicle_profile is None or
                 self.vehicle_profile != self.vehicle_profile_confirmed):
             return "limits_pending"
         return None if self.vehicle_plan_ready(now) else "plan_pending"
 
-    def snapshot(self, now):
+    def snapshot(self, now, *, pv_share=1):
+        from .charge_plans import plan_view
         with self.lock:
             # A pending background retry must not delay the warning threshold.
             self.report_forecast_availability(now)
@@ -753,13 +794,29 @@ class Controller:
             current = bool(generated and self.order_for(opts["battery_resource"],now) is not None)
             vehicle_resource=opts.get('vehicle_resource') if opts.get('wallbox_type')!='none' else None
             forecast=vehicle_forecast(self.forecast,self.forecast_vehicle_resource,vehicle_resource) if current else []
+            projection = 'unavailable'
+            if vehicle_resource:
+                phases = self.live.get('phases')
+                auto = (self.config.daily['phase_auto'] and
+                        getattr(getattr(self.config.wallbox, 'features', None), 'phase_switching', False) is True)
+                maximum = self.vehicle_profile[0] if self.vehicle_profile else (
+                    self.config.options.get('max_current_a', 0) * 230 * phases if phases in (1, 3) else 0)
+                minimum = self.vehicle_profile[1] if self.vehicle_profile else 6 * 230 * (1 if auto else phases or 0)
+                forecast, projection = projected_vehicle_soc(forecast, self.forecast, now, self.live.get('car_soc'),
+                    {**self.config.options, **self.config.daily}, connected=self.vehicle_connected,
+                    maximum_w=maximum or 0, minimum_w=minimum or 0, pv_share=pv_share,
+                    foreign_vehicle=self.forecast_vehicle_resource != vehicle_resource)
             driver=getattr(self.config.battery,'driver',self.config.battery)
             plugin_reads={kind:getattr(value,'telemetry_status',[]) for kind,value in
                           (('battery',driver),('wallbox',self.config.wallbox))}
             group=getattr(driver,'site_summary',None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
-            return {"source_configuration":deepcopy(self.source_configuration),
+            return {"charge_plan_view": plan_view(self.config.daily, now, self.config.zone),
+                    "eos_run": self.eos_run_state(now),
+                    "vehicle_forecast_source": projection,
+                    "charge_target_soc": self.goal_target(now),
+                    "source_configuration":self.pv_availability.decorate(deepcopy(self.source_configuration), now),
                     "plugin_read_issues":{key:deepcopy(value) if isinstance(value,list) else [] for key,value in plugin_reads.items()},
                     "battery_group":deepcopy(group) if isinstance(group,dict) else None,
                     "pv_battery_support": {"active":self.pv_support.active,
@@ -778,7 +835,7 @@ class Controller:
                     "control_waiting": self.armed and self.restore_pending,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "eos_cache": {resource:{"remaining_s":max(0,300-(now-failed).total_seconds())} for resource,failed in self.eos_failure_since.items() if resource in self.resource_plans and (now-failed).total_seconds()<300 and self.order_for(resource,now) is not None},
-                    "errors": dict(self.errors), "error_details": dict(self.error_details), "last_failure": self.last_failure, "zone": opts["timezone"],
+                    "errors": self.visible_errors(now), "error_details": dict(self.error_details), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},
                     "vehicle_name": opts.get("vehicle_name", "E-Auto").strip(),
                     "plugins": {"battery":describe(self.config.battery),"wallbox":describe(self.config.wallbox)},

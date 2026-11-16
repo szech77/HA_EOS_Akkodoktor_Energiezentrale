@@ -1167,6 +1167,11 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         app.source_configuration = {'unavailable':['solar'], 'sources':{
             'solar':{'reason':'stale','max_age_s':45,'source':{'name':'private-sensor'}}}}
         coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        with self.assertNoLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING'):
+            result = await self.hass.async_add_executor_job(coordinator._tick)
+        self.assertFalse(result['notices'])
+        from datetime import timedelta
+        app.pv_availability.missing_since -= timedelta(minutes=5)
         with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
             result = await self.hass.async_add_executor_job(coordinator._tick)
         self.assertEqual(result['notices'][0]['code'],'sources_unavailable')
@@ -1187,6 +1192,26 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('private-host','\n'.join(logs.output))
         self.assertNotIn('test-secret','\n'.join(logs.output))
 
+    async def test_eos_status_is_polled_and_busy_window_is_visible_without_eos_warning(self):
+        from datetime import timedelta
+        from test_energy import NOW
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.eos=Mock()
+        app.config.eos.health.return_value={'status':'alive','energy-management':{
+            'stage':'OPTIMIZATION','start_datetime':NOW.isoformat(),'last_run_datetime':None}}
+        app.config.eos.plan.side_effect=TimeoutError()
+        coordinator=EnergyCoordinator(self.hass,self.entry,app)
+        for seconds in (0,299,301):
+            now=NOW+timedelta(seconds=seconds)
+            with patch('custom_components.eos_energiezentrale.coordinator.datetime') as clock:
+                clock.now.return_value=now
+                await coordinator._async_poll_eos('plan')
+            self.assertEqual(coordinator.data['eos_run']['state'],'calculating')
+            self.assertEqual(coordinator.data['eos_run']['elapsed_s'],seconds)
+            self.assertEqual('eos' in coordinator.data['errors'],seconds>=300)
+            self.assertEqual(any(row['code']=='eos' for row in coordinator.data['notices']),seconds>=300)
+        self.assertEqual(app.config.eos.health.call_count,3)
+
     async def test_invalid_settings_log_backend_reason_and_do_not_modify_bounds(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
         self.entry.runtime_data = coordinator = EnergyCoordinator(self.hass, self.entry, app)
@@ -1199,6 +1224,20 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(app.config.daily['battery_min_soc'],20)
         issue = next(item for item in coordinator.issue_log.diagnostics()['active'] if item['scope'] == 'api/settings')
         self.assertEqual(issue['details']['fields'],['battery_max_soc','battery_min_soc'])
+
+    async def test_invalid_goal_list_logs_safe_reason_and_preserves_settings(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        self.entry.runtime_data = coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
+            result = await self.invoke({'action':'settings','values':{'charge_plans':[
+                {'id':'invalid-goal','schedule':'once','departure':'not-a-date','target_soc':80}]}})
+        result.send_error.assert_called_once()
+        self.assertIn('invalid_charge_plan',logs.output[0])
+        self.assertNotIn('not-a-date',' '.join(logs.output))
+        self.assertIsNone(app.config.daily['charge_plans'])
+        issue = next(item for item in coordinator.issue_log.diagnostics()['active'] if item['scope'] == 'api/settings')
+        self.assertEqual(issue['details']['fields'],['charge_plans'])
 
     async def test_cached_browser_reports_are_discarded_without_logs_even_during_restart(self):
         coordinator,_ = self.controller()
@@ -1363,6 +1402,23 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             await departure.async_set_value("not-a-date")
         self.assertEqual(departure.native_value, "2026-11-10T09:45:00+01:00")
         self.assertEqual(schedule.current_option, "once")
+
+    async def test_goal_list_replaces_legacy_schedule_fields_without_silent_ignored_edits(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        coordinator.async_set_updated_data(app.snapshot(datetime.now(timezone.utc)))
+        await coordinator.async_change(settings={'charge_plans':[{'id':'work','schedule':'weekly',
+            'weekdays':[0,1,2,3,4],'departure_time':'07:30','target_soc':75}]})
+        schedule=ScheduleSelect(coordinator,'schedule')
+        departure=EnergyText(coordinator,'departure')
+        self.assertFalse(schedule.available)
+        self.assertFalse(departure.available)
+        for change in (schedule.async_select_option('off'),departure.async_set_value('2027-01-01T07:30:00Z')):
+            with self.assertRaises(ValueError):
+                await change
+        self.assertEqual(app.config.daily['charge_plans'][0]['target_soc'],75)
+        restored=Configuration(dict(DEFAULTS),Mock(),self.directory)
+        self.assertEqual(restored.daily['charge_plans'],app.config.daily['charge_plans'])
 
     async def test_pending_release_visible_immediately_after_failed_native_switch_off(self):
         ha = Mock()

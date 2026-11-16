@@ -56,10 +56,13 @@ def test_eos_curve_is_delivered_only_to_its_resource_among_multiple_vehicles(mak
     app.tick(NOW,0)
     for vehicle in app.snapshot(NOW)['vehicles']:
         if vehicle['id']==identity:
+            assert vehicle['vehicle_forecast_source']=='eos'
             assert vehicle['forecast'][0]['car_soc']==20
             assert vehicle['forecast'][0]['car']==4000
         else:
-            assert all('car_soc' not in row and 'car' not in row for row in vehicle['forecast'])
+            assert vehicle['vehicle_forecast_source']=='constant'
+            assert {row['car_soc'] for row in vehicle['forecast'] if 'car_soc' in row}=={40}
+            assert all('car' not in row for row in vehicle['forecast'])
         assert vehicle['forecast'][0]['solar']==1000
 
 
@@ -92,7 +95,9 @@ def test_missing_conflicting_or_foreign_ids_never_guess_a_curve_for_single_vehic
     app.tick(NOW,0)
     rows=app.snapshot(NOW)['vehicles'][0]['forecast']
     assert rows and rows[0]['solar']==1000
-    assert all('car_soc' not in row and 'car' not in row for row in rows)
+    assert app.snapshot(NOW)['vehicles'][0]['vehicle_forecast_source']=='constant'
+    assert {row['car_soc'] for row in rows if 'car_soc' in row}=={40}
+    assert all('car' not in row for row in rows)
 
 
 @pytest.mark.parametrize('source',['parameters','ev_obj','eauto_obj'])
@@ -115,13 +120,16 @@ def test_forecast_failure_or_stale_solution_removes_all_vehicle_curves(make_flee
     app.config.eos.solution.side_effect=OSError('forecast unavailable')
     later=NOW+timedelta(seconds=60)
     app.tick(later,60)
-    assert all(not row['forecast'] for row in app.snapshot(later)['vehicles'])
+    for vehicle in app.snapshot(later)['vehicles']:
+        assert vehicle['vehicle_forecast_source']=='constant'
+        assert {row['car_soc'] for row in vehicle['forecast']}=={40}
+        assert all('solar' not in row and 'car' not in row for row in vehicle['forecast'])
     assert all(child.forecast_vehicle_resource is None for _,child,_ in app.controllers)
     app.config.eos.solution.side_effect=None
     app.config.eos.solution.return_value=solution(now=NOW-timedelta(hours=2))
     later=NOW+timedelta(seconds=120)
     app.tick(later,120)
-    assert all(not row['forecast'] for row in app.snapshot(later)['vehicles'])
+    assert all(row['vehicle_forecast_source']=='constant' for row in app.snapshot(later)['vehicles'])
 
 
 def test_invalid_soc_samples_are_gaps_and_invalid_capacity_does_not_invent_power():
@@ -134,3 +142,37 @@ def test_invalid_soc_samples_are_gaps_and_invalid_capacity_does_not_invent_power
     data['parameters']['ev']['capacity_wh']=-10000
     assert forecast_rows(data,NOW)[0]['car_soc']==20
     assert forecast_rows(data,NOW)[0]['car'] is None
+
+
+def test_without_eos_ev_plan_pv_estimate_uses_current_soc_without_mutating_control_forecast(make_fleet):
+    app,_=make_fleet(definitions()[:1])
+    app.config.daily['pv']=True
+    data=solution()
+    data['parameters'].pop('ev')
+    data.pop('ev_obj')
+    data['parameters']['ems'].update(pv_forecast_wh=[1000]*4,total_load=[250]*4)
+    data['result']={}
+    app.config.eos.solution.return_value=data
+    app.tick(NOW,0)
+    vehicle=app.snapshot(NOW)['vehicles'][0]
+    assert vehicle['vehicle_forecast_source']=='pv_estimate'
+    values=[row['car_soc'] for row in vehicle['forecast'] if 'car_soc' in row]
+    assert values[0]==40
+    assert values[1]>40
+    assert max(values)<=app.config.daily['pv_target_soc']
+    assert app.soc==40
+    assert all(row.get('car_soc') is None for row in app.forecast)
+
+
+def test_eos_idle_zero_curve_does_not_replace_measured_vehicle_soc(make_fleet):
+    app,_=make_fleet(definitions()[:1])
+    data=solution()
+    data['result']['ev_soc_per_hour']=[0,0,0,0]
+    app.config.eos.solution.return_value=data
+    app.tick(NOW,0)
+    vehicle=app.snapshot(NOW)['vehicles'][0]
+    assert vehicle['live']['car_soc']==40
+    assert vehicle['vehicle_forecast_source']=='constant'
+    assert {row['car_soc'] for row in vehicle['forecast'] if 'car_soc' in row}=={40}
+    assert app.soc==40
+    assert all(row['car_soc']==0 for row in app.forecast[:4])  # Raw EOS data remains unchanged.

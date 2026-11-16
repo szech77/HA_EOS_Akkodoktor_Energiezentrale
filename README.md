@@ -42,8 +42,15 @@ Linien zeigen Messwerte, gestrichelte Linien die Prognose.
 Die Fahrzeugansicht zeigt Ladeziel und Abfahrtszeit sowie die EOS-Lademodi,
 Wallbox-Leistung, PV-Produktion, SoC und Bezugspreise.
 Auch bei nur einem verwalteten Fahrzeug wird eine vorhandene EOS-SoC-Prognose
-angezeigt. Die gestrichelte Kurve gehört ausschließlich zum von EOS benannten
-Fahrzeug; aktuelle Messwerte bleiben davon unabhängig.
+angezeigt, einschließlich eines eigenen SoC-Diagramms in der gemeinsamen
+Autoübersicht. Ohne passende EOS-Kurve wird der aktuelle gültige SoC für die
+nächsten 24 Stunden fortgeschrieben. Bei aktiviertem PV-Laden kann das Backend
+anhand verfügbarer PV- und Hauslastprognosen einen Anstieg bis zum PV-Ziel
+abschätzen. Die Anzeige unterscheidet EOS-Prognose und lokale Schätzung;
+aktuelle Messwerte und Regelung bleiben davon unabhängig.
+Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
+Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt
+dann beim aktuellen SoC und berücksichtigt verfügbare PV-Überschussprognosen.
 
 ![E-Auto-Detailansicht mit Ladeziel, Moduszeitleiste, Wallbox-Leistung, SoC und Strompreis](docs/screenshots/vehicle.png)
 
@@ -352,10 +359,10 @@ Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entität
 | Phasenautomatik | Automatischer Wechsel zwischen ein- und dreiphasigem Laden. |
 | Speicherunterstützung | Kann während tatsächlicher Auto-PV-Ladung die EOS-Entladesperre unter Beachtung der SoC-Grenzen aufheben. |
 | Speichergestützter PV-Ladestart | Eigener Schalter, standardmäßig aus; ermöglicht den Start bei kleinem Überschuss unterhalb der Fahrzeug-Mindestleistung. Benötigt zusätzlich Speicherunterstützung und aktives PV-Laden. |
-| Speicher-Untergrenze für PV-Ladestart | Standard 50 %, einstellbar 0–98 %. Wirksam ist die höhere Grenze aus diesem Wert und dem allgemeinen Speicher-Mindest-SoC. Start ab zwei Prozentpunkten darüber, Ende der Unterstützung an der Grenze. |
+| Hausspeicher-Mindest-SoC für unterstützte PV-Ladestarts | Standard 50 %, einstellbar 0–98 %. Wirksam ist die höhere Grenze aus diesem Wert und dem allgemeinen Speicher-Mindest-SoC. Start ab zwei Prozentpunkten darüber, Ende der Unterstützung an der Grenze. |
 | Überschusswartezeit | Standard 60 s, einstellbar 10–600 s. Unterbrechungen, fehlende Messwerte oder zu niedriger SoC starten die Wartezeit neu. |
 | PV-Überschuss- und Defizitschwelle | Standard 150 W, einstellbar 1–5.000 W. Mindestens dieser Überschuss wird zum Start benötigt. Nach dem Start beendet ein durchgängiges PV-Defizit ab dieser Schwelle über 60 s die Unterstützung. |
-| Abfahrtsplanung | Aus, einmalig mit Datum/Uhrzeit oder wöchentlich mit einzelnen Wochentagen. |
+| Ladeziele unter Auto | Bis zu 32 aktivierbare Ziele mit eigenem SoC, einmaliger Abfahrt oder wiederkehrend mit Wochentagen und zusätzlichen Feiertagen. |
 
 Beispiel: Bei 500 W PV-Überschuss und einphasiger Mindestladung von 1.380 W
 kann der Speicher die fehlenden 880 W bereitstellen. Bei einer Untergrenze von
@@ -591,6 +598,20 @@ Die Frischegrenzen für die Regelung betragen 45 Sekunden für PV und Netz,
 120 Sekunden für Haus-, Wärmepumpen-, Wallbox- und Speicherleistungen und
 3600 Sekunden für den Preis. Der Speicher-SoC wird ebenfalls mit 120 Sekunden
 geprüft. Maßgeblich ist die letzte Meldung, auch wenn der Zahlenwert gleich bleibt.
+Für PV-Leistung von **0 bis einschließlich 2 W** gilt eine Ausnahme von
+**12 Stunden**, weil einige Sensoren nachts kleine Restwerte melden und keine
+neuen Meldungen senden. Werte in kW werden vorher in Watt umgerechnet. Dies gilt ebenfalls für
+PV-Werte aus generischen HA-Plugins. Fehlende Werte, falsche Einheiten und
+zukünftige Zeitstempel werden weiterhin zurückgewiesen; PV-Leistung über 2 W
+behält die kurze Frischegrenze.
+Die PV-Quellenwarnung erscheint erst nach fünf Minuten ohne gültigen aktuellen
+Wert. Nach einem gültigen Wert von 0–2 W wartet sie bis maximal 12 Stunden nach
+diesem Messzeitpunkt. Dies deckt auch vorübergehende Modbus-N/A-Werte ab;
+wiederholte Ausfälle verlängern die Frist nicht. Der letzte kleine Wert bleibt
+mit Altersangabe sichtbar. Ein fehlender aktueller PV-Wert bleibt für Regelung
+und Historie ungültig; der Anzeigepuffer ersetzt keine Messung. Falsche Einheiten,
+zukünftige Zeitstempel und fehlende Konfiguration werden weiterhin unmittelbar
+als Quellenproblem angezeigt. Geräte- und Verbindungsfehler bleiben diagnostizierbar.
 
 Ein letzter gültiger Wärmepumpenwert kann in der Übersicht mit Altersangabe
 weiter erscheinen. Der daraus berechnete Hausverbrauch trägt `≈` und den Hinweis
@@ -634,7 +655,10 @@ Entity-IDs findest du unter dem Gerät **EOS Energiezentrale**. Bereits bestehen
 Helper werden nicht überschrieben. Einen bisherigen EOS-SoC-Eingang bei Bedarf
 auf den neuen nativen Auto-SoC-Faktor umstellen.
 
-Alltagseinstellungen sind im Panel und über native Entitäten erreichbar.
+Allgemeine Einstellungen für Kosten/Bilanzierung, Hausspeicher, PV-Ladestart und
+Regelintervall stehen im Panel unter **Einstellungen**. Fahrzeugbezogene
+Ladeoptionen und Ladeziele stehen in der Detailansicht **Auto → Ladeplanung**.
+Native Entitäten ergänzen die Bedienung einzelner Parameter.
 Inbetriebnahme-Einstellungen findest du unter Geräte & Dienste → EOS Energiezentrale
 → **Konfigurieren**. Nach deren Änderung wird die Integration neu geladen. Die
 gespeicherte Steuerfreigabe bleibt erhalten und wird nach Prüfung der Eingangsdaten wieder aktiv.
@@ -650,8 +674,9 @@ Mitgelieferte Treiber: **Fronius GEN24 / BYD über callifo/fronius_modbus** und
 Entitätszuordnungen lassen sich als JSON in den Hardware-Optionen überschreiben.
 Siehe [Einrichtung und Betrieb](DOCS.md) und [Contributing](CONTRIBUTING.md).
 
-InfluxDB 1.x ist optional und wird lesend angesprochen. Die Integration hat keine
-zusätzlichen Python-Laufzeitabhängigkeiten außerhalb von Home Assistant.
+InfluxDB 1.x ist optional und wird lesend angesprochen. Home Assistant installiert
+die Laufzeitabhängigkeit `holidays==0.108` für die lokale Feiertagsermittlung;
+die Berechnung benötigt keinen externen Kalenderdienst.
 
 ## Entwicklung
 
@@ -721,8 +746,34 @@ verwenden die gemeinsame EOS-API-Basisadresse; es sind keine zusätzlichen
 EOS-Verbindungen nötig. Ohne Fahrzeugliste bleibt das Feld für die bisherige
 Einzelkonfiguration sichtbar. Neue Fahrzeuge weiterhin unter **Geräte** hinzufügen.
 
-In den Alltagseinstellungen das Fahrzeug auswählen und dessen Ziel-SoC,
-PV-Ziel, Abfahrt und Schnellladung speichern. Die Speichergrenzen bleiben global.
+Unter **Auto → Ladeplanung** das Fahrzeug auswählen und PV-Überschussladen mit
+PV-Ziel-SoC, Schnellladen mit eigenem Ziel-SoC sowie automatische Phasenwahl
+einstellen. Die Liste **Ladeziele** unterstützt bis zu 32 Einträge je Fahrzeug:
+einmalige Abfahrt oder wiederkehrende Abfahrt mit Uhrzeit, Wochentagen und
+zusätzlichen Feiertagen, jeweils mit Ziel-SoC und Aktivschalter. Einträge lassen
+sich hinzufügen und nach einer Bestätigung entfernen; erst **Speichern** übernimmt
+die Änderungen. Inaktive und abgelaufene einmalige Ziele bleiben bearbeitbar.
+Das Backend übergibt das zeitlich nächste aktive Ziel an EOS. Bei identischem
+Termin gilt der höhere Ziel-SoC. Nach Ablauf wird das nächste Ziel ausgewählt;
+EOS muss nach einer Änderung zunächst einen neuen Plan erstellen. Alle Uhrzeiten
+verwenden die konfigurierte Anlagenzeitzone. Wiederkehrende Termine in der
+Zeitumstellungslücke werden auf die nächste existierende Uhrzeit verschoben;
+nicht existierende einmalige Uhrzeiten werden zurückgewiesen.
+
+Unter **Einstellungen → Feiertage in Deutschland** Bundesland und gegebenenfalls
+Augsburg als örtliche Sonderregelung auswählen. Für betroffene Gemeinden Bayerns,
+Sachsens und Thüringens können örtliche katholische Feiertage aktiviert werden.
+Diese Auswahl richtet sich nach dem Standort, nicht nach der persönlichen
+Konfession. Ohne Bundesland gelten bundesweite gesetzliche Feiertage. Die Option
+im Ladeziel ergänzt die Wochentage; sie schließt Feiertage an bereits ausgewählten
+Wochentagen nicht aus. Auch reine Feiertagspläne sind möglich.
+
+Bestehende Einzelpläne erscheinen unverändert als ein Ladeziel. Nach dem ersten
+Speichern der neuen Liste ersetzt sie den alten Einzelplan. Die nativen Entitäten
+für Zeitplan und Abfahrtsdatum/-zeit sind danach nicht verfügbar; die Liste wird
+im Fahrzeugpanel bearbeitet. Der native Standard-Ziel-SoC steuert dann nur noch
+die Schnellladung. Speichergrenzen, PV-Ladestartparameter, Einspeisereserve,
+Regelintervall und Feiertagsregion bleiben für alle Fahrzeuge gemeinsam.
 Der Stromfluss zeigt jedes konfigurierte Fahrzeug mit eigenem Namen, Ladeleistung,
 fünf SoC-Balken und eigener Verbindung zur Energiezentrale. Dies gilt auch bei nur
 einem Fahrzeug. Ein Klick auf das Fahrzeug öffnet dessen Messwerte, SoC und
@@ -741,11 +792,24 @@ Budget hat die Reihenfolge in der Liste Vorrang. Beim Abschalten werden alle Lad
 pausiert und der Speicher freigegeben. Die Hausleistung zieht alle gemessenen
 Fahrzeugleistungen genau einmal ab.
 
-Die bisherige EOS-Lösungsantwort enthält nur eine nicht nach Fahrzeugressourcen
-aufgeschlüsselte EV-Prognose. In der Mehrfahrzeugansicht werden deshalb keine
-Leistungs-/SoC-Prognosen einzelnen Fahrzeugen zugeordnet. PV-Prognose und
-ressourcenspezifische EOS-Moduspläne bleiben verfügbar. Fahrzeughistorie wird lokal
-ab Einrichtung geführt; ältere individuelle Influx-Verläufe werden hier noch nicht geladen.
+Die EOS-Lösungsantwort enthält eine EV-Prognose. Sie wird nur bei eindeutiger
+Zuordnung der gespeicherten `device_id` zum entsprechenden Fahrzeug angezeigt.
+Eine ausschließlich aus 0 % bestehende Zukunftskurve hat keinen Vorrang vor
+einem bekannten positiven Fahrzeug-SoC. Ohne geplantes Fahrzeug stellt EOS
+solche Nullkurven bereit; stattdessen wird der lokale Ersatzverlauf verwendet.
+Fremde, fehlende oder widersprüchliche IDs übernehmen keine EOS-Kurve. Für diese
+Fahrzeuge zeigt das Backend stattdessen eine ausdrücklich gekennzeichnete lokale
+SoC-Schätzung, sofern ein gültiger aktueller SoC vorliegt. Ohne abschätzbare
+PV-Ladung bleibt sie konstant. Eine PV-Schätzung benötigt ein angeschlossenes
+Fahrzeug, aktiviertes PV-Laden, bekannte Mindest-/Maximalleistung, Kapazität,
+Ladeeffizienz sowie Prognosen für PV und Hausverbrauch. Sie berücksichtigt
+Einspeisereserve, prognostizierte Speicherladung und andere prognostizierte
+Fahrzeuglasten. Bei mehreren PV-Fahrzeugen wird der verbleibende Überschuss
+konservativ aufgeteilt. Fehlende Prognoseintervalle werden nicht durch aktuelle
+PV-Leistung ersetzt. Die Schätzung ist keine Ladezusage und wird nicht zur
+Steuerung oder als Messwert an EOS übergeben. PV-Prognose und ressourcenspezifische
+EOS-Moduspläne bleiben verfügbar. Fahrzeughistorie wird lokal ab Einrichtung
+geführt; ältere individuelle Influx-Verläufe werden hier noch nicht geladen.
 
 ### Letzte Sensorwerte anzeigen
 
@@ -781,6 +845,19 @@ Nach Ablauf wird die EOS-abhängige Ladung pausiert; die Steuerfreigabe bleibt g
 damit nach Erholung automatisch fortgesetzt werden kann. Lokale Sicherheitsgrenzen
 und die Frische der HA-Messwerte werden weiterhin geprüft. Pro Fahrzeug wird ein
 eigener Plan gepuffert. Die Diagnose zeigt den aktiven Puffer und seine Restzeit.
+
+Vor dem Planabruf wird `/v1/health` gelesen. Im Kopfbereich und unter Einrichtung
+erscheint **EOS berechnet** mit verstrichenen Sekunden, wenn EOS eine laufende
+Phase meldet oder der Laufstart nach dem letzten Abschluss liegt. Ältere
+EOS-Versionen liefern nur gerundete Start- und Abschlusszeitpunkte. Ist damit
+kein Lauf eindeutig erkennbar, EOS aber erreichbar und ein neuer Plan noch nicht
+abrufbar, zeigt das Panel **Warte auf aktuellen EOS-Plan**. Beide Zustände erhalten
+ein begrenztes Fenster von fünf Minuten ohne temporäre Plan-/Prognosewarnungen
+oder transportbedingte EOS-Synchronisationswarnungen. Wiederholte Statusabrufe
+verlängern das Fenster nicht. Ein veralteter oder fehlgeschlagener Health-Abruf
+kann Fehler nicht unterdrücken. Gerätestörungen und Konfigurationsfehler bleiben
+sichtbar; die Gültigkeit vorhandener Steuerpläne wird nicht verlängert.
+Zustandswechsel werden im Integrationslog auf INFO-Ebene protokolliert.
 
 Die Panel-Meldung **Daten oder Steuerung prüfen · Prognose** erscheint erst,
 wenn der EOS-Prognoseabruf fünf Minuten durchgehend fehlschlägt. Die Frist beginnt

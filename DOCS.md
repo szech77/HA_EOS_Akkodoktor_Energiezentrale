@@ -41,9 +41,26 @@ entsprechenden Registry sowie der Typauswahl registriert. Fachliche Tests ergän
 
 Die Integration prüft alle fünf Sekunden, einschließlich jeder vollen Minute.
 EOS-Pläne werden höchstens alle 15 Sekunden, Prognosen alle 60 Sekunden abgerufen.
+Vor jedem Planabruf wird zusätzlich der EOS-Health-Status gelesen. Eine laufende
+Berechnung beziehungsweise das Warten auf einen aktuellen Plan wird oben im Panel
+mit Laufzeit angezeigt. Bei erreichbarem EOS erhalten temporäre Abrufprobleme
+bis zu fünf Minuten ohne Fehlermeldung; erneute Versuche verlängern das Fenster
+nicht. Ein nicht mehr frischer Status unterdrückt keine Warnung. Alte EOS-Versionen
+ohne Phasenstatus werden anhand ihrer Start- und Abschlusszeitpunkte ausgewertet;
+bei mehrdeutigen gerundeten Zeitpunkten wird nur das Warten auf den Plan angezeigt.
+Plangültigkeit, Stopps und Gerätefehler gelten weiterhin unverändert.
 Bereits gelesene zukünftige Anweisungen werden anhand ihrer Ausführungszeit aktiviert.
 Das Strom-Regelintervall begrenzt die Schreibfrequenz; eine neue Netzmessung nach dem
 letzten Schreibvorgang ist ebenfalls erforderlich.
+Ein unveränderter PV-Wert von 0 bis einschließlich 2 W bleibt nachts bis zu
+12 Stunden gültig, auch bei Sensoren mit kW-Einheit nach Umrechnung. Für
+PV-Leistung über 2 W gilt weiterhin die kurze Aktualitätsprüfung von 45 Sekunden.
+Bei zeitweilig fehlendem Wert wird die PV-Quellenwarnung fünf Minuten
+zurückgestellt. Nach zuletzt 0–2 W gilt stattdessen die längere Frist bis
+12 Stunden nach dem ursprünglichen Messzeitpunkt. Der letzte kleine Wert bleibt
+mit Altersangabe sichtbar; fehlende aktuelle Werte bleiben dennoch für die
+Regelung ungültig. Diese Frist wird auch bei wiederholt fehlenden Modbus-Werten
+nicht verlängert. Gerätefehler und ungültige Einheiten werden dadurch nicht verdeckt.
 
 Das PV-Regelbudget berücksichtigt Netzleistung und Speicherentladung. Während
 laufender PV-Autoladung darf die optionale Speicherunterstützung die EOS-Sperre
@@ -82,12 +99,25 @@ erstellt den Plan unter Berücksichtigung der geänderten Konfiguration.
 
 ## Alltagsplanung
 
-Ziel-SoC zur Abfahrt und separates PV-Ziel sind unabhängig. PV-Überschussladen
-funktioniert ohne zeitlichen Termin bis zum PV-Ziel. Schnellladen nutzt das Planziel
-und wird nach Neustart nicht automatisch wieder eingeschaltet.
-Einmalige Termine benötigen einen ISO-Zeitstempel mit Zeitzone; im Panel erzeugt
-die Datumsauswahl diesen automatisch. Wiederkehrende Termine verwenden die
-Home-Assistant-Zeitzone und ausgewählte Wochentage.
+Unter **Auto → Ladeplanung** stehen PV-Überschussladen mit eigenem PV-Ziel,
+Schnellladen mit Standard-/Schnellladeziel und automatische Phasenwahl. Schnellladen
+wird nach Neustart nicht automatisch wieder eingeschaltet. Die Liste mit bis zu
+32 Ladezielen je Fahrzeug enthält einmalige oder wiederkehrende Abfahrten,
+jeweils mit eigenem Ziel-SoC und Aktivschalter. Beim Löschen wird eine Bestätigung
+abgefragt; Änderungen gelten nach dem Speichern. Das Backend wählt das nächste
+aktive Ziel, bei gleichzeitigem Termin den höheren Ziel-SoC, und synchronisiert
+es mit EOS. Ein abgelaufener Einzeltermin wird nicht automatisch gelöscht.
+
+Einmalige Termine verwenden im API einen ISO-Zeitstempel mit Zeitzone. Im Panel
+interpretiert das Backend die lokale Datumsauswahl in der Anlagenzeitzone.
+Wiederkehrende Termine verwenden ebenfalls diese Zeitzone und Wochentage,
+optional ergänzt durch gesetzliche Feiertage. Auch reine Feiertagspläne sind
+möglich. Unter **Einstellungen** werden Bundesland und örtliche Feiertagsregeln
+für Deutschland festgelegt; die Berechnung erfolgt lokal über `holidays`.
+Allgemeine Speichergrenzen und E-Auto-Regelparameter gelten für alle Fahrzeuge.
+Bestehende Einzelpläne werden beim ersten Speichern in die neue Liste übernommen;
+danach erfolgt die Bearbeitung im Fahrzeugpanel anstelle der bisherigen nativen
+Zeitplan- und Abfahrtsentitäten.
 
 ## Verlauf und Speicherung
 
