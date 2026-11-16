@@ -802,7 +802,16 @@ Teilsummen und werden nicht auf die gesamte Energiemenge hochgerechnet.
 Ohne ausreichende bewertete Energiemenge oder ohne Verbrauch bleibt der Preis
 **— ct/kWh**. Ein tatsächlich kostenloser bewerteter Verbrauch zeigt **0 ct/kWh**.
 
-Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** eine eigene Auswertung:
+In der Tagesübersicht öffnet die Karte **Gesamtverbrauch** eine eigene Auswertung für
+die Summe aus Hausverbrauch, Wärmepumpe und Fahrzeugen. Sie zeigt Energie, Kosten,
+gewichteten Durchschnittspreis und die Aufteilung nach Energiequelle gemeinsam
+für alle aktivierten Verbraucher. Einzelne Fahrzeuge werden neben der gemeinsamen
+Fahrzeugbilanz nicht erneut addiert. Bestehende lokale Aufzeichnungen und historische
+Rekonstruktionen werden berücksichtigt; geschätzte und unbekannte Kostenanteile
+bleiben gekennzeichnet.
+
+Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** die Einzelauswertung.
+Für beide Auswertungen gelten dieselben Ansichten und Bedienelemente:
 
 - **Tag:** stündliche Werte; **Monat:** Tageswerte; **Jahr:** Monatswerte.
 - Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert und wird beim nächsten Öffnen wiederhergestellt. Ohne verfügbaren Browserspeicher bleibt die Auswahl für die laufende Sitzung erhalten.

@@ -35,13 +35,13 @@ const averageCostLabel = amount => {
   return t('billing.average_unit_price',{price:value==='—' ? `— ${t('unit.price')}` : value});
 };
 const costWithPrice = amount => `${costValue(amount)} · ${averageCostLabel(amount)}`;
-const billingName = key => key.startsWith('car/') ? snapshot.vehicles?.find(item=>item.id===key.slice(4))?.name ?? t('device.car') : t(`device.${key}`);
+const billingName = key => key==='total' ? t('billing.total_consumption') : key.startsWith('car/') ? snapshot.vehicles?.find(item=>item.id===key.slice(4))?.name ?? t('device.car') : t(`device.${key}`);
 
 function dayBalance() {
   const report=snapshot.accounting, target=byId('day-balance');
   if (!report) {target.innerHTML='';return;}
-  const items=Object.keys(report.overview?.consumers??{}), total=report.overview?.total;
-  const totalFor=key=>report.overview.consumers[key];
+  const items=['total',...Object.keys(report.overview?.consumers??{})], total=report.overview?.total;
+  const totalFor=key=>key==='total'?total:report.overview.consumers[key];
   target.innerHTML=`<div class="panel-heading"><h2>${th('billing.today')}</h2><span>${th('billing.total')}: ${html(total?energyValue(total.kwh):'—')} · ${html(costWithPrice(total))}</span></div>
     <div class="balance-grid">${items.map(key=>{
       const value=totalFor(key);
@@ -57,7 +57,7 @@ function sourceBar(value) {
 function billingRoute(requested) {
   if (!requested.startsWith('usage/')) return false;
   const key=requested.slice(6);
-  return ['house','heat','car'].includes(key) ? consumerEnabled(key) : key.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===key.slice(4));
+  return key==='total' || (['house','heat','car'].includes(key) ? consumerEnabled(key) : key.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===key.slice(4)));
 }
 
 async function fetchBilling(force=false) {
@@ -116,9 +116,9 @@ function billingSlots() {
 
 function usageDetail(key, fetch=true) {
   if(fetch)void fetchBilling();
-  const data=billing.data,entry=data?.consumers[key],amount=entry?.total;
+  const data=billing.data,entry=key==='total'?data?.total:data?.consumers[key],amount=entry?.total;
   byId('usage-title').textContent=billingName(key)+' · '+t('billing.title');
-  byId('usage-back').href='#'+key;
+  byId('usage-back').href=key==='total'?'#overview':'#'+key;
   byId('billing-period').value=billing.period;
   byId('billing-range').textContent=data?new Intl.DateTimeFormat(language.locale,{timeZone:'UTC',...(billing.period==='day'?{dateStyle:'long'}:billing.period==='month'?{year:'numeric',month:'long'}:{year:'numeric'})}).format(new Date(data.date+'T12:00:00Z')):'';
   byId('billing-date').value=billing.date??localDay(windowNow());

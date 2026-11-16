@@ -150,7 +150,7 @@
 @media(prefers-reduced-motion:reduce) {#eos-energy-design .orb svg .battery-bar, #eos-energy-design svg .car-soc-bar {transition:none;}}
 
 /* Energy/cost reports: common scales, readable mobile cards and touch targets. */
-#eos-energy-design .balance-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+#eos-energy-design .balance-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;}
 #eos-energy-design .balance-card {display:grid;gap:8px;color:var(--ink);text-decoration:none;border:1px solid var(--edge);border-radius:12px;padding:16px;min-width:0;}
 #eos-energy-design .balance-card strong {font-size:26px;}
 #eos-energy-design .balance-card small {color:var(--dim);}

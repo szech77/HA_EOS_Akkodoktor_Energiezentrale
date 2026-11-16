@@ -3,6 +3,24 @@
 Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
 zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
 
+## 0.18.0 - 2026-11-16
+
+### Features
+
+- Gesamtverbrauch in der Tagesübersicht als eigene Karte mit Verbrauch, Kosten und gewichtetem Durchschnittspreis anzeigen. Die Karte öffnet eine Tages-, Monats- oder Jahresauswertung mit Energie- und Kostendiagrammen sowie Quellenaufteilung. Haus, Wärmepumpe und die gemeinsame Fahrzeugbilanz im Backend zusammenführen; einzelne Fahrzeuge nicht doppelt zählen. Bestehende Messwerte, historische Rekonstruktion, Schätzungen und unbekannte Kostenanteile einbeziehen. Deutsche und englische Beschriftung ergänzen.
+
+### Bugfixes
+
+- GitHub-Sponsoring aus `szech77-patch-1` integrieren und `.github/FUNDING.yml` korrigieren: Für GitHub Sponsors den Benutzernamen `szech77` statt der vollständigen Profil-URL hinterlegen.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
 ## 0.17.7 - 2026-11-15
 
 ### Features

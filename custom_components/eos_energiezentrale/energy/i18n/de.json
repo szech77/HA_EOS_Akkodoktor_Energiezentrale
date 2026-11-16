@@ -220,6 +220,7 @@
     "control.cached_eos": "Aktiv · EOS-Ersatzplan, maximal 5 Minuten",
     "billing.today": "Heute · Verbrauch & Kosten",
     "billing.total": "Gesamt",
+    "billing.total_consumption": "Gesamtverbrauch",
     "billing.observed": "Aus Messwerten und gekennzeichneten Schätzungen",
     "billing.estimated_duration": "Davon geschätzt: {hours} h",
     "billing.partial": "Messlücken bis 6 Stunden werden zwischen Messpunkten interpoliert (≈). Größere Lücken im Verbrauch bleiben offen; der bekannte Akkupreis bleibt erhalten. Unbewertbare Kosten werden als Teilsumme angezeigt.",
