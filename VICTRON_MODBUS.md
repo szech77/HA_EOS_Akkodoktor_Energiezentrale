@@ -27,6 +27,32 @@ unverändert verfügbar. Die synchronen Modbus-Abfragen laufen im HA-Executor.
    allgemeine Sensoren haben Vorrang.
 5. Zuerst lesend prüfen. **Enable ESS Mode 2 control** bleibt standardmäßig aus.
 
+### Firmware-Erkennung und Diagnose
+
+Das Firmware-Register **834/835 gibt es erst ab Venus OS 3.70**. Ältere
+Versionen wie **v3.66** liefern dort häufig zwei reservierte Wörter `0xFFFF`.
+Dies bedeutet nicht, dass die Messregister oder der moderne ESS-Sollwert fehlen.
+Der reine Messwertabruf benötigt keine bekannte Firmwareversion, sofern die
+ausgewählten Messregister gültig antworten. Reservierte Firmwarewörter oder
+Modbus-Ausnahmecode 2 für dieses optionale Register sind erlaubt; andere
+Kommunikationsfehler und ungültige Versionscodierungen bleiben Fehler.
+
+Für die Steuerung eine fehlende Erkennung im Plugin-Feld **„Venus-OS-Version
+bei fehlender automatischer Erkennung“** ergänzen, beispielsweise **`v3.66`**.
+Die Version am GX unter Firmware nachsehen; nicht aus einem reservierten Wert
+ableiten. Eine tatsächlich erkannte Version hat Vorrang vor der manuellen
+Ersatzangabe. Ohne beide Angaben bleibt Steuerung einschließlich Rückgabe mit
+`firmware_version_required` gesperrt. Für v3.66 ist keine Legacy-Freigabe nötig.
+
+Die Gerätdiagnose unter Einstellungen zeigt **Venus OS**, die Herkunft der
+Version (automatisch/manuell/unbekannt), den Registerstatus und vorhandene
+Firmwarewörter in Hexadezimaldarstellung. Im HA-Diagnoseexport stehen diese Werte
+unter `devices[].firmware`: `version`, `source`, `detected`, `configured`,
+`register_status` und `raw_words`. Hostadressen und Seriennummern bleiben verborgen.
+Änderungen der optionalen Firmware-Erkennung werden als `firmware_status` auf
+INFO-Ebene protokolliert; echte Fehler und blockierte Steuerung weiter als
+Plugin-Fehler mit ihrer jeweiligen Kennung.
+
 Eine GX-Anlage wird einschließlich intern geregelter Batteriemodule nur **einmal**
 angelegt. Ebenso PV-Leistung nicht zusätzlich über Geräte erfassen, die das GX
 bereits in seine Summe einbezieht. Getrennte GX-Anlagen dürfen eigene Geräte sein;
@@ -151,7 +177,10 @@ Port, Seriennummer, Kapazität, Messwerte und rohe Fehlermeldungen fehlen bewuss
 - `identity` / 800: Verbindung, aktivierten Modbus-TCP-Dienst und Systemdienst
   auf Unit-ID 100 prüfen.
 - `firmware` / 834–835: Firmwarefeld konnte nicht gelesen werden; Verbindung und
-  Registerverfügbarkeit prüfen. `firmware_invalid`: ungültige Versionscodierung.
+  Registerverfügbarkeit prüfen. Reservierte oder ausdrücklich nicht unterstützte
+  Firmware-Register verhindern keine Messung. `firmware_invalid`: ungültige
+  Versionscodierung. `firmware_version_required`: Für die Steuerung fehlt eine
+  erkannte oder manuell angegebene Version.
   `firmware_legacy_opt_in_required`: Legacy-Freigabe für Steuerung vor 3.50 fehlt.
 - `legacy_setpoint_range` / 2700: Sollwert oder nativer Rückgabesollwert liegt
   außerhalb von −32768 bis 32767 W; kein Schreibzugriff erfolgt.
@@ -176,6 +205,23 @@ erwartet. Das Einschalten der ESS-Steuerung repariert keine fehlenden Messungen.
 dieser Fehler ist getrennt von der Victron-Leseverbindung zu untersuchen.
 
 ## English setup
+
+Firmware register 834/835 was only added in Venus OS 3.70. Earlier versions such
+as v3.66 may return reserved words `0xFFFF/0xFFFF`. This does not imply missing
+measurement or ESS setpoint registers. Reserved words and an explicit illegal
+register response (code 2) allow telemetry without a known version. Transport
+failures, other exception codes and malformed version data still fail.
+For control, enter the actual version in the optional **Venus OS version if
+automatic detection is unavailable** field, e.g. `v3.66`. Detected versions take
+precedence over this fallback. Unknown versions block all control operations
+with `firmware_version_required`. Version 3.66 uses 2716/2717 without legacy opt-in.
+
+Settings display the effective version, its source, register status and raw
+firmware words. Downloaded HA diagnostics expose `devices[].firmware` with
+`version`, `source`, `detected`, `configured`, `register_status` and `raw_words`.
+Firmware discovery changes use INFO log code `firmware_status`; actual failures
+and blocked control still generate plugin error incidents. Network locations
+and serial numbers are not included.
 
 Enable Modbus TCP on a GX running Venus OS. Versions before 3.50 can supply
 telemetry when all selected system registers are available and valid; missing

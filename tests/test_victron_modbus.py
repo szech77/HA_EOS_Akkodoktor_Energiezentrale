@@ -118,7 +118,7 @@ def test_malformed_firmware_is_not_accepted_as_legacy_telemetry(firmware):
 
 def test_beta_revision_word_does_not_change_the_major_minor_control_threshold():
     with gx() as (driver,server,_):
-        server.registers[835]=42
+        server.registers[835]=0x42
         driver.apply(command('grid_charge',2000,0),{})
         assert target(server)==3000
 
@@ -384,7 +384,9 @@ def test_ac_output_pv_on_three_phases_does_not_require_dc_pv():
         assert sample.soc==60 and sample.measurements['solar'].value==6000
         assert driver.read_diagnostics=={'phases':3,'control_enabled':False,'legacy_control_enabled':False,'grid_meter_enabled':True,
             'read_consumption':True,'dc_pv_enabled':False,'ac_pv_input_enabled':False,
-            'ac_pv_output_enabled':True,'failure':None}
+            'ac_pv_output_enabled':True,'failure':None,'firmware':{
+                'version':'v3.50','source':'detected','detected':'v3.50','configured':None,
+                'register_status':'valid','raw_words':[0x0350,0]}}
         assert not any(address in (850,811) for _,_,address,_ in server.requests)
         assert not server.writes
 

@@ -29,6 +29,25 @@ test('missing measurements stay unknown and device names are escaped',()=>{
  assert.match(result,/SoC: <strong>—/);assert.match(result,/Messwerte unvollständig/);
 });
 
+test('Victron firmware diagnostics show backend version, source and raw registers in both languages',()=>{
+ for(const language of ['de','en']){
+  const ctx=fixture(language);
+  const render=firmware=>ctx.batteryGroupDetails({devices:[{name:'GX',battery:true,measurements:{},
+   read_diagnostics:{firmware}}]});
+  const manual=render({version:'v3.66',source:'configured',register_status:'reserved',raw_words:[65535,65535]});
+  assert.match(manual,/Venus OS: <strong>v3.66/);
+  assert.match(manual,language==='de'?/manuell angegeben/:/manually configured/);
+  assert.match(manual,/0xFFFF 0xFFFF/);
+  const detected=render({version:'v3.74~42',source:'detected',register_status:'valid',raw_words:[0x0374,0x42]});
+  assert.match(detected,/v3.74~42/);
+  assert.match(detected,language==='de'?/automatisch erkannt/:/automatically detected/);
+  const unknown=render({version:null,source:'unknown',register_status:'unsupported',raw_words:null});
+  assert.match(unknown,language==='de'?/unbekannt/:/unknown/);
+  assert.doesNotMatch(unknown,/v3.66/);
+  assert.match(render({version:'<unsafe>',source:'unknown',register_status:'invalid',raw_words:null}),/&lt;unsafe&gt;/);
+ }
+});
+
 test('Victron shows its declared consumption and grid values without an unsupported AC placeholder',()=>{
  for(const language of ['de','en']){
   const ctx=fixture(language);

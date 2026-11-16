@@ -376,6 +376,18 @@
     "forecast.updated": "Wetter abgerufen",
     "forecast.refresh": "Aktualisieren",
     "action.weather_forecast": "Wettervorhersage",
-    "forecast.open_failed": "Die Wetter-/PV-Vorhersage konnte nicht geöffnet werden. Bitte erneut auf das Wettersymbol klicken oder die Oberfläche neu laden."
+    "forecast.open_failed": "Die Wetter-/PV-Vorhersage konnte nicht geöffnet werden. Bitte erneut auf das Wettersymbol klicken oder die Oberfläche neu laden.",
+    "plugin.firmware": "Venus OS",
+    "plugin.firmware_unknown": "unbekannt",
+    "plugin.firmware_source_detected": "automatisch erkannt",
+    "plugin.firmware_source_configured": "manuell angegeben",
+    "plugin.firmware_source_unknown": "keine Versionsangabe",
+    "plugin.firmware_register": "Firmware-Register",
+    "plugin.firmware_register_valid": "verfügbar",
+    "plugin.firmware_register_reserved": "reserviert, keine Versionsangabe",
+    "plugin.firmware_register_unsupported": "nicht unterstützt",
+    "plugin.firmware_register_invalid": "ungültiger Wert",
+    "plugin.firmware_register_unread": "noch nicht abgefragt",
+    "plugin.firmware_register_transport_error": "Abfrage fehlgeschlagen"
   }
 }
