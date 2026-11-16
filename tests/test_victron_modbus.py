@@ -18,7 +18,7 @@ from test_fronius_modbus import inverter
 def gx(**options):
     with inverter() as (_,server):
         server.registers={800+i:value for i,value in enumerate(struct.unpack('>6H',b'c0619ab01234'))}
-        server.registers.update({834:0x0350,835:0,840:500,841:0,842:0,843:60,850:2000,826:1,
+        server.registers.update({834:0x0350,835:0,840:500,841:0,842:0,843:60,850:2000,826:1,2700:50,
             2704:450,2705:60,2716:0,2717:50,2900:10,2901:200,2902:1,5423:0})
         for address in range(808,823):server.registers[address]=0
         server.registers.update({808:400,811:600,817:1000,818:2000,819:3000,820:1000})
@@ -35,6 +35,9 @@ def command(mode='limits',charge=5000,discharge=3000,**extra):
 
 
 def target(server):
+    if server.registers[834]<0x0350:
+        raw=server.registers[2700]
+        return raw-65536 if raw>=32768 else raw
     raw=server.registers[2716]<<16|server.registers[2717]
     return raw-2**32 if raw>=2**31 else raw
 
@@ -87,15 +90,15 @@ def test_older_gx_versions_supply_all_selected_measurements_without_control_regi
         assert not server.writes and driver.read_diagnostics['failure'] is None
 
 
-def test_legacy_firmware_blocks_all_control_paths_before_writes_but_still_reads(caplog):
+def test_legacy_firmware_requires_opt_in_before_all_control_paths_but_still_reads(caplog):
     with gx() as (driver,server,_):
         server.registers[834]=0x0349
         assert driver.read({},NOW).soc==60
         for operation in (lambda:driver.power_limits({}),lambda:driver.apply(command(),{}),lambda:driver.release({})):
-            with pytest.raises(ModbusError,match='ESS control requires Venus OS >= 3.50'):
+            with pytest.raises(ModbusError,match='explicit legacy ESS control permission'):
                 operation()
         assert not server.writes
-        assert 'firmware_control_unsupported' in caplog.text
+        assert 'firmware_legacy_opt_in_required' in caplog.text
         assert driver.read({},NOW).soc==60
         # A later firmware upgrade restores control without bypassing guards.
         server.registers[834]=0x0350
@@ -120,6 +123,7 @@ def test_beta_revision_word_does_not_change_the_major_minor_control_threshold():
         assert target(server)==3000
 
 
+@pytest.mark.parametrize('firmware',[0x0290,0x0349,0x0350])
 @pytest.mark.parametrize('mode,charge,discharge,grid,battery,amps,outgoing,expected',[
     ('grid_charge',2000,0,1000,0,40,0,3000),
     ('limits',5000,3000,1000,0,100,300,0),
@@ -128,18 +132,121 @@ def test_beta_revision_word_does_not_change_the_major_minor_control_threshold():
     ('limits',2000,3000,-1200,0,40,300,0),
     ('limits',0,0,1000,-500,0,0,1500),
 ])
-def test_mode_budgets_scaling_and_signed_32bit_setpoint(mode,charge,discharge,grid,battery,amps,outgoing,expected):
-    with gx(grid_discharge_supported=True) as (driver,server,_):
+def test_mode_budgets_scaling_and_versioned_setpoint(mode,charge,discharge,grid,battery,amps,outgoing,expected,firmware):
+    with gx(grid_discharge_supported=True,legacy_control_enabled=True) as (driver,server,_):
+        server.registers[834]=firmware
         server.registers[820]=grid&65535;server.registers[842]=battery&65535
         driver.apply(command(mode,charge,discharge),{})
         assert server.registers[2705]==amps
         assert server.registers[2704]==outgoing
         assert target(server)==expected
-        assert {address for address,_ in server.writes}<={2704,2705,2716}
-        assert server.writes[-1][0]==2716 or expected==50
+        setpoint_address=2700 if firmware<0x0350 else 2716
+        assert {address for address,_ in server.writes}<={2704,2705,setpoint_address}
+        assert server.writes[-1][0]==setpoint_address or expected==50
         before=list(server.writes)
         driver.apply(command(mode,charge,discharge),{})
         assert server.writes==before
+
+
+@pytest.mark.parametrize('firmware',[0x0290,0x0349])
+def test_legacy_release_restores_signed_native_values_after_restart(firmware,caplog):
+    with gx(legacy_control_enabled=True,release_setpoint=-50,release_charge_current=-1) as (_,server,params):
+        server.registers.update({834:firmware,2700:2000,2704:0,2705:0,840:0})
+        for address in (2716,2717):server.registers.pop(address)
+        restarted=BATTERY_DRIVERS['victron_modbus'](None,params)
+        restarted.release({})
+        assert server.writes==[(2700,[(-50)&65535]),(2705,[65535]),(2704,[450])]
+        assert 'legacy_persistent_setpoint' in caplog.text
+        before=list(server.writes)
+        restarted.release({})
+        assert server.writes==before
+        assert caplog.text.count('legacy_persistent_setpoint')==1
+        assert not any(address in (840,2716) for _,_,address,_ in server.requests)
+
+
+def test_legacy_setpoint_requires_readback_and_stops_release_on_failure():
+    with gx(legacy_control_enabled=True) as (driver,server,_):
+        server.registers.update({834:0x0349,2700:2000})
+        server.ignore_writes=True
+        with pytest.raises(ModbusError):driver.release({})
+        assert server.writes==[(2700,[50])]
+        issue=driver.telemetry_status[0]
+        assert issue['details']['address']==2700 and issue['details']['stage']=='write_confirmation'
+
+
+@pytest.mark.parametrize('mode',['grid_charge','grid_discharge'])
+def test_legacy_setpoint_overflow_cannot_wrap_or_change_limits(mode):
+    with gx(legacy_control_enabled=True,grid_discharge_supported=True,
+            max_charge_current=1000,max_discharge_power=50000) as (driver,server,_):
+        server.registers[834]=0x0349
+        with pytest.raises(ModbusError,match='signed 16-bit'):
+            driver.apply(command(mode,45000 if mode=='grid_charge' else 0,45000 if mode=='grid_discharge' else 0),{})
+        assert not server.writes
+        assert driver.telemetry_status[0]['details']['stage']=='legacy_setpoint_range'
+
+
+def test_unrepresentable_legacy_return_value_blocks_control_acquisition_and_release():
+    with gx(legacy_control_enabled=True,release_setpoint=40000) as (driver,server,_):
+        server.registers[834]=0x0349
+        for run in (lambda:driver.power_limits({}),lambda:driver.apply(command(),{}),lambda:driver.release({})):
+            with pytest.raises(ModbusError,match='signed 16-bit'):run()
+        assert not server.writes
+        assert driver.telemetry_status[0]['details']['parameter']=='release_setpoint'
+
+
+@pytest.mark.parametrize('firmware,exception_code,allowed',[
+    (0x0290,2,True),(0x0349,2,True),(0x0350,2,False),
+    (0x0349,10,False),(0x0349,11,False),(0x0349,None,False),
+])
+def test_only_missing_legacy_dynamic_ess_register_allows_manual_confirmation(firmware,exception_code,allowed,caplog):
+    with gx(legacy_control_enabled=True) as (driver,server,_):
+        server.registers[834]=firmware
+        original_read=driver.client.read
+        def read(address,count):
+            if address==5423:
+                if exception_code is None:raise TimeoutError('private host')
+                raise ModbusError('private response',exception_code=exception_code)
+            return original_read(address,count)
+        with patch.object(driver.client,'read',side_effect=read):
+            if allowed:
+                driver.apply(command('grid_charge',2000,0),{})
+                assert target(server)==3000
+                driver.release({})
+                assert target(server)==50
+                assert caplog.text.count('legacy_dynamic_ess_manual')==1
+            else:
+                with pytest.raises(OSError):driver.apply(command(),{})
+                assert not server.writes
+        assert 'private host' not in caplog.text and 'private response' not in caplog.text
+
+
+def test_legacy_opt_in_never_overrides_an_active_dynamic_ess_controller():
+    with gx(legacy_control_enabled=True) as (driver,server,_):
+        server.registers.update({834:0x0349,5423:1})
+        with pytest.raises(ModbusError,match='Dynamic ESS must be disabled'):driver.apply(command(),{})
+        with pytest.raises(ModbusError):driver.release({})
+        assert not server.writes
+
+
+@pytest.mark.parametrize('watts',[-32768,32767])
+def test_legacy_signed_setpoint_boundaries_are_confirmed_without_wrapping(watts):
+    with gx(legacy_control_enabled=True,release_setpoint=watts) as (driver,server,_):
+        server.registers[834]=0x0349
+        driver.release({})
+        assert target(server)==watts
+        assert server.writes[0]==(2700,[watts&65535])
+
+
+def test_modern_firmware_never_falls_back_to_persistent_register_on_read_failure():
+    with gx(legacy_control_enabled=True) as (driver,server,_):
+        original_read=driver.client.read
+        def read(address,count):
+            if address==2716:raise ModbusError('missing',exception_code=2)
+            return original_read(address,count)
+        with patch.object(driver.client,'read',side_effect=read):
+            with pytest.raises(ModbusError):driver.release({})
+        assert not server.writes
+        assert not any(address==2700 for _,_,address,_ in server.requests)
 
 
 def test_efficiencies_current_caps_and_voltage_are_used_before_rounding():
@@ -275,7 +382,7 @@ def test_ac_output_pv_on_three_phases_does_not_require_dc_pv():
         server.registers.update({850:65535,808:1000,809:2000,810:3000})
         sample=driver.read({},NOW)
         assert sample.soc==60 and sample.measurements['solar'].value==6000
-        assert driver.read_diagnostics=={'phases':3,'control_enabled':False,'grid_meter_enabled':True,
+        assert driver.read_diagnostics=={'phases':3,'control_enabled':False,'legacy_control_enabled':False,'grid_meter_enabled':True,
             'read_consumption':True,'dc_pv_enabled':False,'ac_pv_input_enabled':False,
             'ac_pv_output_enabled':True,'failure':None}
         assert not any(address in (850,811) for _,_,address,_ in server.requests)

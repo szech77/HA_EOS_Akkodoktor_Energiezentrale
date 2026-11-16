@@ -11,7 +11,8 @@ zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf m
 
 ### Bugfixes
 
-- Victron-GX-Messwerte auch mit Venus OS vor 3.50 lesen, sofern die ausgewählten Systemregister verfügbar und gültig sind. Das Firmwarefeld vollständig über Register 834/835 lesen und ungültige Versionscodierungen weiterhin ablehnen. ESS-Steuerung und Geräterückgabe bleiben wegen des erst ab 3.50 verfügbaren flüchtigen Netzsollwerts auf neuere Versionen begrenzt; ältere Versionen vor jedem Schreibzugriff mit der Logkennung `firmware_control_unsupported` ablehnen. Die Kennung `firmware_invalid` unterscheidet ungültige Firmwaredaten von Kommunikationsfehlern.
+- Victron-GX-Messwerte auch mit Venus OS vor 3.50 lesen, sofern die ausgewählten Systemregister verfügbar und gültig sind. Das Firmwarefeld vollständig über Register 834/835 lesen und ungültige Versionscodierungen mit `firmware_invalid` von Kommunikationsfehlern unterscheiden.
+- ESS-Mode-2-Steuerung auf älterem Venus OS nach zusätzlicher Legacy-Freigabe über Register 2700 ermöglichen; ab 3.50 weiterhin den flüchtigen 32-Bit-Sollwert 2716/2717 verwenden. Alte Sollwerte auf den vorzeichenbehafteten 16-Bit-Bereich prüfen, bevor Leistungsgrenzen verändert werden; unveränderte Sollwerte nicht erneut schreiben und jeden Schreibzugriff bestätigen. Bei alten Servern darf ausschließlich ein ausdrücklich als nicht vorhanden gemeldetes Dynamic-ESS-Register durch die manuelle Bestätigung „Dynamic ESS ausgeschaltet“ ersetzt werden. Aktives Dynamic ESS, sonstige Modbus-Fehler und moderne Server mit fehlendem Prüfregister verhindern weiterhin Befehle. Dauerhafte Legacy-Schreibzugriffe und die manuelle Schutzprüfung im Backend protokollieren; Hinweise und Freigabe auf Deutsch und Englisch dokumentieren.
 
 ### Breaking Changes
 
