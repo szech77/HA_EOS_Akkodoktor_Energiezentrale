@@ -99,6 +99,35 @@ def source_origin(github, tag, target):
     return origin
 
 
+def includes_stable_source(github, latest_source, source):
+    """Accept ancestry or an identical full tree before a squash/rebase merge."""
+    path = '/compare/'+latest_source+'...'+source
+    comparison = github.request(path+'?per_page=100&page=1')
+    if not comparison:
+        return False
+    if comparison.get('status') in ('ahead', 'identical'):
+        return True
+    if comparison.get('status') != 'diverged':
+        return False
+    stable = github.request('/git/commits/'+latest_source)
+    tree = (stable or {}).get('tree', {}).get('sha', '')
+    if not re.fullmatch(r'[0-9a-f]{40}', tree):
+        return False
+    page = 1
+    while comparison:
+        # Compare returns only commits reachable from source but not latest_source.
+        # A matching full tree proves the branch contains the stable snapshot even
+        # when GitHub assigned a different SHA while merging it into main.
+        commits = comparison.get('commits', [])
+        if any(item.get('commit', {}).get('tree', {}).get('sha') == tree for item in commits):
+            return True
+        if len(commits) < 100:
+            return False
+        page += 1
+        comparison = github.request(path+'?per_page=100&page='+str(page))
+    return False
+
+
 def build_plan(root, github, source, channel, beta_number=None, branch='main', today=None):
     if not re.fullmatch(r'[0-9a-f]{40}', source or '') or channel not in ('stable', 'beta'):
         raise ValueError('Release needs a full source SHA and a stable/beta channel')
@@ -129,8 +158,7 @@ def build_plan(root, github, source, channel, beta_number=None, branch='main', t
         previous = draft_sections(previous_text)
         released_text = file_at(github, target, 'CHANGELOG.md')
         history = version_history(released_text or previous_text)
-        comparison = github.request('/compare/'+latest_source+'...'+source)
-        if not comparison or comparison.get('status') not in ('ahead', 'identical'):
+        if not includes_stable_source(github, latest_source, source):
             raise ValueError('Update the branch with the latest stable source before releasing')
     refs = github.request('/git/matching-refs/tags/v') or []
     versions = {item['ref'].removeprefix('refs/tags/v'):item['object']['sha'] for item in refs

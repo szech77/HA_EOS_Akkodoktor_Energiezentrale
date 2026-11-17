@@ -79,9 +79,17 @@ benötigt keinen Branchschutz-Bypass und kein persönliches Token. Nur der
 Publish-Job hat `contents: write`; Versionsplanung und PR-Prüfungen bleiben
 lesend. Die nummerierte Historie wird aus dem letzten stabilen Release übernommen
 und steht vollständig im Changelog der Release-Tags, nicht automatisch im
-Quellbranch. Alte Branches müssen vor der Veröffentlichung den letzten stabilen
-Quellstand übernehmen. Auf `main` werden laufende Releases durch einen neuen
-Push nicht abgebrochen.
+Quellbranch. Dort bleibt `## New Version` auch nach einer Veröffentlichung als
+Eingabebereich für die nächste Version stehen. Im veröffentlichten Code unter
+**Releases → Tag → CHANGELOG.md** wird diese Überschrift durch Version und Datum
+ersetzt; auch die Quellcodearchive des Tags enthalten diesen nummerierten Stand.
+
+Alte Branches müssen vor der Veröffentlichung den letzten stabilen Quellstand
+übernehmen. Nach einem Squash-Merge oder Rebase erkennt die Versionsplanung auch
+einen Commit mit identischem vollständigem Git-Dateibaum in der Branchhistorie
+als diesen Quellstand an. Gleiche Changelog- oder Manifest-Dateien allein reichen
+nicht aus. Fehlen stabile Änderungen, bleibt die Veröffentlichung gesperrt.
+Auf `main` werden laufende Releases durch einen neuen Push nicht abgebrochen.
 
 Lokal prüft `python tools/release.py validate` die Eingaben. Eine lesende Vorschau
 für einen bereits auf GitHub vorhandenen Quellcommit ist beispielsweise:
