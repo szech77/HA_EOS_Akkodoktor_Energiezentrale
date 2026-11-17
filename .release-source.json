@@ -1,0 +1,9 @@
+{
+  "branch": "main",
+  "channel": "stable",
+  "date": "2026-11-17",
+  "notes_sha256": "6cbdf42a3593ab680919b5e99e94f17372270c840354e21167443aea08a9b893",
+  "source_changelog_sha256": "83c9e7b1c1431fa0b33b7e6d27cd589c2550ce91d0216232f22ced590718e6b1",
+  "source_commit": "9d6b82c677ce828df2aaecd5ba0a3a42e0d0e12a",
+  "version": "0.22.2"
+}
