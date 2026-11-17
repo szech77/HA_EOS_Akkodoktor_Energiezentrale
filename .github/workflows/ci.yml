@@ -220,6 +220,7 @@ jobs:
     name: Publish stable or beta HACS release
     needs: required
     if: >-
+      !cancelled() && needs.required.result == 'success' &&
       github.event_name == 'push' &&
       github.repository == 'szech77/HA_EOS_Akkodoktor_Energiezentrale' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') ||

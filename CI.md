@@ -86,6 +86,14 @@ Nach **allen** erfolgreichen Pflichtprüfungen gelten folgende Kanäle:
 | Push/Merge nach `main` | `vX.Y.Z` als stabiles, neuestes Release |
 | Pull Request, Merge Queue, Fork, manueller Lauf | Nur Prüfungen, keine Veröffentlichung |
 
+Der Publish-Job prüft ausdrücklich `!cancelled()` und ein erfolgreiches
+`needs.required.result`. Das ist auch nach einem grünen Sammelstatus nötig:
+GitHubs implizites `success()` berücksichtigt übersprungene Vorgänger entlang
+der Abhängigkeitskette. Auf `main` ist die Branch-Changelog-Bereinigung absichtlich
+übersprungen; das darf die stabile Veröffentlichung nicht überspringen. Die
+explizite Statusfunktion hebt nur diese implizite Sperre auf. Fehlgeschlagene,
+übersprungene oder abgebrochene Pflichtprüfungen geben keinen Release frei.
+
 Jeder neue Branchlauf erhält eine eindeutige Beta-Nummer, etwa
 `0.20.0b123456789`. Wiederholungen desselben Laufs verwenden dieselbe Version,
 denselben Tag und dieselben Release Notes; bestehende Tags werden nie verschoben.
