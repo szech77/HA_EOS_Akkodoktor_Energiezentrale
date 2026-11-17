@@ -20,6 +20,31 @@ erneut versucht. Dies gilt auch für mehrere Wallboxen mit gemeinsamem Speicher.
 Notstrom erscheint als neutrale Statusinformation. In diesem Zustand entfallen
 die Warnungen für erwartbar nicht verfügbare Netz- und Hausverbrauchsmessungen.
 Andere Messwert-, Konfigurations- und Freigabefehler bleiben sichtbar.
+Wenn die konfigurierten Wechselrichter ihre AC-Ausgangsleistung bereitstellen,
+verwendet das Backend im bestätigten Notstrom diese Leistung als Gesamtverbrauch.
+Bei mehreren Geräten müssen alle AC-Werte frisch und vollständig sein; sie werden
+summiert. Die Rohwerte der normalen Haus-/Netzsensoren bleiben unverändert.
+Gemessene Wallbox- und Wärmepumpenverbräuche werden wie im Netzbetrieb separat
+abgezogen. Fehlt ein benötigter Verbraucherwert, bleibt der verbleibende
+Hausverbrauch unbekannt. Nach Netzwiederkehr gilt wieder die normale Hausquelle.
+Fehlende, negative oder veraltete AC-Leistung wird nicht als 0 W gewertet.
+
+E-Auto-Laden ist während der eingeschalteten Notstrompause standardmäßig gesperrt.
+Auch erneut gestartete Ladevorgänge werden gestoppt; fehlende Stopbestätigungen
+bleiben sichtbar und werden erneut versucht. Unter **Technische Grenzen** kann
+**Manuelles E-Auto-Laden im Notstrom erlauben (EOS bleibt pausiert)** ausdrücklich
+aktiviert werden. Dann darf extern/manuell geladen werden; die Energiezentrale
+startet im Notstrom selbst keine Ladung und hält die EOS-Regelung pausiert.
+Ein ausdrücklich ausgeschalteter Regler übernimmt keine neue Gerätesteuerung.
+
+Home Assistant erhält einen Binärsensor **Notstrombetrieb** am Gerät
+**EOS Energiezentrale**: `on` bei bestätigtem Notstrom, `off` bei bestätigtem Netz
+und `unavailable` bei unbekanntem, veraltetem oder nicht unterstütztem Status.
+Die Attribute enthalten den Betriebsstatus, den Statuszeitstempel und die
+Regelpause. Die eindeutige Kennung bleibt beim Umbenennen erhalten; die konkrete
+Entitäts-ID kann von Home Assistant vergeben bzw. vom Nutzer geändert werden.
+Die normale Notstrominformation aktiviert den Problembinärsensor nicht.
+
 0 W Netzleistung, ein fehlender Netzsensor oder Batterieentladung allein sind
 kein Notstromnachweis.
 

@@ -1,7 +1,7 @@
 """Behavior at HA boundaries, using HA's real state machine and service registry."""
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from threading import RLock
@@ -34,6 +34,31 @@ from test_energy import temporary_project_directory
 
 
 class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
+    async def test_native_backup_sensor_exposes_confirmed_status_and_expires_without_false_grid_recovery(self):
+        from custom_components.eos_energiezentrale.binary_sensor import async_setup_entry as setup_sensors
+        from custom_components.eos_energiezentrale.energy.status import view_state
+        coordinator, _ = self.controller()
+        sensors = []
+        await setup_sensors(self.hass, self.entry, lambda entities:sensors.extend(entities))
+        sensor = next(entity for entity in sensors if entity.key == 'backup_power')
+        problem = next(entity for entity in sensors if entity.key == 'problem')
+        assert sensor.unique_id == self.entry.entry_id+'_backup_power'
+        now = datetime.now(timezone.utc)
+        for mode, sample, expected, available in (
+            ('backup',now,True,True), ('grid',now,False,True),
+            ('unknown',None,None,False), ('unsupported',None,None,False),
+            ('backup',now-timedelta(seconds=120),None,False)):
+            data = view_state({'power_supply':{'state':mode,'sample':sample.isoformat() if sample else None}}, now)
+            coordinator.async_set_updated_data(data)
+            assert sensor.is_on is expected
+            assert sensor.available is available
+            assert problem.is_on is (data['power_supply']['state'] == 'unknown')
+        coordinator.async_set_updated_data(view_state({'power_supply':{'state':'backup','sample':now.isoformat()}}, now))
+        assert sensor.extra_state_attributes['operating_state'] == 'backup'
+        assert not problem.is_on  # Normal backup information is not a problem.
+        coordinator.closing = True
+        assert not sensor.available
+
     async def test_victron_forms_show_specific_parameter_errors_in_both_configuration_paths(self):
         for params,key in (({'port':502.5},'port'),({'host':'http://private-host'},'host'),
             ({'charge_efficiency':95},'charge_efficiency'),({'discharge_efficiency':0},'discharge_efficiency'),

@@ -52,6 +52,7 @@
           "battery_charge_w": "Battery charging basis (W)",
           "battery_discharge_w": "Battery discharging basis (W)",
           "allow_battery_export": "Allow battery export",
+          "allow_backup_ev_charging": "Allow manual EV charging during backup (EOS remains paused)",
           "max_current_a": "Maximum charging current (A)",
           "phase_wait_s": "Phase change stability wait (s)",
           "regulation_interval_s": "Default regulation interval (s)",
@@ -217,6 +218,7 @@
           "battery_charge_w": "Battery charging basis (W)",
           "battery_discharge_w": "Battery discharging basis (W)",
           "allow_battery_export": "Allow battery export",
+          "allow_backup_ev_charging": "Allow manual EV charging during backup (EOS remains paused)",
           "max_current_a": "Maximum charging current (A)",
           "phase_wait_s": "Phase change stability wait (s)",
           "regulation_interval_s": "Default regulation interval (s)",
@@ -554,6 +556,9 @@
       }
     },
     "binary_sensor": {
+      "backup_power": {
+        "name": "Backup power"
+      },
       "plan_current": {
         "name": "EOS plan current"
       },

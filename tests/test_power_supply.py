@@ -75,6 +75,7 @@ def test_configured_status_supports_inversion_and_unavailable_is_not_grid_operat
     {'backup_mode_entity':'switch.relay'}, {'backup_mode_entity':17},
     {'backup_active_state':'off'}, {'backup_inactive_state':'ON'},
     {'backup_active_state':'unknown'}, {'backup_active_state':' on'},
+    {'allow_backup_ev_charging':'true'}, {'allow_backup_ev_charging':1},
 ])
 def test_invalid_status_configuration_is_rejected(changes):
     with pytest.raises(ValueError):

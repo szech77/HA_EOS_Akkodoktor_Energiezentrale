@@ -39,6 +39,8 @@ def configured_supply(options, states, now):
 
 
 def validate_supply_options(options):
+    if type(options.get('allow_backup_ev_charging', False)) is not bool:
+        raise ValueError('Backup EV charging permission must be boolean')
     from .clients import ENTITY
     entity = options.get('backup_mode_entity', '')
     if not isinstance(entity, str) or (entity and

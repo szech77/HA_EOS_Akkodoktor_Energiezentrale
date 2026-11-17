@@ -26,6 +26,13 @@ verfügbare Netz-/Hausmesswerte erzeugen nur bei bestätigtem Notstrom keine
 Panel-Warnung; Rohmesswerte und Plugin-Diagnosen bleiben erhalten. Unbestätigte
 Freigaben sind weiterhin Fehler. Der Wiederanlauf benötigt bestätigten
 Netzbetrieb, erfolgreiche Freigabe und die normalen gültigen Regelgrundlagen.
+Die im Notstrom abgeleitete Gesamtverbrauchsquelle ist in `source_configuration`
+als Typ `backup` mit Eingangsgröße `inverter_ac` gekennzeichnet. Fehlende oder
+ungültige AC-Werte bleiben als Verbrauchswarnung sichtbar. Eine erneut gestartete
+Wallbox wird bei aktiver Standardsperre wieder gestoppt; unbestätigte Stopps
+verwenden weiterhin `wallbox_stop`. Der native Binärsensor `backup_power` gibt
+nur bestätigte Betriebszustände aus; normale Informationsmeldungen aktivieren
+den Problembinärsensor nicht.
 
 Das Backend liefert `notices` mit Kennung, Schweregrad und Kontext. Dieselben
 Meldungen erzeugen die HA-Problemanzeige und Einträge unter

@@ -134,10 +134,11 @@ class Controller:
             if persistence_error is not None:
                 raise persistence_error
 
-    def release(self, states, now):
+    def release(self, states, now, *, pause_wallbox=True):
         self.pv_support.reset()
         try:
-            self.config.wallbox.pause(self.config.wallbox.read(states, now))
+            if pause_wallbox:
+                self.config.wallbox.pause(self.config.wallbox.read(states, now))
         finally:
             self.config.battery.release(states)
         self.owned = False
@@ -145,7 +146,7 @@ class Controller:
         self.phase_target = None
         self.candidate = None
 
-    def pause_for_backup(self, states, now):
+    def pause_for_backup(self, states, now, box):
         """Retain user intent until fresh grid status and confirmed cleanup."""
         mode = supply_view(self.power_supply, now)['state']
         if mode == 'backup':
@@ -157,10 +158,12 @@ class Controller:
         self.last_write = None
         self.candidate = self.phase_target = None
         self.restore_pending = self.armed
+        allow_ev = self.config.options.get('allow_backup_ev_charging', False) is True
+        just_released = False
         if self.armed and not self.backup_pause_applied:
             self.control_step = 'backup_pause'
             try:
-                self.release(states, now)
+                self.release(states, now, pause_wallbox=not allow_ev)
             except (OSError, ValueError) as error:
                 # A temporary device outage must not persist an explicit OFF.
                 # Keep the failure visible and retry before allowing new control.
@@ -168,6 +171,17 @@ class Controller:
                 return True
             self.errors.pop('release', None)
             self.backup_pause_applied = True
+            just_released = True
+        if self.armed and not allow_ev and not just_released:
+            if box.enabled or box.status == 'charging' or (box.watts or 0) > 0:
+                try:
+                    self.config.wallbox.pause(box)
+                except (OSError, ValueError) as error:
+                    self.record_failure('wallbox_stop', error)
+                    return True
+                self.errors.pop('wallbox_stop', None)
+            elif box.watts == 0 and box.status not in ('unknown', 'unavailable', ''):
+                self.errors.pop('wallbox_stop', None)
         if mode == 'grid':
             if not self.armed:
                 self.backup_paused = self.backup_pause_applied = False
@@ -574,7 +588,7 @@ class Controller:
         if minute != self.last_minute:
             self.history.write(now, live)
             self.last_minute = minute
-        if self.pause_for_backup(states, now):
+        if self.pause_for_backup(states, now, box):
             return
         if not self.armed:
             self.pv_support.reset()
