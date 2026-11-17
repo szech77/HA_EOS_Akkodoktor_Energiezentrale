@@ -88,6 +88,34 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.entry.runtime_data = EnergyCoordinator(self.hass, self.entry, app)
         return self.entry.runtime_data, app
 
+    async def test_listener_shutdown_follows_confirmed_release_and_runs_outside_ha_loop(self):
+        from threading import get_ident
+        coordinator, app = self.controller()
+        events=[]
+        loop_thread=get_ident()
+        app.set_armed.side_effect=lambda *args,**kwargs:events.append('release')
+        def close():
+            self.assertNotEqual(get_ident(),loop_thread)
+            events.append('close')
+        app.close_resources.side_effect=close
+        await coordinator.async_stop()
+        self.assertEqual(events,['release','close'])
+        coordinator, app = self.controller()
+        app.set_armed.side_effect=OSError('Release unconfirmed')
+        with self.assertRaises(OSError):
+            await coordinator.async_stop()
+        app.close_resources.assert_not_called()
+
+    async def test_ocpp_configuration_has_translated_labels_and_does_not_start_a_server(self):
+        from custom_components.eos_energiezentrale.plugin_forms import async_plugin_object, configured
+        from custom_components.eos_energiezentrale.energy.drivers import WALLBOX_DRIVERS
+        flow=OptionsFlow();flow.hass=self.hass;flow.context={'language':'de'}
+        with patch('socket.socket.bind',side_effect=AssertionError('Listener in configuration')):
+            configured(WALLBOX_DRIVERS['ocpp'],{'password':'test-only-password'})
+            control,defaults=await async_plugin_object(flow,WALLBOX_DRIVERS['ocpp'],{'password':'test-only-password'})
+        self.assertIn('Ladepunkt',control.config['fields']['charge_point_id']['label'])
+        self.assertNotIn('password',defaults)
+
     async def test_slow_history_database_does_not_block_control_changes(self):
         from threading import Event
         coordinator, app = self.controller()

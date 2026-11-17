@@ -157,6 +157,12 @@ class FleetController(Controller):
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
         self.share_general_settings()
 
+    def close_resources(self):
+        for _, app, _ in self.controllers:
+            close = getattr(app.config.wallbox, 'close', None)
+            if close is not None:
+                close()
+
     def _share_plan(self,child):
         child.eos_run=self.eos_run
         child.plan=self.plan

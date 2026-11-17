@@ -550,6 +550,88 @@ Ladestopp, Stromgrenzen und gegebenenfalls Phasenumschaltung prüfen.
 
 Quelle: [Offizielle NRGkick-Gen2-API-Dokumentation](https://nrgkick.com/wp-content/uploads/local_api_docu_simulate-1.html).
 
+## OCPP 1.6J direkt anbinden
+
+Das Plugin **OCPP 1.6J – direct connection** (`ocpp`) ist selbst der zentrale
+OCPP-Server. Die Wallbox verbindet sich direkt; es sind keine HA-Steuerentitäten
+und keine zusätzliche OCPP-Integration erforderlich. Unterstützt wird **OCPP
+1.6J** über WebSocket, einschließlich Smart Charging mit Stromlimits in Ampere.
+OCPP 2.x, Abrechnung/RFID-Verwaltung und automatische Phasenumschaltung sind nicht
+enthalten. Den Fahrzeug-SoC weiterhin über die Fahrzeugdatenquelle konfigurieren.
+
+1. Ein eigenes Passwort mit 16–200 Zeichen wählen und im Plugin-Feld
+   **OCPP-Passwort** hinterlegen. Es wird in der HA-Konfiguration gespeichert,
+   aber nicht als Vorgabewert an den Dialog zurückgegeben; beim Bearbeiten erneut
+   eingeben. Alternativ das Passwortfeld leer lassen und in der HA-Prozessumgebung
+   die Variable `EOS_OCPP_PASSWORD` setzen; der Variablenname ist konfigurierbar.
+   Ein Eintrag in `secrets.yaml` legt keine Prozessumgebungsvariable an.
+2. Unter **Fahrzeuge und Wallboxen** das Plugin `ocpp` auswählen. Als
+   **Lokale HA-IP-Adresse** die lokale Schnittstellenadresse des HA-Rechners
+   eintragen; der Standard `127.0.0.1` erlaubt nur lokale Verbindungen. Den
+   Port, standardmäßig 9000, vom Wallbox-Netz aus erreichbar machen. Bei Containern
+   auch den Port veröffentlichen oder Host-Netzwerk verwenden.
+3. Die **Ladepunktkennung**, beispielsweise `wallbox`, in Wallbox und Plugin
+   identisch konfigurieren. Die vollständige Serveradresse lautet beispielsweise
+   `ws://<HA-IP>:9000/wallbox`. Wenn die Wallbox ihre Kennung selbst an die
+   Basisadresse anhängt, nur `ws://<HA-IP>:9000` als Basis eintragen.
+4. In der Wallbox OCPP 1.6J, HTTP Basic Auth mit Benutzername `wallbox` (der
+   Ladepunktkennung) und dem Passwort aus Schritt 1 einstellen. Die
+   Autorisierungskennung für Remote-Start, standardmäßig `EOS`, muss von der
+   Wallbox für Remote-Ladevorgänge akzeptiert werden. Das Plugin autorisiert
+   Transaktionsstarts nur im Anschluss an einen eigenen Remote-Start.
+5. Anschluss-ID, tatsächlich genutzte Phasen (1 oder 3) und die maximal erlaubte
+   Stromstärke passend zum Gerät/Fahrzeug eintragen. Pro Ladepunkt wird genau ein
+   Anschluss geregelt. Jede weitere Wallbox benötigt einen eigenen Port; identische
+   Listener werden in derselben Fahrzeugliste zurückgewiesen. Den gleichen Port
+   nicht parallel mit einem anderen OCPP-Server verwenden.
+6. In der Wallbox mindestens alle 30–60 Sekunden `Power.Active.Import` in W oder
+   kW melden lassen, zusätzlich zu Statusmeldungen. Das Plugin verwendet den
+   OCPP-Messzeitstempel; ab 120 Sekunden sind Leistungswerte ungültig. Eine
+   Gesamtleistung hat Vorrang vor Phasenwerten. Phasenwerte werden nur als
+   vollständiger Satz für die konfigurierte Phasenzahl summiert. Reine
+   Energiezähler reichen für die Regelung nicht aus.
+
+Für **WSS/TLS** beide optionalen Felder `tls_cert` und `tls_key` auf im
+HA-Prozess lesbare Zertifikat-/Schlüsseldateien setzen; die Wallbox muss der
+Zertifikatskette vertrauen. Der Schlüssel muss ohne interaktive Passworteingabe
+lesbar sein; verschlüsselte Schlüssel werden abgewiesen. Die Adresse beginnt
+dann mit `wss://`. Mit `ws://`
+werden Zugangsdaten unverschlüsselt übertragen; dies ist nur für ein entsprechend
+geschütztes lokales Netz vorgesehen. Den OCPP-Port nicht öffentlich freigeben.
+
+Die Wallbox muss `SetChargingProfile`, `RemoteStartTransaction` und
+`RemoteStopTransaction` unterstützen und mit `Accepted` beantworten. Ablehnungen,
+Zeitüberschreitungen, fehlende Messwerte und Anmelde-/Protokollprobleme erscheinen
+in den Backend-Logs. Start und Stopp bleiben ohne zugehörige
+`StartTransaction`-/`StopTransaction`-Meldung unbestätigt. Protokollantworten und
+die jeweilige Transaktionsbestätigung werden jeweils bis zu acht Sekunden
+abgewartet. Ein Schaltfehler wird
+nicht als Erfolg dargestellt. Änderungen am Profil werden spätestens nach
+30 Sekunden erneuert, sobald die Regelung den Ladebefehl wieder ausführt.
+Das Profil reduziert den Strom nach **180 Sekunden ohne Erneuerung auf 0 A**;
+diese Rücknahme setzt eine korrekte Smart-Charging-Implementierung der Wallbox
+voraus. Die bestehende Reglerintervallgrenze von 120 Sekunden bleibt unterstützt.
+Ein OCPP-`Accepted` ist keine unabhängige elektrische Messbestätigung.
+Die Wallbox benötigt eine korrekte Uhrzeit für absolute Ladeprofile. Die
+Integration verwendet Profil-IDs 1/2 auf Stack-Level 1; konkurrierende Profile
+eines früheren OCPP-Servers vorher im Gerät entfernen.
+Nach einem Serverneustart wird eine laufende Transaktion aus aktuellen
+`MeterValues.transactionId` wiedererkannt. Meldet die Wallbox eine laufende Ladung
+ohne Transaktionskennung, bleibt ein Stopp ausdrücklich unbestätigt.
+
+Netzwerk und Protokollverarbeitung laufen in einem eigenen Hintergrundthread;
+Steuerbefehle bleiben im serialisierten Backend. Nach bestätigter Rückgabe beim
+Entladen/HA-Stopp wird der Listener geschlossen. Bei unbestätigtem Stopp bleibt
+die Rückgabe sichtbar und die Integration zum erneuten Stoppen verfügbar.
+Protokoll-Rohdaten, Passwörter und RFID-/Transaktionskennungen werden nicht geloggt.
+
+Geprüft mit einem lokalen OCPP-Ladepunktsimulator; eine Freigabe an realer
+Wallbox-Hardware steht noch aus. Grundlage sind die
+[OCPP-Python-Bibliothek](https://github.com/mobilityhouse/ocpp) und ihre
+[OCPP-1.6-Schemas](https://github.com/mobilityhouse/ocpp/tree/master/ocpp/v16/schemas).
+Die Laufzeitabhängigkeit `ocpp==2.1.0` wird von Home Assistant installiert;
+`aiohttp` wird bereits von Home Assistant bereitgestellt.
+
 ## Generische HA-Wallbox
 
 Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:
@@ -726,6 +808,14 @@ bleiben 120 Sekunden; auch ein Speicherpool validiert jedes Gerät zuerst einzel
 Wallbox-Leistungsmessungen ohne aktuelle Zeitmarke werden nicht zur Regelung verwendet.
 Nicht unterstützte Befehle und ungültige Strom-/Leistungsvorgaben werden vor dem
 Hardwareaufruf abgewiesen.
+
+Wallboxen können `_maintain(self, state)` implementieren, um einen bereits
+freigegebenen Sollwert zu erneuern. Der Regler ruft die öffentliche, validierende
+Methode `maintain` nur bei weiterhin gültigen Eingaben und unverändertem
+Ladesollwert auf. Der Standard führt keine Aktion aus. Das OCPP-Plugin nutzt
+dies für begrenzte Ladeprofile; veraltete Messwerte dürfen sie nicht verlängern.
+Ein optionales `close()` beendet nach bestätigter Geräterückgabe eigene
+Listener. Netzwerkzugriffe bleiben außerhalb des HA-Eventloops.
 
 Die Erkennung prüft Metadaten, Version, Konfiguration und Methodensignaturen. Defekte
 Module oder doppelte IDs werden abgewiesen und in den Integrationsdiagnosen unter

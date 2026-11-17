@@ -3,7 +3,10 @@ REASONS = frozenset({'unknown_fields', 'invalid_type', 'out_of_range', 'battery_
     'invalid_schedule', 'invalid_departure', 'invalid_departure_time', 'invalid_weekdays',
     'profile_invalid', 'profile_nonpositive_power', 'settings_unconfirmed',
     'effective_limits_unavailable', 'effective_limits_differ', 'goal_unconfirmed', 'resource_missing',
-    'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region'})
+    'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region',
+    'ocpp_not_connected', 'ocpp_command_rejected', 'ocpp_command_timeout',
+    'ocpp_start_unconfirmed', 'ocpp_stop_unconfirmed', 'ocpp_transaction_missing',
+    'ocpp_unsafe_state', 'ocpp_listener_failed'})
 FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_interval_s',
     'battery_min_soc', 'battery_max_soc', 'battery_pv_min_soc', 'battery_pv_wait_s', 'battery_pv_surplus_w',
     'pv', 'fast', 'battery_pv_support', 'battery_pv_start', 'phase_auto', 'schedule', 'departure',
