@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/ai-scan-findings",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "6cbdf42a3593ab680919b5e99e94f17372270c840354e21167443aea08a9b893",
+  "source_changelog_sha256": "077b5c2dc5c19bfb9f5d6c147e5d0698ebfdf65e1b6794079ad50c9e1b79a474",
+  "source_commit": "21e27a20644ee5f32aa57520560f8b2332034d9b",
+  "version": "0.22.2b44191200676"
+}
