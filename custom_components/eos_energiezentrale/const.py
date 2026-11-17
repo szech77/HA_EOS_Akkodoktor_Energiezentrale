@@ -15,6 +15,9 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'house_entity': 'sensor.solarnet_leistung_verbrauch',
  'grid_entity': 'sensor.fronius_smartmeter_ip_meter_1_power',
  'weather_entity': '',
+ 'backup_mode_entity': '',
+ 'backup_active_state': 'on',
+ 'backup_inactive_state': 'off',
  'heat_load_entity': '',
  'heat_load_scale': 'percent',
  'pv_peak_w': 10000,
@@ -40,6 +43,7 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'influx_password_env': ''}
 GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_resource'],
  'sensors': ['weather_entity', 'pv_entity',
+             'backup_mode_entity', 'backup_active_state', 'backup_inactive_state',
              'house_entity',
              'grid_entity',
              'heat_entity',

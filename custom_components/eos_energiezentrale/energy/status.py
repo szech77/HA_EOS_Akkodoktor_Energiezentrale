@@ -59,6 +59,17 @@ def view_state(data, now):
     """No device I/O: turn backend facts into an explicit presentation contract."""
     result = dict(data)
     notices = []
+    from .contracts import PowerSupplyReading
+    from .power_supply import supply_view
+    raw_supply = data.get('power_supply') or {}
+    supply = supply_view(PowerSupplyReading(raw_supply.get('state'), instant(raw_supply.get('sample'))), now
+                         ) if raw_supply.get('state') not in (None, 'unsupported') else supply_view(None, now)
+    result['power_supply'] = supply
+    if supply.get('state') in ('backup', 'unknown'):
+        backup = supply['state'] == 'backup'
+        code = 'backup_power_active' if backup else 'backup_power_unknown'
+        notices.append({'id':'system/power_supply', 'code':code, 'message':'notice.'+code,
+                        'severity':'warning', 'scope':'system', 'details':{}})
     vehicles = data.get('vehicles') or [data]
     scopes = [(data, 'system', None)] + [(vehicle, f'vehicle/{index}', vehicle.get('name'))
         for index, vehicle in enumerate(vehicles[1:], 2)]

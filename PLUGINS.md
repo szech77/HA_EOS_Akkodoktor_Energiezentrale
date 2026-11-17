@@ -1,5 +1,51 @@
 # Hardware-Plugins
 
+## Notstrombetrieb erkennen
+
+Die Energiezentrale zeigt bestätigten Notstrombetrieb im Panel an. Im
+Energiestrom-Diagramm wird das Netz ausgegraut und seine Flussanimation gestoppt.
+Die zugrunde liegenden Leistungswerte und historischen Messungen bleiben erhalten.
+0 W Netzleistung, ein fehlender Netzsensor oder Batterieentladung allein sind
+kein Notstromnachweis.
+
+- **Fronius über Home Assistant:** Der zum konfigurierten Fronius-Gerät gehörende
+  Binärsensor für Notstrombetrieb wird automatisch über die Entity Registry
+  zugeordnet. Umbenannte Entitäten bleiben erkennbar. Es wird nur der Sensor
+  derselben Fronius-Konfiguration verwendet; mehrere mögliche Quellen werden
+  nicht willkürlich ausgewählt. Home Assistants Fronius-Integration muss den
+  Status bereitstellen und der Sensor aktiviert sein.
+- **Fronius direkt über Modbus:** Die standardmäßig aktive Notstromerkennung
+  liest ergänzend `/solar_api/v1/GetPowerFlowRealtimeData.fcgi` und dessen
+  `Body.Data.Site.BackupMode`. Die Solar API muss am Wechselrichter aktiviert
+  sein. Ohne eigene URL wird `http://<Modbus-Host>` verwendet; bei einem
+  Modbus-Gateway oder anderem HTTP-Port die Solar-API-URL des Wechselrichters
+  explizit konfigurieren. Der Abruf erfolgt höchstens alle 30 Sekunden im
+  Executor und prüft Antwortstatus, booleschen Wert und Zeitstempel.
+  Ein Ausfall dieser ergänzenden API lässt gültige Modbus-Leistungen verfügbar.
+  Die Notstromerkennung kann im Plugin ausgeschaltet werden.
+- **Victron GX direkt:** Register 826 (`/Ac/ActiveIn/Source`) liefert
+  240 für Inselbetrieb und 1 für Netzbetrieb. Unbekannte Werte, Generator oder
+  Landstrom werden nicht als bestätigter Netz- oder Notstrombetrieb ausgegeben.
+- **Andere Systeme oder explizite Quelle:** Unter **Quellsensoren** kann ein
+  optionaler Notstromstatus aus `binary_sensor` oder `sensor` gewählt werden.
+  Die Felder für aktiven/inaktiven Zustand legen die Zuordnung fest
+  (Standard: `on` = Notstrom, `off` = Netz). Die ausgewählte Quelle hat Vorrang;
+  bei ihrem Ausfall wird nicht still auf eine andere Quelle gewechselt.
+
+Ein Status muss innerhalb der letzten 120 Sekunden gemeldet worden sein.
+Fehlende, ungültige, zukünftige oder veraltete Statusmeldungen ergeben
+„unbekannt“, keine behauptete Rückkehr zum Netz. Unterstützt ein Gerät keine
+Statusquelle, bleibt die bisherige Darstellung erhalten. Bei Speichergruppen
+hat der ausgewählte gemeinsame Netzmesspunkt Vorrang; sonst müssen die
+Statusmeldungen aller beteiligten Speicher übereinstimmen.
+
+Das Backend protokolliert Auftreten, Ursachenwechsel und Behebung unabhängig
+von geöffneten Browsern unter den Kennungen `backup_power_active` und
+`backup_power_unknown`. Unveränderte Meldungen werden dedupliziert.
+
+Protokollreferenzen: [HA-Fronius-Notstromsensor](https://github.com/home-assistant/core/blob/dev/homeassistant/components/fronius/binary_sensor.py),
+[Victron-Zustände](https://github.com/victronenergy/venus-html5-app/blob/master/TOPICS.md).
+
 ## Victron GX und Victron Venus MQTT / HACS
 
 Ohne weitere HA-Integration: **Victron GX direct Modbus TCP** (`victron_modbus`)

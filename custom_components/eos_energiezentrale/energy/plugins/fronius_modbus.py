@@ -30,11 +30,16 @@ class FroniusModbus(BatteryDriver):
         PluginField("grid_discharge_supported", "Allow forced grid export", "boolean", default=False),
         PluginField("battery_capacity_wh", "Primary battery capacity (Wh; required with multiple batteries)", "number", default=0),
         PluginField("additional_inverters", "Additional inverters (JSON object; see PLUGINS.md)", "json", default={}),
+        PluginField('backup_detection_enabled', 'Detect backup power via Solar API', 'boolean', default=True),
+        PluginField('backup_api_url', 'Solar API URL (empty: http://Modbus host)', 'text', required=False, default=''),
     )
 
     def __init__(self, ha, params):
         values = parameters(self.configuration, params)
         host = checked_host(values["host"])
+        from .._fronius_backup import FroniusBackup
+        self.backup = (FroniusBackup(values['backup_api_url'] or 'http://'+('['+host+']' if ':' in host else host))
+                       if values['backup_detection_enabled'] else None)
         for key, maximum in (("port", 65535), ("unit_id", 247), ("grid_meter_unit_id", 247)):
             if values[key] != int(values[key]) or not 1 <= values[key] <= maximum:
                 raise ValueError("Invalid Modbus " + key)
@@ -121,10 +126,14 @@ class FroniusModbus(BatteryDriver):
             extra["house_total"] = Measurement(house, now if house is not None else None)
         # Timestamp a successful live poll, never a cached value. `now` is the
         # acquisition start, so it remains conservative while requests complete.
+        supply = self.backup.read(now) if self.backup is not None else None
+        if self.backup is not None and self.backup.error is not None:
+            from ..plugin_diagnostics import partial_read_failure
+            partial_read_failure(self, self.backup.error, 'backup_status')
         return BatteryReading(soc, charge, discharge,
                               now if soc is not None else None,
                               now if charge is not None else None,
-                              now if discharge is not None else None, extra)
+                              now if discharge is not None else None, extra, power_supply=supply)
 
     def _ac_power(self):
         if self.inverter_model is None:

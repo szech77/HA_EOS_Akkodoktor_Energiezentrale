@@ -10,6 +10,7 @@ from .domain import BatteryCommand
 from ._modbus_tcp import ModbusError
 from .sanitiser import bounded
 from .storage_pool import distribute, total
+from .power_supply import aggregate_supply
 
 
 def capacity(value, optional=False):
@@ -57,7 +58,8 @@ class FroniusSite:
                 raise ValueError('PV-only inverters do not have a battery capacity')
             driver=factory(None,{**{key:settings[key] for key in ('host','port','unit_id') if key in settings},
                                  'grid_meter_enabled':False,
-                                 'grid_discharge_supported':primary.features.grid_discharge})
+                                 'grid_discharge_supported':primary.features.grid_discharge,
+                                 'backup_detection_enabled':primary.backup is not None})
             key=endpoint(driver)
             if key in seen: raise ValueError('Duplicate inverter endpoint')
             seen.add(key)
@@ -139,7 +141,9 @@ class FroniusSite:
             extra.update(grid=Measurement(grid,now if grid is not None else None),
                          house_total=Measurement(house,now if house is not None else None))
         return BatteryReading(soc,charge,discharge,now if soc is not None else None,
-                              now if charge is not None else None,now if discharge is not None else None,extra)
+                              now if charge is not None else None,now if discharge is not None else None,extra,
+                              power_supply=aggregate_supply((device is self.devices[0], reading)
+                                                            for device,reading in battery_values))
 
     def apply(self,command,states):
         if len(self.batteries)==1:

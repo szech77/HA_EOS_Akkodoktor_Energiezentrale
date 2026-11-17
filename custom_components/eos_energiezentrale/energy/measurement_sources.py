@@ -49,7 +49,9 @@ def resolve_sources(options, states, providers, now, keys=None):
     """Sensor first; then battery plugin, then wallbox plugin. Never fail over a
     configured-but-unavailable sensor. Preserve fleet-adjusted internal rows.
     """
-    opts, rows = dict(options), dict(states)
+    from copy import copy
+    # Preserve metadata on a captured HA state batch (e.g. registry associations).
+    opts, rows = dict(options), copy(states) if isinstance(states, dict) else dict(states)
     sources = {}
     for key, (option, kind, unit, age) in SOURCES.items():
         if keys is not None and key not in keys:

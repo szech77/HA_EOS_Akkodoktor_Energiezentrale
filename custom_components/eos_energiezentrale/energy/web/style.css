@@ -42,6 +42,8 @@
   #eos-energy-design .orb,#eos-energy-design .hub { display:grid; place-items:center; border-radius:50%; }
   #eos-energy-design .orb { width:52px; height:52px; color:var(--energy-color); background:var(--surface2); border:2px solid var(--energy-color); }
   #eos-energy-design .node:hover .orb { background:color-mix(in srgb,var(--energy-color) 22%,var(--surface)); }
+  #eos-energy-design .node.grid-disconnected { color:var(--dim); --energy-color:var(--dim); filter:grayscale(1); opacity:.55; }
+  #eos-energy-design .node.grid-disconnected .orb { border-color:var(--edge); background:var(--surface2); }
   #eos-energy-design .hub { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:80px; height:80px; align-content:center; gap:3px; color:var(--accent); background:var(--surface2); border:2px solid var(--edge); font-size:11px; }
   #eos-energy-design .footnote { margin-top:6px; }
   #eos-energy-design .next { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }

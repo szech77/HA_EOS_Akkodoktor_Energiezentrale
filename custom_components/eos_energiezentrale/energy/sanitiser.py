@@ -25,7 +25,8 @@ def battery_reading(value, now=None, *, soc_max_age=120):
             return None
         return reading if 0 <= (now - timestamp).total_seconds() < age else None
 
-    return replace(value,
+    from .power_supply import checked_supply
+    return replace(value, power_supply=checked_supply(value.power_supply, now) if now is not None else value.power_supply,
         soc=validated_sample(value.soc, value.soc_sample, 100,soc_max_age if bounded(soc_max_age,1,360) is not None else 120),
         charge=validated_sample(value.charge, value.charge_sample, 1000000),
         discharge=validated_sample(value.discharge, value.discharge_sample, 1000000))

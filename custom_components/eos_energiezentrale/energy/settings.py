@@ -115,6 +115,8 @@ def influx_credential(options, environment=None):
 
 class Configuration:
     def __init__(self, options, ha, directory):
+        from .power_supply import validate_supply_options
+        validate_supply_options(options)
         options={**options,'vehicle_resource':options.get('vehicle_resource','')}
         self.options = options
         self.zone = ZoneInfo(options["timezone"])

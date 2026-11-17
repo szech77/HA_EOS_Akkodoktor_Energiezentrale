@@ -25,7 +25,10 @@
           "car_soc_scale": "Vehicle SoC unit",
           "heat_load_entity": "Heat pump power utilization (optional)",
           "heat_load_scale": "Utilization scale",
-          "weather_entity": "Weather (optional; empty = automatic selection)"
+          "weather_entity": "Weather (optional; empty = automatic selection)",
+          "backup_mode_entity": "Backup-mode status (optional; empty = automatic)",
+          "backup_active_state": "State for backup power",
+          "backup_inactive_state": "State for grid operation"
         },
         "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. If neither source is configured, the panel shows a configuration notice. Heat pump and vehicle remain optional."
       },
@@ -187,7 +190,10 @@
           "car_soc_scale": "Vehicle SoC unit",
           "heat_load_entity": "Heat pump power utilization (optional)",
           "heat_load_scale": "Utilization scale",
-          "weather_entity": "Weather (optional; empty = automatic selection)"
+          "weather_entity": "Weather (optional; empty = automatic selection)",
+          "backup_mode_entity": "Backup-mode status (optional; empty = automatic)",
+          "backup_active_state": "State for backup power",
+          "backup_inactive_state": "State for grid operation"
         },
         "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. If neither source is configured, the panel shows a configuration notice. Heat pump and vehicle remain optional."
       },
@@ -663,6 +669,12 @@
         },
         "additional_inverters": {
           "name": "Additional inverters (JSON object; see PLUGINS.md)"
+        },
+        "backup_detection_enabled": {
+          "name": "Detect backup power via Solar API"
+        },
+        "backup_api_url": {
+          "name": "Solar API URL (empty: http://Modbus host)"
         }
       }
     },

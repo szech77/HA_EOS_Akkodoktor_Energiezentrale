@@ -52,6 +52,35 @@ function fixture(vehicles,language='de'){
 }
 const car=(id,soc,watts,extra={})=>({id,name:'Auto '+id,live:{car_soc:soc,car:watts,car_connected:true},power_reference:{car:watts*2},...extra});
 
+test('backup mode greys the grid and stops even retained grid pulses until grid operation returns',()=>{
+ for(const language of ['de','en']){
+  const f=fixture([],language),node=f.selectors['[data-node="grid"]'],flow=f.selectors['[data-flow="grid"]'];
+  f.ctx.snapshot.power_supply={state:'backup',grid_active:false};
+  f.ctx.snapshot.flow_display={grid:{value:5000,aligned:true,age_s:20}};
+  f.ctx.renderFlow();
+  assert.equal(node.classes.has('grid-disconnected'),true);
+  assert.equal(flow.classes.has('inactive'),true);
+  assert.equal(node.querySelector('strong').textContent,'—');
+  assert.ok(node.getAttribute('aria-label').includes(f.ctx.t('power_supply.backup')));
+  assert.equal(f.ctx.snapshot.live.grid,2000);
+  f.ctx.snapshot.power_supply={state:'grid',grid_active:true};
+  f.ctx.snapshot.flow_display={};
+  f.ctx.renderFlow();
+  assert.equal(node.classes.has('grid-disconnected'),false);
+  assert.equal(flow.classes.has('inactive'),false);
+  assert.equal(node.querySelector('strong').textContent,'2 kW');
+ }
+});
+
+test('zero or missing grid watts do not create a backup state in the browser',()=>{
+ const f=fixture([]);
+ for(const grid of [0,null]){
+  f.ctx.snapshot.live.grid=grid;
+  f.ctx.renderFlow();
+  assert.equal(f.selectors['[data-node="grid"]'].classes.has('grid-disconnected'),false);
+ }
+});
+
 test('one configured vehicle appears inside the flow with its own SoC and detail link',()=>{
  const f=fixture([car('first',20,1380)]),node=f.nodes()[0];
  assert.equal(node.href,'#car/first');

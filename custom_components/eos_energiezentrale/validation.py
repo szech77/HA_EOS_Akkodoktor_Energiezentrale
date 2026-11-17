@@ -11,6 +11,8 @@ from .energy.resources import validate_resources
 
 
 def validate_options(options):
+    from .energy.power_supply import validate_supply_options
+    validate_supply_options(options)
     name = options.get("vehicle_name", "E-Auto")
     if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 60
             or any(ord(char) < 32 or ord(char) == 127 for char in name)):

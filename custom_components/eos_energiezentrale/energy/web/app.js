@@ -305,10 +305,12 @@ function renderFlow() {
     const source=vehicle ?? snapshot, live=source.live;
     const name=vehicle ? vehicle.name : names[key];
     const inactiveCar = key === 'car' && !vehicleActive(source);
+    const inactiveGrid = key === 'grid' && snapshot.power_supply?.grid_active === false;
     node.classList.toggle('vehicle-inactive', inactiveCar);
+    node.classList.toggle('grid-disconnected', inactiveGrid);
     const retained = source.flow_display?.[key] ?? source.display?.[key];
-    const stale = valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
-    const value = inactiveCar ? null : stale ? retained.value : live[key];
+    const stale = !inactiveGrid && valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
+    const value = inactiveCar || inactiveGrid ? null : stale ? retained.value : live[key];
     const soc = source.flow_display?.[key+'_soc']?.value ?? (valid(live[key+'_soc']) ? live[key+'_soc'] : source.display?.[key+'_soc']?.value);
     if (key === 'car') {
       const filled=socBarCount(soc);
@@ -332,12 +334,12 @@ function renderFlow() {
       ageNote.className = 'reading-age';
       node.append(ageNote);
     }
-    ageNote.hidden = inactiveCar || !stale || (retained.aligned && retained.age_s<10);
-    ageNote.textContent = stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
+    ageNote.hidden = inactiveCar || (!inactiveGrid && (!stale || (retained.aligned && retained.age_s<10)));
+    ageNote.textContent = inactiveGrid ? t('power_supply.backup') : stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
       {minutes:Math.ceil(retained.age_s / 60)}) : '';
     node.title = [vehicle?.name,inactiveCar ? vehicleStatus(source) : '',ageNote.textContent].filter(Boolean).join(' · ');
     node.querySelector('span:nth-child(2)').textContent = socBarCount(soc)!==null ? `${name} · ${percent(soc)}` : name;
-    node.setAttribute('aria-label', [name,inactiveCar ? vehicleStatus(source) : power(value),value ? direction : ''].filter(Boolean).join(' · '));
+    node.setAttribute('aria-label', [name,inactiveGrid ? t('power_supply.backup') : inactiveCar ? vehicleStatus(source) : power(value),value ? direction : ''].filter(Boolean).join(' · '));
     if (['battery','car'].includes(key) && valid(soc)) {
       const warning=node.classList.contains('battery-low') ? t('battery.minimum_reached') : '';
       node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
@@ -371,6 +373,7 @@ function modeCards() {
 function overview() {
   dayBalance();
   const live = snapshot.live;
+  const backup = snapshot.power_supply?.grid_active === false;
   const remaining = solarRemaining();
   const weather = live.weather;
   const weatherNode = byId('flow-weather');
@@ -400,7 +403,9 @@ function overview() {
   byId('overview-kpis').innerHTML = cards([
     [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
     [t('metric.price_now'),price(displayed('price')),t('metric.import')],
-    [t('metric.grid_connection'),displayedPower('grid'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
+    [t('metric.grid_connection'),backup ? t('power_supply.backup') : displayedPower('grid'),
+      backup ? t('power_supply.grid_disconnected') : snapshot.power_supply?.state === 'unknown' ? t('power_supply.unknown')
+      : valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
   ]);
   renderFlow();
   byId('next').innerHTML=modeCards();

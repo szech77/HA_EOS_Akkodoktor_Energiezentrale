@@ -9,7 +9,7 @@ from ..plugin_diagnostics import entity_reading
 class FroniusInverter(InverterDriver):
     info = PluginInfo('fronius_modbus', 'Fronius PV inverter / Modbus TCP', 'inverter')
     configuration = tuple(field for field in FroniusModbus.configuration if field.key not in {
-        'battery_capacity_wh', 'additional_inverters', 'grid_discharge_supported'})
+        'battery_capacity_wh', 'additional_inverters', 'grid_discharge_supported', 'backup_detection_enabled', 'backup_api_url'})
 
     def __init__(self, ha, params):
         values = parameters(self.configuration, params)
