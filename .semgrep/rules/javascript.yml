@@ -1,0 +1,72 @@
+rules:
+  - id: eos.javascript.dynamic-code
+    languages: [javascript]
+    severity: ERROR
+    message: Avoid eval and the Function constructor for dynamic JavaScript.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-95]
+      security-severity: '9.0'
+      help: Parse structured data and dispatch through explicit functions instead of evaluating strings as code.
+      references: ['https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval']
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+  - id: eos.javascript.wildcard-message-target
+    languages: [javascript]
+    severity: WARNING
+    message: Send window messages only to an explicit trusted target origin.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-346]
+      security-severity: '6.5'
+      help: Use the exact intended origin for postMessage. Validate origin, source window and request identity independently when receiving messages.
+      references: ['https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#security_concerns']
+    pattern-either:
+      - pattern: $TARGET.postMessage($MESSAGE, "*", ...)
+      - pattern: $TARGET.postMessage($MESSAGE, {targetOrigin:"*", ...})
+  - id: eos.javascript.untrusted-dom-html
+    languages: [javascript]
+    severity: ERROR
+    message: Escape untrusted browser or message data before inserting it as HTML.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-79]
+      security-severity: '8.0'
+      help: Prefer textContent for plain text. The panel's tested html() encoder is valid for text embedded in HTML; use an appropriate sanitizer for deliberately supported markup. URL and other contexts require their own validation.
+      references: ['https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML#security_considerations']
+    mode: taint
+    pattern-sources:
+      - pattern: location.hash
+      - pattern: location.search
+      - pattern: window.location.hash
+      - pattern: window.location.search
+      - pattern: document.URL
+      - patterns:
+          - pattern-inside: $TARGET.addEventListener("message", ($EVENT) => { ... })
+          - pattern: $EVENT.data
+      - patterns:
+          - pattern-inside: $TARGET.addEventListener("message", async ($EVENT) => { ... })
+          - pattern: $EVENT.data
+    pattern-sanitizers:
+      - pattern: html(...)
+      - pattern: DOMPurify.sanitize(...)
+    pattern-sinks:
+      - patterns:
+          - pattern: $NODE.innerHTML = $VALUE
+          - focus-metavariable: $VALUE
+      - patterns:
+          - pattern: $NODE.outerHTML = $VALUE
+          - focus-metavariable: $VALUE
+      - patterns:
+          - pattern: $NODE.insertAdjacentHTML($POSITION, $VALUE)
+          - focus-metavariable: $VALUE
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
