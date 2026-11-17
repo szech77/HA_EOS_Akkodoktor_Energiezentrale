@@ -1,0 +1,17 @@
+{
+  "version": "1.185.0",
+  "artifacts": {
+    "Linux-x86_64": {
+      "url": "https://files.pythonhosted.org/packages/f2/13/0d4dc8d124794105f300082c46e3d8ad45eac7af63113b57a5966629b5a3/semgrep-1.185.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-manylinux_2_34_x86_64.whl",
+      "sha256": "0eb6aaadad5b957af96d1300487e10af1dc8016e8ef53072effb48cd4906c02b",
+      "size": 72302138,
+      "executable": "semgrep-core"
+    },
+    "Windows-x86_64": {
+      "url": "https://files.pythonhosted.org/packages/8e/8e/c8d5135ff77a60e825c08b68272a924572e59841d01beba29be7041d2c75/semgrep-1.185.0-cp310.cp311.cp312.cp313.cp314.py310.py311.py312.py313.py314-none-win_amd64.whl",
+      "sha256": "91812ac0856cfe5b6135a4dffde3052a04c36a46e4e82e78793e3a07e51d7894",
+      "size": 59558677,
+      "executable": "semgrep-core.exe"
+    }
+  }
+}

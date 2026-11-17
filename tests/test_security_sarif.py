@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from tools.security_sarif import bandit, main, pip_audit, trivy
+from tools.security_sarif import bandit, main, pip_audit, trivy, semgrep, semgrep_targets, semgrep_version, semgrep_catalog
 from test_energy import temporary_project_directory
 
 
@@ -47,7 +47,10 @@ class SecurityReportingRequirements(TestCase):
 
     def test_clean_reports_publish_empty_results_to_close_fixed_findings(self):
         for output in (bandit({"results": [], "errors": []}), pip_audit({"dependencies": []}, []),
-                       trivy({"SchemaVersion": 2})):
+                       trivy({"SchemaVersion": 2}), semgrep({'version':semgrep_version(), 'results':[],
+                           'errors':[], 'skipped_rules':[], 'eos_scan_exit_code':0,
+                           'eos_core_exit_codes':[0], 'rules_by_engine':[[key,'OSS'] for key in semgrep_catalog()],
+                           'paths':{'scanned':sorted(semgrep_targets())}})):
             self.assertEqual(output["version"], "2.1.0")
             self.assertEqual(output["runs"][0]["results"], [])
             self.assertTrue(output["runs"][0]["automationDetails"]["id"].endswith("/"))
@@ -77,7 +80,8 @@ class SecurityReportingRequirements(TestCase):
             (output / "trivy-secrets.sarif").write_text("stale analysis", encoding="utf-8")
             console = StringIO()
             with patch("sys.argv", ["security_sarif", "--bandit", str(good), "--pip-audit", str(bad),
-                                    "--trivy", str(bad), "--output-dir", str(output)]), redirect_stdout(console):
+                                    "--trivy", str(bad), '--semgrep',str(bad),
+                                    "--output-dir", str(output)]), redirect_stdout(console):
                 code = main()
             self.assertEqual(code, 1)
             self.assertTrue((output / "bandit.sarif").is_file())

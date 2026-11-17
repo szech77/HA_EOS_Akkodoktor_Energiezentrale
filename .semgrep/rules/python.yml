@@ -1,0 +1,66 @@
+rules:
+  - id: eos.python.subprocess-shell
+    languages: [python]
+    severity: ERROR
+    message: Avoid shell command strings. Pass a list of arguments with shell=False.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-78]
+      security-severity: '8.8'
+      help: Shell parsing can turn untrusted arguments into commands. Use subprocess argument lists and keep shell=False; validate the allowed operation independently.
+      references: ['https://docs.python.org/3/library/subprocess.html#security-considerations']
+    pattern-either:
+      - pattern: subprocess.run(..., shell=True, ...)
+      - pattern: subprocess.Popen(..., shell=True, ...)
+      - pattern: subprocess.call(..., shell=True, ...)
+      - pattern: subprocess.check_call(..., shell=True, ...)
+      - pattern: subprocess.check_output(..., shell=True, ...)
+  - id: eos.python.tls-verification-disabled
+    languages: [python]
+    severity: ERROR
+    message: Keep TLS certificate verification enabled for HTTP clients.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-295]
+      security-severity: '7.4'
+      help: Disabling certificate verification permits interception of device credentials and measurements. Use a trusted CA bundle or an explicitly configured certificate instead.
+      references: ['https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification']
+    patterns:
+      - pattern: $CLIENT.$METHOD(..., verify=False, ...)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(get|post|put|patch|delete|head|options|request|Client|AsyncClient|Session)$
+  - id: eos.python.unverified-tls-context
+    languages: [python]
+    severity: ERROR
+    message: Use a verified TLS context instead of an unverified SSL context.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-295]
+      security-severity: '7.4'
+      help: Use ssl.create_default_context and configure trusted certificates without disabling certificate or hostname verification.
+      references: ['https://docs.python.org/3/library/ssl.html#ssl.create_default_context']
+    pattern: ssl._create_unverified_context(...)
+  - id: eos.python.dynamic-code
+    languages: [python]
+    severity: ERROR
+    message: Do not execute dynamically constructed Python code.
+    metadata:
+      license: Apache-2.0
+      category: security
+      confidence: HIGH
+      cwe: [CWE-95]
+      security-severity: '9.0'
+      help: Replace eval/exec with structured parsing such as json.loads or an explicit allowlist of supported operations. Do not treat device or browser data as executable code.
+      references: ['https://docs.python.org/3/library/functions.html#eval']
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+      - pattern: builtins.eval(...)
+      - pattern: builtins.exec(...)

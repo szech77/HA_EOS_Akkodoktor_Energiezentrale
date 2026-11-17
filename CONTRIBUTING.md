@@ -74,6 +74,13 @@ Passwörter oder Rohfehler mit privaten Daten in Frontend-Antworten, Logs oder T
 mit echten Zugangsdaten aufnehmen. Sicherheitsprobleme nicht mit privaten
 Messwerten in öffentlichen Issues veröffentlichen.
 
+Semgrep-Regeln und ihre sicheren/unsicheren Beispiele werden zusammen unter
+`.semgrep/rules` gepflegt. Die native Semgrep-Engine wird geprüft installiert; Einrichtung
+und lokale Befehle stehen in [CI.md](CI.md#semgrep-regeln-datenschutz-und-lokale-prüfung).
+Keine globalen Ausschlüsse oder pauschalen Unterdrückungen für Fehlalarme einführen.
+Regelanpassungen benötigen einen passenden Regressionstest. In GitHub werden nur
+geschwärzte SARIF-Berichte bewertet; Rohreports bleiben lokal bzw. in `RUNNER_TEMP`.
+
 Übersetzungen: native HA-Texte in `translations`, Panel-Texte in `energy/i18n`.
 Englisch bleibt der Rückfall. UI und Einstellungen müssen auf kleinen Bildschirmen
 benutzbar bleiben.

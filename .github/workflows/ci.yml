@@ -69,6 +69,20 @@ jobs:
         id: audit
         continue-on-error: true
         run: python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict --format json --output "$RUNNER_TEMP/pip-audit.json"
+      - name: Install verified native Semgrep engine
+        id: semgrep_tools
+        continue-on-error: true
+        run: python tools/install_semgrep.py --directory "$RUNNER_TEMP/semgrep" --github-output "$GITHUB_OUTPUT"
+      - name: Test versioned Semgrep rules
+        id: semgrep_rules
+        if: ${{ !cancelled() && steps.semgrep_tools.outcome == 'success' }}
+        continue-on-error: true
+        run: python tools/semgrep_scan.py --executable "${{ steps.semgrep_tools.outputs.executable }}" --test
+      - name: Semgrep Python and JavaScript security analysis
+        id: semgrep
+        if: ${{ !cancelled() && steps.semgrep_tools.outcome == 'success' && steps.semgrep_rules.outcome == 'success' }}
+        continue-on-error: true
+        run: python tools/semgrep_scan.py --executable "${{ steps.semgrep_tools.outputs.executable }}" --output "$RUNNER_TEMP/semgrep.json"
       - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.76.2
@@ -85,6 +99,7 @@ jobs:
           --bandit "$RUNNER_TEMP/bandit.json"
           --pip-audit "$RUNNER_TEMP/pip-audit.json"
           --trivy "$RUNNER_TEMP/trivy-secrets.json"
+          --semgrep "$RUNNER_TEMP/semgrep.json"
           --output-dir .security-results
       - name: Publish findings to GitHub Code scanning
         id: upload
@@ -99,12 +114,18 @@ jobs:
         env:
           BANDIT: ${{ steps.bandit.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
+          SEMGREP_TOOLS: ${{ steps.semgrep_tools.outcome }}
+          SEMGREP_RULES: ${{ steps.semgrep_rules.outcome }}
+          SEMGREP: ${{ steps.semgrep.outcome }}
           SECRETS: ${{ steps.secrets.outcome }}
           REPORTS: ${{ steps.reports.outcome }}
           UPLOAD: ${{ steps.upload.outcome }}
         run: |
           test "$BANDIT" = success
           test "$AUDIT" = success
+          test "$SEMGREP_TOOLS" = success
+          test "$SEMGREP_RULES" = success
+          test "$SEMGREP" = success
           test "$SECRETS" = success
           test "$REPORTS" = success
           test "$UPLOAD" = success

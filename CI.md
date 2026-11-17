@@ -7,7 +7,8 @@ Verpflichtender Sammelstatus: **Required checks**. Er hängt ab von:
 
 - Fachlichen Tests und HA-Schnittstellentests mit Python 3.14 / HA 2026.11.0.
 - JavaScript-Syntax und Tests der authentifizierten Panel-Kommunikation.
-- Bandit, pip-audit für Entwicklungs-/HA-Testabhängigkeiten und Trivy-Geheimnisscan.
+- Bandit, Semgrep CE für Python/JavaScript (Regeltests und Scan), pip-audit für
+  Entwicklungs-/HA-Testabhängigkeiten und Trivy-Geheimnisscan.
 - Home-Assistant-hassfest und HACS-Validierung. Der Brands-Katalog ist für dieses
   benutzerdefinierte Repository nicht erforderlich und wird nicht geprüft.
 - Changelog-Kategorien, automatische Versionsplanung und Schutz vor Wiederverwendung eines Tags.
@@ -183,9 +184,10 @@ normalen Leserechten dieses CI-Jobs nicht möglich.
 
 ## Findings in GitHub Security / Code scanning
 
-Bandit, pip-audit und Trivy veröffentlichen ihre Befunde als SARIF unter
+Bandit, Semgrep, pip-audit und Trivy veröffentlichen ihre Befunde als SARIF unter
 **Repository → Security → Code scanning**. Die Tools behalten getrennte Namen:
-**Bandit**, **pip-audit**, **Trivy Secrets**. Die Action erzeugt keine Issues und
+**Bandit**, **Semgrep**, **pip-audit**, **Trivy Secrets**.
+Die Action erzeugt keine Issues und
 keine PR-Kommentare. Ergebnisse eines Feature-Branches lassen sich über den
 Branchfilter auswählen; die Standardansicht zeigt Ergebnisse des Default-Branches.
 
@@ -218,3 +220,71 @@ ablehnt, unter **Settings → Advanced Security / Code security** die Freigabe p
 Die Pipeline überspringt diesen Fehler nicht stillschweigend.
 
 Referenz: https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file
+
+### Semgrep-Regeln, Datenschutz und lokale Prüfung
+
+Verwendet wird ausschließlich die native Semgrep-CE-Engine `semgrep-core`, nicht
+die Python-CLI. `tools/install_semgrep.py` lädt das in `.semgrep/tool.json` exakt
+gepinnte offizielle PyPI-Wheel (Linux bzw. Windows x86_64) ohne Weiterleitungen
+nur von `files.pythonhosted.org`, prüft Größe und SHA-256 und extrahiert nur die
+Engine und ihre mitgelieferten Bibliotheken (unter Linux im Unterordner `libs/`).
+Es werden keine Python-Pakete installiert; Home-Assistant-Laufzeit- und
+Testabhängigkeiten bleiben unverändert. `PyYAML` ist eine explizite
+Entwicklungsabhängigkeit für den versionierten Regelkatalog.
+
+Dependabot und pip-audit erfassen `.semgrep/tool.json` nicht. Ein Semgrep-Update
+erfolgt manuell in einem eigenen PR: Release Notes lesen, `version` sowie `url`,
+`sha256` und `size` beider Wheels aus `https://pypi.org/pypi/semgrep/<version>/json`
+übernehmen, Regeltests und Scan ausführen und `New Version` ergänzen.
+`semgrep-core` akzeptiert mit `-lang` nur eine Zieldatei; deshalb läuft je Datei
+und Regelgruppe ein eigener, einzeln validierter Engine-Aufruf.
+
+`.semgrep/rules` enthält sieben eigene Apache-2.0-Regeln und zugehörige positive
+und negative Beispiele: Python-Shell-Aufrufe, dynamische Codeausführung,
+deaktivierte TLS-Prüfung, JavaScript-Codeauswertung, beliebige `postMessage`-
+Zielursprünge und DOM-XSS aus URL-Daten bzw. Inline-Message-Callbacks.
+Der getestete Panel-Encoder `html()` und DOMPurify werden in der DOM-Regel als
+Sanitizer berücksichtigt. Dies ist ein begrenzter, gezielt gepflegter Regelsatz,
+keine vollständige Sicherheitsprüfung oder funktionsübergreifende Taint-Analyse.
+
+`tools/semgrep_scan.py` führt lokale Regeln ohne Semgrep-Login/Cloud-Konfiguration,
+ohne Metrik- oder Versionsabfragen aus. Gescannt werden alle `.py`-/`.js`-Dateien
+in `custom_components` und `tools`; Fixture-Dateien bleiben ausschließlich im
+Regeltest. `nosemgrep`-Kommentare unterdrücken keine Funde; solche Funde bleiben
+blockierend. Regeltests müssen jede Regel mit mindestens einem positiven und einem
+negativen Beispiel prüfen. Scanversion, Exitcode,
+Dateivollständigkeit, übersprungene Regeln und Parser-/Timeoutfehler werden geprüft.
+Ein fehlerhafter Regeltest verhindert den Scan; unvollständige Berichte erzeugen
+keinen scheinbar sauberen Semgrep-SARIF-Report. Andere Scannerberichte werden
+weiterhin verarbeitet und hochgeladen.
+
+Für GitHub werden ausschließlich die versionierten Regelbeschreibungen mit
+stabiler ID, Behebungshilfe, CWE-Tags, Präzision, Regelpriorität und Fundstelle
+übernommen. Die `security-severity`-Werte sind bewusst festgelegte Prioritäten
+der eigenen Regeln, keine berechneten CVSS-Werte für konkrete Befunde.
+Expandierte Meldungen, Matches, Variablenwerte, Codeausschnitte, Autofixes und
+Dataflow-Traces aus Rohreports bleiben unveröffentlicht. `upload-sarif` ergänzt
+Fingerprints, damit GitHub Befunde über Läufe hinweg zuordnen kann.
+
+Unter **Security → Code scanning → Tool: Semgrep** können Findings nach Branch,
+Regel und Schweregrad geprüft und beispielsweise als Fehlalarm bewertet werden.
+Eine dortige Bewertung hebt die lokale CI-Sperre nicht automatisch auf: Ein
+Fehlalarm wird durch eine begründete, eng gefasste Regelkorrektur mit Regressionstest
+behoben. Installations-, Scanner-, Regeltest- und Uploadfehler bleiben Pflichtfehler.
+
+Lokal unter PowerShell (Projektumgebung verwenden; die Engine landet im
+ignorierten Verzeichnis `.semgrep-native`):
+
+```powershell
+.\.venv\Scripts\python.exe tools/install_semgrep.py
+.\.venv\Scripts\python.exe tools/semgrep_scan.py --test
+.\.venv\Scripts\python.exe tools/semgrep_scan.py --output "$env:TEMP/semgrep.json"
+```
+
+Unter Linux entsprechend `.venv/bin/python` verwenden; macOS und ARM werden vom
+Installer nicht unterstützt. Ohne `--executable` nutzt `semgrep_scan.py` die
+Engine aus `.semgrep-native/<version>`. Exitcode 0 bedeutet keine Funde, 1 Funde
+und 2 einen unvollständigen Scan oder fehlgeschlagene Regeltests. Rohreports
+nicht als Artefakt oder Issue-Anhang veröffentlichen.
+Referenzen: [Semgrep CE in CI](https://docs.semgrep.dev/deployment/oss-deployment),
+[GitHub SARIF-Unterstützung](https://docs.github.com/en/code-security/reference/code-scanning/sarif-support-for-code-scanning).
