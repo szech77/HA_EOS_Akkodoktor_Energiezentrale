@@ -9,12 +9,13 @@ from time import monotonic, sleep
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, ProxyHandler, build_opener
 
-from ..clients import NoRedirect, base_url
+from ..clients import NoRedirect, RequestDeadline, base_url
 from ..contracts import WallboxDriver, WallboxFeatures, WallboxReading, PluginInfo, PluginField
 from ..plugin_parameters import parameters
 from ..sanitiser import bounded
 from ..failures import HardwareAPIError
 
+REQUEST_GRACE_S=2  # Total exchange deadline beyond the socket inactivity timeout.
 STATUS_KEYS=('car','err','frc','alw','amp','ama','adi','cbl','var','nrg','psm','pnp','pha','fsp','mca')
 
 
@@ -46,14 +47,17 @@ class GoEHTTPv2(WallboxDriver):
         self.features=WallboxFeatures(phase_switching=self.switching,optional_connection=True)
         self.ids=dict.fromkeys(('power','status','enable','current','phases'),'')
         self.opener=None  # Certificate loading belongs to the first executor request.
+        self.deadline=RequestDeadline('eos-goe-request')
         self.zero_after=self.zero_sample=self.phase_requested=None
 
     def _request(self,path,timeout=3):
-        try:
+        def exchange():
             if self.opener is None:
                 self.opener=build_opener(ProxyHandler({}),NoRedirect())
             request=Request(self.url+path,headers={'Accept':'application/json','Cache-Control':'no-cache'})
-            with self.opener.open(request,timeout=timeout) as response: raw=response.read(65537)
+            with self.opener.open(request,timeout=timeout) as response: return response.read(65537)
+        try:
+            raw=self.deadline.run(exchange,timeout+REQUEST_GRACE_S)
             if len(raw)>65536: raise ValueError('Oversized response')
             result=json.loads(raw)
             if not isinstance(result,dict): raise ValueError('Expected JSON object')

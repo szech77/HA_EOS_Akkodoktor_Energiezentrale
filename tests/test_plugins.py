@@ -5,6 +5,8 @@ import importlib
 import json
 import sys
 import unittest
+
+import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -222,3 +224,33 @@ class ScopedHardwareRequirements(unittest.TestCase):
         adapter=ScopedHardwareAdapter(Mock())
         with self.assertRaises(PermissionError):
             adapter.state('sensor.anything')
+
+
+class StuckSwitchHA(EntityHA):
+    """The HA service call succeeds, but the switch never reports off."""
+    def set(self,entity,value):
+        self.commands.append((entity,value))
+
+
+def test_unavailable_enable_switch_never_reports_a_successful_stop():
+    from custom_components.eos_energiezentrale.energy.device_io import DeviceConfirmationError
+    params,ha=generic_wallbox()
+    ha=StuckSwitchHA(ha.rows)
+    box=GenericWallbox(ha,params)
+    ha.rows['input_boolean.ev_enable']=row('unavailable')
+    sample=box.read(ha.rows,NOW)
+    assert not sample.enabled and sample.status=='unknown'
+    with patch('custom_components.eos_energiezentrale.energy.device_io.sleep'),pytest.raises(DeviceConfirmationError):
+        box.pause(sample)
+    assert ha.commands==[('input_boolean.ev_enable',False)]
+
+
+def test_stop_is_confirmed_by_the_switch_and_an_off_switch_needs_no_command():
+    params,ha=generic_wallbox()
+    box=GenericWallbox(ha,params)
+    ha.rows['input_boolean.ev_enable']=row('unavailable')
+    box.pause(box.read(ha.rows,NOW))
+    assert ha.commands==[('input_boolean.ev_enable',False)]
+    assert ha.rows['input_boolean.ev_enable']['state']=='off'
+    box.pause(box.read(ha.rows,NOW))
+    assert len(ha.commands)==1

@@ -11,7 +11,10 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Keine.
+- Generische und HA-basierte NRGkick-Wallboxen melden einen Stopp nur noch als erfolgreich, wenn die Ladefreigabe `off` bestätigt. Bei nicht verfügbarer oder fehlender Freigabe-Entität den Stopp trotzdem anfordern; eine fehlende Bestätigung bleibt ein sichtbarer Steuerfehler, auch bei Sicherheitsstopps und beim Ausschalten.
+- Einen konfigurierten oder vom Gerät gemeldeten, aber nicht verfügbaren, veralteten oder fehlenden Netzbetriebsstatus wie Notstrom behandeln: Speicher und Wallboxen freigeben, keine neuen Regelbefehle senden und erst nach frischem Netzbetriebsstatus fortsetzen, auch beim Start und im Mehrfahrzeugbetrieb. Der gespeicherte Steuerungswunsch bleibt erhalten.
+- Nach einem Neustart mit gespeicherter Steuerfreigabe die Geräte als möglicherweise noch angesteuert behandeln. Ausschalten vor dem Wiederanlauf gibt Speicher und alle Wallboxen frei. Sind die Geräte lesbar, fehlen aber EOS-Plan oder Messwerte, werden sie während des Wartens freigegeben; fehlgeschlagene Freigaben bleiben sichtbar und werden wiederholt.
+- Fahrzeug-SoC-Werte, deren letzte Meldung mehr als 36 Stunden zurückliegt, nicht mehr als Regelgrundlage oder Startwert der SoC-Schätzung verwenden und nach fünf Minuten ohne gültigen Wert als nicht verfügbar melden.
 
 ### Breaking Changes
 
@@ -19,6 +22,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Security
 
+- Lokale HTTP-Anfragen der Plugins `nrgkick_local` und `goe_http_v2` zusätzlich zur Socket-Inaktivitätsfrist mit einer Gesamtfrist begrenzen (NRGkick 5 s, go-e Inaktivitätsfrist plus 2 s). Tröpfelnd gesendete Header oder Antworten können Abfragen, Ausschalten und das Entladen der Integration nicht mehr über die Regelungssperre blockieren; solange eine abgebrochene Anfrage offen ist, scheitern weitere Anfragen an dasselbe Gerät sofort als Gerätefehler.
 - Semgrep CE 1.185.0 als zusätzlichen verpflichtenden Python-/JavaScript-Scanner im CI-Job `security` mit sieben versionierten, vor jedem Scan getesteten Projektregeln integrieren. Nur die native Engine aus dem exakt gepinnten offiziellen PyPI-Wheel nach Größen- und SHA-256-Prüfung verwenden; bestehende Scanner erhalten. Befunde mit stabilen Regel-IDs, CWE-Zuordnung, Priorität, Behebungshinweisen und Fundstellen über geschwärzte SARIF-Berichte in GitHub Code Scanning bewertbar machen. Rohcode, expandierte Variablen und private Inhalte nicht hochladen; `nosemgrep`-Unterdrückungen nicht akzeptieren. Unvollständige Scans, fehlgeschlagene Regeltests, kaputte Berichte, Scanner-, Installations- oder Uploadfehler blockieren. PyYAML 6.0.3 explizit als Entwicklungsabhängigkeit für den Regelkatalog aufnehmen.
 
 ## 0.19.0 - 2026-11-16

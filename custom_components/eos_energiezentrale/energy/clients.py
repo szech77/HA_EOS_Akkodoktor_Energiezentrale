@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from datetime import timedelta
-from threading import Lock, RLock
+from threading import Lock, RLock, Thread
 from time import monotonic
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -18,6 +18,44 @@ from .failures import BackendError
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args):
         return None
+
+
+class RequestDeadline:
+    """Bound a complete device exchange, including slow headers and bodies.
+
+    Socket timeouts only limit inactivity: a peer sending a byte shortly before
+    each timeout could otherwise hold a poll and the control lock for hours.
+    The exchange runs in a daemon worker; after the deadline the caller fails
+    immediately. While an abandoned exchange is still open, further requests to
+    the same device fail fast instead of accumulating workers.
+    """
+
+    def __init__(self, name):
+        self.name = name
+        self._pending = None
+
+    def run(self, function, seconds):
+        pending = self._pending
+        if pending is not None and pending.is_alive():
+            raise TimeoutError("Previous device request is still open")
+        outcome = {}
+
+        def exchange():
+            try:
+                outcome["value"] = function()
+            except BaseException as error:  # Re-raised in the calling thread.
+                outcome["error"] = error
+
+        worker = Thread(target=exchange, name=self.name, daemon=True)
+        worker.start()
+        worker.join(max(0, seconds))
+        if worker.is_alive():
+            self._pending = worker
+            raise TimeoutError("Device request exceeded its total deadline")
+        self._pending = None
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["value"]
 
 
 OPENER = build_opener(NoRedirect())

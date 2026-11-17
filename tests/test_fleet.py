@@ -313,3 +313,24 @@ class FleetRequirements(unittest.TestCase):
         second=app.controllers[1][1]
         self.assertEqual(second.order_for("ev2",later).mode,"NON_EXPORT")
         self.assertIsNone(second.order_for("ev2",NOW+timedelta(seconds=315)))
+
+
+def test_restored_fleet_intent_owns_every_wallbox_and_explicit_off_releases_all():
+    case = FleetRequirements()
+    try:
+        directory = case.enterContext(temporary_project_directory())
+        opts = {**DEFAULTS, "vehicles":json.dumps(definitions()), "heat_entity":"", "phase_wait_s":10}
+        ha = LocalHA(opts)
+        create_controller(ha, opts, directory).set_armed(True)
+        app = create_controller(ha, opts, directory)
+        assert app.armed and all(child.owned for _, child, _ in app.controllers)
+        app.battery_driver.release = Mock()
+        pauses = []
+        for _, child, _ in app.controllers:
+            child.config.wallbox.pause = Mock(side_effect=lambda state, child=child: pauses.append(child))
+        app.set_armed(False)
+        app.battery_driver.release.assert_called_once()
+        assert pauses == [child for _, child, _ in app.controllers]
+        assert not any(child.owned for _, child, _ in app.controllers)
+    finally:
+        case.doCleanups()

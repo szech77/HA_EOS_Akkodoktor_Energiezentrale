@@ -14,6 +14,12 @@ der Dauer des Notstrombetriebs. Nach bestätigter Netzwiederkehr und sobald die
 erforderlichen Messwerte und ein gültiger Plan vorliegen, läuft die Steuerung
 automatisch weiter. Ein manuelles Ausschalten während der Pause bleibt erhalten.
 Unbekannter/veralteter Status nach erkanntem Notstrom beendet die Pause nicht.
+Ist eine Statusquelle konfiguriert oder meldet ein Gerät den Netzbetriebsstatus,
+pausiert ein nicht verfügbarer, veralteter oder fehlender Status die Steuerung
+ebenfalls wie Notstrom, auch im vorherigen Netzbetrieb und beim Start. Das Panel
+zeigt dann **Steuerung pausiert · warte auf bestätigte Netzwiederkehr** und die
+Warnung „Netzbetriebsstatus unbekannt“; erst ein frischer Netzbetriebsstatus hebt
+die Pause auf.
 Nicht bestätigte Freigaben bleiben sichtbar und werden vor dem Wiederanlauf
 erneut versucht. Dies gilt auch für mehrere Wallboxen mit gemeinsamem Speicher.
 
@@ -515,7 +521,10 @@ Steuerung erfolgt ausschließlich über `amp` (ganze Ampere), `frc=1` (Pause),
 `frc=2` (Freigabe) und bei aktivierter Phasenumschaltung `psm=1`/`2` (1-/3-phasig).
 Schreiben verlangt sowohl eine positive API-Antwort als auch passende zurückgelesene
 Werte. Die go-e-Ladelogik aktualisiert ihre Ergebnisse etwa einmal pro Sekunde;
-das Plugin wartet begrenzt auf die Bestätigung. Vor dem Einschalten werden
+das Plugin wartet begrenzt auf die Bestätigung. Jede HTTP-Anfrage endet spätestens
+2 Sekunden nach ihrer Inaktivitätsfrist (normal 3 Sekunden), auch wenn das Gerät
+Antwortdaten nur tröpfchenweise sendet. Eine noch offene abgebrochene Anfrage lässt
+weitere Anfragen an dieses Gerät sofort scheitern. Vor dem Einschalten werden
 Kabel-/Adaptergrenzen, Fahrzeuganwesenheit und Phasen erneut geprüft. Strom wird
 vor Freigabe gesetzt. Eine fehlgeschlagene Vorgabe löst einen bestätigten
 Pauseversuch aus; nicht bestätigte Pausen bleiben Steuerfehler.
@@ -615,6 +624,10 @@ nicht gelöscht. `charge_permitted` und Gerätefehler werden gelesen; das Plugin
 umgeht keine Schutzfunktionen des NRGkick. Fehler-/RCD-Zustände verhindern neue
 Ladefreigaben. Auch bei ausgefallener Messwertabfrage wird beim Stoppen eine
 unabhängige, bestätigte Pause über `/control` versucht.
+Jede Anfrage hat neben 3 Sekunden Inaktivitätsfrist eine Gesamtfrist von
+5 Sekunden, auch bei langsam tröpfelnden Antworten. Solange eine abgebrochene
+Anfrage noch offen ist, scheitern weitere Anfragen an dasselbe Gerät sofort als
+Gerätefehler; Abfragen, Ausschalten und das Entladen der Integration werden dadurch nicht blockiert.
 
 Die optionale Phasenumschaltung verwendet nur 1 und 3 Phasen. Sie pausiert zuerst,
 wartet auf zwei neue Nullleistungsmessungen mit mindestens drei Sekunden Abstand,
@@ -659,7 +672,9 @@ Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:
 | `status_map` | JSON-Objekt: gemeldeter Status → `connected`, `charging`, `wakeup`, `disconnected`, `unknown`, `unavailable` oder `error`. Groß-/Kleinschreibung der Eingänge wird normalisiert. |
 
 Bei reiner Steckerkennung wird `charging` aus Ladefreigabe und gemessener Leistung
-abgeleitet. Bei Helfern müssen eigene HA-Automationen die Befehle zur Hardware
+abgeleitet. Ein Stopp gilt erst als erfolgreich, wenn `enable` den Zustand `off`
+meldet. Bei nicht verfügbarer oder fehlender Ladefreigabe wird der Stopp trotzdem
+angefordert; ohne Bestätigung bleibt er ein sichtbarer Steuerfehler. Bei Helfern müssen eigene HA-Automationen die Befehle zur Hardware
 weitergeben. Die Messsensoren müssen echte Rückmeldungen liefern. Die Rückmeldung
 eines Helfers bestätigt nur dessen Zustand, nicht den Zustand der Hardware.
 Der Phasenwechsel wartet weiterhin auf deaktivierte Ladung, neue Nullleistungsmessungen

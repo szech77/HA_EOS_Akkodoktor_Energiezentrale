@@ -178,3 +178,33 @@ def test_all_fleet_wallboxes_and_shared_battery_pause_and_resume_after_long_back
         app.battery_driver.release.assert_called_once()
     finally:
         case.doCleanups()
+
+
+def test_unknown_status_after_grid_operation_pauses_and_releases_until_fresh_grid(control):
+    assert poll(control, 0, 'grid')['control_status'] == 'active'
+    control.battery.apply.reset_mock()
+    control.box.charge.reset_mock()
+    control.box.pause.reset_mock()
+    charging = requirements.wallbox(watts=2000, status='charging', enabled=True)
+    for seconds in (5, 600):
+        result = poll(control, seconds, 'unknown', car=charging)
+        assert result['control_status'] == 'power_supply_waiting'
+        assert result['armed'] and result['control_paused']
+        assert any(row['code'] == 'backup_power_unknown' for row in result['notices'])
+    control.battery.apply.assert_not_called()
+    control.box.charge.assert_not_called()
+    control.battery.release.assert_called_once()
+    assert control.box.pause.call_count == 2  # Released, then a restarted charge stopped again.
+    control.config.set_control_enabled.assert_called_once_with(True)
+    result = poll(control, 640, 'grid')
+    assert result['control_status'] == 'active' and not result['control_paused']
+    control.battery.apply.assert_called_once()
+
+
+def test_startup_with_unknown_status_never_passes_the_readiness_gate(control):
+    for seconds in (0, 300):
+        result = poll(control, seconds, 'unknown')
+        assert result['control_status'] == 'power_supply_waiting' and result['armed']
+    control.battery.apply.assert_not_called()
+    control.box.charge.assert_not_called()
+    assert poll(control, 340, 'grid')['control_status'] == 'active'
