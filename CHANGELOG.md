@@ -1,31 +1,14 @@
 # Changelog
 
-Die CI erzeugt Version und Releasedatum. Neue Einträge stehen unter New Version;
-veröffentlichte Abschnitte werden in den Release-Tags archiviert.
-
-## New Version
+## 0.22.1b44182269330 - 2026-11-17
 
 ### Features
 
-- Security Policy für das melden von Verwundbarkeiten wurde hinzugefügt
-
-- Im bestätigten Notstrombetrieb die frische, summierte AC-Ausgangsleistung der konfigurierten Wechselrichter als Gesamtverbrauch verwenden. Gemessene Wallbox- und Wärmepumpenleistungen weiter separat abziehen; ungültige oder veraltete AC-Werte nicht ersetzen und nach Netzwiederkehr die normale Verbrauchsquelle verwenden. Notstrom als nativen Home-Assistant-Binärsensor mit nicht verfügbarem Zustand bei unbestätigtem Status bereitstellen. E-Auto-Laden während der aktiven Notstrompause standardmäßig auch nach erneutem Start stoppen; manuelles Laden optional über die technischen Grenzen erlauben, während EOS pausiert bleibt.
-
-- Bestätigten Notstrom im Energieflussdiagramm zusätzlich mit einem roten Haus-/Blitz-Piktogramm am ausgegrauten Netzsymbol kennzeichnen. Bei Netzwiederkehr oder unbestätigtem Status das Piktogramm ausblenden.
-
-- Notstrombetrieb anhand bestätigter, aktueller Gerätestatus im Backend erkennen und im Panel anzeigen. Im Energiestrom-Diagramm das öffentliche Netz ausgrauen und dessen Flussanimation unterdrücken, ohne Messwerte umzuschreiben. Fronius automatisch über den zugehörigen HA-Notstromsensor oder beim direkten Modbus-Plugin ergänzend über die lokale Solar API erkennen; Victron GX über den Inselstatus und weitere Systeme über eine optionale HA-Statusquelle unterstützen. Unbekannte/veraltete Zustände, Speichergruppen, Rückkehr zum Netz und deduplizierte Backend-Meldungen berücksichtigen; Deutsch und Englisch ergänzen.
-
-- Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
+- Keine.
 
 ### Bugfixes
 
-- Stabile Releases nach einem Merge nach `main` trotz absichtlich übersprungener Branch-Changelog-Bereinigung veröffentlichen. Den Publish-Job mit einer expliziten Statusfunktion und erfolgreichem `required`-Ergebnis freigeben; bei fehlgeschlagenen/übersprungenen Pflichtprüfungen, Abbruch oder nicht vorgesehenem Auslöser weiterhin keine Veröffentlichung starten. Regression für stabile Releases und Beta-Branches ergänzen.
-
-- Bestätigten Notstrom als normalen Pausenzustand statt als Messwertfehler darstellen. Netz-/Hausmesswertwarnungen nur für erwartbare Ausfälle im bestätigten Notstrom unterdrücken; andere Fehler sichtbar lassen. Speicher und Wallboxen freigeben/pausieren, den Steuerungswunsch auch bei mehrtägigen Ausfällen erhalten und erst nach bestätigter Netzwiederkehr, gültigen Messwerten und gültigem Plan automatisch weiterregeln. Unbestätigte Freigaben und unbekannter Netzstatus verhindern den Wiederanlauf; manuelles Ausschalten bleibt bestehen. Auch mehrere Wallboxen berücksichtigen.
-
-- Bei aktivierter Fronius-Modbus-Notstromerkennung ein fehlendes Solar-API-Feld `BackupMode` als unbestätigten Status anzeigen und im Backend protokollieren. Die Statusquelle nicht mehr still als nicht unterstützt behandeln; Erkennung bei ausgefallenem Smart Meter durch Regressionstests absichern.
-
-- Die CI-Versionsplanung nach Squash-Merges oder Rebases auch für weitergeführte Branches mit identischem vollständigem stabilem Quellstand ermöglichen. Wirklich veraltete Branches weiterhin zurückweisen. Den Unterschied zwischen `New Version` im Quellbranch und nummeriertem Changelog im veröffentlichten Release-Tag dokumentieren.
+- Keine.
 
 ### Breaking Changes
 
@@ -34,6 +17,66 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Semgrep CE 1.185.0 als zusätzlichen verpflichtenden Python-/JavaScript-Scanner im CI-Job `security` mit sieben versionierten, vor jedem Scan getesteten Projektregeln integrieren. Nur die native Engine aus dem exakt gepinnten offiziellen PyPI-Wheel nach Größen- und SHA-256-Prüfung verwenden; bestehende Scanner erhalten. Befunde mit stabilen Regel-IDs, CWE-Zuordnung, Priorität, Behebungshinweisen und Fundstellen über geschwärzte SARIF-Berichte in GitHub Code Scanning bewertbar machen. Rohcode, expandierte Variablen und private Inhalte nicht hochladen; `nosemgrep`-Unterdrückungen nicht akzeptieren. Unvollständige Scans, fehlgeschlagene Regeltests, kaputte Berichte, Scanner-, Installations- oder Uploadfehler blockieren. PyYAML 6.0.3 explizit als Entwicklungsabhängigkeit für den Regelkatalog aufnehmen.
+
+## 0.22.0 - 2026-11-17
+
+### Features
+
+- Security Policy für das melden von Verwundbarkeiten wurde hinzugefügt
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.21.0 - 2026-11-17
+
+### Features
+
+- Im bestätigten Notstrombetrieb die frische, summierte AC-Ausgangsleistung der konfigurierten Wechselrichter als Gesamtverbrauch verwenden. Gemessene Wallbox- und Wärmepumpenleistungen weiter separat abziehen; ungültige oder veraltete AC-Werte nicht ersetzen und nach Netzwiederkehr die normale Verbrauchsquelle verwenden. Notstrom als nativen Home-Assistant-Binärsensor mit nicht verfügbarem Zustand bei unbestätigtem Status bereitstellen. E-Auto-Laden während der aktiven Notstrompause standardmäßig auch nach erneutem Start stoppen; manuelles Laden optional über die technischen Grenzen erlauben, während EOS pausiert bleibt.
+- Bestätigten Notstrom im Energieflussdiagramm zusätzlich mit einem roten Haus-/Blitz-Piktogramm am ausgegrauten Netzsymbol kennzeichnen. Bei Netzwiederkehr oder unbestätigtem Status das Piktogramm ausblenden.
+- Notstrombetrieb anhand bestätigter, aktueller Gerätestatus im Backend erkennen und im Panel anzeigen. Im Energiestrom-Diagramm das öffentliche Netz ausgrauen und dessen Flussanimation unterdrücken, ohne Messwerte umzuschreiben. Fronius automatisch über den zugehörigen HA-Notstromsensor oder beim direkten Modbus-Plugin ergänzend über die lokale Solar API erkennen; Victron GX über den Inselstatus und weitere Systeme über eine optionale HA-Statusquelle unterstützen. Unbekannte/veraltete Zustände, Speichergruppen, Rückkehr zum Netz und deduplizierte Backend-Meldungen berücksichtigen; Deutsch und Englisch ergänzen.
+- Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
+
+### Bugfixes
+
+- Stabile Releases nach einem Merge nach `main` trotz absichtlich übersprungener Branch-Changelog-Bereinigung veröffentlichen. Den Publish-Job mit einer expliziten Statusfunktion und erfolgreichem `required`-Ergebnis freigeben; bei fehlgeschlagenen/übersprungenen Pflichtprüfungen, Abbruch oder nicht vorgesehenem Auslöser weiterhin keine Veröffentlichung starten. Regression für stabile Releases und Beta-Branches ergänzen.
+- Bestätigten Notstrom als normalen Pausenzustand statt als Messwertfehler darstellen. Netz-/Hausmesswertwarnungen nur für erwartbare Ausfälle im bestätigten Notstrom unterdrücken; andere Fehler sichtbar lassen. Speicher und Wallboxen freigeben/pausieren, den Steuerungswunsch auch bei mehrtägigen Ausfällen erhalten und erst nach bestätigter Netzwiederkehr, gültigen Messwerten und gültigem Plan automatisch weiterregeln. Unbestätigte Freigaben und unbekannter Netzstatus verhindern den Wiederanlauf; manuelles Ausschalten bleibt bestehen. Auch mehrere Wallboxen berücksichtigen.
+- Bei aktivierter Fronius-Modbus-Notstromerkennung ein fehlendes Solar-API-Feld `BackupMode` als unbestätigten Status anzeigen und im Backend protokollieren. Die Statusquelle nicht mehr still als nicht unterstützt behandeln; Erkennung bei ausgefallenem Smart Meter durch Regressionstests absichern.
+- Die CI-Versionsplanung nach Squash-Merges oder Rebases auch für weitergeführte Branches mit identischem vollständigem stabilem Quellstand ermöglichen. Wirklich veraltete Branches weiterhin zurückweisen. Den Unterschied zwischen `New Version` im Quellbranch und nummeriertem Changelog im veröffentlichten Release-Tag dokumentieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.20.0 - 2026-11-17
+
+### Features
+
+- Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
 
 ## 0.19.0 - 2026-11-16
 
@@ -893,4 +936,3 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Keine.
-

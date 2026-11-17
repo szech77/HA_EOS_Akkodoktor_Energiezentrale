@@ -1,0 +1,9 @@
+{
+  "branch": "feature/semgrep-security",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "10b13df16be2e46ace5c2e6504a7718a0aff4b8a6c12dccc6ff1f45bde6f8e0a",
+  "source_changelog_sha256": "e78acf0a39e52f5ab1b329c179c3b5127a3d4f8b3415f3b2ace37658ec5e2d5f",
+  "source_commit": "5430e78e1bda73957f64da4d8ddb6356d06ab0a9",
+  "version": "0.22.1b44182269330"
+}
