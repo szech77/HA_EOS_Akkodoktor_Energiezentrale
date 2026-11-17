@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/ci-release-changelog",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "6f0ba8164eddd3a810f397f805ded671ae95fdde9404e44db32d01cebc81801f",
+  "source_changelog_sha256": "32f44f533ca4fc4eb6473ac1aecce74337d944bbc827eb19e7da874de14d02bb",
+  "source_commit": "4e461557c73ec713282b84edbf7c34a1169c29d2",
+  "version": "0.21.0b44125144274"
+}
