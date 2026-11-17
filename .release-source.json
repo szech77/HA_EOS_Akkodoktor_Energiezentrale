@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/main-release-skipped",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "93e2b9251c11d132ce6ee04975925ce5d8a204522381c3ef4f1fb5d1abd1065a",
+  "source_changelog_sha256": "b2191f411d11dafc6e40f399eebd4c3f71b290be91ba68ceadad05644fb72c50",
+  "source_commit": "6afa22ad1b74c99a21a8ea8f9409241e838f9224",
+  "version": "0.21.0b44166468918"
+}
