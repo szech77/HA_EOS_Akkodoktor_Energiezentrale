@@ -10,17 +10,89 @@ Verpflichtender Sammelstatus: **Required checks**. Er hängt ab von:
 - Bandit, pip-audit für Entwicklungs-/HA-Testabhängigkeiten und Trivy-Geheimnisscan.
 - Home-Assistant-hassfest und HACS-Validierung. Der Brands-Katalog ist für dieses
   benutzerdefinierte Repository nicht erforderlich und wird nicht geprüft.
-- Manifest-Version, Changelog-Kategorien und Schutz vor Wiederverwendung eines Tags.
+- Changelog-Kategorien, automatische Versionsplanung und Schutz vor Wiederverwendung eines Tags.
 
-Das HACS-Paket hat keine eigenen zusätzlichen Python-Laufzeitabhängigkeiten.
 Containerbau, Container-Vulnerability-Scan und GHCR-Publish entfallen, weil kein
 eigenes Laufzeit-Image mehr ausgeliefert wird.
 
-Auf main erzeugt ein erfolgreicher Lauf ein GitHub-Release `v<manifest-version>`
-am exakt geprüften Commit. HACS lädt `custom_components/eos_energiezentrale` aus
-dem Repository-Release. Es sind weder Docker-Images noch Bot-Commits nach main nötig.
-Für jeden neuen Release die Version in `manifest.json` erhöhen und einen passenden
-Changelog-Eintrag mit Features, Bugfixes, Breaking Changes und Security anlegen.
+## Automatische Versionierung und Betas
+
+Im Quellbranch wird ausschließlich der oberste Changelog-Abschnitt gepflegt:
+
+```markdown
+## New Version
+
+### Features
+
+- Neue Funktion beschreiben.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+```
+
+Die CI ermittelt die nächste Version aus dem letzten stabilen Release und den
+bereits belegten stabilen Tags. Neue Einträge unter `Breaking Changes` erhöhen
+Major (auch von 0.x auf 1.0.0), `Features` Minor, sonst `Bugfixes`/`Security` Patch.
+Die höchste betroffene Kategorie entscheidet. Aus 0.19.0 wird beispielsweise
+0.20.0 für ein Feature oder 0.19.1 für einen Fehlerfix.
+
+Die Stichpunkte werden mit `New Version` des zuletzt stabil veröffentlichten
+Quellcommits verglichen. Bereits veröffentlichte Einträge werden nicht erneut
+gezählt. Sie dürfen stehen bleiben oder entfernt werden; neue/geänderte
+Stichpunkte müssen das neue Verhalten beschreiben. Ohne neue Einträge schlägt
+die Versionsplanung fehl. Veröffentlichte nummerierte Einträge bleiben erhalten.
+
+Nach **allen** erfolgreichen Pflichtprüfungen gelten folgende Kanäle:
+
+| Auslöser im Originalrepository | Veröffentlichung |
+| --- | --- |
+| Push auf `feature/**`, `bug/**`, `bugfix/**` | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
+| Push/Merge nach `main` | `vX.Y.Z` als stabiles, neuestes Release |
+| Pull Request, Merge Queue, Fork, manueller Lauf | Nur Prüfungen, keine Veröffentlichung |
+
+Jeder neue Branchlauf erhält eine eindeutige Beta-Nummer, etwa
+`0.20.0b123456789`. Wiederholungen desselben Laufs verwenden dieselbe Version,
+denselben Tag und dieselben Release Notes; bestehende Tags werden nie verschoben.
+Betas verändern nicht das neueste stabile Release. Für Betas in HACS
+**Beta-Versionen anzeigen** aktivieren und die gewünschte Version auswählen;
+der Release-Titel nennt den Quellbranch.
+
+`manifest.json` enthält im Quellbranch den Entwicklungsplatzhalter `0.0.0`.
+Die Pipeline erstellt über die GitHub-API einen separaten Metadatencommit mit
+dem exakt geprüften Quellcommit als direktem Elterncommit. Nur Manifest-Version,
+datierter Changelog und `.release-source.json` mit Quell-SHA und Prüfsummen
+werden ergänzt. Der Release-Tag zeigt auf diesen Commit; der Anwendungscode
+stammt vollständig aus dem geprüften Stand. HACS erhält dadurch immer eine zum
+Tag passende Manifest-Version. Der Default-Branch wird in HACS ausgeblendet.
+
+Die Pipeline schreibt keine Bot-Commits auf `main` oder Arbeitsbranches und
+benötigt keinen Branchschutz-Bypass und kein persönliches Token. Nur der
+Publish-Job hat `contents: write`; Versionsplanung und PR-Prüfungen bleiben
+lesend. Die nummerierte Historie wird aus dem letzten stabilen Release übernommen
+und steht vollständig im Changelog der Release-Tags, nicht automatisch im
+Quellbranch. Alte Branches müssen vor der Veröffentlichung den letzten stabilen
+Quellstand übernehmen. Auf `main` werden laufende Releases durch einen neuen
+Push nicht abgebrochen.
+
+Lokal prüft `python tools/release.py validate` die Eingaben. Eine lesende Vorschau
+für einen bereits auf GitHub vorhandenen Quellcommit ist beispielsweise:
+
+```sh
+python tools/release.py plan --repository szech77/HA_EOS_Akkodoktor_Energiezentrale --commit <vollständige-SHA> --channel beta --beta-number 123456789 --branch feature/meine-aenderung
+```
+
+Die Veröffentlichung akzeptiert nur den Changelog des angegebenen Quellcommits.
+Nicht committete Änderungen sind keine gültige Release-Grundlage. Tags/Releases
+werden ausschließlich durch die Pipeline veröffentlicht.
 
 `main-ruleset.json` und `tools/configure_github.py` bleiben für den Branchschutz
 vorbereitet. Ihre bloße Existenz aktiviert ihn nicht: Ein Repository-Administrator

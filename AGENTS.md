@@ -18,30 +18,31 @@ bei der Nachbearbeitung von Dependabot-Updates.
 ## Vollständigkeit und Releases
 
 Jeder zur Veröffentlichung bestimmte PR, einschließlich CI- und
-Abhängigkeitsupdates, benötigt zusammenpassende Release-Metadaten:
+Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
 
-1. `custom_components/eos_energiezentrale/manifest.json` und `CHANGELOG.md`
-   gemeinsam aktualisieren. Die Manifest-Version ist die Release-Version.
-2. Eine noch nicht veröffentlichte Version oberhalb der Version auf `main`
-   verwenden. Für kompatible Fehler-, CI- und Abhängigkeitskorrekturen die
-   Patch-Version erhöhen; neue Funktionen bzw. inkompatible Änderungen passend
-   versionieren. Eine ausdrücklich vorgegebene Version berücksichtigen.
-3. Eine bereits in diesem PR vorbereitete, weiterhin freie Version beibehalten;
-   nicht für jeden Nachbesserungscommit erneut erhöhen. Vor dem Merge gegen
-   den aktuellen Stand von `main` und die Release-Tags auf Kollisionen prüfen.
-   Bei einer Kollision Version und Changelog gemeinsam fortschreiben.
-4. Den neuen Changelog-Abschnitt oben als `## X.Y.Z - YYYY-MM-DD` mit dem
-   tatsächlichen Datum anlegen. Alle vier Kategorien `Features`, `Bugfixes`,
-   `Breaking Changes` und `Security` ausfüllen; ohne Änderung `- Keine.` verwenden.
-   Bestehende veröffentlichte Einträge erhalten.
-5. Das tatsächliche Verhalten beschreiben. Bei Dependency-Updates Abhängigkeit,
+1. Nur den obersten Abschnitt `## New Version` pflegen, mit allen vier Kategorien
+   `Features`, `Bugfixes`, `Breaking Changes` und `Security`; ohne Änderung
+   `- Keine.` verwenden. Bestehende veröffentlichte Einträge erhalten.
+2. Die Manifest-Version im Quellbranch bleibt `0.0.0`. Version und Datum werden
+   ausschließlich von der CI im veröffentlichten Tag gesetzt. Keine manuellen
+   Versionsbumps oder datierten Abschnitte für neue Änderungen anlegen.
+3. Die CI berücksichtigt nur neue/geänderte Stichpunkte gegenüber dem letzten
+   stabil veröffentlichten Quellstand: Breaking Changes erhöht Major, Features
+   Minor, sonst Bugfixes/Security Patch. Bereits veröffentlichte Stichpunkte
+   können stehen bleiben oder entfernt werden; ein neuer Release braucht neue
+   Einträge. Details und Beta-Schema stehen in `CI.md`.
+4. Das tatsächliche Verhalten beschreiben. Bei Dependency-Updates Abhängigkeit,
    bisherige und neue Version bzw. Commit sowie den betroffenen Einsatz nennen.
    Ein normales Versionsupdate nicht ohne Beleg als behobene Sicherheitslücke
    darstellen. Dokumentation gehört ebenfalls zum Änderungsumfang.
 
-Ein Merge nach `main` veröffentlicht nach erfolgreichen Pflichtprüfungen
-automatisch ein HACS-Release. Agents dürfen Tags und Releases nicht als Ersatz
-für diese Pipeline manuell erzeugen oder veröffentlichte Tags verschieben.
+Ein Push auf `feature/`, `bug/` oder `bugfix/` veröffentlicht nach erfolgreichen
+Pflichtprüfungen eine Beta; ein Merge nach `main` ein stabiles HACS-Release.
+Die Pipeline erzeugt einen Metadatencommit mit dem geprüften Quellcommit als
+direktem Elterncommit und verändert keinen Branch. Die nummerierte Historie
+steht vollständig im Changelog des Release-Tags. Agents dürfen Tags und Releases
+nicht als Ersatz für die Pipeline manuell erzeugen oder veröffentlichte Tags
+verschieben.
 
 ## Dependabot-PRs nachbearbeiten
 
@@ -61,7 +62,7 @@ Die folgenden Aufgaben übernimmt der Agent, der einen Dependabot-PR fertigstell
   und die verwendete Python-Version berücksichtigen. Keine zusätzlichen
   Laufzeitabhängigkeiten oder Lockdatei-Formate ohne konkreten Bedarf einführen.
 - Erforderliche Code-, Konfigurations-, Dokumentations- und Testanpassungen sowie
-  Version und Changelog im selben PR ergänzen. Unterschiedliche Updates nicht
+  den Abschnitt `New Version` im selben PR ergänzen. Unterschiedliche Updates nicht
   beiläufig bündeln.
 - Ein Major-Update gezielt auf Migrationen prüfen. Bei Inkompatibilität Ursache
   und erforderliche Anpassungen dokumentieren; einen fehlschlagenden PR nicht
@@ -142,8 +143,8 @@ nie einen nicht ausgeführten Check als erfolgreich ausgeben.
 ## Übergabe und PR-Beschreibung
 
 - Problem und resultierendes Verhalten, bei Updates alte/neue Abhängigkeit und
-  Kompatibilitätsbewertung nennen. Release-Version und Changelog müssen zum
-  endgültigen Diff passen.
+  Kompatibilitätsbewertung nennen. Changelog und berechneter Release-Typ müssen
+  zum endgültigen Diff passen; die Versionsnummer vergibt die CI.
 - Ausgeführte Prüfungen mit Ergebnis und verbleibende Einschränkungen angeben.
   Ein unbekannter oder fehlgeschlagener Check ist kein Erfolg.
 - Vor dem Merge müssen `tests`, `security`, `integration`, `release_metadata`
