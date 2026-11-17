@@ -26,6 +26,7 @@ class Repository:
         self.writes = []
         self.trees = {}
         self.comparison = 'ahead'
+        self.comparison_commits = []
 
     def tag_commit(self, tag):
         return self.tags.get(tag)
@@ -40,7 +41,8 @@ class Repository:
             value=self.files.get((ref,unquote(parsed.path.removeprefix('/contents/'))))
             return {'type':'file','encoding':'base64','content':base64.b64encode(value.encode()).decode()} if value is not None else None
         if path.startswith('/compare/'):
-            return {'status':self.comparison}
+            page = int(parse_qs(urlsplit(path).query).get('page', ['1'])[0])
+            return {'status':self.comparison, 'commits':self.comparison_commits[(page-1)*100:page*100]}
         if path == '/git/matching-refs/tags/v':
             return [{'ref':'refs/tags/'+tag,'object':{'sha':sha,'type':'commit'}} for tag,sha in self.tags.items()]
         if path == '/git/trees':
@@ -107,18 +109,21 @@ def test_two_branch_builds_have_distinct_beta_versions_and_do_not_replace_latest
     assert not any(path.endswith('/heads/main') for path,_ in github.writes)
 
 
-def test_generated_tag_has_matching_manifest_date_history_and_checked_source_parent(project):
-    github=Repository();build_plan=plan(project,github,'stable')
+@pytest.mark.parametrize('channel', ['stable', 'beta'])
+def test_generated_tag_has_matching_manifest_date_history_and_checked_source_parent(project, channel):
+    github=Repository();build_plan=plan(project,github,channel)
+    version = '0.20.0' if channel == 'stable' else '0.20.0b123'
     result=release.publish_build(github,build_plan)
-    target=github.tags['v0.20.0']
+    target=github.tags['v'+version]
     assert target!=SOURCE
     assert github.commits[target]['parents']==[{'sha':SOURCE}]
     manifest=json.loads(github.files[target,release.MANIFEST])
-    assert manifest=={'version':'0.20.0','requirements':['example==1']}
-    assert '## 0.20.0 - 2026-11-17' in github.files[target,'CHANGELOG.md']
+    assert manifest=={'version':version,'requirements':['example==1']}
+    assert '## '+version+' - 2026-11-17' in github.files[target,'CHANGELOG.md']
     assert '## 0.19.0' in github.files[target,'CHANGELOG.md']
     assert '## New Version' not in github.files[target,'CHANGELOG.md']
-    assert result['prerelease'] is False and result['make_latest']=='true'
+    assert result['prerelease'] is (channel == 'beta')
+    assert result['make_latest'] == ('true' if channel == 'stable' else 'false')
     assert (project/'CHANGELOG.md').read_text(encoding='utf-8')==DRAFT
     assert json.loads((project/release.MANIFEST).read_text())['version']=='0.0.0'
 
@@ -187,6 +192,54 @@ def test_missing_notes_divergent_sources_and_stable_branch_misuse_fail_closed(pr
     github.comparison='ahead'
     with pytest.raises(ValueError,match='no changes'):
         plan(project,github)
+
+
+def test_squash_merged_stable_snapshot_allows_following_branch_release(project):
+    github = Repository()
+    release.publish_build(github, plan(project, github, 'stable'))
+    following = 'd'*40
+    text = '# Changelog\n\n## New Version\n\n'+release.render_notes(
+        {**NOTES, 'Bugfixes':['- Fix the next problem.']})
+    (project/'CHANGELOG.md').write_text(text, encoding='utf-8')
+    github.files[following, 'CHANGELOG.md'] = text
+    github.commits[following] = {'sha':following, 'tree':{'sha':'2'*40}, 'parents':[]}
+    github.comparison = 'diverged'
+    github.comparison_commits = [
+        {'sha':'c'*40, 'commit':{'tree':github.commits[SOURCE]['tree']}},
+        {'sha':following, 'commit':{'tree':github.commits[following]['tree']}},
+    ]
+    build_plan = plan(project, github, source=following)
+    assert build_plan['version'] == '0.20.1b123'
+    assert 'automatic releases' not in build_plan['notes']
+    assert 'Fix the next problem' in build_plan['notes']
+    assert '## New Version' not in build_plan['changelog']
+    assert '## 0.20.0 - 2026-11-17' in build_plan['changelog']
+
+
+@pytest.mark.parametrize('status,trees', [
+    ('diverged', ['2'*40]),  # Stable changes are absent from every branch snapshot.
+    ('diverged', [None]),  # Missing tree data must not count as equivalence.
+    ('behind', ['1'*40]),  # An older branch still needs the stable source.
+    ('unknown', ['1'*40]),
+])
+def test_non_equivalent_branch_snapshots_remain_blocked(project, status, trees):
+    github = Repository()
+    github.comparison = status
+    github.comparison_commits = [{'commit':{'tree':{'sha':tree}}} for tree in trees]
+    with pytest.raises(ValueError, match='latest stable source'):
+        plan(project, github)
+    assert not github.writes
+
+
+def test_equivalent_snapshot_is_found_after_first_comparison_page(project):
+    github = Repository()
+    github.comparison = 'diverged'
+    github.comparison_commits = [{'commit':{'tree':{'sha':'2'*40}}} for _ in range(100)]
+    github.comparison_commits.append({'commit':{'tree':github.commits[BASE]['tree']}})
+    assert plan(project, github)['version'] == '0.20.0b123'
+    github.comparison_commits.pop()
+    with pytest.raises(ValueError, match='latest stable source'):
+        plan(project, github)
 
 
 def test_first_publication_preserves_version_floor_from_archived_history(project):
