@@ -694,6 +694,12 @@ node --test tests/*.test.cjs
 
 Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).
 
+Versionen vergibt die CI automatisch: erfolgreiche Arbeitsbranches liefern
+Beta-Versionen, ein Merge nach `main` ein stabiles Release. Für Betas in HACS
+**Beta-Versionen anzeigen** aktivieren; der Release-Titel nennt den Branch.
+Für Beiträge genügt der Abschnitt **New Version** im [Changelog](CHANGELOG.md).
+Die vollständige nummerierte Historie steht im Changelog des jeweiligen Release-Tags.
+
 ## Lizenz
 
 [Apache License 2.0](LICENSE). Private und kommerzielle Nutzung unter den

@@ -12,9 +12,17 @@ einschließlich der Nachbearbeitung von Dependabot-PRs.
 2. Änderungen klein und fachlich nachvollziehbar halten.
 3. Verhalten und relevante Fehlerfälle testen. Keine Tests schreiben, die nur die
    aktuelle Implementierungsstruktur spiegeln.
-4. Manifest-Version erhöhen und Changelog um Features, Bugfixes, Breaking Changes
+4. Im Changelog nur `## New Version` um Features, Bugfixes, Breaking Changes
    und Security ergänzen. Leere Kategorien mit `- Keine.` kennzeichnen.
+   Die Manifest-Version bleibt im Quellbranch `0.0.0`; die CI vergibt Version
+   und Datum. Arbeitsbranches erhalten Betas, `main` stabile Releases.
 5. Pull Request nach `main`; alle Pflichtprüfungen müssen erfolgreich sein.
+
+Die CI erhöht bei neuen Breaking Changes Major, bei Features Minor, sonst Patch.
+Bereits veröffentlichte Stichpunkte unter `New Version` können stehen bleiben
+oder entfernt werden; nur neue/geänderte Stichpunkte gehen in den nächsten
+Release ein. Die vollständige nummerierte Historie steht im jeweiligen Release-Tag.
+Veröffentlichung, Beta-Installation und technische Details: [CI.md](CI.md).
 
 ## Lokale Tests
 

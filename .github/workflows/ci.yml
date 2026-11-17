@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   tests:
@@ -144,10 +144,17 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
-      - name: Validate manifest version and changelog
+      - name: Validate draft and calculate release version
         env:
           COMMIT: ${{ github.sha }}
-        run: python tools/release.py validate --check-local-tag --commit "$COMMIT"
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CHANNEL: ${{ github.ref == 'refs/heads/main' && 'stable' || 'beta' }}
+          BUILD: ${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+        run: >-
+          python tools/release.py plan --repository "$REPOSITORY" --commit "$COMMIT"
+          --channel "$CHANNEL" --beta-number "$BUILD" --branch "$BRANCH"
 
   required:
     name: Required checks
@@ -169,13 +176,20 @@ jobs:
           test "$RELEASE" = success
 
   publish:
-    name: Publish HACS release
+    name: Publish stable or beta HACS release
     needs: required
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'szech77/HA_EOS_Akkodoktor_Energiezentrale' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') ||
+      startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -183,9 +197,14 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
-      - name: Publish versioned GitHub release for HACS
+      - name: Publish generated version and immutable release snapshot
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           COMMIT: ${{ github.sha }}
-        run: python tools/release.py publish --repository "$REPOSITORY" --commit "$COMMIT"
+          CHANNEL: ${{ github.ref == 'refs/heads/main' && 'stable' || 'beta' }}
+          BUILD: ${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+        run: >-
+          python tools/release.py publish --repository "$REPOSITORY" --commit "$COMMIT"
+          --channel "$CHANNEL" --beta-number "$BUILD" --branch "$BRANCH"

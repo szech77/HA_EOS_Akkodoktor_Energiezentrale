@@ -1,7 +1,25 @@
 # Changelog
 
-Die Release-Pipeline verwendet die Integrationsversion aus manifest.json und die
-zugehörigen Änderungen. Releases entstehen nach erfolgreichen Prüfungen auf main.
+Die CI erzeugt Version und Releasedatum. Neue Einträge stehen unter New Version;
+veröffentlichte Abschnitte werden in den Release-Tags archiviert.
+
+## New Version
+
+### Features
+
+- Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
 
 ## 0.19.0 - 2026-11-16
 
