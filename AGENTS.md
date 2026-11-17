@@ -38,16 +38,9 @@ Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
    Ein normales Versionsupdate nicht ohne Beleg als behobene Sicherheitslücke
    darstellen. Dokumentation gehört ebenfalls zum Änderungsumfang.
 
-Ein Push auf `feature/`, `bug/` oder `bugfix/` veröffentlicht nach erfolgreichen
-Pflichtprüfungen eine Beta; ein Merge nach `main` ein stabiles HACS-Release.
-Die Pipeline erzeugt einen Metadatencommit mit dem geprüften Quellcommit als
-direktem Elterncommit. Zusätzlich bereinigt sie `New Version` auf Arbeitsbranches
-nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen durch einen
-Fast-Forward-Bot-Commit und startet für dessen HEAD die vollständigen Prüfungen
-ohne weitere Veröffentlichung. `main` bleibt von Bot-Commits ausgenommen.
-Die nummerierte Historie steht vollständig im Changelog des Release-Tags. Agents dürfen Tags und Releases
-nicht als Ersatz für die Pipeline manuell erzeugen oder veröffentlichte Tags
-verschieben.
+Ein Merge nach `main` veröffentlicht nach erfolgreichen Pflichtprüfungen
+automatisch ein HACS-Release. Agents dürfen Tags und Releases nicht als Ersatz
+für diese Pipeline manuell erzeugen oder veröffentlichte Tags verschieben.
 
 ## Dependabot-PRs nachbearbeiten
 

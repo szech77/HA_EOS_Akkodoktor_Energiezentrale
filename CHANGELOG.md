@@ -8,6 +8,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Features
 
 - OCPP-1.6J-Wallboxen direkt mit einem eigenen WebSocket-Server anbinden: Anmeldung, optionale TLS-Verschlüsselung, Ladeleistungsmessung, bestätigter Transaktionsstart/-stopp und Strombegrenzung mit zeitlicher Rücknahme auf 0 A bei ausbleibender Regleraktualisierung. Keine zusätzliche OCPP-Integration erforderlich. Protokollbibliothek ocpp 2.1.0 ergänzen.
+- Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
 - Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
 
 ### Bugfixes
