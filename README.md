@@ -534,7 +534,10 @@ Wenn dein vorhandener Sensor bereits 0–1 liefert, direkt auswählen und
 `percent`; eine zusätzliche Umrechnung ist für die Energiezentrale nicht nötig.
 
 Ein vorhandener gültiger Fahrzeug-SoC darf unverändert bleiben, auch wenn der
-Sensor längere Zeit keine Aktualisierung meldet. Eine SoC-Warnung erscheint erst,
+Sensor längere Zeit keine Aktualisierung meldet. Ein Wert, dessen letzte Meldung
+(`last_reported`, sonst `last_updated`) mehr als 36 Stunden zurückliegt, gilt
+jedoch als veraltet und wird weder für Ladeentscheidungen noch als Startwert der
+SoC-Schätzung verwendet. Eine SoC-Warnung erscheint erst,
 wenn mehr als fünf Minuten durchgehend kein gültiger Wert vorhanden ist. Sobald
 wieder ein gültiger Wert vorliegt, verschwindet die Warnung und eine spätere
 Unterbrechung erhält erneut die volle Frist. Im Mehrfahrzeugbetrieb gilt dies
@@ -578,6 +581,11 @@ Nach einem Neustart bleibt ein zuvor aktivierter Schalter eingeschaltet. Die
 Anzeige **Aktiv · warte auf Messwerte und Plan** bedeutet, dass die Freigabe
 gespeichert ist, die Integration aber noch auf gültige Eingangsdaten und einen
 aktuellen EOS-Speicherplan wartet. Anschließend setzt sie die Regelung selbstständig fort.
+Nach einem unsauberen Ende können Geräte noch die letzten Vorgaben halten. Sind
+Speicher und Wallbox bereits lesbar, fehlen aber EOS-Plan oder Messwerte, werden
+sie während des Wartens freigegeben und die Wallbox pausiert. Fehlgeschlagene
+Freigaben bleiben sichtbar und werden erneut versucht. Ein Ausschalten vor dem
+Wiederanlauf gibt die Geräte ebenfalls frei.
 
 Ein bewusst ausgeschalteter Schalter bleibt aus. Ein Regelfehler deaktiviert die
 Steuerung ebenfalls dauerhaft; zur Wiederaufnahme muss sie ausdrücklich aktiviert

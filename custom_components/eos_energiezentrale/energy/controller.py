@@ -25,6 +25,8 @@ from .pv_availability import PVAvailability
 from .power_supply import configured_supply, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
 
+CAR_SOC_MAX_AGE_S = 36 * 3600
+
 
 class Controller:
     def __init__(self, ha, config):
@@ -36,7 +38,9 @@ class Controller:
         self.stop_event = Event()
         self.armed = getattr(config, "control_enabled", False)
         self.restore_pending = self.armed
-        self.owned = False
+        # A remembered intent may follow an unclean stop: devices can still hold
+        # the last commands, so explicit OFF or a failed restore must release them.
+        self.owned = self.armed
         self.live = {}
         self.power_supply = None
         self.backup_paused = False
@@ -146,10 +150,25 @@ class Controller:
         self.phase_target = None
         self.candidate = None
 
+    def release_until_ready(self, states, now):
+        """Return devices to autonomous operation while restored control waits."""
+        if not self.owned:
+            return
+        self.control_step = 'restore_release'
+        try:
+            self.release(states, now)
+        except (OSError, ValueError) as error:
+            # Keep the intent; retry on the next poll and keep the failure visible.
+            self.record_failure('release', error)
+        else:
+            self.errors.pop('release', None)
+
     def pause_for_backup(self, states, now, box):
         """Retain user intent until fresh grid status and confirmed cleanup."""
         mode = supply_view(self.power_supply, now)['state']
-        if mode == 'backup':
+        # A configured but unavailable, stale or failed status is no evidence of
+        # grid operation: pause like backup until a fresh grid report arrives.
+        if mode in ('backup', 'unknown'):
             self.backup_paused = True
         if not self.backup_paused:
             return False
@@ -397,7 +416,9 @@ class Controller:
             return False
         options = self.input_options
         entity = options["car_soc_entity"]
-        raw = reading(states, entity, now, "soc")
+        # Unchanged vehicle values may legitimately keep their timestamp for a
+        # day; a report older than this is no basis for charging decisions.
+        raw = reading(states, entity, now, "soc", CAR_SOC_MAX_AGE_S)
         if raw is not None:
             raw *= 100 if options["car_soc_scale"] == "factor" else 1
             raw = raw if 0 <= raw <= 100 else None
@@ -415,7 +436,7 @@ class Controller:
 
     def report_soc_availability(self, raw, now):
         # Vehicles may retain the same valid SoC for hours. Warn about an absent
-        # value, not the age of last_updated/last_reported used for power sensors.
+        # or outdated value (CAR_SOC_MAX_AGE_S), not the short power sensor age.
         if raw is not None:
             self.soc_missing_since = None
         elif self.soc_missing_since is None or now < self.soc_missing_since:
@@ -595,22 +616,26 @@ class Controller:
             return
         if self.restore_pending:
             # HA integrations and EOS can become ready after this integration.
-            # Keep the remembered switch on but issue no commands until ready.
-            ready = (battery_order is not None and battery.soc is not None
+            # Keep the remembered switch on but issue no regulation commands until
+            # ready. Devices which already report their control state may still
+            # hold commands from before an unclean stop, so release them meanwhile.
+            ids = getattr(self.config.battery, "ids", {})
+            mode = ids.get("mode") if isinstance(ids, Mapping) else None
+            battery_reachable = battery.soc is not None and not (
+                mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"})
+            ids = getattr(self.config.wallbox, "ids", {})
+            enable = ids.get("enable") if isinstance(ids, Mapping) else None
+            switch_known = not enable or states.get(enable, {}).get("state") in {"on", "off"}
+            wallbox_reachable = switch_known and box.status not in {"", "unknown", "unavailable"}
+            ready = (battery_order is not None and battery_reachable and switch_known
                      and all(live[key] is not None for key in
                              ("solar", "grid", "battery_charge", "battery_discharge"))
                      and (self.vehicle_connected is False or
-                          (box.watts is not None and box.status not in {"", "unknown", "unavailable"}
+                          (wallbox_reachable and box.watts is not None
                            and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)))
-            ids = getattr(self.config.battery, "ids", {})
-            mode = ids.get("mode") if isinstance(ids, Mapping) else None
-            if mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"}:
-                ready = False
-            ids = getattr(self.config.wallbox, "ids", {})
-            enable = ids.get("enable") if isinstance(ids, Mapping) else None
-            if enable and states.get(enable, {}).get("state") not in {"on", "off"}:
-                ready = False
             if not ready:
+                if battery_reachable and (wallbox_reachable or not car_enabled):
+                    self.release_until_ready(states, now)
                 return
             self.restore_pending = False
             self.backup_paused = self.backup_pause_applied = False

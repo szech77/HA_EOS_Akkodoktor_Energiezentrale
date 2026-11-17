@@ -103,3 +103,29 @@ def test_each_vehicle_has_its_own_missing_value_timer():
         assert warns(second['source_configuration'])
     finally:
         fixture.doCleanups()
+
+
+def test_soc_report_beyond_the_age_limit_is_no_charging_basis_and_warns(control):
+    from custom_components.eos_energiezentrale.energy.controller import CAR_SOC_MAX_AGE_S
+    from custom_components.eos_energiezentrale.energy.settings import daily_settings
+    from test_requirements import state
+    control.config.daily = daily_settings({'fast':True, 'target_soc':80}, 20)
+    control.app.set_armed(True)
+    for second, age in ((0, CAR_SOC_MAX_AGE_S), (301, CAR_SOC_MAX_AGE_S + 301)):
+        now = NOW + timedelta(seconds=second)
+        rows = control.states(when=now)
+        rows['sensor.soc'] = state(.4, when=now - timedelta(seconds=age))
+        control.ha.states.return_value = rows
+        control.app.tick(now, second)
+        assert control.app.soc is None
+    control.box.charge.assert_not_called()
+    report = control.app.snapshot(now)['source_configuration']
+    assert warns(report) and report['sources']['car_soc']['available'] is False
+    now = NOW + timedelta(seconds=320)
+    rows = control.states(when=now)
+    rows['sensor.soc'] = state(.4, when=now - timedelta(seconds=CAR_SOC_MAX_AGE_S - 1))
+    control.ha.states.return_value = rows
+    control.app.tick(now, 320)
+    assert control.app.soc == 40
+    assert not warns(control.app.snapshot(now)['source_configuration'])
+    control.box.charge.assert_called()

@@ -13,10 +13,13 @@ from time import monotonic
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, ProxyHandler, build_opener
 
-from ..clients import NoRedirect, base_url
+from ..clients import NoRedirect, RequestDeadline, base_url
 from ..contracts import WallboxDriver, WallboxReading, WallboxFeatures, PluginInfo, PluginField
 from ..sanitiser import bounded
 from ..failures import HardwareAPIError
+
+
+REQUEST_DEADLINE_S = 5
 
 
 class NRGkickAPIError(HardwareAPIError):
@@ -55,6 +58,7 @@ class NRGkickLocal(WallboxDriver):
         self.phase_switching = values["phase_switching"]
         self.features = WallboxFeatures(phase_switching=self.phase_switching, optional_connection=True)
         self.opener = None  # Certificate loading belongs to the first executor request.
+        self.deadline = RequestDeadline("eos-nrgkick-request")
         self.zero_after = self.zero_sample = self.phase_requested = None
 
     def _request(self, path):
@@ -65,11 +69,14 @@ class NRGkickLocal(WallboxDriver):
                 raise NRGkickAPIError("NRGkick API credential is unavailable",reason='credential_unavailable',fields=('password_env',))
             token = base64.b64encode(f"{self.username}:{secret}".encode()).decode("ascii")
             headers["Authorization"] = "Basic " + token
-        try:
+        def exchange():
             if self.opener is None:
                 self.opener = build_opener(ProxyHandler({}), NoRedirect())
             with self.opener.open(Request(self.url + path, headers=headers), timeout=3) as response:
-                raw = response.read(262145)
+                return response.read(262145)
+        try:
+            # 3 s socket inactivity, at most REQUEST_DEADLINE_S for the whole exchange.
+            raw = self.deadline.run(exchange, REQUEST_DEADLINE_S)
             if len(raw) > 262144:
                 raise ValueError("Response too large")
             result = json.loads(raw)

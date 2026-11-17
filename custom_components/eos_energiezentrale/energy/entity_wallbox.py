@@ -23,8 +23,14 @@ class EntityWallbox(WallboxDriver):
         self.zero_sample = None
         self.zero_after = None
         self.phase_requested = None
-        if state.enabled:
-            self.ha.set(self.ids["enable"], False)
+        entity = self.ids["enable"]
+        # An unavailable or missing switch is not evidence of a stopped charge.
+        # Request the stop and require the entity itself to confirm "off".
+        if not state.enabled and self.ha.state(entity).get("state") == "off":
+            return
+        self.ha.set(entity, False)
+        self._operation_context={'stage':'stop_confirmation','parameter':'enable'}
+        confirmed_state(self.ha, entity, lambda row: row.get("state") == "off")
 
     def _phase(self, phases, state):
         self._operation_context={'stage':'phase_feedback','parameter':'phase_feedback' if self.ids.get('phase_feedback') else 'phases'}

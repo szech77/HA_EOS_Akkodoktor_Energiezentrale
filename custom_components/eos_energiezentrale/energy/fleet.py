@@ -154,6 +154,9 @@ class FleetController(Controller):
                 controller=Controller(proxy,config)
                 controller.update_eos=lambda now,clock,child=controller:self._share_plan(child)
             controller.support_driver = self.battery_driver
+            # Children follow the fleet's remembered intent, including the
+            # assumption that devices may still hold commands after a crash.
+            controller.owned = self.armed
             self.controllers.append((identity,controller,proxy))
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
         self.share_general_settings()
