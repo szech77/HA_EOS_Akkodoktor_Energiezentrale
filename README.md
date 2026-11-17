@@ -180,6 +180,12 @@ lokale API-Adresse eintragen. Das bestehende HA-Plugin `nrgkick` bleibt verfügb
 Einrichtung, optionale Anmeldung und Phasenumschaltung sind unter
 [NRGkick lokal](PLUGINS.md#nrgkick-gen2-direkt-über-die-lokale-json-api) beschrieben.
 
+**OCPP-1.6J-Wallboxen** können sich direkt mit dem Plugin **OCPP 1.6J – direct
+connection** (`ocpp`) verbinden. Das Plugin betreibt einen eigenen WebSocket-Port;
+eine zusätzliche OCPP-Integration ist nicht erforderlich. Einrichtung, Anmeldung,
+optionale TLS-Verschlüsselung und Voraussetzungen stehen unter
+[OCPP direkt](PLUGINS.md#ocpp-16j-direkt-anbinden).
+
 Adapter-, Strom- und Phasengrenzen bestimmen die an EOS übermittelte maximale
 Ladeleistung. Ist der NRGkick nicht erreichbar oder kein Fahrzeug angeschlossen,
 wird das Auto ausgegraut und die Fahrzeugplanung deaktiviert. Speicher und andere
@@ -664,7 +670,7 @@ Inbetriebnahme-Einstellungen findest du unter Geräte & Dienste → EOS Energiez
 gespeicherte Steuerfreigabe bleibt erhalten und wird nach Prüfung der Eingangsdaten wieder aktiv.
 
 Das eigene Panel ist Administratoren vorbehalten und verwendet die bestehende
-HA-Anmeldung. Es gibt keinen zusätzlichen Webserver, Port oder eingebetteten Token.
+HA-Anmeldung. Das Panel nutzt den vorhandenen HA-Webserver und keinen eingebetteten Token.
 Die Sprache folgt standardmäßig Home Assistant; Englisch ist der Rückfall.
 
 ## Hardware und Daten

@@ -574,3 +574,6 @@ class EnergyCoordinator(DataUpdateCoordinator):
             self.accounting_refresh_task.cancel()
         async with self.work_lock:
             await self.hass.async_add_executor_job(partial(self.app.set_armed, False, persist=False))
+            close = getattr(self.app, 'close_resources', None)
+            if close is not None:
+                await self.hass.async_add_executor_job(close)

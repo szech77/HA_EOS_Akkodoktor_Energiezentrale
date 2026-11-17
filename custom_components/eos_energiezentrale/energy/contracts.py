@@ -211,6 +211,15 @@ class WallboxDriver(ABC):
         if self._charge(amps,state) is not None:
             raise PluginContractError("Wallbox charge must return None")
 
+    def maintain(self, state: WallboxReading) -> None:
+        """Renew an already permitted command, only while regulation stays valid."""
+        from .sanitiser import wallbox_reading
+        if self._maintain(wallbox_reading(state)) is not None:
+            raise PluginContractError('Wallbox maintain must return None')
+
+    def _maintain(self, state):
+        pass
+
     @abstractmethod
     def _read(self, states: dict, now: datetime) -> WallboxReading: ...
     @abstractmethod

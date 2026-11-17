@@ -46,10 +46,11 @@ def plugin_object(factory,supplied=None,labels=None,choice_labels=None):
             # Hardware-specific ranges and integer constraints remain backend validations.
             control = selector.NumberSelector(selector.NumberSelectorConfig(mode=selector.NumberSelectorMode.BOX,step='any'))
         else:
-            control = selector.TextSelector(selector.TextSelectorConfig(multiline=field.kind=="json"))
+            control = selector.TextSelector(selector.TextSelectorConfig(multiline=field.kind=="json",
+                type=selector.TextSelectorType.PASSWORD if field.kind=='password' else selector.TextSelectorType.TEXT))
             if field.kind=="json" and isinstance(value,dict): value = json.dumps(value,ensure_ascii=False)
         descriptor = {"label":labels.get(field.key) or field.label,"required":field.required,"selector":control}
-        if value is not None and value!="":
+        if value is not None and value!="" and field.kind!='password':
             descriptor["default"] = value
             defaults[field.key] = value
         fields[field.key] = descriptor

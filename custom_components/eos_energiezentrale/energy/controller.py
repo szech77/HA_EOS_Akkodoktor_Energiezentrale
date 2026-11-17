@@ -87,6 +87,12 @@ class Controller:
         self.last_vehicle_sync = -1000
         self.pv_support = PVSupport()
 
+    def close_resources(self):
+        """After confirmed device release, stop listeners owned by this controller."""
+        close = getattr(self.config.wallbox, 'close', None)
+        if close is not None:
+            close()
+
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
         if store is None:
@@ -730,6 +736,10 @@ class Controller:
             driver.charge(amps, box)
             self.commanded_car_w = amps*phase*voltage
             self.last_write = now
+        else:
+            maintain = getattr(driver, 'maintain', None)
+            if maintain is not None:
+                maintain(box)
         self.pv_session = solar_only
         live["car_control"] = 'pv_battery' if supported else "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"
 
