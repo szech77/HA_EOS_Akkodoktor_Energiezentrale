@@ -1,0 +1,9 @@
+{
+  "branch": "feature/backup-power",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "e60c944913dccd76e51661dcd7f235611a3a9744dbe7dff5d309113970db5c1e",
+  "source_changelog_sha256": "17e27e25bf89ddb546604e54ae17ce46c2bac4535962b18821a4b45b1aa6c233",
+  "source_commit": "2447ca134285c9d9877e048bbd49ba8469e6c48a",
+  "version": "0.21.0b44163541390"
+}
