@@ -1,19 +1,33 @@
 # Changelog
 
-Die CI erzeugt Version und Releasedatum. Neue Einträge stehen unter New Version;
-veröffentlichte Abschnitte werden in den Release-Tags archiviert.
-
-## New Version
+## 0.21.0b44134016622 - 2026-11-17
 
 ### Features
 
 - OCPP-1.6J-Wallboxen direkt mit einem eigenen WebSocket-Server anbinden: Anmeldung, optionale TLS-Verschlüsselung, Ladeleistungsmessung, bestätigter Transaktionsstart/-stopp und Strombegrenzung mit zeitlicher Rücknahme auf 0 A bei ausbleibender Regleraktualisierung. Keine zusätzliche OCPP-Integration erforderlich. Protokollbibliothek ocpp 2.1.0 ergänzen.
 - Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
-- Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
 
 ### Bugfixes
 
 - Die CI-Versionsplanung nach Squash-Merges oder Rebases auch für weitergeführte Branches mit identischem vollständigem stabilem Quellstand ermöglichen. Wirklich veraltete Branches weiterhin zurückweisen. Den Unterschied zwischen `New Version` im Quellbranch und nummeriertem Changelog im veröffentlichten Release-Tag dokumentieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.20.0 - 2026-11-17
+
+### Features
+
+- Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
+
+### Bugfixes
+
+- Keine.
 
 ### Breaking Changes
 
@@ -881,4 +895,3 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Keine.
-

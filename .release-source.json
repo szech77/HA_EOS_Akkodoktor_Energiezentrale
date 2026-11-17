@@ -1,0 +1,9 @@
+{
+  "branch": "feature/ocpp-wallbox",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "b4fe076789179d52b12ef5894972d404868c695eaf873b85c08bd8e9cbde1377",
+  "source_changelog_sha256": "9797cc8102e271f4542bb7a6edb258630e382f60764301ff3545b5eefa618f46",
+  "source_commit": "278c9379adde441fcfe62618f3df5e1871890f9c",
+  "version": "0.21.0b44134016622"
+}
