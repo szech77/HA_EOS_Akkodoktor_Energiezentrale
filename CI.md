@@ -46,10 +46,37 @@ Die höchste betroffene Kategorie entscheidet. Aus 0.19.0 wird beispielsweise
 0.20.0 für ein Feature oder 0.19.1 für einen Fehlerfix.
 
 Die Stichpunkte werden mit `New Version` des zuletzt stabil veröffentlichten
-Quellcommits verglichen. Bereits veröffentlichte Einträge werden nicht erneut
-gezählt. Sie dürfen stehen bleiben oder entfernt werden; neue/geänderte
-Stichpunkte müssen das neue Verhalten beschreiben. Ohne neue Einträge schlägt
-die Versionsplanung fehl. Veröffentlichte nummerierte Einträge bleiben erhalten.
+Quellcommits und der nummerierten stabilen Release-Historie verglichen. Bereits
+veröffentlichte Einträge werden nicht erneut gezählt, auch wenn sie aus späteren
+Quellbranches bereits entfernt wurden. Neue/geänderte Stichpunkte müssen das neue
+Verhalten beschreiben. Ohne neue Einträge schlägt die Versionsplanung fehl.
+Veröffentlichte nummerierte Einträge bleiben erhalten; Betas verbrauchen keine
+Einträge für das nächste stabile Release.
+
+Bei einem Push auf `feature/**`, `bug/**` oder `bugfix/**` entfernt die CI im
+Originalrepository bereits stabil veröffentlichte Stichpunkte aus `New Version`.
+Dafür müssen Tests, Sicherheits- und Integrationsprüfungen erfolgreich sein.
+Ein Bot-Commit ändert ausschließlich diesen Entwurfsabschnitt; neue/geänderte
+Einträge, alle vier Kategorien und die vorhandene nummerierte Historie bleiben
+erhalten. Leere Kategorien enthalten `- Keine.`. Mit `git pull --ff-only` wird
+der Bot-Commit anschließend auch lokal übernommen.
+
+Da ein Push mit `GITHUB_TOKEN` keinen weiteren Push-Lauf startet, löst die CI
+ausdrücklich einen `workflow_dispatch` für den bereinigten Branch aus. Dieser
+prüft den neuen Commit vollständig, bereinigt aber nicht erneut und veröffentlicht
+keine zweite Beta. Die Beta des ursprünglichen Pushes bleibt an dessen geprüften
+Quellcommit gebunden. Die Sammelprüfung des Push-Laufs verlangt zusätzlich eine
+erfolgreiche Bereinigung beziehungsweise einen bestätigten unveränderten Entwurf.
+Fehler bei Branch-Update oder Folgeprüfung werden nicht als Erfolg gewertet.
+Die Dispatch-Ausnahme ist im [GitHub-Verhalten für GITHUB_TOKEN](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)
+beschrieben.
+
+Neuere oder zwischenzeitlich gepushte Commits werden nicht überschrieben; die CI
+verwendet ausschließlich Fast-Forward-Updates. Nach einem Dispatch-Fehler kann
+derselbe Lauf den schon angelegten Bereinigungscommit wiederverwenden. Branchschutz
+wird nicht umgangen: Verbietet eine Regel Bot-Updates auf dem Arbeitsbranch,
+schlägt die Bereinigung sichtbar fehl. `main`, Forks und Pull-Request-Läufe werden
+nicht automatisch beschrieben.
 
 Nach **allen** erfolgreichen Pflichtprüfungen gelten folgende Kanäle:
 
@@ -74,13 +101,15 @@ werden ergänzt. Der Release-Tag zeigt auf diesen Commit; der Anwendungscode
 stammt vollständig aus dem geprüften Stand. HACS erhält dadurch immer eine zum
 Tag passende Manifest-Version. Der Default-Branch wird in HACS ausgeblendet.
 
-Die Pipeline schreibt keine Bot-Commits auf `main` oder Arbeitsbranches und
-benötigt keinen Branchschutz-Bypass und kein persönliches Token. Nur der
-Publish-Job hat `contents: write`; Versionsplanung und PR-Prüfungen bleiben
-lesend. Die nummerierte Historie wird aus dem letzten stabilen Release übernommen
+Die Pipeline schreibt keine Bot-Commits auf `main` und benötigt keinen
+Branchschutz-Bypass und kein persönliches Token. Der Bereinigungsjob für
+Arbeitsbranches hat `contents: write` und für die Folgeprüfung `actions: write`;
+der Publish-Job hat ausschließlich `contents: write`. Versionsplanung und
+PR-Prüfungen bleiben lesend. Die nummerierte Historie wird aus dem letzten stabilen Release übernommen
 und steht vollständig im Changelog der Release-Tags, nicht automatisch im
-Quellbranch. Dort bleibt `## New Version` auch nach einer Veröffentlichung als
-Eingabebereich für die nächste Version stehen. Im veröffentlichten Code unter
+Quellbranch. Dort bleibt `## New Version` als Eingabebereich für die nächste
+Version stehen; auf Arbeitsbranches bereinigt die CI dessen alte Einträge beim
+nächsten erfolgreichen Push-Lauf. Im veröffentlichten Code unter
 **Releases → Tag → CHANGELOG.md** wird diese Überschrift durch Version und Datum
 ersetzt; auch die Quellcodearchive des Tags enthalten diesen nummerierten Stand.
 

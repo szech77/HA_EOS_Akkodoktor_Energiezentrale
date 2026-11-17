@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.error import HTTPError
 
 import pytest
 
@@ -27,6 +28,10 @@ class Repository:
         self.trees = {}
         self.comparison = 'ahead'
         self.comparison_commits = []
+        self.comparison_files = ['CHANGELOG.md']
+        self.branches = {'feature/releases':SOURCE}
+        self.concurrent_head = None
+        self.fail_dispatch = False
 
     def tag_commit(self, tag):
         return self.tags.get(tag)
@@ -42,7 +47,23 @@ class Repository:
             return {'type':'file','encoding':'base64','content':base64.b64encode(value.encode()).decode()} if value is not None else None
         if path.startswith('/compare/'):
             page = int(parse_qs(urlsplit(path).query).get('page', ['1'])[0])
-            return {'status':self.comparison, 'commits':self.comparison_commits[(page-1)*100:page*100]}
+            return {'status':self.comparison, 'commits':self.comparison_commits[(page-1)*100:page*100],
+                    'files':[{'filename':name} for name in self.comparison_files]}
+        if path.startswith('/git/ref/heads/'):
+            return {'object':{'sha':self.branches[unquote(path.removeprefix('/git/ref/heads/'))]}}
+        if path.startswith('/git/refs/heads/') and method == 'PATCH':
+            branch = unquote(path.removeprefix('/git/refs/heads/'))
+            assert data['force'] is False
+            if self.concurrent_head:
+                self.branches[branch] = self.concurrent_head
+            if self.branches[branch] not in [row['sha'] for row in self.commits[data['sha']]['parents']]:
+                raise HTTPError(path, 422, 'Not a fast forward', {}, None)
+            self.branches[branch] = data['sha']
+            return {}
+        if path == '/actions/workflows/ci.yml/dispatches' and method == 'POST':
+            if self.fail_dispatch:
+                raise HTTPError(path, 503, 'Temporary dispatch failure', {}, None)
+            return None
         if path == '/git/matching-refs/tags/v':
             return [{'ref':'refs/tags/'+tag,'object':{'sha':sha,'type':'commit'}} for tag,sha in self.tags.items()]
         if path == '/git/trees':
@@ -51,6 +72,9 @@ class Repository:
         if path == '/git/commits' and method == 'POST':
             sha=f'{len(self.commits)+200:040x}'
             self.commits[sha]={'sha':sha,'parents':[{'sha':value} for value in data['parents']], 'tree':{'sha':data['tree']}}
+            for (ref, path), content in list(self.files.items()):
+                if ref == data['parents'][0]:
+                    self.files[sha, path] = content
             for item in self.trees[data['tree']]['tree']:
                 self.files[sha,item['path']]=item['content']
             return self.commits[sha]
