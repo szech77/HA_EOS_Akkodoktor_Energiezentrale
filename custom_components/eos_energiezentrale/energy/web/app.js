@@ -308,6 +308,18 @@ function renderFlow() {
     const inactiveGrid = key === 'grid' && snapshot.power_supply?.grid_active === false;
     node.classList.toggle('vehicle-inactive', inactiveCar);
     node.classList.toggle('grid-disconnected', inactiveGrid);
+    if (key === 'grid') {
+      let indicator = node.querySelector('.backup-indicator');
+      if (!indicator) {
+        indicator = document.createElement('span');
+        indicator.className = 'backup-indicator';
+        indicator.setAttribute('aria-hidden','true');
+        indicator.innerHTML = '<svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M5 10v11h14V10"/><path class="backup-bolt" d="m13 8-5 7h4l-1 5 6-8h-4z"/></svg>';
+        node.append(indicator);
+      }
+      indicator.hidden = !inactiveGrid;
+      indicator.title = t('power_supply.backup');
+    }
     const retained = source.flow_display?.[key] ?? source.display?.[key];
     const stale = !inactiveGrid && valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
     const value = inactiveCar || inactiveGrid ? null : stale ? retained.value : live[key];
@@ -748,10 +760,13 @@ function renderView() {
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
-  const warnings = (snapshot.notices??[]).map(notice=>noticeText(notice));
+  const notices = snapshot.notices??[];
+  const information = notices.filter(notice=>notice.severity==='info').map(notice=>noticeText(notice));
+  const warnings = notices.filter(notice=>notice.severity!=='info').map(notice=>noticeText(notice));
   if(connectionFailure)warnings.push(t('notice.connection'));
   if(forecastOpenFailure)warnings.push(t('forecast.open_failed'));
-  byId('notice').textContent = warnings.length ? `${t('notice.check')} · ${warnings.join(', ')}` : '';
+  byId('notice').textContent = [...information, ...(warnings.length ? [`${t('notice.check')} · ${warnings.join(', ')}`] : [])].join(' · ');
+  byId('notice').classList.toggle('information', information.length>0 && warnings.length===0);
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();

@@ -15,9 +15,9 @@ from .failures import BackendError, PluginParameterError, HardwareAPIError, REAS
 
 ERROR_MESSAGES = {key: 'notice.' + key for key in (
     'eos', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
-    'battery_limits', 'vehicle_limits', 'wallbox', 'wallbox_stop', 'control_persistence', 'connection')}
+    'battery_limits', 'vehicle_limits', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection')}
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
-CONTROL_STATUSES = ('waiting', 'read_only', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
+CONTROL_STATUSES = ('waiting', 'read_only', 'backup', 'power_supply_waiting', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
 BATTERY_LIMIT_STATUSES = ('failed', 'confirmed', 'pending', 'unmanaged')
 CONNECTION_STATUSES = ('fetch_failed', 'plan_available', 'no_plan', 'local_history', 'history_available', 'no_samples', 'connecting', 'calculating', 'updating')
 
@@ -68,8 +68,9 @@ def view_state(data, now):
     if supply.get('state') in ('backup', 'unknown'):
         backup = supply['state'] == 'backup'
         code = 'backup_power_active' if backup else 'backup_power_unknown'
-        notices.append({'id':'system/power_supply', 'code':code, 'message':'notice.'+code,
-                        'severity':'warning', 'scope':'system', 'details':{}})
+        message = 'backup_power_paused' if backup and data.get('armed') and data.get('control_paused') else code
+        notices.append({'id':'system/power_supply', 'code':code, 'message':'notice.'+message,
+                        'severity':'info' if backup else 'warning', 'scope':'system', 'details':{}})
     vehicles = data.get('vehicles') or [data]
     scopes = [(data, 'system', None)] + [(vehicle, f'vehicle/{index}', vehicle.get('name'))
         for index, vehicle in enumerate(vehicles[1:], 2)]
@@ -88,6 +89,10 @@ def view_state(data, now):
         for kind in ('missing', 'unavailable'):
             measurements = [key for key in report.get(kind, []) if key in MEASUREMENT_KEYS
                             and (scope == 'system' or key == 'car_soc')
+                            and not (supply['state'] == 'backup' and kind == 'unavailable'
+                                     and key in ('grid', 'house_total')
+                                     and report.get('sources', {}).get(key, {}).get('reason')
+                                         not in ('unit_invalid', 'future_sample'))
                             and not (kind == 'unavailable' and key == 'solar'
                                 and (instant(report.get('sources', {}).get(key, {}).get('warning_after')) or now) > now)]
             if measurements:
@@ -100,7 +105,9 @@ def view_state(data, now):
                     for key in sorted(measurements)]
     result['notices'] = notices
     pending = {vehicle.get('vehicle_planning') for vehicle in vehicles}
-    result['control_status'] = ('waiting' if data.get('control_waiting') else
+    result['control_status'] = ('backup' if data.get('armed') and data.get('control_paused') and supply['state'] == 'backup' else
+        'power_supply_waiting' if data.get('armed') and data.get('control_paused') and supply['state'] != 'grid' else
+        'waiting' if data.get('control_waiting') else
         'read_only' if not data.get('armed') else 'cached_eos' if data.get('eos_cache') else
         'syncing_vehicle' if pending & {'goal_pending', 'limits_pending'} else
         'planning_vehicle' if 'plan_pending' in pending else 'active')

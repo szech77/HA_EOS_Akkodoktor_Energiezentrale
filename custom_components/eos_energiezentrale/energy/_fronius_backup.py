@@ -14,14 +14,13 @@ class FroniusBackup:
         self.last_probe = None
         self.value = None
         self.error = None
-        self.supported = False
 
     def read(self, now):
         clock = monotonic()
         if self.last_probe is None or clock-self.last_probe >= 30:
             self.last_probe = clock
             self.error = None
-            self.value = PowerSupplyReading('unknown', None) if self.supported else None
+            self.value = PowerSupplyReading('unknown', None)
             try:
                 payload = request(self.url)
                 head = payload['Head']
@@ -30,15 +29,15 @@ class FroniusBackup:
                 site = payload['Body']['Data']['Site']
                 if not isinstance(site, dict):
                     raise ValueError('Solar API site data is invalid')
-                if 'BackupMode' in site:
-                    self.supported = True
-                    if type(site['BackupMode']) is not bool:
-                        raise ValueError('Solar API backup state must be boolean')
-                    stamp = instant(head.get('Timestamp'))
-                    completed = now+timedelta(seconds=monotonic()-clock)
-                    if stamp is None or not -5 <= (completed-stamp).total_seconds() < 120:
-                        raise ValueError('Solar API backup timestamp is invalid')
-                    self.value = PowerSupplyReading('backup' if site['BackupMode'] else 'grid', min(stamp, now))
+                if 'BackupMode' not in site:
+                    raise ValueError('Solar API backup state missing')
+                if type(site['BackupMode']) is not bool:
+                    raise ValueError('Solar API backup state must be boolean')
+                stamp = instant(head.get('Timestamp'))
+                completed = now+timedelta(seconds=monotonic()-clock)
+                if stamp is None or not -5 <= (completed-stamp).total_seconds() < 120:
+                    raise ValueError('Solar API backup timestamp is invalid')
+                self.value = PowerSupplyReading('backup' if site['BackupMode'] else 'grid', min(stamp, now))
             except (OSError, ValueError, KeyError, TypeError) as error:
                 self.error = error
                 self.value = PowerSupplyReading('unknown', None)

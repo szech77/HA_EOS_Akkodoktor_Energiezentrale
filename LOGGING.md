@@ -14,11 +14,18 @@ keine browserseitige Ladefreigabe oder Ersatzberechnung bei fehlenden Backendwer
 
 ## Warnungen und Fehler
 
-Bestätigter Notstrombetrieb erscheint als `backup_power_active`, ein nicht
+Bestätigter Notstrombetrieb erscheint als normale Information (`INFO`)
+`backup_power_active`, ein nicht
 bestätigter zuvor unterstützter oder konfigurierter Status als
 `backup_power_unknown`. Beide verwenden die gemeinsame Kennung
 `system/power_supply` in Anzeige, Backend-Log und Diagnosedaten. Der Wechsel
 zu unbekannt bleibt eine aktive Warnung; bestätigter Netzbetrieb behebt sie.
+Die Betriebszustände `backup` und `power_supply_waiting` beschreiben die
+automatische Regelpause mit erhaltenem Steuerungswunsch. Erwartbar nicht
+verfügbare Netz-/Hausmesswerte erzeugen nur bei bestätigtem Notstrom keine
+Panel-Warnung; Rohmesswerte und Plugin-Diagnosen bleiben erhalten. Unbestätigte
+Freigaben sind weiterhin Fehler. Der Wiederanlauf benötigt bestätigten
+Netzbetrieb, erfolgreiche Freigabe und die normalen gültigen Regelgrundlagen.
 
 Das Backend liefert `notices` mit Kennung, Schweregrad und Kontext. Dieselben
 Meldungen erzeugen die HA-Problemanzeige und Einträge unter

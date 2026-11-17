@@ -15,7 +15,7 @@ class Element {
  append(node){this.children.push(node);}
  prepend(node){this.children.unshift(node);this.selectors['.power-ring']=node;}
  replaceChildren(){this.children=[];}
- querySelector(key){return this.selectors[key]??null;}
+ querySelector(key){return this.selectors[key]??this.children.find(node=>key==='.'+node.className)??null;}
  querySelectorAll(key){return this.selectors[key]??[];}
  set innerHTML(value){
   this.markup=value;
@@ -25,6 +25,7 @@ class Element {
   }
   if(value.includes('class="ring-value"'))this.selectors['.ring-value']=new Element();
  }
+ get innerHTML(){return this.markup??'';}
 }
 function fixture(vehicles,language='de'){
  const ids=Object.fromEntries(['energy-flow','flow-wires','vehicle-nodes','vehicle-flows'].map(id=>[id,new Element()]));
@@ -59,14 +60,24 @@ test('backup mode greys the grid and stops even retained grid pulses until grid 
   f.ctx.snapshot.flow_display={grid:{value:5000,aligned:true,age_s:20}};
   f.ctx.renderFlow();
   assert.equal(node.classes.has('grid-disconnected'),true);
+  const indicator=node.querySelector('.backup-indicator');
+  assert.equal(indicator.hidden,false);
+  assert.equal(indicator.title,f.ctx.t('power_supply.backup'));
+  assert.ok(indicator.innerHTML.includes('backup-bolt'));
+  f.ctx.renderFlow();
+  assert.equal(node.children.filter(child=>child.className==='backup-indicator').length,1);
   assert.equal(flow.classes.has('inactive'),true);
   assert.equal(node.querySelector('strong').textContent,'—');
   assert.ok(node.getAttribute('aria-label').includes(f.ctx.t('power_supply.backup')));
   assert.equal(f.ctx.snapshot.live.grid,2000);
+  f.ctx.snapshot.power_supply={state:'unknown',grid_active:null};
+  f.ctx.renderFlow();
+  assert.equal(indicator.hidden,true);
   f.ctx.snapshot.power_supply={state:'grid',grid_active:true};
   f.ctx.snapshot.flow_display={};
   f.ctx.renderFlow();
   assert.equal(node.classes.has('grid-disconnected'),false);
+  assert.equal(indicator.hidden,true);
   assert.equal(flow.classes.has('inactive'),false);
   assert.equal(node.querySelector('strong').textContent,'2 kW');
  }
@@ -78,6 +89,7 @@ test('zero or missing grid watts do not create a backup state in the browser',()
   f.ctx.snapshot.live.grid=grid;
   f.ctx.renderFlow();
   assert.equal(f.selectors['[data-node="grid"]'].classes.has('grid-disconnected'),false);
+  assert.equal(f.selectors['[data-node="grid"]'].querySelector('.backup-indicator').hidden,true);
  }
 });
 

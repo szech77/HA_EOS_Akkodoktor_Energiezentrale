@@ -130,8 +130,10 @@ def test_fronius_api_failure_or_removed_field_does_not_reuse_old_backup_state():
     payload['Body']['Data']['Site'].clear()
     with patch('custom_components.eos_energiezentrale.energy._fronius_backup.request', return_value=payload):
         assert probe.read(NOW).mode == 'unknown'
-        assert probe.error is None
-        assert FroniusBackup('http://inverter.test').read(NOW) is None
+        assert isinstance(probe.error, ValueError)
+        first_probe = FroniusBackup('http://inverter.test')
+        assert first_probe.read(NOW).mode == 'unknown'
+        assert isinstance(first_probe.error, ValueError)
 
 
 def test_fronius_modbus_keeps_power_readings_when_solar_api_fails(caplog):
@@ -199,6 +201,35 @@ def test_device_site_carries_automatic_fronius_backup_status():
         'custom_components.eos_energiezentrale.energy._fronius_backup.request', return_value=api(True)):
         site = DeviceSite(None, [primary(server)])
         assert site.read({}, NOW).power_supply.mode == 'backup'
+
+
+@pytest.mark.parametrize('mode, expected', [(True, 'backup'), (False, 'grid'), (None, 'unknown')])
+def test_fronius_backup_status_survives_missing_smart_meter(mode, expected, caplog):
+    from custom_components.eos_energiezentrale.energy.devices import DeviceSite
+    from test_devices import primary
+    payload = api(mode)
+    if mode is None:
+        payload['Body']['Data']['Site'].clear()
+    with inverter() as (_, server), patch(
+        'custom_components.eos_energiezentrale.energy._fronius_backup.request', return_value=payload):
+        site = DeviceSite(None, [primary(server)])
+        # Healthy reading first: neither old watts nor old operating mode may
+        # conceal a grid-meter outage on the next read.
+        site.read({}, NOW)
+        server.meters.clear()
+        value = site.read({}, NOW)
+        assert value.measurements['grid'].value is None
+        assert value.measurements['house_total'].value is None
+        assert value.soc is not None
+        result = view_state({'power_supply':supply_view(value.power_supply, NOW)}, NOW)
+        assert result['power_supply']['state'] == expected
+        assert result['power_supply']['grid_active'] is (False if mode is True else True if mode is False else None)
+        if mode is not False:
+            assert any(item['code'] == ('backup_power_active' if mode else 'backup_power_unknown')
+                       for item in result['notices'])
+        assert not server.writes
+    if mode is None:
+        assert 'backup_status' in caplog.text
 
 
 def test_sensor_picker_can_be_cleared_and_accepts_binary_sensor():
