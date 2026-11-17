@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/review-fail-safe-followups",
+  "channel": "beta",
+  "date": "2026-11-18",
+  "notes_sha256": "8f526aeba2352b28e25dbad89d620997e8710d5013ebaab7d45398cbf9a821c0",
+  "source_changelog_sha256": "bec70f0c0e7f5514d7e41c765c8be3ada711e20b33d59587cf1a7e141369abaf",
+  "source_commit": "a7458868ece8c1fda9574c9cfb7d079e4b69cdbe",
+  "version": "0.22.3b44198090909"
+}
