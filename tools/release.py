@@ -99,6 +99,35 @@ def source_origin(github, tag, target):
     return origin
 
 
+def stable_baseline(github):
+    """Retain released bullets even after a source draft has been cleaned."""
+    latest = github.request('/releases/latest')
+    if latest is None:
+        return None
+    tag = latest['tag_name']
+    version = tag.removeprefix('v')
+    if not VERSION.fullmatch(version) or latest.get('prerelease') or latest.get('draft'):
+        raise ValueError('Latest stable release has invalid metadata')
+    target = github.tag_commit(tag)
+    source = source_origin(github, tag, target)['source_commit']
+    previous_text = file_at(github, source, 'CHANGELOG.md')
+    if previous_text is None:
+        raise ValueError('Previous release source changelog is missing')
+    released_text = file_at(github, target, 'CHANGELOG.md') or previous_text
+    snapshots = [draft_sections(previous_text) or {}]
+    headings = list(re.finditer(r'^## \d+\.\d+\.\d+(?: - \d{4}-\d{2}-\d{2})?\s*$',
+                                released_text, re.MULTILINE))
+    for index, heading in enumerate(headings):
+        end = headings[index+1].start() if index+1 < len(headings) else len(released_text)
+        snapshots.append(draft_sections('## New Version\n'+released_text[heading.end():end]))
+    known = {key:Counter() for key in SECTIONS}
+    for snapshot in snapshots:
+        for key in SECTIONS:
+            known[key] |= Counter(snapshot.get(key, []))
+    return {'version':version, 'source':source, 'history':version_history(released_text),
+            'notes':{key:list(value.elements()) for key,value in known.items()}}
+
+
 def includes_stable_source(github, latest_source, source):
     """Accept ancestry or an identical full tree before a squash/rebase merge."""
     path = '/compare/'+latest_source+'...'+source
@@ -128,6 +157,53 @@ def includes_stable_source(github, latest_source, source):
     return False
 
 
+def clean_branch_changelog(github, source, branch):
+    """Remove stable bullets with a fast-forward commit and recheck its head."""
+    if not re.fullmatch(r'[0-9a-f]{40}', source or ''):
+        raise ValueError('Changelog cleanup needs a full source SHA')
+    if not re.fullmatch(r'(?:feature|bug|bugfix)/[^\s\x00-\x1f]+', branch or ''):
+        raise ValueError('Changelog cleanup is restricted to working branches')
+    text = file_at(github, source, 'CHANGELOG.md')
+    current = draft_sections(text or '')
+    if current is None:
+        raise ValueError('Changelog cleanup requires New Version')
+    baseline = stable_baseline(github)
+    if baseline is None:
+        return None
+    if not includes_stable_source(github, baseline['source'], source):
+        raise ValueError('Update the branch with the latest stable source before cleanup')
+    remaining = added_notes(current, baseline['notes'])
+    if remaining == current:
+        return None
+    headings = list(re.finditer(r'^## (.+)$', text, re.MULTILINE))
+    history = text[headings[1].start():] if len(headings) > 1 else ''
+    cleaned = text[:headings[0].end()]+'\n\n'+render_notes(remaining)+'\n'+history
+    ref = 'heads/'+quote(branch, safe='')
+    head = github.request('/git/ref/'+ref)['object']['sha']
+    original = github.request('/git/commits/'+source)
+    if head != source:
+        # Retry dispatch after a successful ref update followed by an API failure.
+        commit = github.request('/git/commits/'+head)
+        comparison = github.request('/compare/'+source+'...'+head)
+        if ([parent['sha'] for parent in commit['parents']] != [source]
+                or [item['filename'] for item in comparison.get('files', [])] != ['CHANGELOG.md']
+                or file_at(github, head, 'CHANGELOG.md') != cleaned):
+            raise ValueError('Branch advanced; cleanup must not overwrite newer commits')
+        target = head
+    else:
+        tree = github.request('/git/trees', 'POST', {'base_tree':original['tree']['sha'], 'tree':[
+            {'path':'CHANGELOG.md', 'mode':'100644', 'type':'blob', 'content':cleaned}]})
+        commit = github.request('/git/commits', 'POST', {
+            'message':'Remove released changelog entries', 'tree':tree['sha'], 'parents':[source]})
+        target = commit['sha']
+        # GitHub rejects a concurrent, diverging branch update. Never force-push.
+        github.request('/git/refs/'+ref, 'PATCH', {'sha':target, 'force':False})
+    # GITHUB_TOKEN pushes do not trigger push workflows; dispatch checks explicitly.
+    # Dispatch runs do not publish or clean again, so this creates no release loop.
+    github.request('/actions/workflows/ci.yml/dispatches', 'POST', {'ref':branch})
+    return target
+
+
 def build_plan(root, github, source, channel, beta_number=None, branch='main', today=None):
     if not re.fullmatch(r'[0-9a-f]{40}', source or '') or channel not in ('stable', 'beta'):
         raise ValueError('Release needs a full source SHA and a stable/beta channel')
@@ -141,24 +217,11 @@ def build_plan(root, github, source, channel, beta_number=None, branch='main', t
     current = draft_sections(text)
     if current is None:
         raise ValueError('Automatic releases require a New Version changelog section')
-    latest = github.request('/releases/latest')
+    baseline = stable_baseline(github)
     previous, base, history = None, '0.0.0', version_history(text)
-    latest_source = None
-    if latest is not None:
-        tag = latest['tag_name']
-        base = tag.removeprefix('v')
-        if not VERSION.fullmatch(base) or latest.get('prerelease') or latest.get('draft'):
-            raise ValueError('Latest stable release has invalid metadata')
-        target = github.tag_commit(tag)
-        origin = source_origin(github, tag, target)
-        latest_source = origin['source_commit']
-        previous_text = file_at(github, latest_source, 'CHANGELOG.md')
-        if previous_text is None:
-            raise ValueError('Previous release source changelog is missing')
-        previous = draft_sections(previous_text)
-        released_text = file_at(github, target, 'CHANGELOG.md')
-        history = version_history(released_text or previous_text)
-        if not includes_stable_source(github, latest_source, source):
+    if baseline is not None:
+        base, previous, history = baseline['version'], baseline['notes'], baseline['history']
+        if not includes_stable_source(github, baseline['source'], source):
             raise ValueError('Update the branch with the latest stable source before releasing')
     refs = github.request('/git/matching-refs/tags/v') or []
     versions = {item['ref'].removeprefix('refs/tags/v'):item['object']['sha'] for item in refs
@@ -287,6 +350,8 @@ class GitHub:
                                    "Content-Type": "application/json"})
         try:
             with self.opener.open(request, timeout=15) as response:
+                if response.status == 204:
+                    return None
                 return json.load(response)
         except HTTPError as error:
             if error.code == 404 and method == "GET":
@@ -346,7 +411,7 @@ def publish_release(github, version, notes, commit, *, prerelease=False, title=N
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("validate", "prepare", "publish", "plan"))
+    parser.add_argument("command", choices=("validate", "prepare", "publish", "plan", "clean-branch"))
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--notes", type=Path)
     parser.add_argument("--repository")
@@ -362,7 +427,11 @@ def main():
             raise ValueError('Release target must be a full commit SHA')
         if args.check_local_tag and version is not None:
             check_local_tag(args.root, version, args.commit or "")
-        if args.command == 'plan' or (args.command == 'publish' and args.channel):
+        if args.command == 'clean-branch':
+            github = GitHub(args.repository or '', os.environ.get('GH_TOKEN', ''))
+            target = clean_branch_changelog(github, args.commit, args.branch)
+            print('Branch changelog cleaned and CI dispatched:', target or 'no cleanup needed')
+        elif args.command == 'plan' or (args.command == 'publish' and args.channel):
             github = GitHub(args.repository or '', os.environ.get('GH_TOKEN',''), read_only=args.command == 'plan')
             plan = build_plan(args.root,github,args.commit,args.channel or 'stable',args.beta_number,args.branch)
             version, notes = plan['version'], plan['notes']

@@ -156,9 +156,39 @@ jobs:
           python tools/release.py plan --repository "$REPOSITORY" --commit "$COMMIT"
           --channel "$CHANNEL" --beta-number "$BUILD" --branch "$BRANCH"
 
+  clean_changelog:
+    name: Remove released entries from branch draft
+    needs: [tests, security, integration]
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'szech77/HA_EOS_Akkodoktor_Energiezentrale' &&
+      (startsWith(github.ref, 'refs/heads/feature/') ||
+      startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Clean branch draft and check the resulting commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: >-
+          python tools/release.py clean-branch --repository "$REPOSITORY"
+          --commit "$COMMIT" --branch "$BRANCH"
+
   required:
     name: Required checks
-    needs: [tests, security, integration, release_metadata]
+    needs: [tests, security, integration, release_metadata, clean_changelog]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -169,11 +199,22 @@ jobs:
           SECURITY: ${{ needs.security.result }}
           INTEGRATION: ${{ needs.integration.result }}
           RELEASE: ${{ needs.release_metadata.result }}
+          CLEANUP: ${{ needs.clean_changelog.result }}
+          CLEANUP_EXPECTED: >-
+            ${{ github.event_name == 'push' &&
+            github.repository == 'szech77/HA_EOS_Akkodoktor_Energiezentrale' &&
+            (startsWith(github.ref, 'refs/heads/feature/') ||
+            startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/')) }}
         run: |
           test "$TESTS" = success
           test "$SECURITY" = success
           test "$INTEGRATION" = success
           test "$RELEASE" = success
+          if [ "$CLEANUP_EXPECTED" = true ]; then
+            test "$CLEANUP" = success
+          else
+            test "$CLEANUP" = skipped
+          fi
 
   publish:
     name: Publish stable or beta HACS release

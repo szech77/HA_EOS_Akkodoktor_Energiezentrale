@@ -28,9 +28,11 @@ Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
    Versionsbumps oder datierten Abschnitte für neue Änderungen anlegen.
 3. Die CI berücksichtigt nur neue/geänderte Stichpunkte gegenüber dem letzten
    stabil veröffentlichten Quellstand: Breaking Changes erhöht Major, Features
-   Minor, sonst Bugfixes/Security Patch. Bereits veröffentlichte Stichpunkte
-   können stehen bleiben oder entfernt werden; ein neuer Release braucht neue
-   Einträge. Details und Beta-Schema stehen in `CI.md`.
+   Minor, sonst Bugfixes/Security Patch. Die stabile Release-Historie verhindert
+   Wiederholungen auch nach der Bereinigung des Entwurfs. Bereits veröffentlichte
+   Stichpunkte entfernt die CI bei erfolgreichen Push-Läufen auf Arbeitsbranches
+   durch einen Bot-Commit; diesen vor weiteren Änderungen mit `git pull --ff-only`
+   übernehmen. Ein neuer Release braucht neue Einträge. Details stehen in `CI.md`.
 4. Das tatsächliche Verhalten beschreiben. Bei Dependency-Updates Abhängigkeit,
    bisherige und neue Version bzw. Commit sowie den betroffenen Einsatz nennen.
    Ein normales Versionsupdate nicht ohne Beleg als behobene Sicherheitslücke
@@ -39,8 +41,11 @@ Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
 Ein Push auf `feature/`, `bug/` oder `bugfix/` veröffentlicht nach erfolgreichen
 Pflichtprüfungen eine Beta; ein Merge nach `main` ein stabiles HACS-Release.
 Die Pipeline erzeugt einen Metadatencommit mit dem geprüften Quellcommit als
-direktem Elterncommit und verändert keinen Branch. Die nummerierte Historie
-steht vollständig im Changelog des Release-Tags. Agents dürfen Tags und Releases
+direktem Elterncommit. Zusätzlich bereinigt sie `New Version` auf Arbeitsbranches
+nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen durch einen
+Fast-Forward-Bot-Commit und startet für dessen HEAD die vollständigen Prüfungen
+ohne weitere Veröffentlichung. `main` bleibt von Bot-Commits ausgenommen.
+Die nummerierte Historie steht vollständig im Changelog des Release-Tags. Agents dürfen Tags und Releases
 nicht als Ersatz für die Pipeline manuell erzeugen oder veröffentlichte Tags
 verschieben.
 

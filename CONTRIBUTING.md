@@ -19,9 +19,12 @@ einschließlich der Nachbearbeitung von Dependabot-PRs.
 5. Pull Request nach `main`; alle Pflichtprüfungen müssen erfolgreich sein.
 
 Die CI erhöht bei neuen Breaking Changes Major, bei Features Minor, sonst Patch.
-Bereits veröffentlichte Stichpunkte unter `New Version` können stehen bleiben
-oder entfernt werden; nur neue/geänderte Stichpunkte gehen in den nächsten
-Release ein. Die vollständige nummerierte Historie steht im jeweiligen Release-Tag.
+Bereits veröffentlichte Stichpunkte unter `New Version` entfernt die CI nach
+erfolgreichen Tests, Sicherheits- und Integrationsprüfungen beim Push auf einen
+Arbeitsbranch durch einen Bot-Commit. Diesen mit `git pull --ff-only` übernehmen.
+Nur neue/geänderte Stichpunkte gehen in den nächsten Release ein; die stabile
+Historie verhindert Wiederholungen auch nach der Bereinigung. Die vollständige
+nummerierte Historie steht im jeweiligen Release-Tag.
 Veröffentlichung, Beta-Installation und technische Details: [CI.md](CI.md).
 
 ## Lokale Tests
