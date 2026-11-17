@@ -333,12 +333,13 @@ class FleetController(Controller):
                 command=replace(command,net_demand_w=max(command.net_demand_w,required),required_discharge_w=required)
             self.battery_driver.apply(command,rows)
 
-    def release(self,states,now):
+    def release(self,states,now,*,pause_wallbox=True):
         errors=[]
         for key,app,_ in self.controllers:
             app.pv_support.reset()
             try:
-                app.config.wallbox.pause(app.config.wallbox.read(states,now))
+                if pause_wallbox:
+                    app.config.wallbox.pause(app.config.wallbox.read(states,now))
             except Exception as error:
                 errors.append(error)
             app.pv_session=False

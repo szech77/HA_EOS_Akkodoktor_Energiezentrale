@@ -102,6 +102,8 @@ class DeviceSite(BatteryDriver):
             getattr(driver.features,field.name) for _,driver in self.batteries) for field in fields(BatteryFeatures)})
         keys=set(BatteryDriver.measurement_keys if self.batteries else ())
         if any('solar' in driver.measurement_keys for _,driver in self.devices): keys.add('solar')
+        if self.devices and all('inverter_ac' in driver.measurement_keys for _,driver in self.devices):
+            keys.add('inverter_ac')
         if self.grid_sources:
             keys.add('grid')
             if (self.grid_sources[0][1].provides_site_consumption
@@ -150,6 +152,9 @@ class DeviceSite(BatteryDriver):
         stamps={}
         if 'solar' in self.measurement_keys: extra['solar']=total(values('solar'))
         stamps['solar']=sample_time('solar')
+        if 'inverter_ac' in self.measurement_keys:
+            extra['inverter_ac']=total(values('inverter_ac'))
+            stamps['inverter_ac']=sample_time('inverter_ac')
         if self.grid_sources:
             extra['grid']=next((value.measurements.get('grid',Measurement(None,None)).value if value else None
                 for row,_,value in samples if row.get('grid_source')))

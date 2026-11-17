@@ -6,7 +6,7 @@ consumers (control, fleet reservation, display, history) use the same source.
 from collections.abc import Mapping
 from datetime import datetime
 
-from .contracts import Measurement, PluginContractError
+from .contracts import BatteryReading, Measurement, PluginContractError
 from .clients import reading, measurement_max_age
 from .sanitiser import bounded
 from .domain import instant, number
@@ -48,8 +48,14 @@ def checked_measurements(values, declared, now):
 def resolve_sources(options, states, providers, now, keys=None):
     """Sensor first; then battery plugin, then wallbox plugin. Never fail over a
     configured-but-unavailable sensor. Preserve fleet-adjusted internal rows.
+    Confirmed backup replaces grid-based house totals with fresh inverter AC.
     """
     from copy import copy
+    from .power_supply import configured_supply, supply_view
+    providers = tuple(providers)
+    supply = (configured_supply(options, states, now) if options.get('backup_mode_entity') else
+              next((sample.power_supply for _, sample in providers if isinstance(sample, BatteryReading)), None))
+    backup = supply_view(supply, now)['state'] == 'backup'
     # Preserve metadata on a captured HA state batch (e.g. registry associations).
     opts, rows = dict(options), copy(states) if isinstance(states, dict) else dict(states)
     sources = {}
@@ -59,6 +65,23 @@ def resolve_sources(options, states, providers, now, keys=None):
         entity = options.get(option, "")
         opts.setdefault(option, entity)
         source = {"type": "sensor", "name": entity} if entity else None
+        if key == 'house_total' and backup:
+            for driver, sample in providers:
+                declared = getattr(driver, 'measurement_keys', ())
+                if not isinstance(declared, tuple) or 'inverter_ac' not in declared:
+                    continue
+                item = getattr(sample, 'measurements', {}).get('inverter_ac')
+                value = bounded(item.value, 0, 1000000) if isinstance(item, Measurement) else None
+                stamp = item.sample if isinstance(item, Measurement) else None
+                if (not isinstance(stamp, datetime) or stamp.utcoffset() is None
+                        or not 0 <= (now-stamp).total_seconds() < age):
+                    value = None
+                entity = '@backup:house_total'
+                opts[option] = entity
+                rows[entity] = {'state':value, 'last_reported':stamp.isoformat() if value is not None else None,
+                                'attributes':{'unit_of_measurement':unit}}
+                source = {'type':'backup', 'name':driver.info.name, 'measurement':'inverter_ac'}
+                break
         if not entity:
             for driver, sample in providers:
                 declared = getattr(driver, "measurement_keys", ())

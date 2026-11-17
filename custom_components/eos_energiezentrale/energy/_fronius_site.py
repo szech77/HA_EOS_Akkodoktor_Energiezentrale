@@ -124,7 +124,9 @@ class FroniusSite:
         charge=total([reading.charge if reading else None for _,reading in battery_values])
         discharge=total([reading.discharge if reading else None for _,reading in battery_values])
         solar=total(solars)
-        extra={'solar':Measurement(solar,now if solar is not None else None)}
+        ac=total(acs)
+        extra={'solar':Measurement(solar,now if solar is not None else None),
+               'inverter_ac':Measurement(ac,now if ac is not None else None)}
         if 'grid' in self.primary.measurement_keys:
             caught=None
             try:

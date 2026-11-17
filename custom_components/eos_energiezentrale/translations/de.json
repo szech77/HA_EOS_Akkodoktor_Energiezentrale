@@ -52,6 +52,7 @@
           "battery_charge_w": "Speicher-Ladebasis (W)",
           "battery_discharge_w": "Speicher-Entladebasis (W)",
           "allow_battery_export": "Speichereinspeisung erlauben",
+          "allow_backup_ev_charging": "Manuelles E-Auto-Laden im Notstrom erlauben (EOS bleibt pausiert)",
           "max_current_a": "Maximaler Ladestrom (A)",
           "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
           "regulation_interval_s": "Vorgabe Regelintervall (s)",
@@ -217,6 +218,7 @@
           "battery_charge_w": "Speicher-Ladebasis (W)",
           "battery_discharge_w": "Speicher-Entladebasis (W)",
           "allow_battery_export": "Speichereinspeisung erlauben",
+          "allow_backup_ev_charging": "Manuelles E-Auto-Laden im Notstrom erlauben (EOS bleibt pausiert)",
           "max_current_a": "Maximaler Ladestrom (A)",
           "phase_wait_s": "Stabilitätswartezeit Phasenwechsel (s)",
           "regulation_interval_s": "Vorgabe Regelintervall (s)",
@@ -554,6 +556,9 @@
       }
     },
     "binary_sensor": {
+      "backup_power": {
+        "name": "Notstrombetrieb"
+      },
       "plan_current": {
         "name": "EOS-Plan aktuell"
       },

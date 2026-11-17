@@ -23,7 +23,7 @@ def control():
         case.doCleanups()
 
 
-def poll(case, seconds, mode, *, meter=True, plan=True):
+def poll(case, seconds, mode, *, meter=True, plan=True, car=None):
     now = NOW + timedelta(seconds=seconds)
     rows = case.states(when=now)
     if not meter:
@@ -32,7 +32,7 @@ def poll(case, seconds, mode, *, meter=True, plan=True):
     case.ha.states.return_value = rows
     case.battery.read.return_value = BatteryReading(50, 0, 0, now, now, now,
         power_supply=PowerSupplyReading(mode, now if mode in ('grid', 'backup') else None))
-    case.box.read.return_value = replace(requirements.wallbox(), sample=now)
+    case.box.read.return_value = replace(car or requirements.wallbox(), sample=now)
     case.eos.plan.side_effect = None if plan else OSError('unavailable')
     case.eos.plan.return_value = case.plan(now)
     case.app.tick(now, seconds)
@@ -73,6 +73,35 @@ def test_manual_off_during_backup_is_not_overridden_on_grid_recovery(control):
     assert not result['armed'] and result['control_status'] == 'read_only'
     control.battery.apply.assert_not_called()
     assert control.config.set_control_enabled.call_args.args == (False,)
+
+
+def test_backup_default_stops_a_restarted_charge_and_keeps_failed_stops_visible(control):
+    poll(control, 0, 'backup')
+    control.box.pause.reset_mock()
+    charging = requirements.wallbox(watts=2000, status='charging', enabled=True)
+    poll(control, 10, 'backup', car=charging)
+    control.box.pause.assert_called_once()
+    control.box.pause.side_effect = OSError('unavailable')
+    result = poll(control, 20, 'backup', car=charging)
+    assert 'wallbox_stop' in result['errors'] and result['armed']
+    result = poll(control, 30, 'grid', car=charging)
+    assert result['control_paused']
+    control.battery.apply.assert_not_called()
+    control.box.pause.side_effect = None
+    result = poll(control, 40, 'grid')
+    assert 'wallbox_stop' not in result['errors'] and not result['control_paused']
+    control.battery.release.assert_called_once()
+
+
+def test_backup_manual_charging_opt_in_leaves_eos_paused_and_does_not_issue_charge_commands(control):
+    control.config.options['allow_backup_ev_charging'] = True
+    charging = requirements.wallbox(watts=2000, status='charging', enabled=True)
+    for seconds in (0, 7200):
+        assert poll(control, seconds, 'backup', car=charging)['control_status'] == 'backup'
+    control.box.pause.assert_not_called()
+    control.box.charge.assert_not_called()
+    control.battery.apply.assert_not_called()
+    control.battery.release.assert_called_once()
 
 
 def test_failed_cleanup_stays_visible_and_blocks_resume_without_clearing_intent(control):

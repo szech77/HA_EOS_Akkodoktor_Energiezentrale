@@ -91,6 +91,8 @@ def view_state(data, now):
                             and (scope == 'system' or key == 'car_soc')
                             and not (supply['state'] == 'backup' and kind == 'unavailable'
                                      and key in ('grid', 'house_total')
+                                     and not (key == 'house_total' and
+                                         (report.get('sources', {}).get(key, {}).get('source') or {}).get('type') == 'backup')
                                      and report.get('sources', {}).get(key, {}).get('reason')
                                          not in ('unit_invalid', 'future_sample'))
                             and not (kind == 'unavailable' and key == 'solar'
