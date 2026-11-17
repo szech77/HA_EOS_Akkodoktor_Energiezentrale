@@ -1,0 +1,9 @@
+{
+  "branch": "feature/automatic-release-versioning",
+  "channel": "beta",
+  "date": "2026-11-17",
+  "notes_sha256": "8e739b1aea72ac4ff8448f163fb6ff5cf0afd86834750b0904dc8f809b17583c",
+  "source_changelog_sha256": "0cbf6cde1b46bcb430013d87deb82ba02f8eaef88505fc04aadbf13a06cd0225",
+  "source_commit": "cb62cda65a87d039e70541be36be4cba61d4d9de",
+  "version": "0.20.0b44088310529"
+}

@@ -1,9 +1,6 @@
 # Changelog
 
-Die CI erzeugt Version und Releasedatum. Neue Einträge stehen unter New Version;
-veröffentlichte Abschnitte werden in den Release-Tags archiviert.
-
-## New Version
+## 0.20.0b44088310529 - 2026-11-17
 
 ### Features
 
@@ -879,4 +876,3 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Keine.
-
