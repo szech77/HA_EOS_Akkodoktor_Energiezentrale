@@ -6,6 +6,7 @@ from ..clients import report_time
 from ..domain import number
 from ..device_io import entities, confirmed_state, DeviceConfirmationError, DeviceNotReady
 from ..plugin_diagnostics import entity_reading, plugin_operation
+from ..power_supply import fronius_entity_supply
 
 class Fronius(BatteryDriver):
     info = PluginInfo("fronius","Fronius GEN24 / BYD","battery")
@@ -36,7 +37,8 @@ class Fronius(BatteryDriver):
                               entity_reading(self,states,now,'discharge_power','power',120,('battery_discharge',)),
                               report_time(states, self.ids["soc"]),
                               report_time(states, self.ids["charge_power"]),
-                              report_time(states, self.ids["discharge_power"]))
+                              report_time(states, self.ids["discharge_power"]),
+                              power_supply=fronius_entity_supply(states, self.ids.values(), now))
 
     @plugin_operation('release')
     def _release(self, states):

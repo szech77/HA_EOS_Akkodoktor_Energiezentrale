@@ -12,6 +12,7 @@ from .plugin_registry import describe
 from .plugin_parameters import parameters
 from .sanitiser import bounded
 from .storage_pool import distribute, total
+from .power_supply import aggregate_supply
 
 REGISTRIES = {'battery': BATTERY_DRIVERS, 'inverter': INVERTER_DRIVERS}
 
@@ -168,7 +169,9 @@ class DeviceSite(BatteryDriver):
             times=[getattr(value,key) if value else None for _,value in batteries]
             return min(times) if times and all(stamp is not None for stamp in times) else None
         return BatteryReading(soc,charge,discharge,battery_time('soc_sample'),battery_time('charge_sample'),battery_time('discharge_sample'),
-            {key:Measurement(value,stamps.get(key)) for key,value in extra.items()})
+            {key:Measurement(value,stamps.get(key)) for key,value in extra.items()},
+            power_supply=aggregate_supply(
+                (row.get('grid_source',False), value) for row,_,value in samples if row['kind']=='battery'))
 
     def _apply(self,command,states):
         if not self.batteries: raise ValueError('No battery configured')

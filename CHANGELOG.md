@@ -7,6 +7,8 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
+- Notstrombetrieb anhand bestätigter, aktueller Gerätestatus im Backend erkennen und im Panel anzeigen. Im Energiestrom-Diagramm das öffentliche Netz ausgrauen und dessen Flussanimation unterdrücken, ohne Messwerte umzuschreiben. Fronius automatisch über den zugehörigen HA-Notstromsensor oder beim direkten Modbus-Plugin ergänzend über die lokale Solar API erkennen; Victron GX über den Inselstatus und weitere Systeme über eine optionale HA-Statusquelle unterstützen. Unbekannte/veraltete Zustände, Speichergruppen, Rückkehr zum Netz und deduplizierte Backend-Meldungen berücksichtigen; Deutsch und Englisch ergänzen.
+
 - Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
 
 ### Bugfixes

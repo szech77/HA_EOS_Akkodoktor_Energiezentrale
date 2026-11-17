@@ -9,6 +9,7 @@ from .energy.domain import number
 class StateSnapshot(dict):
     """State batch with the time at which the HA loop finished reading it."""
     captured_at = None
+    fronius_backup_modes = None
 
 
 class HomeAssistantAdapter:
@@ -39,6 +40,22 @@ class HomeAssistantAdapter:
             state = self.hass.states.get(entity)
             return self._snapshot(state) if state else {}
         result=StateSnapshot({state.entity_id:self._snapshot(state) for state in self.hass.states.async_all()})
+        # Registry identity survives entity renaming and keeps distinct SolarNet
+        # installations apart. Registry access stays on HA's loop, without I/O.
+        from homeassistant.helpers import entity_registry as er
+        registry = er.async_get(self.hass)
+        entries = tuple(getattr(registry, 'entities', {}).values())
+        backup = {}
+        ambiguous = set()
+        for entry in entries:
+            if (entry.platform == 'fronius' and entry.domain == 'binary_sensor'
+                    and entry.unique_id.endswith('-power_flow-backup_mode')):
+                if entry.config_entry_id in backup:
+                    ambiguous.add(entry.config_entry_id)
+                backup[entry.config_entry_id] = entry.entity_id
+        result.fronius_backup_modes = {entry.entity_id:backup[entry.config_entry_id]
+            for entry in entries if entry.platform == 'fronius'
+            and entry.config_entry_id in backup and entry.config_entry_id not in ambiguous}
         result.captured_at=datetime.now(timezone.utc)
         return result
 

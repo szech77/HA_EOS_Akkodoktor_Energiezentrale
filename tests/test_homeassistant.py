@@ -69,6 +69,48 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.hass.config_entries, "async_setup", new_callable=AsyncMock):
             await self.hass.config_entries.async_add(self.entry)
 
+    async def test_fronius_backup_sensor_is_found_by_registry_after_renaming(self):
+        from homeassistant.helpers import entity_registry as er
+        from homeassistant.helpers import device_registry as dr
+        from custom_components.eos_energiezentrale.energy.plugins.fronius import Fronius
+        from custom_components.eos_energiezentrale.energy.measurement_sources import resolve_sources
+        dr.async_setup(self.hass)
+        await dr.async_load(self.hass, load_empty=True)
+        registry = er.async_get(self.hass)
+        await registry.async_load(load_empty=True)
+        fronius_entry = ConfigEntry(domain='fronius', data={'host':'inverter.test'}, options={}, version=1,
+            minor_version=1, source='user', title='Solar', unique_id='fronius-test',
+            discovery_keys=MappingProxyType({}), subentries_data=[])
+        with patch.object(self.hass.config_entries, 'async_setup', new_callable=AsyncMock):
+            await self.hass.config_entries.async_add(fronius_entry)
+        backup = registry.async_get_or_create('binary_sensor','fronius','system-power_flow-backup_mode',
+            config_entry=fronius_entry, suggested_object_id='renamed_supply_status')
+        power = registry.async_get_or_create('sensor','fronius','system-storage_charging_power',
+            config_entry=fronius_entry, suggested_object_id='renamed_charging')
+        now = datetime.now(timezone.utc)
+        self.hass.states.async_set(backup.entity_id, 'on', timestamp=now.timestamp())
+        states = await HomeAssistantAdapter(self.hass)._states()
+        driver = Fronius(None, {'charge_power':power.entity_id})
+        assert driver.read(states, now).power_supply.mode == 'backup'
+        # Fleet source resolution must retain the associations in copied batches.
+        _, fleet_states, _ = resolve_sources(DEFAULTS, states, (), now)
+        assert driver.read(fleet_states, now).power_supply.mode == 'backup'
+        self.hass.states.async_set(backup.entity_id, 'off')
+        states = await HomeAssistantAdapter(self.hass)._states()
+        assert driver.read(states, states.captured_at).power_supply.mode == 'grid'
+
+    async def test_backup_notice_is_logged_by_coordinator_without_browser_calls(self):
+        from custom_components.eos_energiezentrale.energy.power_supply import supply_view
+        from custom_components.eos_energiezentrale.energy.contracts import PowerSupplyReading
+        coordinator, _ = self.controller()
+        now = datetime.now(timezone.utc)
+        raw = {'live':{}, 'power_supply':supply_view(PowerSupplyReading('backup', now), now)}
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator', level='WARNING') as logs:
+            first = coordinator._present(raw)
+            coordinator._present(raw)
+        assert first['power_supply']['grid_active'] is False
+        assert sum('backup_power_active' in item for item in logs.output) == 1
+
     async def asyncTearDown(self):
         await self.hass.async_stop(force=True)
         self.directory_context.__exit__(None, None, None)
@@ -271,7 +313,8 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             fields=schema['battery_parameters'].serialize()['selector']['object']['fields']
             self.assertEqual(set(fields),{'host','port','unit_id','grid_discharge_supported',
                                           'grid_meter_enabled','grid_meter_unit_id','grid_meter_invert',
-                                          'battery_capacity_wh','additional_inverters','grid_meter_host','grid_meter_port'})
+                                          'battery_capacity_wh','additional_inverters','grid_meter_host','grid_meter_port',
+                                          'backup_detection_enabled','backup_api_url'})
             result=await flow.async_step_hardware_parameters({'battery_parameters':{'host':'inverter.local'}})
             self.assertEqual(result['type'],'create_entry')
             self.assertEqual(result['data']['battery_type'],'fronius_modbus')

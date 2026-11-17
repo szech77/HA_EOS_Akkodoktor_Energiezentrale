@@ -213,7 +213,18 @@ class VictronModbus(BatteryDriver):
             self.read_diagnostics['failure']={**self._read_context,'type':type(error).__name__,
                 'exception_code':getattr(error,'exception_code',None)}
             raise
-        return sample
+        from ..contracts import PowerSupplyReading
+        from dataclasses import replace
+        supply = PowerSupplyReading('unknown', None)
+        try:
+            # GX /Ac/ActiveIn/Source: 1=grid, 240=inverting/island.
+            # 0=unconfigured, 2=generator and 3=shore prove neither mode.
+            source = self._registers(826,1,'backup_status')[0]
+            supply = PowerSupplyReading({1:'grid',240:'backup'}.get(source,'unknown'), now)
+        except (OSError, ValueError) as error:
+            from ..plugin_diagnostics import partial_read_failure
+            partial_read_failure(self, error, 'backup_status')
+        return replace(sample, power_supply=supply)
 
     @plugin_operation('power_limits')
     def power_limits(self,states):

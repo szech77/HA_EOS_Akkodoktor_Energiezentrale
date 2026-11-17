@@ -418,6 +418,11 @@
     "status.calculating": "EOS is calculating a new plan",
     "status.updating": "EOS reachable, waiting for a current plan",
     "eos.run_calculating": "EOS calculating ({seconds} s)",
-    "eos.run_updating": "Waiting for a current EOS plan ({seconds} s)"
+    "eos.run_updating": "Waiting for a current EOS plan ({seconds} s)",
+    "power_supply.backup": "Backup power",
+    "power_supply.grid_disconnected": "Grid disconnected",
+    "power_supply.unknown": "Grid operating status unknown",
+    "notice.backup_power_active": "Backup power is active. The PV/storage system is disconnected from the utility grid.",
+    "notice.backup_power_unknown": "Grid/backup operating status is unconfirmed. Check the status source and its freshness."
   }
 }

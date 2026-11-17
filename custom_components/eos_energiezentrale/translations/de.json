@@ -25,7 +25,10 @@
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
           "heat_load_scale": "Skalierung der Auslastung",
-          "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
+          "weather_entity": "Wetter (optional; leer = automatische Auswahl)",
+          "backup_mode_entity": "Notstromstatus (optional; leer = automatisch)",
+          "backup_active_state": "Zustand für Notstrombetrieb",
+          "backup_inactive_state": "Zustand für Netzbetrieb"
         },
         "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Ohne beide Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
       },
@@ -187,7 +190,10 @@
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
           "heat_load_scale": "Skalierung der Auslastung",
-          "weather_entity": "Wetter (optional; leer = automatische Auswahl)"
+          "weather_entity": "Wetter (optional; leer = automatische Auswahl)",
+          "backup_mode_entity": "Notstromstatus (optional; leer = automatisch)",
+          "backup_active_state": "Zustand für Notstrombetrieb",
+          "backup_inactive_state": "Zustand für Netzbetrieb"
         },
         "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Ohne beide Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
       },
@@ -663,6 +669,12 @@
         },
         "additional_inverters": {
           "name": "Weitere Wechselrichter (JSON-Objekt; siehe PLUGINS.md)"
+        },
+        "backup_detection_enabled": {
+          "name": "Notstrombetrieb über Solar API erkennen"
+        },
+        "backup_api_url": {
+          "name": "Solar-API-URL (leer: http://Modbus-Host)"
         }
       }
     },

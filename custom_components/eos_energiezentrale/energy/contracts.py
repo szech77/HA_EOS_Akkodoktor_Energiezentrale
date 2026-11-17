@@ -77,6 +77,13 @@ class InverterDriver(ABC):
 
 
 @dataclass(frozen=True)
+class PowerSupplyReading:
+    """Explicit operating mode, independent of measured grid power."""
+    mode: str
+    sample: datetime | None
+
+
+@dataclass(frozen=True)
 class BatteryReading:
     soc: float | None
     charge: float | None
@@ -85,6 +92,7 @@ class BatteryReading:
     charge_sample: datetime | None = None
     discharge_sample: datetime | None = None
     measurements: Mapping[str, Measurement] = field(default_factory=dict)
+    power_supply: PowerSupplyReading | None = None
 
 
 @dataclass(frozen=True)

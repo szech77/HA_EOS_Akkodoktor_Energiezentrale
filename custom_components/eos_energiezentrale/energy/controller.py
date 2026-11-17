@@ -22,6 +22,8 @@ from .pv_support import PVSupport
 from .vehicle_projection import projected_vehicle_soc
 from .eos_status import EOSRunStatus
 from .pv_availability import PVAvailability
+from .power_supply import configured_supply, supply_view
+from .contracts import PowerSupplyReading
 
 
 class Controller:
@@ -36,6 +38,7 @@ class Controller:
         self.restore_pending = self.armed
         self.owned = False
         self.live = {}
+        self.power_supply = None
         self.display = {}
         self.pv_availability = PVAvailability()
         self.flow_display = {}
@@ -463,7 +466,11 @@ class Controller:
             now=max(now,captured)
         self.errors.pop("ha", None)
         opts, daily = self.config.options, self.config.daily
+        self.power_supply = (configured_supply(opts, states, now) if opts.get('backup_mode_entity') else
+                             PowerSupplyReading('unknown', None) if self.power_supply is not None else None)
         battery = self.config.battery.read(states, now)
+        if not opts.get('backup_mode_entity') and battery.power_supply is not None:
+            self.power_supply = battery.power_supply
         box = self.config.wallbox.read(states, now)
         self.update_vehicle(box, now, clock)
         opts, states, self.source_configuration = resolve_sources(opts, states,
@@ -812,7 +819,8 @@ class Controller:
             group=getattr(driver,'site_summary',None)
             plan_end = (instant(plan.get("valid_until")) or (instant(plan.get("valid_from")) or generated)
                         + timedelta(hours=24)) if current else None
-            return {"charge_plan_view": plan_view(self.config.daily, now, self.config.zone),
+            return {"power_supply": supply_view(self.power_supply, now),
+                    "charge_plan_view": plan_view(self.config.daily, now, self.config.zone),
                     "eos_run": self.eos_run_state(now),
                     "vehicle_forecast_source": projection,
                     "charge_target_soc": self.goal_target(now),

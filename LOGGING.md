@@ -14,6 +14,12 @@ keine browserseitige Ladefreigabe oder Ersatzberechnung bei fehlenden Backendwer
 
 ## Warnungen und Fehler
 
+Bestätigter Notstrombetrieb erscheint als `backup_power_active`, ein nicht
+bestätigter zuvor unterstützter oder konfigurierter Status als
+`backup_power_unknown`. Beide verwenden die gemeinsame Kennung
+`system/power_supply` in Anzeige, Backend-Log und Diagnosedaten. Der Wechsel
+zu unbekannt bleibt eine aktive Warnung; bestätigter Netzbetrieb behebt sie.
+
 Das Backend liefert `notices` mit Kennung, Schweregrad und Kontext. Dieselben
 Meldungen erzeugen die HA-Problemanzeige und Einträge unter
 `custom_components.eos_energiezentrale`, unabhängig davon, ob ein Browser sie abruft.

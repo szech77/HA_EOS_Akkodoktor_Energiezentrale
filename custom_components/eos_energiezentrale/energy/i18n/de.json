@@ -418,6 +418,11 @@
     "status.calculating": "EOS berechnet einen neuen Plan",
     "status.updating": "EOS erreichbar, warte auf aktuellen Plan",
     "eos.run_calculating": "EOS berechnet ({seconds} s)",
-    "eos.run_updating": "Warte auf aktuellen EOS-Plan ({seconds} s)"
+    "eos.run_updating": "Warte auf aktuellen EOS-Plan ({seconds} s)",
+    "power_supply.backup": "Notstrombetrieb",
+    "power_supply.grid_disconnected": "Netz getrennt",
+    "power_supply.unknown": "Netzbetriebsstatus unbekannt",
+    "notice.backup_power_active": "Notstrombetrieb aktiv. Das öffentliche Netz ist vom PV-Speichersystem getrennt.",
+    "notice.backup_power_unknown": "Der Netz-/Notstromstatus ist nicht bestätigt. Statusquelle und Aktualität prüfen."
   }
 }
