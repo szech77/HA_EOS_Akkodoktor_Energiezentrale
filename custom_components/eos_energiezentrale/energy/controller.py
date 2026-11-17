@@ -23,7 +23,7 @@ from .vehicle_projection import projected_vehicle_soc
 from .eos_status import EOSRunStatus
 from .pv_availability import PVAvailability
 from .power_supply import configured_supply, supply_view
-from .contracts import PowerSupplyReading
+from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
 
 
 class Controller:
@@ -39,6 +39,8 @@ class Controller:
         self.owned = False
         self.live = {}
         self.power_supply = None
+        self.backup_paused = False
+        self.backup_pause_applied = False
         self.display = {}
         self.pv_availability = PVAvailability()
         self.flow_display = {}
@@ -142,6 +144,49 @@ class Controller:
         self.pv_session = False
         self.phase_target = None
         self.candidate = None
+
+    def pause_for_backup(self, states, now):
+        """Retain user intent until fresh grid status and confirmed cleanup."""
+        mode = supply_view(self.power_supply, now)['state']
+        if mode == 'backup':
+            self.backup_paused = True
+        if not self.backup_paused:
+            return False
+        self.pv_support.reset()
+        self.commanded_car_w = None
+        self.last_write = None
+        self.candidate = self.phase_target = None
+        self.restore_pending = self.armed
+        if self.armed and not self.backup_pause_applied:
+            self.control_step = 'backup_pause'
+            try:
+                self.release(states, now)
+            except (OSError, ValueError) as error:
+                # A temporary device outage must not persist an explicit OFF.
+                # Keep the failure visible and retry before allowing new control.
+                self.record_failure('release', error)
+                return True
+            self.errors.pop('release', None)
+            self.backup_pause_applied = True
+        if mode == 'grid':
+            if not self.armed:
+                self.backup_paused = self.backup_pause_applied = False
+            # Keep the recovery latch through the normal readiness gate below.
+            # Missing device reads after grid return still need automatic retry.
+            return False
+        return True
+
+    def read_control_input(self, driver, states, now, area):
+        try:
+            value = driver.read(states, now)
+        except (OSError, ValueError) as error:
+            if not self.backup_paused:
+                raise
+            self.record_failure(area, error)
+            return (BatteryReading(None, None, None) if area == 'battery_read' else
+                    WallboxReading(None, 'unavailable', False, None, None, None, None, None))
+        self.errors.pop(area, None)
+        return value
 
     def run(self):
         while not self.stop_event.is_set():
@@ -468,10 +513,16 @@ class Controller:
         opts, daily = self.config.options, self.config.daily
         self.power_supply = (configured_supply(opts, states, now) if opts.get('backup_mode_entity') else
                              PowerSupplyReading('unknown', None) if self.power_supply is not None else None)
-        battery = self.config.battery.read(states, now)
+        if supply_view(self.power_supply, now)['state'] == 'backup':
+            self.backup_paused = True
+        battery = self.read_control_input(self.config.battery, states, now, 'battery_read')
         if not opts.get('backup_mode_entity') and battery.power_supply is not None:
             self.power_supply = battery.power_supply
-        box = self.config.wallbox.read(states, now)
+        # Latch before other reads: a later missing status can never imply grid
+        # recovery after backup has been positively observed.
+        if supply_view(self.power_supply, now)['state'] == 'backup':
+            self.backup_paused = True
+        box = self.read_control_input(self.config.wallbox, states, now, 'wallbox_read')
         self.update_vehicle(box, now, clock)
         opts, states, self.source_configuration = resolve_sources(opts, states,
             ((self.config.battery, battery), (self.config.wallbox, box)), now)
@@ -523,6 +574,8 @@ class Controller:
         if minute != self.last_minute:
             self.history.write(now, live)
             self.last_minute = minute
+        if self.pause_for_backup(states, now):
+            return
         if not self.armed:
             self.pv_support.reset()
             return
@@ -546,6 +599,7 @@ class Controller:
             if not ready:
                 return
             self.restore_pending = False
+            self.backup_paused = self.backup_pause_applied = False
         self.owned = True
         published = (round(self.soc, 4) if self.soc is not None else None, measured)
         if car_enabled and published != self.last_soc_publish:
@@ -841,6 +895,7 @@ class Controller:
                         "confirmed_at": self.battery_limits_confirmed_at.isoformat()
                             if self.battery_limits_confirmed_at else None},
                     "control_waiting": self.armed and self.restore_pending,
+                    "control_paused": self.backup_paused,
                     "armed": self.armed, "release_pending": self.owned and not self.armed,
                     "eos_cache": {resource:{"remaining_s":max(0,300-(now-failed).total_seconds())} for resource,failed in self.eos_failure_since.items() if resource in self.resource_plans and (now-failed).total_seconds()<300 and self.order_for(resource,now) is not None},
                     "errors": self.visible_errors(now), "error_details": dict(self.error_details), "last_failure": self.last_failure, "zone": opts["timezone"],

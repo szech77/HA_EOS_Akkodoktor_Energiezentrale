@@ -13,6 +13,7 @@ from .history import History
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
+from .power_supply import configured_supply, supply_view
 
 SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
                            'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w',
@@ -192,20 +193,33 @@ class FleetController(Controller):
     def tick(self,now,clock):
         rows=self.real_ha.states()
         opts=self.config.options
+        if any(app.backup_paused for _,app,_ in self.controllers):
+            self.backup_paused=True
         from .measurement_sources import resolve_sources
-        battery=self.battery_driver.read(rows,now)
-        primary_box=self.config.wallbox.read(rows,now)
+        supply=configured_supply(opts,rows,now)
+        if supply_view(supply,now)['state']=='backup':
+            self.backup_paused=True
+        battery=self.read_control_input(self.battery_driver,rows,now,'battery_read')
+        if not opts.get('backup_mode_entity'):
+            supply=battery.power_supply
+        if supply_view(supply,now)['state']=='backup':
+            self.backup_paused=True
+        for _,app,_ in self.controllers:
+            if self.backup_paused:
+                app.backup_paused=True
+        primary_box=self.read_control_input(self.config.wallbox,rows,now,'wallbox_read')
         shared_keys=("solar","grid","house_total","heat","price","heat_load")
         opts,rows,shared_sources=resolve_sources(opts,rows,
             ((self.battery_driver,battery),(self.config.wallbox,primary_box)),now,keys=shared_keys)
         grid=reading(rows,opts["grid_entity"],now,"power",45)
-        actual={key:app.config.wallbox.read(rows,now).watts for key,app,_ in self.controllers}
+        actual={key:app.read_control_input(app.config.wallbox,rows,now,'wallbox_read').watts
+                for key,app,_ in self.controllers}
         complete=all(value is not None for value in actual.values())
         snapshots=[]
         for key,app,proxy in self.controllers:
             if app is not self:
                 app.config.daily.update({name:self.config.daily[name] for name in SHARED_BATTERY_SETTINGS})
-            box=app.config.wallbox.read(rows,now)
+            box=app.read_control_input(app.config.wallbox,rows,now,'wallbox_read')
             if not box.plugged and box.watts == 0:
                 self.targets[key]=0
             proxy.rows=deepcopy(rows)
@@ -296,7 +310,8 @@ class FleetController(Controller):
             for status in ('missing','unavailable'):
                 report[status]=sorted((set(report[status])-set(shared_keys))|set(shared_sources[status]))
         self.history.write(now,self.live)
-        if not self.armed or not any(app.owned for _,app,_ in self.controllers):
+        if (not self.armed or any(app.backup_paused for _,app,_ in self.controllers)
+                or not any(app.owned for _,app,_ in self.controllers)):
             return
         self.control_step="battery_control"
         battery=self.battery_driver.read(rows,now)
@@ -347,6 +362,7 @@ class FleetController(Controller):
     def snapshot(self,now):
         from .charge_plans import plan_view
         result=Controller.snapshot(self,now)
+        result['control_paused']=any(app.backup_paused for _,app,_ in self.controllers)
         controllers={identity:app for identity,app,_ in self.controllers}
         result["vehicles"]=[{**payload,"vehicle_planning":controllers[payload["id"]].vehicle_planning_state(now),
                              "source_configuration":self.pv_availability.decorate(deepcopy(payload['source_configuration']),now),

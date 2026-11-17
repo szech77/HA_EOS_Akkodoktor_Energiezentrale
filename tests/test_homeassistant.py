@@ -105,7 +105,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator, _ = self.controller()
         now = datetime.now(timezone.utc)
         raw = {'live':{}, 'power_supply':supply_view(PowerSupplyReading('backup', now), now)}
-        with self.assertLogs('custom_components.eos_energiezentrale.coordinator', level='WARNING') as logs:
+        with self.assertLogs('custom_components.eos_energiezentrale.coordinator', level='INFO') as logs:
             first = coordinator._present(raw)
             coordinator._present(raw)
         assert first['power_supply']['grid_active'] is False

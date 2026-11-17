@@ -42,8 +42,11 @@
   #eos-energy-design .orb,#eos-energy-design .hub { display:grid; place-items:center; border-radius:50%; }
   #eos-energy-design .orb { width:52px; height:52px; color:var(--energy-color); background:var(--surface2); border:2px solid var(--energy-color); }
   #eos-energy-design .node:hover .orb { background:color-mix(in srgb,var(--energy-color) 22%,var(--surface)); }
-  #eos-energy-design .node.grid-disconnected { color:var(--dim); --energy-color:var(--dim); filter:grayscale(1); opacity:.55; }
-  #eos-energy-design .node.grid-disconnected .orb { border-color:var(--edge); background:var(--surface2); }
+  #eos-energy-design .node.grid-disconnected { color:var(--dim); --energy-color:var(--dim); }
+  #eos-energy-design .node.grid-disconnected .orb { filter:grayscale(1); opacity:.55; border-color:var(--edge); background:var(--surface2); }
+  #eos-energy-design .backup-indicator { position:absolute; left:calc(50% + 10px); top:-7px; display:grid; place-items:center; width:30px; height:30px; border:2px solid currentColor; border-radius:50%; background:var(--surface); color:light-dark(#b42318,#ff6b6b); }
+  #eos-energy-design .backup-indicator svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  #eos-energy-design .backup-indicator .backup-bolt { fill:currentColor; stroke:none; }
   #eos-energy-design .hub { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:80px; height:80px; align-content:center; gap:3px; color:var(--accent); background:var(--surface2); border:2px solid var(--edge); font-size:11px; }
   #eos-energy-design .footnote { margin-top:6px; }
   #eos-energy-design .next { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
@@ -108,6 +111,7 @@
   #eos-energy-design #timeline:not(:empty) { margin:14px 0; }
   #eos-energy-design #charts section + section { margin-top:14px; }
   #eos-energy-design #notice:not(:empty) { color:var(--heat); margin-bottom:12px; }
+  #eos-energy-design #notice.information:not(:empty) { color:var(--accent); }
   #eos-energy-design #control { background:var(--surface2); border:1px solid var(--edge); border-radius:8px; padding:8px 12px; margin:8px 8px 0 0; }
   #eos-energy-design #daily { margin-top:12px; }
 

@@ -92,10 +92,11 @@ class Request(socketserver.BaseRequestHandler):
 
 @contextmanager
 def inverter(address=40342, export=False):
-    # This emulator serves SunSpec only; its separate Solar API has no backup field.
+    # Separate Solar API simulation; the TCP server below serves SunSpec only.
     with Inverter(address) as server, patch(
         'custom_components.eos_energiezentrale.energy._fronius_backup.request',
-        return_value={'Head':{'Status':{'Code':0}}, 'Body':{'Data':{'Site':{}}}}):
+        return_value={'Head':{'Status':{'Code':0}, 'Timestamp':NOW.isoformat()},
+                      'Body':{'Data':{'Site':{'BackupMode':False}}}}):
         thread = Thread(target=server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
         thread.start()
         params = {"host": "127.0.0.1", "port": server.server_address[1],

@@ -4,7 +4,22 @@
 
 Die Energiezentrale zeigt bestätigten Notstrombetrieb im Panel an. Im
 Energiestrom-Diagramm wird das Netz ausgegraut und seine Flussanimation gestoppt.
+Ein rotes Haus-/Blitz-Piktogramm am Netzsymbol kennzeichnet den bestätigten
+Notstrombetrieb zusätzlich; bei Netzwiederkehr oder unbestätigtem Status entfällt es.
 Die zugrunde liegenden Leistungswerte und historischen Messungen bleiben erhalten.
+Bei eingeschalteter Steuerung ist Notstrom ein normaler Pausenzustand. Bestehende
+Regelvorgaben werden freigegeben und Wallboxen pausiert; neue Regelbefehle bleiben
+gesperrt. Der gespeicherte Steuerungswunsch bleibt eingeschaltet, unabhängig von
+der Dauer des Notstrombetriebs. Nach bestätigter Netzwiederkehr und sobald die
+erforderlichen Messwerte und ein gültiger Plan vorliegen, läuft die Steuerung
+automatisch weiter. Ein manuelles Ausschalten während der Pause bleibt erhalten.
+Unbekannter/veralteter Status nach erkanntem Notstrom beendet die Pause nicht.
+Nicht bestätigte Freigaben bleiben sichtbar und werden vor dem Wiederanlauf
+erneut versucht. Dies gilt auch für mehrere Wallboxen mit gemeinsamem Speicher.
+
+Notstrom erscheint als neutrale Statusinformation. In diesem Zustand entfallen
+die Warnungen für erwartbar nicht verfügbare Netz- und Hausverbrauchsmessungen.
+Andere Messwert-, Konfigurations- und Freigabefehler bleiben sichtbar.
 0 W Netzleistung, ein fehlender Netzsensor oder Batterieentladung allein sind
 kein Notstromnachweis.
 
@@ -23,6 +38,12 @@ kein Notstromnachweis.
   Executor und prüft Antwortstatus, booleschen Wert und Zeitstempel.
   Ein Ausfall dieser ergänzenden API lässt gültige Modbus-Leistungen verfügbar.
   Die Notstromerkennung kann im Plugin ausgeschaltet werden.
+  Bei aktivierter Erkennung führt auch ein fehlendes `BackupMode`-Feld zu
+  „Netzbetriebsstatus unbekannt“ und einer Backend-Meldung (`backup_status`),
+  statt die Erkennung still als nicht unterstützt zu behandeln. Zur Diagnose
+  die obige URL direkt am Wechselrichter öffnen und `Head.Status`,
+  `Head.Timestamp` und `Body.Data.Site` prüfen. Ein ausgefallener Smart Meter
+  verhindert die Erkennung eines gültigen `BackupMode: true` nicht.
 - **Victron GX direkt:** Register 826 (`/Ac/ActiveIn/Source`) liefert
   240 für Inselbetrieb und 1 für Netzbetrieb. Unbekannte Werte, Generator oder
   Landstrom werden nicht als bestätigter Netz- oder Notstrombetrieb ausgegeben.
