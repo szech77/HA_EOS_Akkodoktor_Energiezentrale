@@ -11,13 +11,17 @@ from .clients import reading, measurement_max_age
 from .sanitiser import bounded
 from .domain import instant, number
 
+# Unchanged vehicle values may legitimately keep their timestamp for a day;
+# an older report is no basis for charging decisions or diagnostics.
+CAR_SOC_MAX_AGE_S = 36 * 3600
+
 SOURCES = {
     "solar": ("pv_entity", "solar", "W", 45),
     "grid": ("grid_entity", "power", "W", 45),
     "house_total": ("house_entity", "power", "W", 120),
     "heat": ("heat_entity", "power", "W", 120),
     "price": ("price_entity", "price", "ct/kWh", 3600),
-    "car_soc": ("car_soc_entity", "soc", "%", 120),
+    "car_soc": ("car_soc_entity", "soc", "%", CAR_SOC_MAX_AGE_S),
     "heat_load": ("heat_load_entity", "soc", "%", 120),
 }
 MEASUREMENT_KEYS = frozenset(SOURCES) | {"battery_soc", "battery_charge", "battery_discharge", "car", "inverter_ac"}

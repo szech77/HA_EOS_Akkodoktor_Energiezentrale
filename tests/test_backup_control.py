@@ -208,3 +208,34 @@ def test_startup_with_unknown_status_never_passes_the_readiness_gate(control):
     control.battery.apply.assert_not_called()
     control.box.charge.assert_not_called()
     assert poll(control, 340, 'grid')['control_status'] == 'active'
+
+
+def entity_poll(case, seconds, state, *, stamp=None, battery_error=None):
+    now = NOW + timedelta(seconds=seconds)
+    rows = case.states(when=now)
+    rows['binary_sensor.backup'] = {'state':state, 'last_reported':(stamp or now).isoformat()}
+    case.ha.states.return_value = rows
+    case.battery.read.side_effect = battery_error
+    case.battery.read.return_value = BatteryReading(50, 0, 0, now, now, now)
+    case.box.read.return_value = replace(requirements.wallbox(), sample=now)
+    case.eos.plan.return_value = case.plan(now)
+    case.app.tick(now, seconds)
+    return view_state(case.app.snapshot(now), now)
+
+
+def test_unchanged_explicit_grid_state_of_a_configured_entity_keeps_control_running(control):
+    control.config.options['backup_mode_entity'] = 'binary_sensor.backup'
+    for seconds in (0, 3600, 86400):
+        result = entity_poll(control, seconds, 'off', stamp=NOW)
+        assert result['control_status'] == 'active' and not result['control_paused']
+    control.battery.release.assert_not_called()
+
+
+def test_unknown_status_with_a_failed_device_read_keeps_the_remembered_intent(control):
+    control.config.options['backup_mode_entity'] = 'binary_sensor.backup'
+    assert entity_poll(control, 0, 'off')['control_status'] == 'active'
+    result = entity_poll(control, 5, 'unavailable', battery_error=TimeoutError('unavailable'))
+    assert result['armed'] and result['control_status'] == 'power_supply_waiting'
+    assert 'battery_read' in result['errors']
+    control.config.set_control_enabled.assert_called_once_with(True)
+    assert entity_poll(control, 45, 'off')['control_status'] == 'active'

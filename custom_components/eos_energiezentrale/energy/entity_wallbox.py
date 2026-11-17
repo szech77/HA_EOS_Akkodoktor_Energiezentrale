@@ -24,13 +24,20 @@ class EntityWallbox(WallboxDriver):
         self.zero_after = None
         self.phase_requested = None
         entity = self.ids["enable"]
-        # An unavailable or missing switch is not evidence of a stopped charge.
-        # Request the stop and require the entity itself to confirm "off".
-        if not state.enabled and self.ha.state(entity).get("state") == "off":
+        # A known "off" in the polled snapshot needs no command (readers report
+        # status "unknown" unless the switch is on/off). An unavailable or missing
+        # switch is no evidence of a stopped charge: re-check it live, request the
+        # stop and require the entity itself to confirm "off".
+        if not state.enabled and state.status not in {"unknown", "unavailable", ""}:
+            return
+        current = self.ha.state(entity).get("state")
+        if current == "off":
             return
         self.ha.set(entity, False)
         self._operation_context={'stage':'stop_confirmation','parameter':'enable'}
-        confirmed_state(self.ha, entity, lambda row: row.get("state") == "off")
+        # An unavailable entity rarely recovers within seconds; keep polls short.
+        confirmed_state(self.ha, entity, lambda row: row.get("state") == "off",
+                        timeout=5 if current == "on" else 1)
 
     def _phase(self, phases, state):
         self._operation_context={'stage':'phase_feedback','parameter':'phase_feedback' if self.ids.get('phase_feedback') else 'phases'}

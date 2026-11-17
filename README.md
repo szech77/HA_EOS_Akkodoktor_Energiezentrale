@@ -583,9 +583,12 @@ gespeichert ist, die Integration aber noch auf gültige Eingangsdaten und einen
 aktuellen EOS-Speicherplan wartet. Anschließend setzt sie die Regelung selbstständig fort.
 Nach einem unsauberen Ende können Geräte noch die letzten Vorgaben halten. Sind
 Speicher und Wallbox bereits lesbar, fehlen aber EOS-Plan oder Messwerte, werden
-sie während des Wartens freigegeben und die Wallbox pausiert. Fehlgeschlagene
-Freigaben bleiben sichtbar und werden erneut versucht. Ein Ausschalten vor dem
-Wiederanlauf gibt die Geräte ebenfalls frei.
+sie während des Wartens freigegeben und die Wallbox pausiert. Ist nur der Speicher
+lesbar, wird er allein freigegeben und die Wallbox folgt, sobald sie lesbar ist.
+Bei mehreren Fahrzeugen gibt ein noch wartendes Fahrzeug nur seine eigene Wallbox
+frei. Fehlgeschlagene Freigaben bleiben sichtbar und werden erneut versucht. Ein
+Ausschalten vor dem Wiederanlauf versucht die Freigabe sofort und wiederholt sie
+in jedem Zyklus, bis die Geräte sie bestätigen.
 
 Ein bewusst ausgeschalteter Schalter bleibt aus. Ein Regelfehler deaktiviert die
 Steuerung ebenfalls dauerhaft; zur Wiederaufnahme muss sie ausdrücklich aktiviert
@@ -605,7 +608,7 @@ nicht automatisch als ausgeschaltetes Gerät behandelt.
 Die Frischegrenzen für die Regelung betragen 45 Sekunden für PV und Netz,
 120 Sekunden für Haus-, Wärmepumpen-, Wallbox- und Speicherleistungen und
 3600 Sekunden für den Preis. Der Speicher-SoC wird ebenfalls mit 120 Sekunden
-geprüft. Maßgeblich ist die letzte Meldung, auch wenn der Zahlenwert gleich bleibt.
+geprüft, der Fahrzeug-SoC mit 36 Stunden. Maßgeblich ist die letzte Meldung, auch wenn der Zahlenwert gleich bleibt.
 Für PV-Leistung von **0 bis einschließlich 2 W** gilt eine Ausnahme von
 **12 Stunden**, weil einige Sensoren nachts kleine Restwerte melden und keine
 neuen Meldungen senden. Werte in kW werden vorher in Watt umgerechnet. Dies gilt ebenfalls für

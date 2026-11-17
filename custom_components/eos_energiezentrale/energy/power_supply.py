@@ -25,6 +25,26 @@ def supply_view(value, now):
             'sample':value.sample.isoformat() if value and value.sample else None}
 
 
+def requires_pause(value, now, options, states):
+    """Pause control for backup and for a supported status that is not grid.
+
+    Device-reported status is timestamped, so a stale or missing value is no
+    evidence of grid operation. A configured HA entity keeps an unchanged state
+    without new reports; its explicit grid state therefore does not pause
+    running control, while unavailable or unexpected states do. Recovery from
+    a pause still needs a fresh grid report (see Controller.pause_for_backup).
+    """
+    mode = supply_view(value, now)['state']
+    if mode != 'unknown':
+        return mode == 'backup'
+    entity = options.get('backup_mode_entity', '')
+    if not entity:
+        return True
+    state = states.get(entity, {}).get('state')
+    inactive = options.get('backup_inactive_state', 'off')
+    return not (isinstance(state, str) and state.casefold() == inactive.casefold())
+
+
 def entity_supply(row, now, active='on', inactive='off'):
     state = row.get('state')
     mode = ('backup' if state.casefold() == active.casefold() else

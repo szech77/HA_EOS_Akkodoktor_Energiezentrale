@@ -238,3 +238,29 @@ def test_sensor_picker_can_be_cleared_and_accepts_binary_sensor():
     options = {**DEFAULTS, 'backup_mode_entity':'binary_sensor.previous'}
     assert schema_for('sensors', options)({'backup_mode_entity':''})['backup_mode_entity'] == ''
     assert schema_for('sensors', DEFAULTS)({'backup_mode_entity':'binary_sensor.backup'})['backup_mode_entity'] == 'binary_sensor.backup'
+
+
+@pytest.mark.parametrize('state,stamp,expected', [
+    ('off', NOW-timedelta(days=3), False),   # Explicit unchanged HA grid state.
+    ('off', NOW, False),
+    ('on', NOW, True),
+    ('on', NOW-timedelta(days=3), True),     # Stale backup is still no grid evidence.
+    ('unavailable', NOW, True),
+    ('unexpected', NOW, True),
+    (None, None, True),
+])
+def test_configured_entity_pauses_unless_it_explicitly_reports_grid(state, stamp, expected):
+    from custom_components.eos_energiezentrale.energy.power_supply import requires_pause
+    options = {**DEFAULTS, 'backup_mode_entity':'binary_sensor.backup'}
+    states = {} if state is None else {'binary_sensor.backup':{
+        'state':state, 'last_reported':stamp.isoformat()}}
+    assert requires_pause(configured_supply(options, states, NOW), NOW, options, states) is expected
+
+
+@pytest.mark.parametrize('value,expected', [
+    (None, False), (PowerSupplyReading('grid', NOW), False), (PowerSupplyReading('backup', NOW), True),
+    (PowerSupplyReading('grid', NOW-timedelta(seconds=120)), True), (PowerSupplyReading('unknown', None), True),
+])
+def test_device_reported_status_pauses_unless_fresh_grid(value, expected):
+    from custom_components.eos_energiezentrale.energy.power_supply import requires_pause
+    assert requires_pause(value, NOW, dict(DEFAULTS), {}) is expected

@@ -254,3 +254,27 @@ def test_stop_is_confirmed_by_the_switch_and_an_off_switch_needs_no_command():
     assert ha.rows['input_boolean.ev_enable']['state']=='off'
     box.pause(box.read(ha.rows,NOW))
     assert len(ha.commands)==1
+
+
+class CountingHA(EntityHA):
+    def __init__(self,rows): super().__init__(rows);self.reads=0
+    def state(self,entity): self.reads+=1;return super().state(entity)
+
+
+def test_a_stop_of_a_wallbox_known_to_be_off_needs_no_live_query():
+    params,ha=generic_wallbox()
+    ha=CountingHA(ha.rows)
+    box=GenericWallbox(ha,params)
+    box.pause(box.read(ha.rows,NOW))
+    assert ha.reads==0 and ha.commands==[]
+
+
+def test_an_unavailable_switch_is_confirmed_briefly_to_keep_polls_short():
+    params,ha=generic_wallbox()
+    ha=StuckSwitchHA(ha.rows)
+    box=GenericWallbox(ha,params)
+    ha.rows['input_boolean.ev_enable']=row('unavailable')
+    with patch('custom_components.eos_energiezentrale.energy.entity_wallbox.confirmed_state',
+               side_effect=ValueError('unconfirmed')) as confirm,pytest.raises(ValueError):
+        box.pause(box.read(ha.rows,NOW))
+    assert confirm.call_args.kwargs['timeout']==1

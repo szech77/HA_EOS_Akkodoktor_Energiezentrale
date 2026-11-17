@@ -334,3 +334,29 @@ def test_restored_fleet_intent_owns_every_wallbox_and_explicit_off_releases_all(
         assert not any(child.owned for _, child, _ in app.controllers)
     finally:
         case.doCleanups()
+
+
+def test_waiting_primary_vehicle_never_releases_a_vehicle_that_already_regulates():
+    case = FleetRequirements()
+    try:
+        directory = case.enterContext(temporary_project_directory())
+        opts = {**DEFAULTS, "vehicles":json.dumps(definitions()), "heat_entity":"", "phase_wait_s":10}
+        ha = LocalHA(opts)
+        create_controller(ha, opts, directory).set_armed(True)
+        app = create_controller(ha, opts, directory)
+        app.config.eos = Mock()
+        app.config.eos.plan.return_value = {"generated_at":NOW.isoformat(),"instructions":[instruction(NOW,"NON_EXPORT")]+[
+            {**instruction(NOW,"NON_EXPORT"),"resource_id":row["resource"]} for row in definitions()]}
+        app.config.eos.solution.return_value = {}
+        app.battery_driver.apply = Mock()
+        app.battery_driver.release = Mock()
+        ha.rows["number.first_phases"]["state"] = "unavailable"  # Primary stays in the restore gate.
+        first, second = (child for _, child, _ in app.controllers)
+        for seconds in (0, 5, 10):
+            app.tick(NOW+timedelta(seconds=seconds), seconds)
+            assert second.owned  # Regulating vehicle keeps its wallbox and the storage.
+            assert first.restore_pending
+        app.battery_driver.release.assert_not_called()
+        assert not any(entity.startswith("switch.second") and value is False for entity, value in ha.writes)
+    finally:
+        case.doCleanups()

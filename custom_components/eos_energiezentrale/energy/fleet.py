@@ -13,7 +13,7 @@ from .history import History
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
-from .power_supply import configured_supply, supply_view
+from .power_supply import configured_supply, requires_pause
 
 SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
                            'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w',
@@ -200,12 +200,13 @@ class FleetController(Controller):
             self.backup_paused=True
         from .measurement_sources import resolve_sources
         supply=configured_supply(opts,rows,now)
-        if supply_view(supply,now)['state']=='backup':
+        # Same latch order as Controller.tick: a configured status before reads.
+        if opts.get('backup_mode_entity') and requires_pause(supply,now,opts,rows):
             self.backup_paused=True
         battery=self.read_control_input(self.battery_driver,rows,now,'battery_read')
         if not opts.get('backup_mode_entity'):
             supply=battery.power_supply
-        if supply_view(supply,now)['state']=='backup':
+        if requires_pause(supply,now,opts,rows):
             self.backup_paused=True
         for _,app,_ in self.controllers:
             if self.backup_paused:
@@ -335,6 +336,25 @@ class FleetController(Controller):
             if command.net_demand_w is not None and required:
                 command=replace(command,net_demand_w=max(command.net_demand_w,required),required_discharge_w=required)
             self.battery_driver.apply(command,rows)
+
+    def release_battery(self,states):
+        self.battery_driver.release(states)
+
+    def release_until_ready(self,states,now,*,pause_wallbox=True):
+        """While another vehicle already regulates its wallbox and the shared
+        battery, a waiting primary vehicle releases only its own wallbox."""
+        if not any(app.owned for _,app,_ in self.controllers if app is not self):
+            return Controller.release_until_ready(self,states,now,pause_wallbox=pause_wallbox)
+        if not pause_wallbox:
+            return
+        self.control_step='restore_release'
+        self.targets[self.controllers[0][0]]=0
+        try:
+            Controller.release(self,states,now)  # MeterOnlyBattery: no battery command.
+        except (OSError,ValueError) as error:
+            self.record_failure('release',error)
+        else:
+            self.errors.pop('release',None)
 
     def release(self,states,now,*,pause_wallbox=True):
         errors=[]

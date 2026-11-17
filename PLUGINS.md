@@ -14,12 +14,15 @@ der Dauer des Notstrombetriebs. Nach bestätigter Netzwiederkehr und sobald die
 erforderlichen Messwerte und ein gültiger Plan vorliegen, läuft die Steuerung
 automatisch weiter. Ein manuelles Ausschalten während der Pause bleibt erhalten.
 Unbekannter/veralteter Status nach erkanntem Notstrom beendet die Pause nicht.
-Ist eine Statusquelle konfiguriert oder meldet ein Gerät den Netzbetriebsstatus,
-pausiert ein nicht verfügbarer, veralteter oder fehlender Status die Steuerung
-ebenfalls wie Notstrom, auch im vorherigen Netzbetrieb und beim Start. Das Panel
-zeigt dann **Steuerung pausiert · warte auf bestätigte Netzwiederkehr** und die
-Warnung „Netzbetriebsstatus unbekannt“; erst ein frischer Netzbetriebsstatus hebt
-die Pause auf.
+Meldet ein Gerät den Netzbetriebsstatus, pausiert ein veralteter oder fehlender
+Status die Steuerung ebenfalls wie Notstrom, auch im vorherigen Netzbetrieb und
+beim Start. Bei einer konfigurierten HA-Statusentität pausieren nicht verfügbare
+oder unerwartete Zustände; ein unverändert gemeldeter Netzbetriebszustand hält den
+laufenden Betrieb auch ohne neue Meldung aufrecht, weil HA unveränderte Zustände
+nicht erneut melden muss. Das Panel zeigt in der Pause **Steuerung pausiert ·
+warte auf bestätigte Netzwiederkehr** und die Warnung „Netzbetriebsstatus
+unbekannt“. Erst ein frischer Netzbetriebsstatus hebt die Pause auf. Lesefehler
+von Speicher oder Wallbox während dieser Pause schalten die Steuerung nicht aus.
 Nicht bestätigte Freigaben bleiben sichtbar und werden vor dem Wiederanlauf
 erneut versucht. Dies gilt auch für mehrere Wallboxen mit gemeinsamem Speicher.
 
@@ -524,7 +527,8 @@ Werte. Die go-e-Ladelogik aktualisiert ihre Ergebnisse etwa einmal pro Sekunde;
 das Plugin wartet begrenzt auf die Bestätigung. Jede HTTP-Anfrage endet spätestens
 2 Sekunden nach ihrer Inaktivitätsfrist (normal 3 Sekunden), auch wenn das Gerät
 Antwortdaten nur tröpfchenweise sendet. Eine noch offene abgebrochene Anfrage lässt
-weitere Anfragen an dieses Gerät sofort scheitern. Vor dem Einschalten werden
+weitere Abfragen an dieses Gerät sofort scheitern; ein Stoppbefehl (`frc=1`) wird
+trotzdem gesendet. Vor dem Einschalten werden
 Kabel-/Adaptergrenzen, Fahrzeuganwesenheit und Phasen erneut geprüft. Strom wird
 vor Freigabe gesetzt. Eine fehlgeschlagene Vorgabe löst einen bestätigten
 Pauseversuch aus; nicht bestätigte Pausen bleiben Steuerfehler.
@@ -626,8 +630,9 @@ Ladefreigaben. Auch bei ausgefallener Messwertabfrage wird beim Stoppen eine
 unabhängige, bestätigte Pause über `/control` versucht.
 Jede Anfrage hat neben 3 Sekunden Inaktivitätsfrist eine Gesamtfrist von
 5 Sekunden, auch bei langsam tröpfelnden Antworten. Solange eine abgebrochene
-Anfrage noch offen ist, scheitern weitere Anfragen an dasselbe Gerät sofort als
+Anfrage noch offen ist, scheitern weitere Abfragen an dasselbe Gerät sofort als
 Gerätefehler; Abfragen, Ausschalten und das Entladen der Integration werden dadurch nicht blockiert.
+Ein Stoppbefehl wird trotzdem gesendet; dafür ist eine zusätzliche Anfrage reserviert.
 
 Die optionale Phasenumschaltung verwendet nur 1 und 3 Phasen. Sie pausiert zuerst,
 wartet auf zwei neue Nullleistungsmessungen mit mindestens drei Sekunden Abstand,
@@ -674,7 +679,10 @@ Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:
 Bei reiner Steckerkennung wird `charging` aus Ladefreigabe und gemessener Leistung
 abgeleitet. Ein Stopp gilt erst als erfolgreich, wenn `enable` den Zustand `off`
 meldet. Bei nicht verfügbarer oder fehlender Ladefreigabe wird der Stopp trotzdem
-angefordert; ohne Bestätigung bleibt er ein sichtbarer Steuerfehler. Bei Helfern müssen eigene HA-Automationen die Befehle zur Hardware
+angefordert; ohne Bestätigung bleibt er ein sichtbarer Fehler. Ist die Wallbox
+dabei nicht erreichbar, wird der Stopp in jedem Zyklus wiederholt, ohne die
+Steuerung auszuschalten; eine erreichbare Wallbox ohne Stoppbestätigung bleibt ein
+Steuerfehler. Bei Helfern müssen eigene HA-Automationen die Befehle zur Hardware
 weitergeben. Die Messsensoren müssen echte Rückmeldungen liefern. Die Rückmeldung
 eines Helfers bestätigt nur dessen Zustand, nicht den Zustand der Hardware.
 Der Phasenwechsel wartet weiterhin auf deaktivierte Ladung, neue Nullleistungsmessungen

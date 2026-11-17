@@ -15,17 +15,15 @@ from .display import DisplayValues
 from .presentation import daily_pv_forecast, heat_utilization, power_references, weather_display
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
-from .measurement_sources import resolve_sources
+from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
 from .status import failure_details
 from .pv_support import PVSupport
 from .vehicle_projection import projected_vehicle_soc
 from .eos_status import EOSRunStatus
 from .pv_availability import PVAvailability
-from .power_supply import configured_supply, supply_view
+from .power_supply import configured_supply, requires_pause, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
-
-CAR_SOC_MAX_AGE_S = 36 * 3600
 
 
 class Controller:
@@ -95,6 +93,7 @@ class Controller:
         self.external_vehicle_sync = False
         self.last_vehicle_sync = -1000
         self.pv_support = PVSupport()
+        self.stop_unconfirmed = False
 
     def remember_control(self, enabled):
         store = getattr(self.config, "set_control_enabled", None)
@@ -150,25 +149,62 @@ class Controller:
         self.phase_target = None
         self.candidate = None
 
-    def release_until_ready(self, states, now):
-        """Return devices to autonomous operation while restored control waits."""
+    def release_battery(self, states):
+        self.config.battery.release(states)
+
+    def release_until_ready(self, states, now, *, pause_wallbox=True):
+        """Return devices to autonomous operation while restored control waits.
+
+        Without a readable wallbox only the battery is released; the wallbox
+        stays owned, so its release is retried once it reports its state.
+        """
         if not self.owned:
             return
         self.control_step = 'restore_release'
         try:
-            self.release(states, now)
+            if pause_wallbox:
+                self.release(states, now)
+            else:
+                self.release_battery(states)
         except (OSError, ValueError) as error:
             # Keep the intent; retry on the next poll and keep the failure visible.
             self.record_failure('release', error)
         else:
             self.errors.pop('release', None)
 
+    def retry_release(self, states, now):
+        """Devices still owned while disarmed: an earlier release failed."""
+        if self.armed or not self.owned:
+            return
+        self.control_step = 'release_retry'
+        try:
+            self.release(states, now)
+        except (OSError, ValueError) as error:
+            self.record_failure('release', error)
+        else:
+            self.errors.pop('release', None)
+
+    def device_readiness(self, states, battery, box):
+        """Whether battery and wallbox report their control state.
+
+        Returns (battery, wallbox, switch): ``switch`` is False only for a
+        configured enable entity without an explicit on/off state.
+        """
+        ids = getattr(self.config.battery, "ids", {})
+        mode = ids.get("mode") if isinstance(ids, Mapping) else None
+        battery_ready = battery.soc is not None and not (
+            mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"})
+        ids = getattr(self.config.wallbox, "ids", {})
+        enable = ids.get("enable") if isinstance(ids, Mapping) else None
+        switch = not enable or states.get(enable, {}).get("state") in {"on", "off"}
+        return battery_ready, switch and box.status not in {"", "unknown", "unavailable"}, switch
+
     def pause_for_backup(self, states, now, box):
         """Retain user intent until fresh grid status and confirmed cleanup."""
         mode = supply_view(self.power_supply, now)['state']
-        # A configured but unavailable, stale or failed status is no evidence of
-        # grid operation: pause like backup until a fresh grid report arrives.
-        if mode in ('backup', 'unknown'):
+        # A supported status that is not grid operation pauses like backup until
+        # a fresh grid report arrives (see requires_pause).
+        if requires_pause(self.power_supply, now, self.config.options, states):
             self.backup_paused = True
         if not self.backup_paused:
             return False
@@ -416,8 +452,6 @@ class Controller:
             return False
         options = self.input_options
         entity = options["car_soc_entity"]
-        # Unchanged vehicle values may legitimately keep their timestamp for a
-        # day; a report older than this is no basis for charging decisions.
         raw = reading(states, entity, now, "soc", CAR_SOC_MAX_AGE_S)
         if raw is not None:
             raw *= 100 if options["car_soc_scale"] == "factor" else 1
@@ -511,7 +545,26 @@ class Controller:
                 self.vehicle_profile_confirmed = profile
                 self.errors.pop('vehicle_limits', None)
 
+    def stop_idle_wallbox(self, box):
+        """Stop a wallbox that must not charge, tolerating an unreachable one.
+
+        An unreachable wallbox (status unknown) cannot be confirmed stopped. Its
+        failed stop stays a visible error and is retried every poll, but it no
+        longer turns control off; no charge command is issued meanwhile.
+        A reachable wallbox that does not confirm the stop remains a control error.
+        """
+        try:
+            self.config.wallbox.pause(box)
+        except (OSError, ValueError) as error:
+            if box.status not in {"", "unknown", "unavailable"}:
+                raise
+            self.record_failure('wallbox_stop', error)
+            self.stop_unconfirmed = True
+        else:
+            self.commanded_car_w = 0
+
     def control_vehicle(self, box, live, planned, pv, now, clock, states):
+        self.stop_unconfirmed = False
         try:
             self.regulate_car(box, live, planned, pv, now, clock, states)
         except (OSError, ValueError) as error:
@@ -533,7 +586,8 @@ class Controller:
                 self.errors.pop('wallbox_stop', None)
         else:
             self.errors.pop('wallbox', None)
-            self.errors.pop('wallbox_stop', None)
+            if not self.stop_unconfirmed:
+                self.errors.pop('wallbox_stop', None)
 
     def tick(self, now, clock):
         self.control_step = "read_inputs"
@@ -548,14 +602,16 @@ class Controller:
         opts, daily = self.config.options, self.config.daily
         self.power_supply = (configured_supply(opts, states, now) if opts.get('backup_mode_entity') else
                              PowerSupplyReading('unknown', None) if self.power_supply is not None else None)
-        if supply_view(self.power_supply, now)['state'] == 'backup':
+        # A configured status is known before any device read: latch first, so a
+        # read failure during an unknown status keeps the remembered intent.
+        if opts.get('backup_mode_entity') and requires_pause(self.power_supply, now, opts, states):
             self.backup_paused = True
         battery = self.read_control_input(self.config.battery, states, now, 'battery_read')
         if not opts.get('backup_mode_entity') and battery.power_supply is not None:
             self.power_supply = battery.power_supply
         # Latch before other reads: a later missing status can never imply grid
-        # recovery after backup has been positively observed.
-        if supply_view(self.power_supply, now)['state'] == 'backup':
+        # recovery after backup or an unknown status has been observed.
+        if requires_pause(self.power_supply, now, opts, states):
             self.backup_paused = True
         box = self.read_control_input(self.config.wallbox, states, now, 'wallbox_read')
         self.update_vehicle(box, now, clock)
@@ -609,6 +665,7 @@ class Controller:
         if minute != self.last_minute:
             self.history.write(now, live)
             self.last_minute = minute
+        self.retry_release(states, now)
         if self.pause_for_backup(states, now, box):
             return
         if not self.armed:
@@ -619,14 +676,7 @@ class Controller:
             # Keep the remembered switch on but issue no regulation commands until
             # ready. Devices which already report their control state may still
             # hold commands from before an unclean stop, so release them meanwhile.
-            ids = getattr(self.config.battery, "ids", {})
-            mode = ids.get("mode") if isinstance(ids, Mapping) else None
-            battery_reachable = battery.soc is not None and not (
-                mode and states.get(mode, {}).get("state") in {None, "", "unknown", "unavailable"})
-            ids = getattr(self.config.wallbox, "ids", {})
-            enable = ids.get("enable") if isinstance(ids, Mapping) else None
-            switch_known = not enable or states.get(enable, {}).get("state") in {"on", "off"}
-            wallbox_reachable = switch_known and box.status not in {"", "unknown", "unavailable"}
+            battery_reachable, wallbox_reachable, switch_known = self.device_readiness(states, battery, box)
             ready = (battery_order is not None and battery_reachable and switch_known
                      and all(live[key] is not None for key in
                              ("solar", "grid", "battery_charge", "battery_discharge"))
@@ -634,8 +684,8 @@ class Controller:
                           (wallbox_reachable and box.watts is not None
                            and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)))
             if not ready:
-                if battery_reachable and (wallbox_reachable or not car_enabled):
-                    self.release_until_ready(states, now)
+                if battery_reachable:
+                    self.release_until_ready(states, now, pause_wallbox=wallbox_reachable or not car_enabled)
                 return
             self.restore_pending = False
             self.backup_paused = self.backup_pause_applied = False
@@ -745,8 +795,7 @@ class Controller:
         if (not box.plugged or box.phases is None or box.amps is None or not box.step or not box.maximum
                 or box.watts is None or live["grid"] is None or live["battery_discharge"] is None
                 or (pv and live["solar"] is None) or (not pv and planned <= 0)):
-            driver.pause(box)
-            self.commanded_car_w = 0
+            self.stop_idle_wallbox(box)
             self.pv_session = False
             self.candidate = self.phase_target = None
             return
