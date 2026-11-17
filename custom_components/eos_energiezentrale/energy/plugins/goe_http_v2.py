@@ -145,7 +145,8 @@ class GoEHTTPv2(WallboxDriver):
 
     def _pause(self,state):
         self.zero_after=self.zero_sample=self.phase_requested=None
-        self._set(frc=1)
+        # A stop is still sent while an abandoned telemetry exchange is open.
+        with self.deadline.priority(): self._set(frc=1)
 
     def _phase(self,phases,state):
         fresh,data,reported,zero=self._observe(datetime.now(timezone.utc))

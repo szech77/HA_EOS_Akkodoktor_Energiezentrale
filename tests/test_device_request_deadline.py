@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 import socket
 from threading import Event, Thread
-from time import monotonic
+from time import monotonic, sleep
 from unittest.mock import patch
 
 import pytest
@@ -20,16 +20,16 @@ def trickling_device():
     stop = Event()
     listener = socket.create_server(('127.0.0.1', 0))
     listener.settimeout(.05)
-    workers = []
+    workers, paths = [], []
 
     def drip(connection):
         with connection:
             try:
-                connection.recv(4096)
+                paths.append(connection.recv(4096).split(b' ')[1].decode())
                 connection.sendall(b'HTTP/1.1 200 OK\r\n')
                 while not stop.wait(.05):
                     connection.sendall(b'X-Padding: a\r\n')
-            except OSError:
+            except (OSError, IndexError):
                 pass
 
     def accept():
@@ -45,7 +45,7 @@ def trickling_device():
     acceptor = Thread(target=accept, daemon=True)
     acceptor.start()
     try:
-        yield f'http://127.0.0.1:{listener.getsockname()[1]}', stop
+        yield f'http://127.0.0.1:{listener.getsockname()[1]}', stop, paths
     finally:
         stop.set()
         acceptor.join(timeout=2)
@@ -54,22 +54,28 @@ def trickling_device():
         listener.close()
 
 
-def wait_for(driver):
-    pending = driver.deadline._pending
-    if pending is not None:
-        pending.join(timeout=5)
-        assert not pending.is_alive()
+def settle(deadline):
+    end = monotonic() + 5
+    while deadline.open_exchanges and monotonic() < end:
+        sleep(.02)
+    assert deadline.open_exchanges == 0
+
+
+def charging_state():
+    from test_requirements import wallbox
+    return wallbox(watts=2000, status='charging', enabled=True)
 
 
 # go-e: 0.2 s inactivity timeout plus 0.2 s grace; NRGkick: 0.4 s total.
-@pytest.mark.parametrize('plugin,error,setting,poll', [
-    ('nrgkick_local', NRGkickAPIError, ('nrgkick_local.REQUEST_DEADLINE_S', .4), lambda driver: driver.read({}, NOW)),
+@pytest.mark.parametrize('plugin,error,setting,poll,stop_path', [
+    ('nrgkick_local', NRGkickAPIError, ('nrgkick_local.REQUEST_DEADLINE_S', .4),
+     lambda driver: driver.read({}, NOW), '/control?charge_pause=1'),
     ('goe_http_v2', GoEAPIError, ('goe_http_v2.REQUEST_GRACE_S', .2),
-     lambda driver: driver._status(timeout=.2)),
+     lambda driver: driver._status(timeout=.2), '/api/set?frc=1'),
 ])
-def test_trickled_response_cannot_hold_a_poll_or_the_stop_path_open(plugin, error, setting, poll):
+def test_trickled_response_is_bounded_and_a_stop_is_still_sent(plugin, error, setting, poll, stop_path):
     name, value = setting
-    with trickling_device() as (url, stop), patch(
+    with trickling_device() as (url, stop, paths), patch(
             f'custom_components.eos_energiezentrale.energy.plugins.{name}', value):
         driver = WALLBOX_DRIVERS[plugin](None, {'url': url})
         started = monotonic()
@@ -80,18 +86,31 @@ def test_trickled_response_cannot_hold_a_poll_or_the_stop_path_open(plugin, erro
             with pytest.raises(error):
                 poll(driver)
         assert monotonic() - started < 2
-        # The still open exchange blocks no further caller, e.g. a stop request.
+        # Further polls fail fast while the abandoned exchange is open ...
         started = monotonic()
         with pytest.raises(error):
-            driver.pause(charging_state())
+            driver._request('/control' if plugin == 'nrgkick_local' else '/api/status')
         assert monotonic() - started < .2
+        # ... but a stop still reaches the device; unconfirmed, it stays an error.
+        count = len(paths)
+        with pytest.raises(error):
+            driver.pause(charging_state())
+        assert stop_path in paths[count:]
         stop.set()
-        wait_for(driver)
+        settle(driver.deadline)
 
 
-def charging_state():
-    from test_requirements import wallbox
-    return wallbox(watts=2000, status='charging', enabled=True)
+def test_backend_requests_have_a_total_deadline():
+    from custom_components.eos_energiezentrale.energy import clients
+    with trickling_device() as (url, stop, _), patch.object(clients, 'BACKEND_DEADLINE_S', .3):
+        started = monotonic()
+        with pytest.raises(TimeoutError):
+            clients.request(url + '/v1/health')
+        assert monotonic() - started < 1
+        with pytest.raises(TimeoutError, match='still open'):
+            clients.request(url + '/v1/health')
+        stop.set()
+        settle(clients.backend_deadline(url))
 
 
 def test_deadline_returns_values_and_reraises_errors_in_the_caller():
@@ -101,7 +120,7 @@ def test_deadline_returns_values_and_reraises_errors_in_the_caller():
         deadline.run(lambda: (_ for _ in ()).throw(ValueError('bad')), 1)
 
 
-def test_deadline_fails_fast_while_an_abandoned_exchange_is_open_and_recovers():
+def test_abandoned_exchanges_are_bounded_with_one_reserved_for_priority_requests():
     deadline = RequestDeadline('test-request')
     release = Event()
     with pytest.raises(TimeoutError):
@@ -110,6 +129,13 @@ def test_deadline_fails_fast_while_an_abandoned_exchange_is_open_and_recovers():
     with pytest.raises(TimeoutError, match='still open'):
         deadline.run(lambda: 1, 1)
     assert monotonic() - started < .1
+    with deadline.priority():
+        assert deadline.run(lambda: 'stop', 1) == 'stop'
+        with pytest.raises(TimeoutError):
+            deadline.run(release.wait, .05)
+        with pytest.raises(TimeoutError, match='still open'):
+            deadline.run(lambda: 'stop', 1)
+    assert deadline.open_exchanges == 2
     release.set()
-    deadline._pending.join(timeout=2)
+    settle(deadline)
     assert deadline.run(lambda: 2, 1) == 2

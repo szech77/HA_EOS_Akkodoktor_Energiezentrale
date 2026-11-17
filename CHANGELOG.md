@@ -15,6 +15,11 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 - Einen konfigurierten oder vom Gerät gemeldeten, aber nicht verfügbaren, veralteten oder fehlenden Netzbetriebsstatus wie Notstrom behandeln: Speicher und Wallboxen freigeben, keine neuen Regelbefehle senden und erst nach frischem Netzbetriebsstatus fortsetzen, auch beim Start und im Mehrfahrzeugbetrieb. Der gespeicherte Steuerungswunsch bleibt erhalten.
 - Nach einem Neustart mit gespeicherter Steuerfreigabe die Geräte als möglicherweise noch angesteuert behandeln. Ausschalten vor dem Wiederanlauf gibt Speicher und alle Wallboxen frei. Sind die Geräte lesbar, fehlen aber EOS-Plan oder Messwerte, werden sie während des Wartens freigegeben; fehlgeschlagene Freigaben bleiben sichtbar und werden wiederholt.
 - Fahrzeug-SoC-Werte, deren letzte Meldung mehr als 36 Stunden zurückliegt, nicht mehr als Regelgrundlage oder Startwert der SoC-Schätzung verwenden und nach fünf Minuten ohne gültigen Wert als nicht verfügbar melden.
+- Einen nicht bestätigten Stopp einer nicht erreichbaren HA-Wallbox (Status unbekannt) als sichtbaren Fehler `wallbox_stop` melden und in jedem Zyklus wiederholen, statt die Steuerung dauerhaft auszuschalten. Bei unverfügbarer Ladefreigabe nur kurz auf die Bestätigung warten; eine bereits gemeldete Pause benötigt keine zusätzliche Abfrage. Erreichbare Wallboxen ohne Stoppbestätigung bleiben Steuerfehler.
+- Den ausdrücklich gemeldeten Netzbetrieb einer konfigurierten HA-Statusentität nicht mehr wegen eines alten Meldezeitpunkts als unbekannt pausieren. Nicht verfügbare oder unerwartete Zustände pausieren weiterhin; die Netzwiederkehr nach einer Pause verlangt weiterhin einen frischen Netzbetriebsstatus. Bei unbekanntem Status schalten gleichzeitige Lesefehler von Speicher oder Wallbox die Steuerung nicht mehr dauerhaft aus, auch im Mehrfahrzeugbetrieb.
+- Während der Wiederanlauf auf EOS oder Messwerte wartet, einen lesbaren Speicher auch bei noch nicht lesbarer Wallbox freigeben; die Wallbox wird freigegeben, sobald sie lesbar ist. Im Mehrfahrzeugbetrieb gibt ein noch wartendes Fahrzeug nur seine eigene Wallbox frei und pausiert keine bereits regelnde Wallbox mehr.
+- Nach dem Ausschalten fehlgeschlagene Gerätefreigaben in jedem Zyklus wiederholen, bis sie bestätigt sind.
+- Die Quelldiagnose bewertet den Fahrzeug-SoC mit derselben 36-Stunden-Grenze wie die Regelung, auch für Plugin-Werte.
 
 ### Breaking Changes
 
@@ -23,6 +28,8 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Lokale HTTP-Anfragen der Plugins `nrgkick_local` und `goe_http_v2` zusätzlich zur Socket-Inaktivitätsfrist mit einer Gesamtfrist begrenzen (NRGkick 5 s, go-e Inaktivitätsfrist plus 2 s). Tröpfelnd gesendete Header oder Antworten können Abfragen, Ausschalten und das Entladen der Integration nicht mehr über die Regelungssperre blockieren; solange eine abgebrochene Anfrage offen ist, scheitern weitere Anfragen an dasselbe Gerät sofort als Gerätefehler.
+- Stoppbefehle der Plugins `nrgkick_local` und `goe_http_v2` auch dann senden, wenn eine abgebrochene Abfrage noch offen ist; dafür ist genau eine zusätzliche Anfrage reserviert. Ohne Bestätigung bleibt der Stopp ein Fehler.
+- EOS-, InfluxDB- und Fronius-Solar-API-Anfragen zusätzlich zur Inaktivitätsfrist von 5 s mit einer Gesamtfrist von 30 s je Anfrage begrenzen. Solange eine abgebrochene Anfrage an denselben Dienst offen ist, scheitern weitere Anfragen dorthin sofort; so können auch verspätet abgeschlossene Konfigurationsschreibvorgänge keine neueren überholen.
 
 ## 0.19.0 - 2026-11-16
 

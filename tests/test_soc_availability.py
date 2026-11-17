@@ -129,3 +129,17 @@ def test_soc_report_beyond_the_age_limit_is_no_charging_basis_and_warns(control)
     assert control.app.soc == 40
     assert not warns(control.app.snapshot(now)['source_configuration'])
     control.box.charge.assert_called()
+
+
+def test_diagnostics_use_the_same_vehicle_soc_age_limit_as_control(control):
+    from custom_components.eos_energiezentrale.energy.measurement_sources import CAR_SOC_MAX_AGE_S
+    from test_requirements import state
+    for age, available in ((7200, True), (CAR_SOC_MAX_AGE_S + 1, False)):
+        rows = control.states(when=NOW)
+        rows['sensor.soc'] = state(.4, when=NOW - timedelta(seconds=age))
+        control.ha.states.return_value = rows
+        control.app.tick(NOW, 0)
+        source = control.app.snapshot(NOW)['source_configuration']['sources']['car_soc']
+        assert source['available'] is available
+        assert source['reason'] == (None if available else 'stale')
+        assert source['max_age_s'] == CAR_SOC_MAX_AGE_S

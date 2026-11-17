@@ -1,5 +1,6 @@
 """Bounded HTTP clients for Home Assistant, EOS and InfluxDB 1.x."""
 import base64
+from contextlib import contextmanager
 import json
 import logging
 import re
@@ -21,23 +22,46 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class RequestDeadline:
-    """Bound a complete device exchange, including slow headers and bodies.
+    """Bound a complete HTTP exchange, including DNS, slow headers and bodies.
 
     Socket timeouts only limit inactivity: a peer sending a byte shortly before
     each timeout could otherwise hold a poll and the control lock for hours.
-    The exchange runs in a daemon worker; after the deadline the caller fails
-    immediately. While an abandoned exchange is still open, further requests to
-    the same device fail fast instead of accumulating workers.
+    urllib offers no per-receive deadline (unlike the Modbus client), so the
+    exchange runs in a daemon worker and the caller fails after the deadline.
+    Abandoned exchanges are counted per peer: once ``open_limit`` are still
+    open, further requests fail fast instead of accumulating workers. Inside
+    ``priority()`` one additional exchange is allowed, so a stop request is
+    still sent while an abandoned poll is open.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, open_limit=1):
         self.name = name
-        self._pending = None
+        self.open_limit = open_limit
+        self._abandoned = []
+        self._guard = Lock()
+        self._priority = 0
+
+    @property
+    def open_exchanges(self):
+        with self._guard:
+            self._abandoned = [worker for worker in self._abandoned if worker.is_alive()]
+            return len(self._abandoned)
+
+    @contextmanager
+    def priority(self):
+        with self._guard:
+            self._priority += 1
+        try:
+            yield
+        finally:
+            with self._guard:
+                self._priority -= 1
 
     def run(self, function, seconds):
-        pending = self._pending
-        if pending is not None and pending.is_alive():
-            raise TimeoutError("Previous device request is still open")
+        with self._guard:
+            self._abandoned = [worker for worker in self._abandoned if worker.is_alive()]
+            if len(self._abandoned) >= self.open_limit + (1 if self._priority else 0):
+                raise TimeoutError("Previous request is still open")
         outcome = {}
 
         def exchange():
@@ -50,9 +74,9 @@ class RequestDeadline:
         worker.start()
         worker.join(max(0, seconds))
         if worker.is_alive():
-            self._pending = worker
-            raise TimeoutError("Device request exceeded its total deadline")
-        self._pending = None
+            with self._guard:
+                self._abandoned.append(worker)
+            raise TimeoutError("Request exceeded its total deadline")
         if "error" in outcome:
             raise outcome["error"]
         return outcome["value"]
@@ -60,10 +84,13 @@ class RequestDeadline:
 
 OPENER = build_opener(NoRedirect())
 MAX_RESPONSE = 8_000_000
+BACKEND_DEADLINE_S = 30  # Total EOS/InfluxDB/Fronius Solar API exchange; 5 s socket inactivity.
 PV_IDLE_MAX_AGE_S = 12 * 3600
 ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+\Z")
 _configuration_locks = WeakValueDictionary()
 _configuration_locks_guard = Lock()
+_backend_deadlines = {}
+_backend_deadlines_guard = Lock()
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -78,6 +105,16 @@ def configuration_lock(url):
             lock = RLock()
             _configuration_locks[key] = lock
         return lock
+
+
+def backend_deadline(url):
+    """One deadline per backend peer: an abandoned exchange (possibly a
+    configuration write) blocks further requests to that peer until it ends."""
+    parsed = urlsplit(url)
+    port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
+    key = (parsed.scheme.lower(), (parsed.hostname or "").lower(), port)
+    with _backend_deadlines_guard:
+        return _backend_deadlines.setdefault(key, RequestDeadline("eos-backend-request"))
 
 
 def base_url(value):
@@ -105,8 +142,10 @@ def request(url, *, method="GET", payload=None, headers=None):
     started = monotonic()
     _LOGGER.debug('Backend request started: operation=%s method=%s', operation, verb)
     try:
-        with OPENER.open(Request(url, data=data, headers=headers, method=method), timeout=5) as response:
-            body = response.read(MAX_RESPONSE + 1)
+        def exchange():
+            with OPENER.open(Request(url, data=data, headers=headers, method=method), timeout=5) as response:
+                return response.read(MAX_RESPONSE + 1)
+        body = backend_deadline(url).run(exchange, BACKEND_DEADLINE_S)
         if len(body) > MAX_RESPONSE:
             raise ValueError("Antwort zu groß")
         result = json.loads(body)

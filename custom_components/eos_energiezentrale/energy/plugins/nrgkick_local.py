@@ -163,7 +163,9 @@ class NRGkickLocal(WallboxDriver):
     def _pause(self, state):
         # Always send and confirm pause, even if the previous poll was unavailable.
         self.zero_after = self.zero_sample = self.phase_requested = None
-        self._set(charge_pause=1)
+        # A stop is still sent while an abandoned telemetry exchange is open.
+        with self.deadline.priority():
+            self._set(charge_pause=1)
 
     def _phase(self, phases, state):
         if self.phase_requested is not None:
