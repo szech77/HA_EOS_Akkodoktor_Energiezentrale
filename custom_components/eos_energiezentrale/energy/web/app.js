@@ -1162,7 +1162,7 @@ function renderView() {
   if (requested !== route) hideProbe();
   const vehicleRoute=requested.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===requested.slice(4));
   const usageRoute=billingRoute(requested);
-  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || ['settings','notices'].includes(requested) ? requested : 'overview';
+  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || ['settings','notices','pv'].includes(requested) ? requested : 'overview';
   document.querySelectorAll('[data-optional]').forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   const section=route.startsWith('car')?'car':['settings','notices'].includes(route)?route:'overview';
   document.querySelectorAll('nav a[data-route]').forEach(link=>{if(link.dataset.route===section)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
@@ -1170,16 +1170,18 @@ function renderView() {
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
   byId('notices').hidden = route !== 'notices';
+  byId('pv').hidden = route !== 'pv';
   updateSavebar();
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
   renderStatus(route);
+  const entered = route !== shownRoute;
   // Routes share their names with section ids; keep the status band in view after navigation.
   if (route !== shownRoute) { if (shownRoute !== null) window.scrollTo(0,0); else requestAnimationFrame(()=>window.scrollTo(0,0)); shownRoute = route; }
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();
+  else if (route === 'pv') {if (entered || (!forecastView && !forecastOpenFailure)) openPvView(); else forecastView?.update();}
   else if (route !== 'notices') detail(route);
-  forecastView?.update();
 }
 let connectionFailure=false;
 async function refresh() {
@@ -1224,22 +1226,24 @@ function ensureModule(file,ready){
 function ensureForecastModule(){
   return ensureModule('forecast.js',()=>typeof globalThis.EosForecast?.create==='function'?globalThis.EosForecast:null);
 }
-async function openWeatherForecast(){
-  const button=byId('flow-weather');
-  if(button.disabled)return;
-  button.disabled=true;forecastOpenFailure=false;
+let pvViewLoading=false;
+// The PV & weather page replaces the former weather dialog; failures stay a browser notice.
+async function openPvView(){
+  if(pvViewLoading)return;
+  pvViewLoading=true;forecastOpenFailure=false;
   try{
     const module=await ensureForecastModule();
-    if(!byId('weather-dialog')||!byId('forecast-close')||!byId('forecast-body'))throw requestError('asset_mismatch','interface');
-    forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
+    if(!byId('pv-strip')||!byId('pv-days')||!byId('pv-effects'))throw requestError('asset_mismatch','interface');
+    forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale,now:windowNow});
     forecastView.open();
   }catch{
     forecastOpenFailure=true;
   }finally{
-    button.disabled=false;render();
+    pvViewLoading=false;
+    if(forecastOpenFailure)render();
   }
 }
-byId('flow-weather').addEventListener('click',openWeatherForecast);
+byId('flow-weather').addEventListener('click',()=>{location.hash='#pv';});
 byId('vehicle-selector').addEventListener('change',()=>{vehicleFormKey=null;vehicleSettings();});
 form.elements.holiday_state.addEventListener('change',holidayFields);
 byId('add-charge-plan').addEventListener('click',()=>{

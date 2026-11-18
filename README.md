@@ -25,8 +25,8 @@ Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screens
 Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
 Energiefluss. Name und Wert stehen unter dem jeweiligen Symbol. Hat ein Gerät einen
 offenen Hinweis, trägt sein Symbol ein Warnzeichen; welcher Hinweis zu welchem
-Gerät gehört, legt das Backend fest. Ein Klick auf PV oder Speicher öffnet
-die Detailansicht, auf Netz die Auswertung Netz & Einspeisung, auf Haus und Wärmepumpe
+Gerät gehört, legt das Backend fest. Ein Klick auf PV oder das Wettersymbol öffnet
+**PV & Wetter**, auf den Speicher die Detailansicht, auf Netz die Auswertung Netz & Einspeisung, auf Haus und Wärmepumpe
 die Verbrauchsauswertung, auf das Auto die Fahrzeugseite und auf das EOS-Symbol
 in der Mitte die Gesamtbilanz. Der
 Link **Leistungsverlauf** unter dem Diagramm öffnet alle Leistungskurven.
@@ -1194,33 +1194,41 @@ ohne Wetterentität bleibt die Anzeige verborgen. Nicht verfügbare oder länger
 als eine Stunde nicht gemeldete Werte erscheinen als unbekannt, nicht als 0 °C.
 Die Wetteranzeige hat keinen Einfluss auf die Energieregelung oder EOS-Prognose.
 
-Ein Klick auf das **Wettersymbol** öffnet **Wetter & PV-Vorhersage**. Oben zeigt
-der Dialog Wetterlage, Temperatur und Niederschlagsmengen für die nächsten
-24 Stunden; darunter steht der PV-Forecast aus EOS mit erwartetem Ertrag und
-maximaler Leistung. Beide Diagramme haben denselben Zeitraum. Mit Maus, Antippen
-oder dem gemeinsamen Zeitschieber lassen sich die Werte zum selben Zeitpunkt
-ablesen; der Schieber ist auch per Tastatur bedienbar. Escape oder das Kreuz
-schließt den Dialog und gibt den Fokus an das Wettersymbol zurück.
+Ein Klick auf das **Wettersymbol** oder den PV-Knoten öffnet die Ansicht
+**PV & Wetter**. Oben stehen die aktuelle PV-Leistung, der heutige Ertrag, der
+erwartete Rest und die Prognose für morgen. Darunter folgen das aktuelle Wetter mit
+Bewölkung und der Vergleich „PV jetzt ≈ x % der Prognose“, eine stündliche Leiste bis
+zum Ende des nächsten Tages mit Wetter, Temperatur und Bewölkung über dem erwarteten
+PV-Ertrag je Stunde sowie Tageskarten für heute, morgen und übermorgen. Stunden ohne
+PV-Ertrag fasst das Backend zu einem Nachtblock mit Tiefsttemperatur zusammen;
+Stunden ohne PV-Prognose bleiben sichtbar und gelten nicht als Nacht. Antippen einer
+Stunde zeigt Wetter, Niederschlag, Regenwahrscheinlichkeit und PV-Ertrag. Die
+Tageskarten zeigen einen Erwartungswert, keine Spanne.
+
+**Was EOS daraus macht** fasst die nächsten 24 Stunden zusammen: deutlich weniger
+oder mehr Sonne morgen (unter 50 % bzw. über 150 % von heute), Speicher wird mit PV
+voll, Speicher lädt aus dem Netz (Zeitraum, Energie, Ø-Preis), Einspeisung von
+PV-Überschuss und Fahrzeuge, die aus dem Netz oder mit PV laden. Das Backend leitet
+diese Aussagen aus der EOS-Prognose und dem Ladeplan ab; jede Zeile führt zur
+passenden Ansicht. Links führen zu **Verlauf & Diagramme** (bisherige PV-Detailansicht)
+und zu **Netz & Einspeisung**.
 
 Die Wetterquelle muss die **stündliche** Home-Assistant-Aktion
 [`weather.get_forecasts`](https://www.home-assistant.io/integrations/weather/#action-weatherget_forecasts)
-unterstützen. Tagesprognosen werden nicht in Stunden umgerechnet. Abfragen erfolgen
-erst beim Öffnen bzw. Aktualisieren des Dialogs und werden fünf Minuten
-zwischengespeichert. Die ausgewählte Wetterentität wird nicht durch eine andere
-Quelle ersetzt. Temperaturwerte verwenden die HA-Einheit; Niederschlagsmengen
-werden in mm angezeigt, eine vorhandene Niederschlagswahrscheinlichkeit zusätzlich
-in der Detailauswahl. Unbekannte Werte bleiben Lücken, insbesondere bedeutet
-fehlender Niederschlag nicht 0 mm. Der PV-Bereich funktioniert auch bei einem
-Wetterfehler. Bei einer unvollständigen PV-Prognose beziehen sich Ertrag und
-Spitzenleistung nur auf die vorhandenen Intervalle; Nachtstunden zählen nur bei
-einer expliziten 0-W-Prognose als abgedeckt. Die Darstellung nutzt die konfigurierte
-Zeitzone und exakt 24 verstrichene Stunden, auch bei Zeitumstellungen.
+unterstützen. Tagesprognosen werden nicht in Stunden umgerechnet. Die Abfrage reicht
+72 Stunden voraus, erfolgt erst beim Öffnen der Ansicht oder nach einer neuen
+PV-Prognose und wird fünf Minuten zwischengespeichert. Die ausgewählte Wetterentität
+wird nicht durch eine andere Quelle ersetzt. Temperaturwerte verwenden die HA-Einheit;
+Niederschlagsmengen werden in mm angezeigt. Unbekannte Werte bleiben Lücken,
+insbesondere bedeutet fehlender Niederschlag nicht 0 mm. Die PV-Leiste funktioniert
+auch bei einem Wetterfehler; der Grund steht dann über der Leiste.
 
-Nach Updates lädt der Klick ein fehlendes Vorhersagemodul bei Bedarf mit der
-Version des laufenden Panels nach, auch wenn der Browser noch ein älteres
-Startskript verwendet. Schlägt das Nachladen fehl, bleibt die Energieübersicht
-benutzbar und der Klick kann wiederholt werden. Bei weiterhin unvollständigen
-UI-Dateien die Integration vollständig aktualisieren und die Oberfläche neu laden.
+Nach Updates lädt die Ansicht ein fehlendes Modul bei Bedarf mit der Version des
+laufenden Panels nach, auch wenn der Browser noch ein älteres Startskript verwendet.
+Schlägt das Nachladen fehl, bleibt die Oberfläche benutzbar, ein Browserhinweis
+erscheint und ein erneuter Aufruf der Ansicht versucht es wieder. Bei weiterhin
+unvollständigen UI-Dateien die Integration vollständig aktualisieren und die
+Oberfläche neu laden.
 
 ### Schutz der InfluxDB-Zugangsdaten
 

@@ -118,26 +118,6 @@ def measured_pv_energy(local, influx, now, zone):
     return watt_seconds / 3600000 if covered else None
 
 
-def next24_pv_forecast(rows, now):
-    from datetime import timedelta
-    end, cursor = now + timedelta(days=1), now
-    slots = []
-    for row in rows:
-        start, stop, watts = instant(row.get('time')), instant(row.get('end')), number(row.get('solar'))
-        if start is not None and stop is not None and type(row.get('solar')) in (int, float) and watts is not None and watts >= 0 and stop > start:
-            slots.append((start, stop, watts))
-    covered, energy, peak = 0, 0, None
-    for start, stop, watts in sorted(slots, key=lambda item:item[0]):
-        first, last = max(now, cursor, start), min(end, stop)
-        seconds = (last-first).total_seconds()
-        if seconds > 0:
-            covered += seconds
-            energy += watts * seconds / 3600000
-            peak = max(peak or 0, watts / 1000)
-            cursor = last
-    return {'kwh':energy if covered else None, 'peak':peak, 'complete':covered >= 86400, 'covered':covered*1000}
-
-
 def mode_timeline(data, rows, now):
     """Classify history gaps and plan validity before drawing the mode track."""
     from datetime import timedelta

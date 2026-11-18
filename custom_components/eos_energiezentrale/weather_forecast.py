@@ -16,14 +16,14 @@ def bounded(value, minimum, maximum):
     return value if value is not None and minimum<=value<=maximum else None
 
 
-def hourly_rows(raw, temperature_unit, precipitation_unit, now):
+def hourly_rows(raw, temperature_unit, precipitation_unit, now, hours=24):
     """Keep missing fields unknown; do not turn daily data into hourly points."""
     if not isinstance(raw,list): return []
     rows={}
     for row in raw[:512]:
         if not isinstance(row,dict): continue
         stamp=instant(row.get('datetime'))
-        if stamp is None or not now-timedelta(hours=1)<stamp<=now+timedelta(hours=24): continue
+        if stamp is None or not now-timedelta(hours=1)<stamp<=now+timedelta(hours=hours): continue
         temperature=number(row.get('temperature'))
         celsius=((temperature-32)*5/9 if temperature_unit=='°F' else temperature-273.15
                  if temperature_unit=='K' else temperature) if temperature is not None else None
@@ -33,7 +33,8 @@ def hourly_rows(raw, temperature_unit, precipitation_unit, now):
         condition=row.get('condition')
         rows[stamp]={'time':stamp.astimezone(timezone.utc).isoformat(),'temperature':temperature,
                      'condition':condition if isinstance(condition,str) and condition in WEATHER_CONDITIONS else 'unknown',
-                     'precipitation':rain,'precipitation_probability':bounded(row.get('precipitation_probability'),0,100)}
+                     'precipitation':rain,'precipitation_probability':bounded(row.get('precipitation_probability'),0,100),
+                     'cloud_coverage':bounded(row.get('cloud_coverage'),0,100)}
     stamps=sorted(rows)
     for index,stamp in enumerate(stamps):
         end=min(stamp+timedelta(hours=1),stamps[index+1]) if index+1<len(stamps) else stamp+timedelta(hours=1)
@@ -78,6 +79,7 @@ class WeatherForecast:
                     return {**result,'status':'unavailable','error_details':failure_details(error)}
                 fetched=datetime.now(timezone.utc).isoformat()
                 self.cached=(key,monotonic(),raw,fetched)
-            rows=hourly_rows(raw,unit,rain_unit,datetime.now(timezone.utc))
+            # The PV view shows today, tomorrow and the day after; the cache keeps one service call per 5 minutes.
+            rows=hourly_rows(raw,unit,rain_unit,datetime.now(timezone.utc),hours=72)
             return {**result,'rows':rows,'temperature_unit':unit if unit in {'°C','°F','K'} else '°C',
                     'status':'available' if rows else 'empty','fetched_at':fetched}

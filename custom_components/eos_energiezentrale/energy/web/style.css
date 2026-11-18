@@ -220,64 +220,6 @@
 #eos-energy-design .flow-footer {display:flex; justify-content:flex-end; padding-top:12px;}
 #eos-energy-design button.flow-weather {background:transparent;border:1px solid transparent;border-radius:8px;color:var(--ink);padding:4px 8px;min-height:44px;}
 #eos-energy-design button.flow-weather:hover,#eos-energy-design button.flow-weather:focus-visible {background:var(--surface2);border-color:var(--accent);}
-#eos-energy-design:has(#weather-dialog[open]) {overflow:hidden;}
-#eos-energy-design #weather-dialog {color:var(--ink);background:var(--bg);border:1px solid var(--edge);border-radius:14px;width:min(1080px,calc(100% - 28px));max-height:calc(100dvh - 28px);padding:clamp(12px,2.5vw,26px);overflow:auto;}
-#eos-energy-design #weather-dialog::backdrop {background:#000a;}
-#eos-energy-design .forecast-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
-#eos-energy-design .forecast-heading h2 {font-size:clamp(22px,3vw,30px);}
-#eos-energy-design #forecast-close {border:0;background:transparent;color:var(--ink);font-size:32px;min-width:44px;min-height:44px;border-radius:8px;}
-#eos-energy-design #forecast-close:hover {background:var(--surface2);}
-#eos-energy-design .forecast-subtitle {color:var(--dim);font-size:18px;}
-#eos-energy-design .forecast-range {color:var(--dim);margin:3px 0 16px;}
-#eos-energy-design .forecast-panel {border:1px solid var(--edge);background:var(--surface);border-radius:12px;padding:clamp(10px,2vw,18px);margin:12px 0;}
-#eos-energy-design .forecast-panel h3 {font-size:21px;margin:0;}
-#eos-energy-design .forecast-panel > p {margin:14px 0;}
-#eos-energy-design .forecast-summary {display:flex;flex-wrap:wrap;gap:8px;}
-#eos-energy-design .forecast-summary > div {border:1px solid var(--edge);border-radius:8px;padding:8px 12px;}
-#eos-energy-design .forecast-summary strong {display:block;font-size:21px;}
-#eos-energy-design .forecast-chart {display:grid;grid-template-columns:56px minmax(0,1fr);gap:6px 8px;margin-top:18px;}
-#eos-energy-design .forecast-plot {position:relative;min-width:0;touch-action:pan-y;}
-#eos-energy-design .forecast-plot > svg {display:block;width:100%;height:190px;overflow:visible;}
-#eos-energy-design .forecast-chart.weather .forecast-plot > svg {height:220px;}
-#eos-energy-design .forecast-plot path,#eos-energy-design .forecast-plot line {fill:none;vector-effect:non-scaling-stroke;}
-#eos-energy-design .forecast-y {display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;color:var(--dim);font-size:11px;white-space:nowrap;}
-#eos-energy-design .forecast-chart.weather .forecast-y {position:relative;}
-#eos-energy-design .forecast-chart.weather .forecast-y span {position:absolute;right:0;transform:translateY(-50%);}
-#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(1) {top:0;}
-#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(2) {top:37.5%;}
-#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(3) {top:75%;}
-#eos-energy-design .forecast-chart.weather .forecast-y span:nth-child(4) {top:82%;}
-#eos-energy-design .forecast-guide {stroke:var(--edge);stroke-width:1;}
-#eos-energy-design .forecast-temperature {stroke:var(--house);stroke-width:3;stroke-linejoin:round;}
-#eos-energy-design .forecast-rain {fill:var(--house);opacity:.65;}
-#eos-energy-design .forecast-plot .forecast-solar-area {fill:var(--solar);opacity:.25;}
-#eos-energy-design .forecast-solar-line {stroke:var(--solar);stroke-width:3;}
-#eos-energy-design .forecast-probe {stroke:var(--ink);stroke-width:1;stroke-dasharray:4 4;pointer-events:none;}
-#eos-energy-design .forecast-axis {grid-column:2;display:flex;justify-content:space-between;font-size:11px;color:var(--dim);}
-#eos-energy-design .forecast-axis span:first-child {transform:translateX(-15%);}
-#eos-energy-design .forecast-axis span:last-child {transform:translateX(15%);}
-#eos-energy-design .forecast-icons {display:flex;justify-content:space-between;margin:18px 0 0 64px;}
-#eos-energy-design .forecast-icons svg {width:30px;height:30px;fill:none;stroke:var(--solar);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
-#eos-energy-design .forecast-legend {display:flex;flex-wrap:wrap;gap:8px 22px;margin:12px 0 0 64px;color:var(--dim);font-size:12px;}
-#eos-energy-design .forecast-legend span::before {content:'';display:inline-block;width:18px;height:4px;margin-right:8px;vertical-align:middle;background:var(--house);}
-#eos-energy-design .forecast-legend .rain-key::before {height:10px;opacity:.65;}
-#eos-energy-design .forecast-tooltip {position:absolute;z-index:2;top:4px;pointer-events:none;white-space:nowrap;padding:5px 8px;border:1px solid var(--edge);border-radius:6px;background:var(--surface2);font-size:12px;}
-#eos-energy-design .forecast-selection {display:grid;gap:8px;margin:16px 0;}
-#eos-energy-design .forecast-selection label {display:grid;gap:8px;font-size:13px;color:var(--dim);}
-#eos-energy-design #forecast-hour {width:100%;min-height:30px;accent-color:var(--accent);}
-#eos-energy-design #forecast-selected {min-height:1.5em;font-size:13px;}
-#eos-energy-design .forecast-footer {display:flex;gap:8px 16px;flex-wrap:wrap;justify-content:space-between;align-items:center;color:var(--dim);font-size:12px;}
-#eos-energy-design #forecast-retry {border:1px solid var(--edge);border-radius:8px;min-height:44px;padding:7px 12px;background:var(--surface2);color:var(--ink);}
-@media(max-width:500px){
-  #eos-energy-design .forecast-chart {grid-template-columns:44px minmax(0,1fr);gap:6px;}
-  #eos-energy-design .forecast-icons,#eos-energy-design .forecast-legend {margin-left:50px;}
-  #eos-energy-design .forecast-icons svg {width:22px;height:22px;}
-  #eos-energy-design .forecast-icons span:nth-child(even) {display:none;}
-  #eos-energy-design .forecast-axis {font-size:9px;}
-  #eos-energy-design .forecast-summary {width:100%;}
-  #eos-energy-design .forecast-summary > div {flex:1;min-width:0;padding:8px;}
-  #eos-energy-design .forecast-summary strong {font-size:18px;}
-}
 #eos-energy-design .vehicle-inactive {
   opacity: .5;
   filter: grayscale(1);
@@ -534,3 +476,37 @@
   #eos-energy-design .goal-summary .goal-tags {grid-column:1/-1;}
   #eos-energy-design .cp-compare {grid-template-columns:minmax(0,1fr);}
 }
+/* PV & Wetter (redesign stage 7) */
+#eos-energy-design #pv {display:grid;grid-template-columns:minmax(0,1fr);gap:16px;}
+#eos-energy-design #pv[hidden] {display:none;}
+#eos-energy-design #pv .plan-panel {margin:0;}
+#eos-energy-design .wx-ico {width:28px;height:28px;flex:none;fill:none;stroke:var(--solar);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+#eos-energy-design .wx-now {display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--edge);}
+#eos-energy-design .wx-now .wx-ico {width:46px;height:46px;}
+#eos-energy-design .wx-now .temp {font-size:30px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;}
+#eos-energy-design .wx-now-text {display:grid;gap:2px;min-width:0;}
+#eos-energy-design .wx-now .meta {display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--dim);font-size:13px;}
+#eos-energy-design .wx-strip {display:flex;gap:2px;overflow-x:auto;padding:12px 0 4px;scrollbar-width:thin;}
+#eos-energy-design .wx-h {all:unset;box-sizing:border-box;flex:1 0 46px;display:grid;justify-items:center;gap:3px;padding:6px 2px;border-radius:8px;cursor:pointer;font-size:12px;text-align:center;}
+#eos-energy-design .wx-h:hover {background:var(--surface2);}
+#eos-energy-design .wx-h[aria-pressed="true"] {background:var(--surface2);outline:2px solid var(--ink);outline-offset:-2px;}
+#eos-energy-design .wx-h:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
+#eos-energy-design .wx-h .t {color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;}
+#eos-energy-design .wx-h .tmp,#eos-energy-design .wx-h .kwh {font-weight:650;font-variant-numeric:tabular-nums;}
+#eos-energy-design .wx-h .pvbar {width:16px;height:56px;display:flex;align-items:flex-end;background:var(--surface2);border-radius:4px;overflow:hidden;}
+#eos-energy-design .wx-h .pvbar i {display:block;width:100%;background:var(--solar);border-radius:4px 4px 0 0;}
+#eos-energy-design .wx-h .cc {color:var(--dim);font-size:11px;min-height:1.2em;}
+#eos-energy-design .wx-h.now {background:color-mix(in srgb,var(--solar) 10%,transparent);}
+#eos-energy-design .wx-gap {flex:0 0 auto;display:grid;place-items:center;align-content:center;padding:0 10px;color:var(--dim);font-size:11px;text-align:center;border-inline:1px dashed var(--edge);margin-inline:4px;}
+#eos-energy-design .wx-days {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;}
+#eos-energy-design .wx-day {border:1px solid var(--edge);border-radius:10px;padding:10px 12px;display:grid;gap:4px;min-width:0;}
+#eos-energy-design .wx-day .hd {display:flex;align-items:center;justify-content:space-between;gap:6px;}
+#eos-energy-design .wx-day b {font-size:14px;}
+#eos-energy-design .wx-day strong {font-size:18px;font-variant-numeric:tabular-nums;}
+#eos-energy-design .wx-day small {color:var(--dim);}
+#eos-energy-design .pv-links {display:flex;flex-wrap:wrap;gap:4px 20px;}
+@media(max-width:640px){
+  #eos-energy-design .wx-days {grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(150px,1fr);overflow-x:auto;scrollbar-width:thin;}
+}
+#eos-energy-design .pv-head h1 {margin:0;}
+#eos-energy-design .pv-head p {margin:4px 0 0;}

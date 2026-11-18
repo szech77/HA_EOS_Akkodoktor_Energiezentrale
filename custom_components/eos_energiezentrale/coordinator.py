@@ -20,7 +20,8 @@ from .energy.settings import changed_settings, settings_payload
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
 from .energy.charge_view import charge_plan
-from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline, node_problems, plan_events
+from .energy.pv_view import pv_effects, pv_hours, pv_now, weather_days
+from .energy.presentation import measured_pv_energy, mode_timeline, node_problems, plan_events
 from .weather_forecast import WeatherForecast
 
 _LOGGER = logging.getLogger(__name__)
@@ -131,8 +132,6 @@ class EnergyCoordinator(DataUpdateCoordinator):
             and row.get('kwh') is not None and measured is not None else row.get('kwh'),
             'includes_measured':index == 0 and row.get('kwh') is not None and measured is not None}
             for index, row in enumerate(result.get('pv_daily_forecast', []))]
-        result['pv_next24'] = next24_pv_forecast(result.get('forecast', []), now)
-        result['pv_next24_start'] = now.isoformat()
         result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], now)
         for vehicle in result.get('vehicles', []):
             vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
@@ -146,6 +145,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
             result['charge_plan'] = charge_plan(result, now, result.get('pv_price_ct'))
         for vehicle in result.get('vehicles', []):
             vehicle['charge_plan'] = charge_plan({'armed':result.get('armed'), **vehicle}, now, result.get('pv_price_ct'))
+        result['pv_now'] = pv_now(result, now)
+        result['pv_effects'] = pv_effects(result, now)
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])
         if result['control_status'] != self.control_status:
@@ -530,6 +531,11 @@ class EnergyCoordinator(DataUpdateCoordinator):
         if values or self.closing:
             raise ValueError('Invalid weather forecast request')
         result = await self.weather_forecast.async_read(self.app.config.options)
+        data, now = self.data or {}, datetime.now(timezone.utc)
+        # Pure in-memory presentation of already loaded data; no I/O in the event loop.
+        result['hours'] = pv_hours(data.get('forecast'), result['rows'], now, data.get('zone') or self.app.config.options['timezone'])
+        result['days'] = weather_days(result['rows'], data.get('pv_forecast_totals'), data.get('pv_today_kwh'), now,
+                                      data.get('zone') or self.app.config.options['timezone'])
         if result['status'] != 'available':
             self.report_notice('weather_forecast', result['status'], result.get('error_details'))
         else:

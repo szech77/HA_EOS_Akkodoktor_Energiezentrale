@@ -1378,7 +1378,11 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator,app=self.controller()
         with patch.object(coordinator.weather_forecast,'async_read',return_value={'status':'empty','rows':[]}) as read:
             connection=await self.invoke({'action':'weather_forecast'})
-            connection.send_result.assert_called_once_with(1,{'status':'empty','rows':[]})
+            connection.send_result.assert_called_once()
+            sent=connection.send_result.call_args.args[1]
+            # Without weather rows the PV strip still comes from the snapshot forecast; no weather is invented.
+            self.assertEqual((sent['status'],sent['rows'],sent['days']),('empty',[],[]))
+            self.assertTrue(sent['hours'] and all(item['condition'] is None for item in sent['hours']))
             read.assert_awaited_once_with(app.config.options)
             connection=await self.invoke({'action':'weather_forecast','values':{'entity_id':'weather.other'}})
             connection.send_error.assert_called_once()
