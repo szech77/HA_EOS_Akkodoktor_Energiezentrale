@@ -51,3 +51,16 @@ test('a stalled module request times out and re-enables the weather button',asyn
  await f.ctx.openWeatherForecast();
  assert.equal(f.failed(),true);assert.equal(f.ids['flow-weather'].disabled,false);
 });
+
+test('the status module is loaded with the app build version when a cached bootstrap omitted it',async()=>{
+ const f=fixture();
+ f.ctx.document.head.append=node=>{f.calls.scripts.push(node);queueMicrotask(()=>{f.ctx.EosStatus={band(){}};node.onload();});};
+ const ready=()=>typeof f.ctx.EosStatus?.band==='function'?f.ctx.EosStatus:null;
+ const loaded=await f.ctx.ensureModule('status.js',ready);
+ assert.equal(loaded,f.ctx.EosStatus);
+ assert.equal(f.calls.scripts[0].src,'https://ha.test/static/status.js?v=new-build');
+ await f.ctx.ensureModule('status.js',ready);assert.equal(f.calls.scripts.length,1);
+ // A file that loads but does not provide the module is reported by name.
+ const g=fixture();g.ctx.document.head.append=node=>queueMicrotask(()=>node.onload());
+ await assert.rejects(g.ctx.ensureModule('status.js',()=>null),error=>error.code==='asset_mismatch'&&error.asset==='status.js');
+});

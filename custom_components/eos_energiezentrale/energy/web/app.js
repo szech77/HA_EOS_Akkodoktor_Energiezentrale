@@ -863,27 +863,32 @@ async function refreshHistory() {
   finally { historyRefreshing = false; render(); }
 }
 let forecastView=null;
-let forecastModuleLoading=null,forecastOpenFailure=false;
-function ensureForecastModule(){
-  if(typeof globalThis.EosForecast?.create==='function')return Promise.resolve(globalThis.EosForecast);
-  if(!forecastModuleLoading){
-    // An older cached bootstrap may not know about this optional dependency.
-    const url=new URL('./forecast.js',location.href);
+let forecastOpenFailure=false;
+const moduleLoading=new Map();
+// bootstrap.js itself is requested without a build version, so a browser may run a cached older
+// bootstrap that does not know newer modules. Load such a module with this app's build version.
+function ensureModule(file,ready){
+  if(ready())return Promise.resolve(ready());
+  if(!moduleLoading.has(file)){
+    const url=new URL('./'+file,location.href);
     url.searchParams.set('v',new URL(appScriptUrl).searchParams.get('v')||String(Date.now()));
-    forecastModuleLoading=new Promise((resolve,reject)=>{
+    moduleLoading.set(file,new Promise((resolve,reject)=>{
       const script=document.createElement('script');let finished=false;
       const finish=error=>{
         if(finished)return;finished=true;clearTimeout(timer);script.remove();
-        if(error)reject(requestError('asset_mismatch','interface'));else resolve(globalThis.EosForecast);
+        if(error){const failure=requestError('asset_mismatch','interface');failure.asset=file;reject(failure);}else resolve(ready());
       };
       const timer=setTimeout(()=>finish(true),10000);
       script.src=url.href;
-      script.onload=()=>finish(typeof globalThis.EosForecast?.create!=='function');
+      script.onload=()=>finish(!ready());
       script.onerror=()=>finish(true);
       document.head.append(script);
-    }).catch(error=>{forecastModuleLoading=null;throw error;});
+    }).catch(error=>{moduleLoading.delete(file);throw error;}));
   }
-  return forecastModuleLoading;
+  return moduleLoading.get(file);
+}
+function ensureForecastModule(){
+  return ensureModule('forecast.js',()=>typeof globalThis.EosForecast?.create==='function'?globalThis.EosForecast:null);
 }
 async function openWeatherForecast(){
   const button=byId('flow-weather');
@@ -978,6 +983,7 @@ async function start() {
   if(!loaded||typeof loaded.locale!=='string'||!loaded.messages||typeof loaded.messages!=='object')throw requestError('language_invalid','language');
   language={locale:loaded.locale,messages:{...startupMessages[startupLanguage],...loaded.messages}};
   startupStage='view';
+  await ensureModule('status.js',()=>typeof globalThis.EosStatus?.band==='function'?globalThis.EosStatus:null);
   if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof globalThis.EosStatus?.band!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
     const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof globalThis.EosStatus?.band!=='function'?'status.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
   }
