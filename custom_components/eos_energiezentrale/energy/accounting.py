@@ -16,8 +16,10 @@ from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, 
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
             "charge_efficiency": .95, "discharge_efficiency": .95,
-            "capacity_wh": 11000.0, "initial_price_ct": None}
+            "capacity_wh": 11000.0, "initial_price_ct": None, "base_price_eur_month": 0.0}
 SOURCES = ("pv", "battery", "grid", "unknown")
+# Ledger rows besides consumers: grid export valued with the feed-in tariff, battery charging by origin.
+EXPORT, STORAGE = "export", "storage"
 
 
 def checked_settings(values):
@@ -29,7 +31,8 @@ def checked_settings(values):
             raise BackendError("Invalid accounting source: " + key, reason='invalid_type', fields=(key,))
     for key, low, high in (("pv_price_ct", -1000, 1000),
                            ("charge_efficiency", .1, 1), ("discharge_efficiency", .1, 1),
-                           ("capacity_wh", 100, 1000000), ("initial_price_ct", -1000, 1000)):
+                           ("capacity_wh", 100, 1000000), ("initial_price_ct", -1000, 1000),
+                           ("base_price_eur_month", 0, 1000)):
         value = result[key]
         if key == "initial_price_ct" and value is None:
             continue
@@ -333,6 +336,36 @@ class Accounting:
                 amount["cost_unknown_kwh"] += unknown
                 amount['estimated_kwh']+=estimated
             outputs[name] = amount
+        seconds = hours_per_thousand*3600000
+        if grid is not None and grid < 0:
+            # Export earns the feed-in tariff; its origin follows the local sources that were delivering.
+            energy = -grid*hours_per_thousand
+            amount = empty()
+            amount.update(kwh=energy, seconds=seconds, cost_eur=energy*rates["pv"],
+                          cost_unknown_kwh=energy*unknowns["pv"])
+            if row.get('estimated'): amount.update(estimated_seconds=seconds, estimated_kwh=energy)
+            local = (pv or 0) + (discharge or 0)
+            shares = {"pv": pv/local, "battery": discharge/local} if sources_ok and local > 0 else {"unknown": 1.}
+            for source, share in shares.items():
+                amount["sources"][source] = {"kwh":energy*share, "cost_eur":energy*share*rates["pv"],
+                    "cost_unknown_kwh":energy*share*unknowns["pv"], "estimated_kwh":energy*share if row.get('estimated') else 0.}
+            outputs[EXPORT] = amount
+        if charge is not None and charge > 0:
+            energy = charge*hours_per_thousand
+            amount = empty()
+            amount.update(kwh=energy, seconds=seconds)
+            if row.get('estimated'): amount.update(estimated_seconds=seconds, estimated_kwh=energy)
+            known = {source: ratios.get(source, 0) for source in ("pv", "grid")} if ratios else {}
+            shares = {**known, "unknown": max(0., 1-sum(known.values()))} if known else {"unknown": 1.}
+            for source, share in shares.items():
+                part = energy*share
+                cost = part*rates.get(source, 0)
+                unknown = part*unknowns.get(source, 1)
+                amount["sources"][source] = {"kwh":part, "cost_eur":cost, "cost_unknown_kwh":unknown,
+                                             "estimated_kwh":part if row.get('estimated') else 0.}
+                amount["cost_eur"] += cost
+                amount["cost_unknown_kwh"] += unknown
+            outputs[STORAGE] = amount
         if charge is not None and charge > 0 and self.stock is not None and effective is not None:
             energy = charge*hours_per_thousand
             # A charging battery cannot be its own energy source.
@@ -395,6 +428,11 @@ class Accounting:
             while stamp < stop.timestamp():
                 hours.append(datetime.fromtimestamp(stamp,timezone.utc).isoformat())
                 stamp += 3600
+        today = now.astimezone(self.zone).date()
+        first = max(start, (instant(self.started).astimezone(self.zone).date() if instant(self.started) else start))
+        last = min(end, today+timedelta(days=1))
+        base_days = max(0, (last-first).days)
         return {"period":period,"date":start.isoformat(),"end":end.isoformat(),"hours":hours,"consumers":consumers,
+                "base_days":base_days,
                 "started":self.started,"settings":self.settings,"effective":self.effective(),
                 "eos_error":self.eos_error,"pv_tariff":self.pv_tariff,"pv_price_ct":self.pv_price(now.isoformat()),"pv_error":self.pv_error,"stock":self.stock,"method":"proportional"}

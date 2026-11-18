@@ -175,7 +175,7 @@ async function loadCostSettings() {
 }
 function costSettingsValues() {
   const form=byId('cost-settings'),settings={};
-  for(const key of ['pv_price_ct','charge_efficiency','discharge_efficiency','capacity_wh'])settings[key]=Number(form.elements[key].value);
+  for(const key of ['pv_price_ct','charge_efficiency','discharge_efficiency','capacity_wh','base_price_eur_month'])settings[key]=Number(form.elements[key].value);
   settings.pv_price_source=form.elements.pv_price_source.value;
   settings.efficiency_source=form.elements.efficiency_source.value;
   settings.initial_price_ct=form.elements.initial_price_ct.value===''?null:Number(form.elements.initial_price_ct.value);

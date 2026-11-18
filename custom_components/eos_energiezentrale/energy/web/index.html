@@ -177,7 +177,9 @@
                 <label><span data-i18n="billing.pv_price_source"></span><select name="pv_price_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
                 <label><span data-i18n="billing.pv_price"></span><input name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required></label>
                 <label><span data-i18n="billing.capacity"></span><input name="capacity_wh" type="number" min="100" max="1000000" step="1" required></label>
+                <label><span data-i18n="billing.base_price"></span><input name="base_price_eur_month" type="number" min="0" max="1000" step="0.01" required></label>
               </div>
+              <p class="footnote" data-i18n="billing.base_price_note"></p>
               <p class="footnote" id="pv-cost-effective"></p>
               <details class="expert"><summary data-i18n="settings.cost_expert"></summary>
                 <div class="fields">

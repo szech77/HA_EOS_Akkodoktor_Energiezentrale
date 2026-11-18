@@ -512,6 +512,8 @@
     "settings.error_out_of_range": "Der Wert liegt außerhalb des erlaubten Bereichs.",
     "settings.error_invalid_type": "Dieser Wert hat ein ungültiges Format.",
     "settings.error_battery_bounds": "Der Mindest-SoC muss kleiner als der Maximal-SoC sein.",
-    "settings.error_invalid_holiday_region": "Diese Kombination aus Bundesland, Ort und katholischen Feiertagen ist nicht möglich."
+    "settings.error_invalid_holiday_region": "Diese Kombination aus Bundesland, Ort und katholischen Feiertagen ist nicht möglich.",
+    "billing.base_price": "Grundpreis gesamt (€/Monat, brutto)",
+    "billing.base_price_note": "Summe aller festen Monatsbeträge (Anbieter, Netz, Messstelle). Er wird tageweise verteilt und nur in der Gesamtbilanz und bei Netz & Einspeisung ausgewiesen."
   }
 }

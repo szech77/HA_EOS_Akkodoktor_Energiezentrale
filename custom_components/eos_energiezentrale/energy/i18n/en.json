@@ -512,6 +512,8 @@
     "settings.error_out_of_range": "The value is outside the allowed range.",
     "settings.error_invalid_type": "This value has an invalid format.",
     "settings.error_battery_bounds": "The minimum SoC must be below the maximum SoC.",
-    "settings.error_invalid_holiday_region": "This combination of state, locality and Catholic holidays is not possible."
+    "settings.error_invalid_holiday_region": "This combination of state, locality and Catholic holidays is not possible.",
+    "billing.base_price": "Total base price (€/month, gross)",
+    "billing.base_price_note": "Sum of all fixed monthly charges (supplier, grid, metering). It is spread per day and shown only in the total balance and under grid & feed-in."
   }
 }

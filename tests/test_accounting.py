@@ -63,6 +63,50 @@ class EnergyAccountingRequirements(TestCase):
         self.assertAlmostEqual(result["kwh"],8.1)
         self.assertAlmostEqual(result["cost_eur"],3.)
 
+    def test_export_earns_the_feed_in_tariff_and_battery_charging_keeps_its_origin(self):
+        self.ledger.configure({"pv_price_ct":8.})
+        self.ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}
+        row=sample(solar=6000,grid=-2000,battery_charge=1000,house_total=3000)
+        row["consumers"]={"house":3000}
+        result=self.ledger.allocate(row,.001,self.ledger.effective())
+        self.assertAlmostEqual(result["export"]["kwh"],2.)
+        self.assertAlmostEqual(result["export"]["cost_eur"],.16)
+        self.assertAlmostEqual(result["export"]["sources"]["pv"]["kwh"],2.)
+        self.assertAlmostEqual(result["storage"]["kwh"],1.)
+        self.assertAlmostEqual(result["storage"]["sources"]["pv"]["kwh"],1.)
+        self.assertAlmostEqual(result["house"]["kwh"],3.)
+        # Grid import charging the battery is attributed to the grid; no export row without export.
+        row=sample(solar=0,grid=4000,battery_charge=4000,house_total=0)
+        row["consumers"]={}
+        result=self.ledger.allocate(row,.001,self.ledger.effective())
+        self.assertNotIn("export",result)
+        self.assertAlmostEqual(result["storage"]["sources"]["grid"]["kwh"],4.)
+        self.assertAlmostEqual(result["storage"]["cost_eur"],1.2)
+        # An unknown feed-in tariff stays visible as unpriced export.
+        self.ledger.configure({"pv_price_source":"eos"})
+        self.ledger.pv_tariff=None
+        row=sample(solar=3000,grid=-1000,house_total=2000)
+        row["consumers"]={"house":2000}
+        export=self.ledger.allocate(row,.001,self.ledger.effective())["export"]
+        self.assertAlmostEqual(export["cost_unknown_kwh"],1.)
+        self.assertEqual(export["cost_eur"],0)
+
+    def test_report_counts_base_price_days_from_recording_start_until_today(self):
+        self.ledger.observe(sample())
+        self.ledger.observe(sample(NOW+timedelta(minutes=1)))
+        day=self.ledger.report({"period":"day"},NOW)
+        self.assertEqual(day["base_days"],1)
+        month=self.ledger.report({"period":"month"},NOW)
+        local=NOW.astimezone(ZoneInfo("Europe/Berlin")).date()
+        self.assertEqual(month["base_days"],1)
+        later=self.ledger.report({"period":"month","date":local.isoformat()},NOW+timedelta(days=5))
+        import calendar
+        days_left=calendar.monthrange(local.year,local.month)[1]-local.day+1
+        self.assertEqual(later["base_days"],min(6,days_left))
+        future=self.ledger.report({"period":"day","date":(local+timedelta(days=3)).isoformat()},NOW)
+        self.assertEqual(future["base_days"],0)
+        self.assertGreaterEqual(self.ledger.report({"period":"year"},NOW)["settings"]["base_price_eur_month"],0)
+
     def test_missing_price_and_initial_storage_do_not_become_free_energy(self):
         self.ledger.configure({"pv_price_source":"eos"})
         result=self.report_minute(solar=0,grid=1800,battery_discharge=1800,battery_soc=50,price=None)

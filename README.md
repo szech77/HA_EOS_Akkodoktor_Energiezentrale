@@ -991,6 +991,7 @@ Anfangspreis eingeklappt unter **Wirkungsgrade und Anfangspreis**):
 | Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
+| Grundpreis gesamt | €/Monat brutto, Summe aller festen Monatsbeträge. Wird tageweise (Monatsbetrag × 12 / 365) ab Aufzeichnungsbeginn bis heute verteilt und nur in Gesamtbilanz und Netz & Einspeisung ausgewiesen. Standard 0. |
 | Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer: Schätzung als PV-Ladung zum aktuellen PV-Kostenansatz einschließlich Ladeverlusten. |
 
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
@@ -1007,6 +1008,17 @@ pro Verbraucher ist mit den vorhandenen Zählern nicht möglich. Größere Wider
 in der Leistungsbilanz erscheinen als unbekannte Quelle. Die Berechnung setzt die
 Leistungen als Werte auf derselben AC-Bilanzgrenze voraus; abweichende DC-Speichermessungen
 führen zu zusätzlichen Modellabweichungen.
+
+Einspeisung und Speicherladung werden je Stunde mitgeschrieben. Die Einspeisung wird
+mit dem PV-Kostenansatz (standardmäßig der EOS-Einspeisevergütung) des jeweiligen
+Zeitpunkts bewertet; ist er unbekannt, bleibt die Vergütung als unbekannt markiert.
+Die Speicherladung wird nach PV und Netz aufgeteilt. Daraus berechnet das Backend
+je Zeitraum Autarkie, Eigenverbrauchsquote des PV-Stroms, physischen Netzbezug,
+Ø-Netzstrompreis, Ersparnis gegenüber reinem Netzbezug und Netto (Kosten der
+Verbraucher + Grundpreis − Einspeisevergütung). Netzgeladene Speicherenergie zählt
+dabei nur einmal, nämlich über den Akku-Kostenbestand bei der Entnahme. Einspeisung
+wird erst ab diesem Update erfasst; ältere Zeiträume zeigen sie nur, soweit sie aus
+InfluxDB rekonstruiert werden.
 
 Netzladung erhöht den Akku-Kostenbestand zum jeweiligen Strompreis, PV-Ladung zum
 PV-Kostenansatz. Ladeverluste reduzieren die eingelagerte Energie; bei Entladung wird
