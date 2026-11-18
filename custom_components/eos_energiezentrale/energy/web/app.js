@@ -737,18 +737,26 @@ function diagnosticSource(row) {
 function diagnosticStatus(row) {
   return row.available?th('diagnostics.ok'):th(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
 }
+// Derived values in display order; shared by the table and the text export.
+function diagnosticDerived(view) {
+  const derived=view.derived??{},balance=view.balance;
+  const rows=[['diagnostics.house_total',derived.house_total,false],['diagnostics.minus_car',derived.car,false],
+    ['diagnostics.minus_heat',derived.heat,false],['diagnostics.house',derived.house,true],
+    ['diagnostics.house_total_measured',derived.house_total_measured,false],
+    ['diagnostics.residual',balance?.residual_w,true],['diagnostics.tolerance',balance?.tolerance_w,false]];
+  const state=view.complete===false?'incomplete':!balance?'measured_missing':balance.balanced?'balanced':'unbalanced';
+  const estimates=(view.estimates??[]).map(item=>[item.key==='house'?'diagnostics.house_label':`measurement.${item.key}`,`diagnostics.estimate.${item.reason}`]);
+  return {rows,state,estimates};
+}
 function sourceDiagnostics(view) {
   if(!view)return `<p>${th('diagnostics.empty')}</p>`;
   const W='W',sources=diagnosticTable([th('diagnostics.measurement'),th('diagnostics.source'),th('diagnostics.value'),th('diagnostics.age'),th('diagnostics.status')],
     (view.sources??[]).map(row=>`<tr class="${row.available?'':'warn'}"><td>${th(`measurement.${row.key}`)}</td><td>${diagnosticSource(row)}</td><td class="num">${diagnosticNumber(row.value,row.unit)}</td><td class="num">${valid(row.age_s)?decimal(row.age_s,0)+' s':'—'}</td><td>${diagnosticStatus(row)}</td></tr>`),[2,3]);
-  const derived=view.derived??{},balance=view.balance;
-  const line=(label,value)=>`<tr><td>${label}</td><td class="num">${diagnosticNumber(value,W)}</td></tr>`;
-  const state=!balance?'incomplete':balance.balanced?'balanced':'unbalanced';
-  const derivedRows=[line(th('diagnostics.house_total'),derived.house_total),line(th('diagnostics.minus_car'),derived.car),
-    line(th('diagnostics.minus_heat'),derived.heat),line(`<strong>${th('diagnostics.house')}</strong>`,derived.house),
-    line(th('diagnostics.supplied'),balance?.supplied_w),line(th('diagnostics.consumed'),balance?.consumed_w),
-    line(`<strong>${th('diagnostics.residual')}</strong>`,balance?.residual_w),line(th('diagnostics.tolerance'),balance?.tolerance_w),
+  const {rows:derivedValues,state,estimates}=diagnosticDerived(view);
+  const derivedRows=[...derivedValues.map(([key,value,strong])=>`<tr><td>${strong?`<strong>${th(key)}</strong>`:th(key)}</td><td class="num">${diagnosticNumber(value,W)}</td></tr>`),
     `<tr class="${state==='balanced'?'':'warn'}"><td colspan="2"><strong>${th(`diagnostics.${state}`)}</strong></td></tr>`];
+  const estimateTable=estimates.length?`<h3>${th('diagnostics.estimates')}</h3>`+diagnosticTable([th('diagnostics.measurement'),th('diagnostics.reason')],
+    estimates.map(([key,reason])=>`<tr><td>${th(key)}</td><td>${th(reason)}</td></tr>`),[]):'';
   const devices=(view.devices??[]).map(device=>`<h3>${html(device.name)}${device.plugin?' · '+html(device.plugin):''}</h3>
     <p class="footnote">${th(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+th('diagnostics.read_error',{error:device.read_error}):''}</p>`+
     diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],Object.entries(device.values??{}).map(([key,value])=>
@@ -756,7 +764,7 @@ function sourceDiagnostics(view) {
   const vehicles=(view.vehicles??[]).length?`<h3>${th('diagnostics.vehicles')}</h3>`+diagnosticTable([th('source.vehicle'),th('measurement.car'),th('measurement.car_soc')],
     view.vehicles.map(item=>`<tr><td>${html(item.name)} · ${th(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}</td><td class="num">${diagnosticNumber(item.car,W)}</td><td class="num">${diagnosticNumber(item.car_soc,'%')}${item.soc_source==='estimate'?' ('+th('source.estimate')+')':''}</td></tr>`),[1,2]):'';
   return `<p class="footnote">${th('diagnostics.time',{time:view.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,timeStyle:'medium'}).format(new Date(view.time)):'—'})}</p>${sources}
-    <h3>${th('diagnostics.derived')}</h3>${diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],derivedRows)}
+    <h3>${th('diagnostics.derived')}</h3>${diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],derivedRows)}${estimateTable}
     ${devices?`<h3>${th('diagnostics.devices')}</h3>${devices}`:''}${vehicles}`;
 }
 
@@ -775,13 +783,9 @@ function diagnosticsText(view) {
   const status=row=>row.available?t('diagnostics.ok'):t(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
   lines.push(...columns([[t('diagnostics.measurement'),t('diagnostics.source'),t('diagnostics.value'),t('diagnostics.age'),t('diagnostics.status')],
     ...(view.sources??[]).map(row=>[t(`measurement.${row.key}`),source(row),number(row.value,row.unit),valid(row.age_s)?decimal(row.age_s,0)+' s':'—',status(row)])],[2,3]));
-  const derived=view.derived??{},balance=view.balance;
-  const state=!balance?'incomplete':balance.balanced?'balanced':'unbalanced';
-  lines.push('',t('diagnostics.derived'),...columns([[t('diagnostics.house_total'),number(derived.house_total,'W')],
-    [t('diagnostics.minus_car'),number(derived.car,'W')],[t('diagnostics.minus_heat'),number(derived.heat,'W')],
-    [t('diagnostics.house'),number(derived.house,'W')],[t('diagnostics.supplied'),number(balance?.supplied_w,'W')],
-    [t('diagnostics.consumed'),number(balance?.consumed_w,'W')],[t('diagnostics.residual'),number(balance?.residual_w,'W')],
-    [t('diagnostics.tolerance'),number(balance?.tolerance_w,'W')]]),t(`diagnostics.${state}`));
+  const {rows:derivedValues,state,estimates}=diagnosticDerived(view);
+  lines.push('',t('diagnostics.derived'),...columns(derivedValues.map(([key,value])=>[t(key),number(value,'W')])),t(`diagnostics.${state}`));
+  if(estimates.length)lines.push('',t('diagnostics.estimates'),...columns(estimates.map(([key,reason])=>[t(key),t(reason)]),[]));
   for(const device of view.devices??[]){
     lines.push('',`${t('diagnostics.devices')}: ${plain(device.name)}${device.plugin?' · '+plain(device.plugin):''} · ${t(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+t('diagnostics.read_error',{error:device.read_error}):''}`,
       ...columns(Object.entries(device.values??{}).map(([key,value])=>[t(`measurement.${key}`),number(value,key==='battery_soc'?'%':'W')])));

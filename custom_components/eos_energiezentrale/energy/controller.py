@@ -8,6 +8,7 @@ from threading import Event, RLock
 from time import monotonic
 
 from .clients import reading
+from .consumption import ConsumptionBalance, apply_balance
 from .domain import (BatteryCommand, battery_command, current_for_power, current_instruction, estimate_soc,
                      house_only, instant, next_departure, plan_series, pv_budget)
 from .history import History, forecast_rows, forecast_vehicle_resource, vehicle_forecast
@@ -76,6 +77,8 @@ class Controller:
         self.last_soc_publish = None
         self.last_write = None
         self.commanded_car_w = None
+        # Display, history and accounting only; never a control input.
+        self.consumption = ConsumptionBalance()
         self.candidate = None
         self.phase_target = None
         self.pv_session = False
@@ -637,8 +640,10 @@ class Controller:
         live["weather"] = weather_display(states,opts,now)
         car_enabled = opts.get("wallbox_type") != "none"
         heat_enabled = bool(opts.get("heat_entity"))
-        live["house"] = house_only(live["house_total"], live["car"] if car_enabled else 0,
-                                   live["heat"] if heat_enabled else 0)
+        apply_balance(live, self.consumption.update(live, now, car_enabled=car_enabled, heat_enabled=heat_enabled,
+                                                    commanded_car_w=self.commanded_car_w if self.armed else None,
+                                                    island=supply_view(self.power_supply, now)['state'] == 'backup'),
+                      car_enabled, heat_enabled)
         live["battery"] = (battery.charge - battery.discharge
                            if battery.charge is not None and battery.discharge is not None else None)
         battery_ids=getattr(self.config.battery,"ids",{})

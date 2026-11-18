@@ -18,6 +18,10 @@ elif op=='view': result=view_state(args['data'],now)
 elif op=='dailySolar': result=daily_pv_forecast(args['data'],now,args['zone'])
 elif op=='pvSummary': result=next24_pv_forecast(args['data'],now)
 elif op=='sourceDiagnostics': result=source_diagnostics(args['data'],now)
+elif op=='balancedDiagnostics':
+    from custom_components.eos_energiezentrale.energy.consumption import ConsumptionBalance,apply_balance
+    data=args['data'];data['live']=apply_balance(dict(data['live']),ConsumptionBalance().update(data['live'],now))
+    result=source_diagnostics(data,now)
 else: raise ValueError('Unknown test operation')
 print(json.dumps(result,allow_nan=False))`;
 const cache=new Map();

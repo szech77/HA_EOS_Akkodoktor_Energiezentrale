@@ -272,6 +272,8 @@ class ControllerRequirements(unittest.TestCase):
         self.config.options.update(wallbox_type="none",heat_entity="",car_soc_entity="")
         self.config.wallbox=NoWallbox(self.ha,{})
         self.ha.states.return_value={key:value for key,value in self.states().items() if key not in {"sensor.heat","sensor.soc"}}
+        # Consistent sources: the AC balance equals the 4000 W site consumption.
+        self.ha.states.return_value["sensor.pv"]=state(4000)
         self.app.set_armed(True)
         self.app.tick(NOW,0)
         result=self.app.snapshot(NOW)
@@ -413,6 +415,7 @@ class ControllerRequirements(unittest.TestCase):
     def test_slow_heat_meter_keeps_marked_overview_estimate_without_fresh_history(self):
         states = self.states(grid=0)
         states["sensor.house"] = state(574.1381)
+        states["sensor.pv"] = state(574.1381)
         states["sensor.heat"] = state(29.8753452301025, when=NOW-timedelta(seconds=390))
         self.ha.states.return_value = states
         self.box.read.return_value = wallbox(watts=1.072)

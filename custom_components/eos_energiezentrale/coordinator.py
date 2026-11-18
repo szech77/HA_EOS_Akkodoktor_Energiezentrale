@@ -14,7 +14,7 @@ from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
 from .energy.controller import Controller
-from .energy.domain import next_departure
+from .energy.domain import instant, next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload
 from .energy.source_diagnostics import source_diagnostics
@@ -135,6 +135,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
         for vehicle in result.get('vehicles', []):
             vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
         result['source_diagnostics'] = source_diagnostics(result, now)
+        # A persistently deviating measured site total hints at a missing source or a wrong meter.
+        since = instant(result['source_diagnostics'].get('deviation_since'))
+        self.issue_log.update('consumption', [{'id': 'consumption/house_total', 'code': 'house_total_deviation',
+            'severity': 'info'}] if since and (now - since).total_seconds() >= 900 else [])
         self.issue_log.update('state', result['notices'])
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])

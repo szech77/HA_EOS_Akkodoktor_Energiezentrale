@@ -218,10 +218,14 @@ class Accounting:
     def observe(self, live, vehicles=()):
         now=instant(live.get('time'))
         if now is None or (self.previous is not None and now<=self.previous[0]): return
-        consumers={key:live.get(field) for key,field in (('house','house'),('heat','heat'),('car','car'))}
-        consumers.update({'car/'+vehicle['id']:vehicle.get('live',{}).get('car') for vehicle in vehicles})
-        sample={key:number(live.get(key)) for key in FIELDS}
+        # The AC balance defines consumption and its split; raw readings are the fallback.
+        balance=live.get('balance') if isinstance(live.get('balance'),dict) else {}
+        fitted=balance.get('consumers') or {}
+        consumers={key:fitted.get(key,live.get(key)) for key in ('house','heat','car')}
+        consumers.update({'car/'+vehicle['id']:fitted.get('car/'+vehicle['id'],vehicle.get('live',{}).get('car')) for vehicle in vehicles})
+        sample={key:number(balance.get(key,live.get(key))) for key in FIELDS}
         sample.update(time=now.isoformat(),consumers={key:number(value) for key,value in consumers.items()})
+        if balance.get('estimated'): sample['estimated']=True
         effective=self.effective()
         previous=self.previous
         backup=deepcopy((self.stock,self.last_rate,self.initial_pv_valued,self.started,self.reconcile,self.restored))

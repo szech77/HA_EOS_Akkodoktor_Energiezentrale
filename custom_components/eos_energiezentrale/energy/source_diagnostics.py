@@ -20,8 +20,11 @@ def _age(sample, now):
 
 
 def _value(live, key, entry):
+    # The source table shows readings; the balanced total appears under the derived values.
     # The vehicle SoC row shows the sensor reading, not the controller's
     # estimate (fleets carry the SoC per vehicle, not in the shared live data).
+    if key == 'house_total' and 'house_total_measured' in live:
+        return number(live['house_total_measured'])
     value = number(entry['value'] if key == 'car_soc' and 'value' in entry else live.get(key))
     if key == 'heat_load' and value is not None:
         return value * 100
@@ -81,14 +84,26 @@ def _devices(data):
 
 def source_diagnostics(data, now):
     live = data.get('live') or {}
+    balance = live.get('balance') if isinstance(live.get('balance'), dict) else {}
     def positive(key):
-        value = number(live.get(key))
+        value = number(balance.get(key, live.get(key)))
         return max(0., value) if value is not None else None
-    balance = energy_balance(positive('solar'), number(live.get('grid')), positive('battery_discharge'),
-                             positive('battery_charge'), positive('house_total'))
+    measured = number(live.get('house_total_measured', live.get('house_total')))
+    # Plausibility of the measured site total against the AC balance of the sources.
+    check = energy_balance(positive('solar'), number(balance.get('grid', live.get('grid'))), positive('battery_discharge'),
+                           positive('battery_charge'), max(0., measured) if measured is not None else None)
     features = data.get('features') or {}
-    derived = {'house': number(live.get('house')), 'house_total': number(live.get('house_total')),
-               'car': number(live.get('car')) if features.get('car') else 0.,
-               'heat': number(live.get('heat')) if features.get('heat') else 0.}
+    consumers = balance.get('consumers') or {}
+    def consumer(key, enabled=True):
+        if not enabled:
+            return 0.
+        return number(consumers.get(key, live.get(key)))
+    derived = {'house': consumer('house'), 'house_total': number(balance.get('house_total', live.get('house_total'))),
+               'house_total_measured': measured, 'car': consumer('car', features.get('car')),
+               'heat': consumer('heat', features.get('heat'))}
+    estimates = balance.get('estimated') or {}
     return {'time': live.get('time'), 'sources': _rows(data, now), 'derived': derived,
-            'balance': balance, 'devices': _devices(data), 'vehicles': _vehicles(data)}
+            'balance': check, 'complete': balance.get('complete', check is not None),
+            'estimates': [{'key': key, 'reason': estimates[key]} for key in sorted(estimates)],
+            'deviation_since': balance.get('deviation_since'),
+            'devices': _devices(data), 'vehicles': _vehicles(data)}

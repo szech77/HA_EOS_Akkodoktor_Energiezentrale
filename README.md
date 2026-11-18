@@ -642,16 +642,41 @@ Status. Ungültige oder veraltete Werte erscheinen ohne Zahlenwert mit Grund.
 Fehlende Pflichtquellen bleiben sichtbar, nicht konfigurierte optionale Quellen
 werden ausgelassen.
 
-Darunter stehen die abgeleiteten Werte und die Energiebilanz, die das Backend
-auch für die Auswertung verwendet:
+Darunter stehen die abgeleiteten Werte, gemessener und berechneter
+Hausverbrauch sowie die gerade geschätzten Werte mit Grund (siehe
+[Hausverbrauch aus der Energiebilanz](#hausverbrauch-aus-der-energiebilanz)).
 
-- Hausverbrauch ohne Auto und Wärmepumpe = Hausverbrauch gesamt − Fahrzeug − Wärmepumpe.
-- Quellen = PV + Netzbezug + Speicherentladung; Senken = Hausverbrauch gesamt +
-  Speicherladung + Einspeisung.
-- Weicht der Bilanzrest um mehr als 10 % bzw. mindestens 300 W ab, wird der
-  Verbrauch dieses Moments in der Auswertung als „Unbekannt“ verbucht. Ein
-  dauerhaft großer Rest deutet auf eine fehlende Quelle oder einen falsch
-  gemessenen Gesamtverbrauch hin.
+### Hausverbrauch aus der Energiebilanz
+
+Der Gesamtverbrauch folgt aus den Quellen: **PV + Netz (Bezug positiv,
+Einspeisung negativ) + Speicherentladung − Speicherladung**. Damit geht die
+Bilanz immer auf, auch wenn Sensoren zeitversetzt melden oder ein Zähler den
+Verbrauch falsch erfasst. Der gemessene Hausverbrauch dient als Rückfall und als
+Kontrolle: Weicht er länger als 15 Minuten um mehr als 10 % bzw. 300 W ab,
+protokolliert das Backend einmalig `house_total_deviation` (Einstellungen → Geräte
+& Dienste → EOS Energiezentrale → Protokolle). Dann fehlt meist eine Quelle,
+z. B. eine nicht erfasste Balkon-PV, oder der Zähler misst falsch. Im
+Notstrombetrieb gilt weiter die gemessene Wechselrichterleistung.
+
+Fahrzeug und Wärmepumpe werden in diesen Gesamtverbrauch eingepasst. Melden sie
+nach einem Schaltvorgang noch den alten Wert, schätzt das Backend für
+höchstens 120 Sekunden:
+
+- Hat diese Integration die Ladeleistung geändert, gilt die befohlene Leistung,
+  auch beim Start, bevor die Wallbox den Anstieg meldet.
+- Fällt die Leistung etwa um den letzten Wert der Wärmepumpe oder des Autos, gilt
+  dieses Gerät als abgeschaltet. Der Hausverbrauch behält seinen letzten Wert.
+- Sonst werden Fahrzeug und Wärmepumpe anteilig an die verfügbare Leistung angepasst.
+- Fehlt ein Messwert kurz, wird der letzte Wert gehalten; fehlt er länger, bleibt
+  sein Anteil im Hausverbrauch, damit der Gesamtverbrauch zugeordnet bleibt.
+- Fehlt eine einzelne Quelle, folgt sie aus dem gemessenen Hausverbrauch und den
+  übrigen Quellen.
+
+Die Auswertung verbucht diese Werte als geschätzt (`≈`). Übersicht und lokaler
+Verlauf zeigen nur Werte aus frischen Messungen; geschätzte Hausverbräuche
+erscheinen dort nicht. „Unbekannt“ bleibt nur, wenn mehrere Quellen länger als
+120 Sekunden fehlen und deshalb keine Bilanz möglich ist. Die Regelung verwendet
+weiterhin nur gemessene Werte.
 
 Für Gerätegruppen folgen die Einzelwerte jedes Geräts (z. B. PV, Netz,
 Hausverbrauch, Speicher-SoC, Lade- und Entladeleistung), bei mehreren Fahrzeugen
