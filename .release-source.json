@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/source-diagnostics",
+  "channel": "beta",
+  "date": "2026-11-18",
+  "notes_sha256": "9031ede8201177fef0b8251ef475a70df7e32502c88dcb18ee665a5a1da1aa36",
+  "source_changelog_sha256": "df9fd206a5b81c125be41c0c72c1bebde081261da29f3766d8f51c47fc635fb4",
+  "source_commit": "5d817460e0f97095fbfe8b42e0773eab57dbeaaf",
+  "version": "0.23.0b44390720077"
+}
