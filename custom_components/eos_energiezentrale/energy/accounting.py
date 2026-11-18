@@ -72,6 +72,11 @@ class Accounting:
             db.execute("CREATE INDEX IF NOT EXISTS energy_day ON energy(day)")
             rows = dict(db.execute("SELECT key,value FROM meta"))
         raw = json.loads(rows.get("settings", "{}"))
+        raw = raw if isinstance(raw, dict) else {}
+        # Settings written by a newer version (e.g. a beta) are kept unchanged but not
+        # interpreted, so a downgrade keeps working and an upgrade finds them again.
+        self.foreign_settings = {key: value for key, value in raw.items() if key not in DEFAULTS}
+        raw = {key: value for key, value in raw.items() if key in DEFAULTS}
         # Preserve earlier nonzero manual prices; migrate the former zero default to EOS.
         if "pv_price_source" not in raw and raw.get("pv_price_ct",0) != 0:
             raw["pv_price_source"] = "manual"
@@ -95,7 +100,7 @@ class Accounting:
             raise ValueError("Accounting settings must be an object")
         settings = checked_settings({**self.settings, **values})
         with closing(self.connect()) as db, db:
-            db.execute("INSERT OR REPLACE INTO meta VALUES ('settings',?)", (json.dumps(settings),))
+            db.execute("INSERT OR REPLACE INTO meta VALUES ('settings',?)", (json.dumps({**getattr(self, 'foreign_settings', {}), **settings}),))
         self.settings = settings
 
     def refresh_eos(self, eos, resource, now):

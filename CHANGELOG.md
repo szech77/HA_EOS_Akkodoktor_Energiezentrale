@@ -11,7 +11,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Keine.
+- Die Verbrauchs- und Kostenbilanz fällt nicht mehr aus („vorübergehend nicht verfügbar“, PV heute „—“), wenn zuvor eine neuere Version (z. B. die Beta des Panel-Redesigns) zusätzliche Abrechnungseinstellungen wie den Grundpreis gespeichert hat. Solche Einstellungen werden beim Laden übersprungen und beim Speichern unverändert erhalten; unbekannte Eingaben aus dem Panel werden weiterhin abgelehnt.
 
 ### Breaking Changes
 
