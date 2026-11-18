@@ -10,6 +10,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
+from .energy.failures import BackendError
 from .energy.localization import load_language
 
 STATIC_URL = "/eos-energiezentrale-static"
@@ -102,6 +103,11 @@ async def websocket_request(hass, connection, msg):
     except ValueError as error:
         code = {"language":"language_invalid","history":"history_invalid","accounting":"invalid_report"}.get(action,"invalid_settings")
         coordinator.report_failure('api/' + action, error, code)
+        if isinstance(error, BackendError):
+            # Reason and field names come from fixed allow-lists, never from submitted values.
+            connection.send_error(msg["id"], code, "Request rejected: " + action, translation_key=code,
+                translation_domain=DOMAIN, translation_placeholders={"reason":error.reason, "fields":",".join(error.fields)})
+            return
         connection.send_error(msg["id"], code, "Request rejected: " + action)
     except (OSError, sqlite3.Error, HomeAssistantError, TimeoutError) as error:
         code = {"language":"language_unavailable","history":"history_unavailable","accounting":"report_unavailable"}.get(action,"change_unconfirmed")

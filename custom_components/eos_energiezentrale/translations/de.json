@@ -1072,5 +1072,13 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "invalid_settings": {
+      "message": "Einstellungen abgelehnt ({reason}): {fields}"
+    },
+    "invalid_report": {
+      "message": "Bilanzanfrage abgelehnt ({reason}): {fields}"
+    }
   }
 }

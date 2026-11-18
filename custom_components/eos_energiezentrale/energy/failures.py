@@ -10,7 +10,9 @@ FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_inte
     'departure_time', 'weekdays', 'capacity_wh', 'nominal_capacity_wh', 'max_charge_power_w',
     'max_discharge_power_w', 'min_charge_power_w', 'min_soc_percentage', 'max_soc_percentage',
     'min_soc_deadline_datetime', 'min_soc_max_duration_h', 'charge_rates', 'profile_adjustment', 'password_env',
-    'charge_plans', 'holiday_state', 'holiday_locality', 'holiday_catholic'})
+    'charge_plans', 'holiday_state', 'holiday_locality', 'holiday_catholic',
+    'pv_price_ct', 'pv_price_source', 'efficiency_source', 'charge_efficiency', 'discharge_efficiency',
+    'initial_price_ct'})
 
 
 class BackendError(ValueError):

@@ -491,6 +491,27 @@
     "plan_event.car_target": "{vehicle} expected to reach {soc} %",
     "plan_event.price": "Grid power {price}",
     "metric.battery_idle": "not charging or discharging",
-    "plan.track_hint": "Tap a section for details."
+    "plan.track_hint": "Tap a section for details.",
+    "settings.sections": "Settings sections",
+    "settings.section_battery": "Battery",
+    "settings.section_car": "Electric car",
+    "settings.section_calendar": "Calendar",
+    "settings.section_costs": "Costs",
+    "settings.section_system": "System",
+    "settings.car_help": "Applies to every vehicle. Set charging targets and modes on the vehicle itself.",
+    "settings.expert": "Expert control values",
+    "settings.cost_expert": "Efficiencies and initial price",
+    "settings.one_change": "1 change",
+    "settings.changes": "{count} changes",
+    "settings.unsaved": "not saved",
+    "settings.discard": "Discard",
+    "settings.discarded": "Changes discarded",
+    "settings.fix_fields": "Not saved. Please check the marked fields.",
+    "settings.error_field": "This value was not accepted.",
+    "settings.error_input": "Enter a valid number within the allowed range.",
+    "settings.error_out_of_range": "The value is outside the allowed range.",
+    "settings.error_invalid_type": "This value has an invalid format.",
+    "settings.error_battery_bounds": "The minimum SoC must be below the maximum SoC.",
+    "settings.error_invalid_holiday_region": "This combination of state, locality and Catholic holidays is not possible."
   }
 }

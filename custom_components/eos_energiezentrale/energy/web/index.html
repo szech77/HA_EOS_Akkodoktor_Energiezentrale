@@ -121,54 +121,89 @@
       <p class="footnote" data-i18n="control.restart_info"></p>
     </section>
     <section id="settings" hidden>
-      <a class="back" href="#overview" data-i18n="nav.back"></a>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div></div>
-      <details id="cost-settings-open" class="plan-panel"><summary data-i18n="billing.settings"></summary>
-        <form id="cost-settings"><div class="fields">
-          <label><span data-i18n="billing.pv_price_source"></span><select name="pv_price_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
-          <label><span data-i18n="billing.pv_price"></span><input name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required></label>
-          <label><span data-i18n="billing.efficiency_source"></span><select name="efficiency_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
-          <label><span data-i18n="billing.charge_efficiency"></span><input name="charge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
-          <label><span data-i18n="billing.discharge_efficiency"></span><input name="discharge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
-          <label><span data-i18n="billing.capacity"></span><input name="capacity_wh" type="number" min="100" max="1000000" required></label>
-          <label><span data-i18n="billing.initial_price"></span><input name="initial_price_ct" type="number" min="-1000" max="1000" step="0.01"></label>
-        </div><p class="footnote" id="pv-cost-effective"></p><p class="footnote" id="cost-effective"></p><p class="footnote" data-i18n="billing.settings_note"></p>
-        <div class="form-footer"><button type="submit" class="save" data-i18n="settings.save"></button><output id="cost-saved" role="status"></output></div></form>
-      </details>
-      <form id="daily">
-        <h2 data-i18n="device.battery"></h2>
-        <div class="fields">
-          <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
-          <label><span data-i18n="settings.battery_max_soc"></span><input name="battery_max_soc" type="number" min="1" max="100" step="1" required></label>
+      <div class="settings-layout">
+        <nav class="settings-side" id="settings-side" data-i18n-aria="settings.sections">
+          <a href="#settings" data-section="battery" aria-current="true" data-i18n="settings.section_battery"></a>
+          <a href="#settings" data-section="car" data-optional="car" data-i18n="settings.section_car"></a>
+          <a href="#settings" data-section="calendar" data-optional="car" data-i18n="settings.section_calendar"></a>
+          <a href="#settings" data-section="costs" data-i18n="settings.section_costs"></a>
+          <a href="#settings" data-section="system" data-i18n="settings.section_system"></a>
+        </nav>
+        <div class="settings-body plan-panel">
+          <form id="daily" novalidate>
+            <section data-settings-section="battery">
+              <h2 data-i18n="device.battery"></h2>
+              <p class="footnote" data-i18n="settings.battery_limits_info"></p>
+              <div class="fields">
+                <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
+                <label><span data-i18n="settings.battery_max_soc"></span><input name="battery_max_soc" type="number" min="1" max="100" step="1" required></label>
+              </div>
+              <p id="battery-limits-status" class="tag" role="status"></p>
+              <label class="switch" data-optional="car"><span><b data-i18n="settings.pv_support"></b></span><input name="battery_pv_support" type="checkbox" class="toggle"></label>
+              <details class="expert" data-optional="car"><summary data-i18n="settings.expert"></summary>
+                <div class="fields">
+                  <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" step="1" required></label>
+                  <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" step="1" required></label>
+                  <label><span data-i18n="settings.battery_pv_min_soc"></span><input name="battery_pv_min_soc" type="number" min="0" max="98" step="1" required></label>
+                  <label><span data-i18n="settings.battery_pv_wait_s"></span><input name="battery_pv_wait_s" type="number" min="10" max="600" step="1" required></label>
+                </div>
+              </details>
+            </section>
+            <section data-settings-section="car" hidden>
+              <h2 data-i18n="settings.general_car"></h2>
+              <p class="footnote" data-i18n="settings.car_help"></p>
+              <label class="switch"><span><b data-i18n="settings.battery_pv_start"></b></span><input name="battery_pv_start" type="checkbox" class="toggle"></label>
+              <div class="fields">
+                <label><span data-i18n="settings.battery_pv_surplus_w"></span><input name="battery_pv_surplus_w" type="number" min="1" max="5000" step="1" required></label>
+              </div>
+              <p class="footnote" data-i18n="settings.battery_pv_info"></p>
+            </section>
+            <section data-settings-section="calendar" hidden>
+              <h2 data-i18n="plans.holiday_settings"></h2>
+              <p class="footnote" data-i18n="plans.region_note"></p>
+              <div class="fields">
+                <label><span data-i18n="plans.state"></span><select name="holiday_state"><option value="" data-i18n="plans.national"></option><option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option></select></label>
+                <label><span data-i18n="plans.locality"></span><select name="holiday_locality"><option value="" data-i18n="plans.no_locality"></option><option value="augsburg">Augsburg</option></select></label>
+              </div>
+              <label class="switch"><span><b data-i18n="plans.catholic"></b></span><input name="holiday_catholic" type="checkbox" class="toggle"></label>
+            </section>
+          </form>
+          <section data-settings-section="costs" hidden>
+            <h2 data-i18n="billing.settings"></h2>
+            <p class="footnote" data-i18n="billing.settings_note"></p>
+            <form id="cost-settings" novalidate>
+              <div class="fields">
+                <label><span data-i18n="billing.pv_price_source"></span><select name="pv_price_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
+                <label><span data-i18n="billing.pv_price"></span><input name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required></label>
+                <label><span data-i18n="billing.capacity"></span><input name="capacity_wh" type="number" min="100" max="1000000" step="1" required></label>
+              </div>
+              <p class="footnote" id="pv-cost-effective"></p>
+              <details class="expert"><summary data-i18n="settings.cost_expert"></summary>
+                <div class="fields">
+                  <label><span data-i18n="billing.efficiency_source"></span><select name="efficiency_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
+                  <label><span data-i18n="billing.charge_efficiency"></span><input name="charge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
+                  <label><span data-i18n="billing.discharge_efficiency"></span><input name="discharge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
+                  <label><span data-i18n="billing.initial_price"></span><input name="initial_price_ct" type="number" min="-1000" max="1000" step="0.01"></label>
+                </div>
+                <p class="footnote" id="cost-effective"></p>
+              </details>
+              <p class="footnote" id="cost-saved" role="status"></p>
+            </form>
+          </section>
+          <section data-settings-section="system" hidden>
+            <h2 data-i18n="settings.setup"></h2>
+            <p class="footnote" data-i18n="settings.setup_info"></p>
+            <dl id="connections"></dl>
+          </section>
         </div>
-        <p class="footnote" data-i18n="settings.battery_limits_info"></p>
-        <p id="battery-limits-status" class="footnote" role="status"></p>
-        <label class="check" data-optional="car"><input name="battery_pv_support" type="checkbox"><span data-i18n="settings.pv_support"></span></label>
-        <h2 data-optional="car" data-i18n="settings.general_car"></h2>
-        <label class="check" data-optional="car"><input name="battery_pv_start" type="checkbox"><span data-i18n="settings.battery_pv_start"></span></label>
-        <div class="fields" data-optional="car">
-          <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" required></label>
-          <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" required></label>
-          <label><span data-i18n="settings.battery_pv_min_soc"></span><input name="battery_pv_min_soc" type="number" min="0" max="98" step="1" required></label>
-          <label><span data-i18n="settings.battery_pv_wait_s"></span><input name="battery_pv_wait_s" type="number" min="10" max="600" step="1" required></label>
-          <label><span data-i18n="settings.battery_pv_surplus_w"></span><input name="battery_pv_surplus_w" type="number" min="1" max="5000" step="1" required></label>
-        </div>
-        <p class="footnote" data-optional="car" data-i18n="settings.battery_pv_info"></p>
-        <fieldset data-optional="car"><legend data-i18n="plans.holiday_settings"></legend><div class="fields">
-          <label><span data-i18n="plans.state"></span><select name="holiday_state"><option value="" data-i18n="plans.national"></option><option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option></select></label>
-          <label><span data-i18n="plans.locality"></span><select name="holiday_locality"><option value="" data-i18n="plans.no_locality"></option><option value="augsburg">Augsburg</option></select></label>
-        </div><label class="check"><input name="holiday_catholic" type="checkbox"><span data-i18n="plans.catholic"></span></label>
-        <p class="footnote" data-i18n="plans.region_note"></p></fieldset>
-        <div class="form-footer"><button class="save" type="submit" data-i18n="settings.save"></button><output id="saved" aria-live="polite"></output></div>
-      </form>
-      <section class="plan-panel">
-        <h2 data-i18n="settings.setup"></h2>
-        <dl id="connections"></dl>
-        <p class="footnote" data-i18n="settings.setup_info"></p>
-      </section>
+      </div>
+    </section>
     </section>
   </main>
 </div>
+<div class="savebar" id="savebar" hidden><div><span><b id="dirty-count"></b> <span class="footnote" data-i18n="settings.unsaved"></span></span><span class="savebar-actions"><button type="button" class="btn ghost" id="discard-settings" data-i18n="settings.discard"></button><button type="button" class="btn primary" id="save-settings" data-i18n="settings.save"></button></span></div></div>
+<div class="toast" id="toast" role="status" hidden></div>
 <dialog id="weather-dialog" aria-labelledby="forecast-title">
   <div class="forecast-heading"><h2 id="forecast-title"></h2><button id="forecast-close" type="button" autofocus>×</button></div>
   <div id="forecast-body"></div>

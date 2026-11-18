@@ -195,6 +195,17 @@ class EnergyAccountingRequirements(TestCase):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 self.ledger.report(values,NOW)
 
+    def test_invalid_settings_name_the_rejected_field_without_the_submitted_value(self):
+        from custom_components.eos_energiezentrale.energy.failures import BackendError
+        for values, reason, fields in (({"charge_efficiency":0}, 'out_of_range', ['charge_efficiency']),
+                                       ({"pv_price_source":"private"}, 'invalid_type', ['pv_price_source']),
+                                       ({"initial_price_ct":5000}, 'out_of_range', ['initial_price_ct']),
+                                       ({"extra":1}, 'unknown_fields', [])):
+            with self.subTest(values=values), self.assertRaises(BackendError) as rejected:
+                checked_settings(values)
+            self.assertEqual((rejected.exception.reason, rejected.exception.fields), (reason, fields))
+            self.assertNotIn('private', str(rejected.exception))
+
     def test_eos_capacity_and_efficiency_are_read_without_writing_configuration(self):
         from unittest.mock import patch
         with patch('custom_components.eos_energiezentrale.energy.clients.request',return_value={"devices":{"batteries":{"battery1":{"capacity_wh":11059,"charging_efficiency":.95,"discharging_efficiency":.96}}}}) as request:

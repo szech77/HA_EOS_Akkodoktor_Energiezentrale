@@ -1072,5 +1072,13 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "invalid_settings": {
+      "message": "Settings rejected ({reason}): {fields}"
+    },
+    "invalid_report": {
+      "message": "Report request rejected ({reason}): {fields}"
+    }
   }
 }

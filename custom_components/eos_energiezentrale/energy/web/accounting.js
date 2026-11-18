@@ -156,30 +156,32 @@ function initializeBilling() {
   });
   byId('usage').addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)&&event.target.matches('[data-billing-bin]')){event.preventDefault();event.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}});
   const form=byId('cost-settings');
-  let loaded=false;
-  byId('cost-settings-open').addEventListener('toggle',async event=>{
-    if(!event.target.open||loaded)return;
-    try {
-      const data=await api('accounting',{period:'day'});
-      for(const [key,value] of Object.entries(data.settings))if(form.elements[key])form.elements[key].value=value??'';
-      form.elements.capacity_wh.disabled=snapshot.battery_group?.battery_count>1;
-      if(form.elements.capacity_wh.disabled)form.elements.capacity_wh.value=snapshot.battery_group.capacity_wh;
-      form.elements.pv_price_source.value=data.settings.pv_price_source??'eos';
-      form.elements.pv_price_ct.disabled=form.elements.pv_price_source.value==='eos';
-      if(form.elements.pv_price_ct.disabled)form.elements.pv_price_ct.value=valid(data.pv_price_ct)?Number(data.pv_price_ct.toFixed(6)):'';
-      byId('pv-cost-effective').textContent=t('billing.pv_effective')+': '+(valid(data.pv_price_ct)?price(data.pv_price_ct):t('billing.pv_missing'));
-      byId('cost-effective').textContent=data.effective?`${t('billing.effective')}: ${percent(data.effective.charge_efficiency*100)} / ${percent(data.effective.discharge_efficiency*100)} · ${energyValue(data.effective.capacity_wh/1000)}`:t('billing.efficiency_missing');
-      loaded=true;
-    } catch(error){byId('cost-saved').textContent=error.message;}
-  });
   form.elements.pv_price_source.addEventListener('change',()=>{form.elements.pv_price_ct.disabled=form.elements.pv_price_source.value==='eos';});
-  form.addEventListener('submit',async event=>{
-    event.preventDefault();const settings={};
-    for(const key of ['pv_price_ct','charge_efficiency','discharge_efficiency','capacity_wh'])settings[key]=Number(form.elements[key].value);
-    settings.pv_price_source=form.elements.pv_price_source.value;
-    settings.efficiency_source=form.elements.efficiency_source.value;
-    settings.initial_price_ct=form.elements.initial_price_ct.value===''?null:Number(form.elements.initial_price_ct.value);
-    try{await api('accounting',{settings});byId('cost-saved').textContent=t('settings.saved');loaded=false;billing.at=0;await refresh();}
-    catch(error){byId('cost-saved').textContent=error.message;}
-  });
+}
+
+/* Cost settings belong to the shared settings save bar; loading fills the form from the backend. */
+async function loadCostSettings() {
+  const form=byId('cost-settings');
+  const data=await api('accounting',{period:'day'});
+  for(const [key,value] of Object.entries(data.settings))if(form.elements[key])form.elements[key].value=value??'';
+  form.elements.capacity_wh.disabled=snapshot.battery_group?.battery_count>1;
+  if(form.elements.capacity_wh.disabled)form.elements.capacity_wh.value=snapshot.battery_group.capacity_wh;
+  form.elements.pv_price_source.value=data.settings.pv_price_source??'eos';
+  form.elements.pv_price_ct.disabled=form.elements.pv_price_source.value==='eos';
+  if(form.elements.pv_price_ct.disabled)form.elements.pv_price_ct.value=valid(data.pv_price_ct)?Number(data.pv_price_ct.toFixed(6)):'';
+  byId('pv-cost-effective').textContent=t('billing.pv_effective')+': '+(valid(data.pv_price_ct)?price(data.pv_price_ct):t('billing.pv_missing'));
+  byId('cost-effective').textContent=data.effective?`${t('billing.effective')}: ${percent(data.effective.charge_efficiency*100)} / ${percent(data.effective.discharge_efficiency*100)} · ${energyValue(data.effective.capacity_wh/1000)}`:t('billing.efficiency_missing');
+  byId('cost-saved').textContent='';
+}
+function costSettingsValues() {
+  const form=byId('cost-settings'),settings={};
+  for(const key of ['pv_price_ct','charge_efficiency','discharge_efficiency','capacity_wh'])settings[key]=Number(form.elements[key].value);
+  settings.pv_price_source=form.elements.pv_price_source.value;
+  settings.efficiency_source=form.elements.efficiency_source.value;
+  settings.initial_price_ct=form.elements.initial_price_ct.value===''?null:Number(form.elements.initial_price_ct.value);
+  return settings;
+}
+async function saveCostSettings() {
+  await api('accounting',{settings:costSettingsValues()});
+  billing.at=0;
 }

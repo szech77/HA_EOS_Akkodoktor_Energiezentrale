@@ -136,13 +136,16 @@ window.addEventListener('message', event => {
   if (!pending) return;
   clearTimeout(pending.timer);
   pendingRequests.delete(event.data.id);
-  if (event.data.error) pending.reject(requestError(event.data.error,pending.action));
+  if (event.data.error) pending.reject(requestError(event.data.error,pending.action,event.data));
   else pending.resolve(event.data.result);
 });
-function requestError(code,action) {
+function requestError(code,action,details={}) {
   const safeCode=typeof code==='string'&&/^[a-z_]{1,64}$/.test(code)?code:'request_failed';
   const error=Error(`${t(`action.${action}`)}: ${language.messages[`error.${safeCode}`]??t('error.request')}`);
-  error.code=safeCode;error.action=action;return error;
+  error.code=safeCode;error.action=action;
+  error.reason=typeof details.reason==='string'&&/^[a-z_]{1,40}$/.test(details.reason)?details.reason:null;
+  error.fields=Array.isArray(details.fields)?details.fields.filter(field=>typeof field==='string'&&/^[a-z_]{1,40}$/.test(field)):[];
+  return error;
 }
 
 function showStartupError(stage,error) {
@@ -755,12 +758,128 @@ function batteryGroupDetails(group) {
     (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');
 }
 
+/* Settings: one save bar for all sections; field errors come from the backend's allow-listed field names. */
+const settingsUi = {section:'battery', baseline:null, costBaseline:null, costLoading:null, saving:false};
+const costForm = byId('cost-settings');
+function formState(target) {
+  const values={};
+  for (const element of target.elements) if (element.name) values[element.name]=element.type==='checkbox' ? element.checked : element.value;
+  return values;
+}
+function dirtySettings() {
+  const result=[];
+  for (const [target,baseline,group] of [[form,settingsUi.baseline,'daily'],[costForm,settingsUi.costBaseline,'cost']]) {
+    if (!baseline) continue;
+    const now=formState(target);
+    for (const key of Object.keys(now)) if (now[key]!==baseline[key]) result.push({group,key});
+  }
+  return result;
+}
+function updateSavebar() {
+  const dirty=dirtySettings();
+  byId('savebar').hidden=route!=='settings' || !dirty.length;
+  byId('dirty-count').textContent=dirty.length===1 ? t('settings.one_change') : t('settings.changes',{count:dirty.length});
+  byId('save-settings').disabled=settingsUi.saving;
+  byId('discard-settings').disabled=settingsUi.saving;
+}
+function showSettingsSection(name) {
+  const links=[...byId('settings-side').querySelectorAll('[data-section]')];
+  const target=links.some(link=>link.dataset.section===name && !link.hidden) ? name : 'battery';
+  settingsUi.section=target;
+  links.forEach(link=>link.setAttribute('aria-current',String(link.dataset.section===target)));
+  document.querySelectorAll('[data-settings-section]').forEach(section=>{section.hidden=section.dataset.settingsSection!==target;});
+  if (target==='costs') void ensureCostSettings();
+}
+function ensureCostSettings() {
+  if (settingsUi.costBaseline || settingsUi.costLoading) return settingsUi.costLoading ?? Promise.resolve();
+  settingsUi.costLoading=loadCostSettings().then(()=>{settingsUi.costBaseline=formState(costForm);})
+    .catch(error=>{byId('cost-saved').textContent=error.message;})
+    .finally(()=>{settingsUi.costLoading=null;updateSavebar();});
+  return settingsUi.costLoading;
+}
+const fieldLabel = name => [form,costForm].map(target=>target.elements.namedItem(name)).find(Boolean)?.closest('label') ?? null;
+function clearFieldError(label) {
+  label.classList.remove('invalid');
+  const message=label.querySelector('.field-error');
+  if (message) {message.hidden=true;message.textContent='';}
+}
+function showFieldErrors(fields,reason) {
+  let first=null;
+  for (const name of fields) {
+    const label=fieldLabel(name);
+    if (!label) continue;
+    label.classList.add('invalid');
+    let message=label.querySelector('.field-error');
+    if (!message) {message=document.createElement('span');message.className='field-error';label.append(message);}
+    const key='settings.error_'+reason;
+    message.textContent=Object.hasOwn(language.messages,key) ? t(key) : t('settings.error_field');
+    message.hidden=false;
+    first??=label;
+  }
+  if (first) {
+    showSettingsSection(first.closest('[data-settings-section]')?.dataset.settingsSection);
+    first.closest('details')?.setAttribute('open','');
+    first.querySelector('input,select')?.focus();
+  }
+  return first!==null;
+}
+function dailyValues() {
+  const values = {};
+  for (const name of ['reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
+  for (const name of ['battery_pv_support','battery_pv_start','holiday_catholic']) values[name] = form.elements[name].checked;
+  for (const name of ['holiday_state','holiday_locality']) values[name] = form.elements[name].value;
+  return values;
+}
+let toastTimer=null;
+function toast(message) {
+  const node=byId('toast');
+  node.textContent=message;node.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{node.hidden=true;},3500);
+}
+async function saveSettings() {
+  if (settingsUi.saving) return;
+  document.querySelectorAll('#settings label.invalid').forEach(clearFieldError);
+  const dirty=dirtySettings();
+  if (!dirty.length) return;
+  // Browser input constraints only catch unparsable or empty numbers; the backend validates the values.
+  const unreadable=dirty.map(item=>(item.group==='daily' ? form : costForm).elements.namedItem(item.key))
+    .filter(element=>element && !element.disabled && !element.checkValidity());
+  if (unreadable.length) {showFieldErrors(unreadable.map(element=>element.name),'input');toast(t('settings.fix_fields'));return;}
+  settingsUi.saving=true;updateSavebar();
+  try {
+    if (dirty.some(item=>item.group==='daily')) {await api('settings',dailyValues());settingsUi.baseline=formState(form);vehicleFormKey=null;}
+    if (dirty.some(item=>item.group==='cost')) {await saveCostSettings();settingsUi.costBaseline=null;await ensureCostSettings();}
+    toast(t('settings.saved'));
+  } catch (error) {
+    toast(showFieldErrors(error.fields ?? [],error.reason) ? t('settings.fix_fields') : error.message);
+  } finally {
+    settingsUi.saving=false;updateSavebar();
+  }
+  await refresh();
+}
+function discardSettings() {
+  for (const [target,baseline] of [[form,settingsUi.baseline],[costForm,settingsUi.costBaseline]]) {
+    if (!baseline) continue;
+    for (const element of target.elements) {
+      if (!element.name || !Object.hasOwn(baseline,element.name)) continue;
+      if (element.type==='checkbox') element.checked=baseline[element.name]; else element.value=baseline[element.name];
+    }
+  }
+  holidayFields();
+  costForm.elements.pv_price_ct.disabled=costForm.elements.pv_price_source.value==='eos';
+  document.querySelectorAll('#settings label.invalid').forEach(clearFieldError);
+  updateSavebar();toast(t('settings.discarded'));
+}
+
 function settings() {
-  if (!formReady && 'schedule' in snapshot.settings) {
+  // Without local edits the form follows backend changes, e.g. from native HA entities.
+  if ('schedule' in snapshot.settings && (!formReady || !dirtySettings().some(item=>item.group==='daily'))) {
     fillForm();
+    settingsUi.baseline=formState(form);
     formReady = true;
   }
-  const limits = snapshot.battery_limits;
+  showSettingsSection(settingsUi.section);
+  updateSavebar();
   byId('battery-limits-status').textContent = t(`settings.battery_limits_${snapshot.battery_limits_status??'unmanaged'}`, {
       minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc});
   byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${th(`status.${snapshot.eos_status??'connecting'}`)}</dd>
@@ -837,6 +956,7 @@ function renderView() {
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
   byId('notices').hidden = route !== 'notices';
+  updateSavebar();
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
   renderStatus(route);
   // Routes share their names with section ids; keep the status band in view after navigation.
@@ -923,15 +1043,6 @@ vehicleForm.addEventListener('submit',async event=>{
   try{await api('settings',values);vehicleFormKey=null;await refresh();byId('vehicle-saved').textContent=t('settings.saved');}
   catch(error){byId('vehicle-saved').textContent=error.message;}
 });
-form.addEventListener('submit', async event => {
-  event.preventDefault();
-  const values = {};
-  for (const name of ['reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
-  for (const name of ['battery_pv_support','battery_pv_start','holiday_catholic']) values[name] = form.elements[name].checked;
-  for (const name of ['holiday_state','holiday_locality']) values[name] = form.elements[name].value;
-  try { await api('settings',values); vehicleFormKey=null; byId('saved').textContent = t('settings.saved'); await refresh(); }
-  catch (error) { byId('saved').textContent = error.message; }
-});
 byId('status-band').addEventListener('click', async event => {
   const action=event.target.closest('[data-control]')?.dataset.control;
   if(!action||control.busy)return;
@@ -949,6 +1060,22 @@ byId('status-band').addEventListener('click', async event => {
   }
   render();
   if(action==='take'||action==='release')byId('status-band').querySelector('[data-control="confirm"]')?.focus();
+});
+for (const target of [form,costForm]) {
+  target.addEventListener('submit',event=>{event.preventDefault();void saveSettings();});
+  for (const type of ['input','change']) target.addEventListener(type,event=>{
+    const label=event.target.closest?.('label');
+    if (label) clearFieldError(label);
+    updateSavebar();
+  });
+}
+byId('save-settings').addEventListener('click',()=>void saveSettings());
+byId('discard-settings').addEventListener('click',discardSettings);
+byId('settings-side').addEventListener('click',event=>{
+  const link=event.target.closest('[data-section]');
+  if (!link) return;
+  event.preventDefault();
+  showSettingsSection(link.dataset.section);
 });
 byId('overview-track').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');

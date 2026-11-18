@@ -491,6 +491,27 @@
     "plan_event.car_target": "{vehicle} erreicht voraussichtlich {soc} %",
     "plan_event.price": "Netzstrom {price}",
     "metric.battery_idle": "ohne Lade- oder Entladeleistung",
-    "plan.track_hint": "Abschnitt antippen für Details."
+    "plan.track_hint": "Abschnitt antippen für Details.",
+    "settings.sections": "Einstellungsbereiche",
+    "settings.section_battery": "Speicher",
+    "settings.section_car": "E-Auto",
+    "settings.section_calendar": "Kalender",
+    "settings.section_costs": "Kosten",
+    "settings.section_system": "System",
+    "settings.car_help": "Gilt für jedes Fahrzeug. Ladeziele und Lademodi stellst du direkt am Fahrzeug ein.",
+    "settings.expert": "Expertenwerte für die Regelung",
+    "settings.cost_expert": "Wirkungsgrade und Anfangspreis",
+    "settings.one_change": "1 Änderung",
+    "settings.changes": "{count} Änderungen",
+    "settings.unsaved": "nicht gespeichert",
+    "settings.discard": "Verwerfen",
+    "settings.discarded": "Änderungen verworfen",
+    "settings.fix_fields": "Nicht gespeichert. Bitte die markierten Felder prüfen.",
+    "settings.error_field": "Dieser Wert wurde nicht übernommen.",
+    "settings.error_input": "Bitte eine gültige Zahl im erlaubten Bereich eingeben.",
+    "settings.error_out_of_range": "Der Wert liegt außerhalb des erlaubten Bereichs.",
+    "settings.error_invalid_type": "Dieser Wert hat ein ungültiges Format.",
+    "settings.error_battery_bounds": "Der Mindest-SoC muss kleiner als der Maximal-SoC sein.",
+    "settings.error_invalid_holiday_region": "Diese Kombination aus Bundesland, Ort und katholischen Feiertagen ist nicht möglich."
   }
 }

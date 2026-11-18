@@ -96,3 +96,18 @@ test('browser failures are ignored and never sent or replayed after HA reconnect
   assert.equal(f.calls.length,0);
   assert.ok(!JSON.stringify(f.calls).includes('test-secret'));
 });
+
+test('rejected settings forward only allow-listed reason and field names',async()=>{
+  const f=panelFixture();let reply;
+  f.panel.hass={locale:{language:'de'},callWS:async()=>{throw {code:'invalid_settings',message:'private 96',
+    translation_placeholders:{reason:'battery_bounds',fields:'battery_max_soc,battery_min_soc,<img>,'+'x'.repeat(50)}};}};
+  f.frame.contentWindow.postMessage=data=>{reply=data;};
+  await f.send({source:f.frame.contentWindow,origin:f.origin,data:{channel:'eos-energy-request',id:5,action:'settings',values:{}}});
+  assert.equal(reply.error,'invalid_settings');
+  assert.equal(reply.reason,'battery_bounds');
+  assert.equal(JSON.stringify(reply.fields),'["battery_max_soc","battery_min_soc"]');
+  assert.ok(!JSON.stringify(reply).includes('private'));
+  f.panel.hass={locale:{language:'de'},callWS:async()=>{throw {code:'invalid_settings',translation_placeholders:{reason:'Bad Reason',fields:7}};}};
+  await f.send({source:f.frame.contentWindow,origin:f.origin,data:{channel:'eos-energy-request',id:6,action:'settings',values:{}}});
+  assert.equal(reply.reason,undefined);assert.equal(JSON.stringify(reply.fields),'[]');
+});

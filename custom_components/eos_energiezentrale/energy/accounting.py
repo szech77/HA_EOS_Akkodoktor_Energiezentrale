@@ -11,6 +11,7 @@ from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 
 from .domain import instant, number
+from .failures import BackendError
 from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, known_rate
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
@@ -21,12 +22,11 @@ SOURCES = ("pv", "battery", "grid", "unknown")
 
 def checked_settings(values):
     if not isinstance(values, dict) or values.keys() - DEFAULTS.keys():
-        raise ValueError("Unknown accounting setting")
+        raise BackendError("Unknown accounting setting", reason='unknown_fields')
     result = {**DEFAULTS, **values}
-    if result["pv_price_source"] not in {"eos", "manual"}:
-        raise ValueError("Invalid PV price source")
-    if result["efficiency_source"] not in {"eos", "manual"}:
-        raise ValueError("Invalid efficiency source")
+    for key in ("pv_price_source", "efficiency_source"):
+        if result[key] not in {"eos", "manual"}:
+            raise BackendError("Invalid accounting source: " + key, reason='invalid_type', fields=(key,))
     for key, low, high in (("pv_price_ct", -1000, 1000),
                            ("charge_efficiency", .1, 1), ("discharge_efficiency", .1, 1),
                            ("capacity_wh", 100, 1000000), ("initial_price_ct", -1000, 1000)):
@@ -34,7 +34,7 @@ def checked_settings(values):
         if key == "initial_price_ct" and value is None:
             continue
         if isinstance(value, bool) or number(value) is None or not low <= float(value) <= high:
-            raise ValueError("Invalid accounting value: " + key)
+            raise BackendError("Invalid accounting value: " + key, reason='out_of_range', fields=(key,))
         result[key] = float(value)
     return result
 

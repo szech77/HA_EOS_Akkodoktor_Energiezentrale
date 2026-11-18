@@ -23,7 +23,7 @@ Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screens
 ### Übersicht: Energiefluss, Wetter und Tagesbilanz
 
 Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
-Energiefluss. Name und Wert stehen neben dem jeweiligen Symbol. Hat ein Gerät einen
+Energiefluss. Name und Wert stehen unter dem jeweiligen Symbol. Hat ein Gerät einen
 offenen Hinweis, trägt sein Symbol ein Warnzeichen; welcher Hinweis zu welchem
 Gerät gehört, legt das Backend fest. Ein Klick auf PV, Netz oder Speicher öffnet
 die Detailansicht, auf Haus und Wärmepumpe deren Verbrauchsauswertung, auf das
@@ -352,7 +352,15 @@ erfordert eine Anpassung des Lesers.
 
 ### Alltägliche Ladeeinstellungen
 
-Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entitäten:
+Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entitäten.
+Die Einstellungsseite ist in die Bereiche **Speicher**, **E-Auto**, **Kalender**,
+**Kosten** und **System** gegliedert; ohne Wallbox entfallen E-Auto und Kalender.
+Selten benötigte Regelwerte stehen eingeklappt unter **Expertenwerte**. Sobald
+ein Wert geändert wurde, erscheint unten eine Leiste mit der Zahl der Änderungen,
+**Verwerfen** und **Speichern**; ein Klick speichert alle Bereiche gemeinsam. Lehnt
+das Backend einen Wert ab, steht der Grund direkt am betroffenen Feld (zum Beispiel
+an Mindest- und Maximal-SoC, wenn der Mindestwert nicht kleiner ist). Die
+**Energiesteuerung** wird im Statusband oben auf jeder Seite geschaltet.
 
 | Einstellung | Bedeutung |
 |---|---|
@@ -417,9 +425,9 @@ Abfahrtszeitpunkt gesetzt sein. Im Panel werden die Angaben gemeinsam gespeicher
 
 ### Speichergrenzen an EOS übergeben
 
-1. Im Panel **Einstellungen → Hausspeicher** öffnen.
+1. Im Panel **Einstellungen → Speicher** öffnen.
 2. **Speicher Mindest-SoC** und **Speicher Maximal-SoC** setzen, zum Beispiel 30 % und 90 %.
-3. **Speichern** drücken. Die Werte gelten auch für die lokale Speicherregelung.
+3. In der Leiste unten **Speichern** drücken. Die Werte gelten auch für die lokale Speicherregelung.
 4. Unter den Feldern die Rückmeldung prüfen: **EOS bestätigt: Speicher 30–90 %.**
 
 Die Einstellungen stehen zusätzlich als zwei `number`-Entitäten unter dem Gerät
@@ -797,7 +805,7 @@ verwenden die konfigurierte Anlagenzeitzone. Wiederkehrende Termine in der
 Zeitumstellungslücke werden auf die nächste existierende Uhrzeit verschoben;
 nicht existierende einmalige Uhrzeiten werden zurückgewiesen.
 
-Unter **Einstellungen → Feiertage in Deutschland** Bundesland und gegebenenfalls
+Unter **Einstellungen → Kalender** Bundesland und gegebenenfalls
 Augsburg als örtliche Sonderregelung auswählen. Für betroffene Gemeinden Bayerns,
 Sachsens und Thüringens können örtliche katholische Feiertage aktiviert werden.
 Diese Auswahl richtet sich nach dem Standort, nicht nach der persönlichen
@@ -973,7 +981,8 @@ Die Datenbankabfragen laufen außerhalb der Gerätesteuerung und sind zeitlich b
 
 ### Einstellungen zur Bilanzierung
 
-Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
+Unter **Einstellungen → Kosten** stehen zur Verfügung (Wirkungsgrade und
+Anfangspreis eingeklappt unter **Wirkungsgrade und Anfangspreis**):
 
 | Einstellung | Bedeutung |
 | --- | --- |

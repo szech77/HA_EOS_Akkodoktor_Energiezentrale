@@ -982,6 +982,21 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(connection.send_error.call_args.args[1],code)
                 self.assertNotIn('missing file',connection.send_error.call_args.args[2])
 
+    async def test_rejected_settings_return_reason_and_field_names_only(self):
+        from custom_components.eos_energiezentrale.energy.failures import BackendError
+        coordinator,_=self.controller()
+        coordinator.async_change=AsyncMock(side_effect=BackendError('private value 96',reason='battery_bounds',
+            fields=('battery_min_soc','battery_max_soc','not_allowed')))
+        connection=await self.invoke({'action':'settings','values':{'battery_min_soc':96}})
+        args,kwargs=connection.send_error.call_args
+        self.assertEqual(args[1],'invalid_settings')
+        self.assertEqual(kwargs['translation_key'],'invalid_settings')
+        self.assertEqual(kwargs['translation_placeholders'],{'reason':'battery_bounds','fields':'battery_max_soc,battery_min_soc'})
+        self.assertNotIn('96',json.dumps([args,kwargs],default=str))
+        coordinator.async_change=AsyncMock(side_effect=ValueError('plain private failure'))
+        connection=await self.invoke({'action':'settings','values':{}})
+        self.assertNotIn('translation_placeholders',connection.send_error.call_args.kwargs)
+
     async def test_unexpected_ui_backend_failure_returns_an_error_instead_of_timing_out(self):
         coordinator,_=self.controller()
         coordinator.async_history=AsyncMock(side_effect=RuntimeError('private backend detail'))
@@ -1217,7 +1232,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         answered = asyncio.Event()
         connection = Mock(user=SimpleNamespace(is_admin=True))
         connection.send_result.side_effect = lambda *_: answered.set()
-        connection.send_error.side_effect = lambda *_: answered.set()
+        connection.send_error.side_effect = lambda *_, **__: answered.set()
         websocket_request(self.hass, connection, {"id": 1, **msg})
         await asyncio.wait_for(answered.wait(), timeout=5)
         return connection
