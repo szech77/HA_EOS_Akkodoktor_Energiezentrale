@@ -30,8 +30,9 @@ Gerät gehört, legt das Backend fest. Ein Klick auf PV oder das Wettersymbol ö
 die Verbrauchsauswertung, auf das Auto die Fahrzeugseite und auf das EOS-Symbol
 in der Mitte die Gesamtbilanz. Der
 Link **Leistungsverlauf** unter dem Diagramm öffnet alle Leistungskurven.
-Daneben steht der EOS-Plan der nächsten 12 Stunden als bedienbarer Zeitstrahl und
-darunter die Liste **Was als Nächstes passiert**: geplante Moduswechsel von
+Darunter steht in voller Breite der EOS-Plan der nächsten 12 Stunden als bedienbarer
+Zeitstrahl und die einklappbare Liste **Was als Nächstes passiert** (mit Anzahl der
+Einträge; der Browser merkt sich, ob sie auf- oder zugeklappt ist): geplante Moduswechsel von
 Speicher und Fahrzeugen, der erwartete Zeitpunkt für einen vollen Speicher und
 für das Erreichen des Ladeziels, jeweils mit dem Netzstrompreis zu diesem
 Zeitpunkt. Moduswechsel, die kürzer als 30 Minuten gelten, erscheinen nicht in der

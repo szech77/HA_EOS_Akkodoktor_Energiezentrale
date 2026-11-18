@@ -423,6 +423,13 @@ function nextEvents() {
   }).join('');
 }
 
+// The expanded state of the event list is a per-viewer convenience only.
+const nextDetailsKey='eos-energiezentrale.next-events-open';
+function restoreNextDetails() {
+  try { const saved=localStorage.getItem(nextDetailsKey); if(saved!==null)byId('next-details').open=saved==='1'; } catch { /* storage unavailable */ }
+  byId('next-details').addEventListener('toggle',()=>{try { localStorage.setItem(nextDetailsKey,byId('next-details').open?'1':'0'); } catch { /* storage unavailable */ }});
+}
+
 function overview() {
   dayBalance();
   const live = snapshot.live;
@@ -464,6 +471,8 @@ function overview() {
   renderFlow();
   byId('overview-track').innerHTML=overviewTrack(windowNow());
   byId('next-events').innerHTML=nextEvents();
+  const count=(snapshot.plan_events??[]).length;
+  byId('next-count').hidden=!count;byId('next-count').textContent=count;
 }
 
 const chartModels = new Map();
@@ -1308,6 +1317,7 @@ byId('overview-track').addEventListener('click',event => {
   byId('overview-track').querySelectorAll('[data-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
   byId('overview-track-detail').textContent = button.dataset.mode;
 });
+restoreNextDetails();
 byId('car-plan').addEventListener('click',event => {
   const button = event.target.closest('[data-charge]');
   if (!button) return;
