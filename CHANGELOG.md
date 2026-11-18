@@ -11,11 +11,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Einen nicht bestätigten Stopp einer nicht erreichbaren HA-Wallbox (Status unbekannt) als sichtbaren Fehler `wallbox_stop` melden und in jedem Zyklus wiederholen, statt die Steuerung dauerhaft auszuschalten. Bei unverfügbarer Ladefreigabe nur kurz auf die Bestätigung warten; eine bereits gemeldete Pause benötigt keine zusätzliche Abfrage. Erreichbare Wallboxen ohne Stoppbestätigung bleiben Steuerfehler.
-- Den ausdrücklich gemeldeten Netzbetrieb einer konfigurierten HA-Statusentität nicht mehr wegen eines alten Meldezeitpunkts als unbekannt pausieren. Nicht verfügbare oder unerwartete Zustände pausieren weiterhin; die Netzwiederkehr nach einer Pause verlangt weiterhin einen frischen Netzbetriebsstatus. Bei unbekanntem Status schalten gleichzeitige Lesefehler von Speicher oder Wallbox die Steuerung nicht mehr dauerhaft aus, auch im Mehrfahrzeugbetrieb.
-- Während der Wiederanlauf auf EOS oder Messwerte wartet, einen lesbaren Speicher auch bei noch nicht lesbarer Wallbox freigeben; die Wallbox wird freigegeben, sobald sie lesbar ist. Im Mehrfahrzeugbetrieb gibt ein noch wartendes Fahrzeug nur seine eigene Wallbox frei und pausiert keine bereits regelnde Wallbox mehr.
-- Nach dem Ausschalten fehlgeschlagene Gerätefreigaben in jedem Zyklus wiederholen, bis sie bestätigt sind.
-- Die Quelldiagnose bewertet den Fahrzeug-SoC mit derselben 36-Stunden-Grenze wie die Regelung, auch für Plugin-Werte.
+- Keine.
 
 ### Breaking Changes
 
@@ -23,8 +19,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Security
 
-- Stoppbefehle der Plugins `nrgkick_local` und `goe_http_v2` auch dann senden, wenn eine abgebrochene Abfrage noch offen ist; dafür ist genau eine zusätzliche Anfrage reserviert. Ohne Bestätigung bleibt der Stopp ein Fehler.
-- EOS-, InfluxDB- und Fronius-Solar-API-Anfragen zusätzlich zur Inaktivitätsfrist von 5 s mit einer Gesamtfrist von 30 s je Anfrage begrenzen. Solange eine abgebrochene Anfrage an denselben Dienst offen ist, scheitern weitere Anfragen dorthin sofort; so können auch verspätet abgeschlossene Konfigurationsschreibvorgänge keine neueren überholen.
+- Keine.
 
 ## 0.19.0 - 2026-11-16
 
