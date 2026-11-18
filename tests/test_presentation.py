@@ -36,3 +36,50 @@ class PowerRingRequirements(unittest.TestCase):
     def test_invalid_visual_configuration_is_rejected(self):
         for changes in ({'pv_peak_w':0},{'pv_peak_w':float('nan')},{'heat_load_entity':'switch.wp'},{'heat_load_scale':'watts'}):
             with self.subTest(changes=changes),self.assertRaises(ValueError):validate_options({**DEFAULTS,**changes})
+
+
+def test_node_problems_map_notices_to_flow_nodes_and_vehicles():
+    from custom_components.eos_energiezentrale.energy.presentation import node_problems
+    notices = [
+        {'code':'sources_unavailable', 'severity':'warning', 'scope':'system', 'measurements':['solar', 'house_total']},
+        {'code':'battery_read', 'severity':'error', 'scope':'system'},
+        {'code':'battery_limits', 'severity':'warning', 'scope':'system'},
+        {'code':'backup_power_active', 'severity':'info', 'scope':'system'},
+        {'code':'wallbox_stop', 'severity':'error', 'scope':'system'},
+        {'code':'goal', 'severity':'warning', 'scope':'vehicle/2'},
+        {'code':'goal', 'severity':'warning', 'scope':'vehicle/9'},
+    ]
+    assert node_problems(notices) == {'solar':'warning', 'house':'warning', 'battery':'error', 'car':'error'}
+    fleet = node_problems(notices, [{'id':'first'}, {'id':'second'}])
+    assert fleet['car/first'] == 'error' and fleet['car/second'] == 'warning'
+    assert 'car' not in fleet and 'grid' not in fleet
+
+
+def test_plan_events_list_changes_milestones_and_prices_in_time_order():
+    from datetime import datetime, timedelta, timezone
+    from custom_components.eos_energiezentrale.energy.presentation import plan_events
+    now = datetime(2026, 11, 18, 13, 32, tzinfo=timezone.utc)
+    at = lambda minutes: (now + timedelta(minutes=minutes)).isoformat()
+    forecast = [{'time':at(15*i), 'end':at(15*(i+1)), 'price':24.1 if i >= 50 else 30.4,
+                 'battery_soc':min(95, 60 + 5*i), 'car_soc':min(80, 40 + i)} for i in range(100)]
+    data = {'live':{'battery_mode':'NON_EXPORT', 'car_mode':'IDLE', 'battery_soc':60, 'car_soc':40},
+            'settings':{'battery_max_soc':95}, 'charge_target_soc':80, 'forecast':forecast,
+            'plan':{'battery':[{'time':at(-60), 'mode':'SELF_CONSUMPTION'}, {'time':at(30), 'mode':'NON_EXPORT'},
+                               {'time':at(28), 'mode':'SELF_CONSUMPTION'}, {'time':at(60*30), 'mode':'IDLE'}],
+                    'car':[{'time':at(12*60+30), 'mode':'FORCED_CHARGE'}]}}
+    events = plan_events(data, now)
+    assert [(row['kind'], row.get('device'), row.get('mode')) for row in events] == [
+        ('mode', 'battery', 'SELF_CONSUMPTION'), ('mode', 'battery', 'NON_EXPORT'),
+        ('battery_full', None, None), ('car_target', None, None), ('mode', 'car', 'FORCED_CHARGE')]
+    assert events[0]['price_ct'] == 30.4 and events[-1]['price_ct'] == 24.1
+    assert events[2]['soc'] == 95 and events[2]['time'] == at(105)
+    assert all(now < datetime.fromisoformat(row['time']) <= now + timedelta(hours=24) for row in events if row['kind'] == 'mode')
+    # Already full or without a target: no milestone; disabled wallbox: no car events.
+    data['live']['battery_soc'] = 95
+    data['features'] = {'car':False}
+    assert [row['kind'] for row in plan_events(data, now)] == ['mode', 'mode']
+    vehicles = {**data, 'features':{'car':True}, 'vehicles':[{'id':'a', 'name':'ID.4', 'live':{'car_mode':'IDLE', 'car_soc':40},
+        'charge_target_soc':80, 'forecast':forecast, 'plan':{'car':[{'time':at(90), 'mode':'FORCED_CHARGE'}]}}]}
+    fleet = plan_events(vehicles, now)
+    assert {row['vehicle_id'] for row in fleet if row.get('device') == 'car' or row['kind'] == 'car_target'} == {'a'}
+    assert len(plan_events(vehicles, now, limit=2)) == 2

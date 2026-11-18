@@ -22,7 +22,7 @@ test('unknown and invalid SoC are distinct from a known empty battery',()=>{
 });
 test('the overview contains the same five bars as the vehicle cards',()=>{
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
- const node=html.match(/<a class="node car"[\s\S]*?<\/a>/)[0];
+ const node=html.match(/<a class="node car[ "][\s\S]*?<\/a>/)[0];
  assert.equal((node.match(/class="car-soc-bar"/g)||[]).length,5);
  assert.match(node,/<g class="car-soc" hidden/);
 });

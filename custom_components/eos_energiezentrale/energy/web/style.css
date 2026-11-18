@@ -350,3 +350,44 @@
   #eos-energy-design .notice-pill {display:flex;}
   #eos-energy-design .notice-pill[hidden] {display:none;}
 }
+
+/* Overview: flow and EOS plan side by side; node text beside the circle so zoom cannot overlap it. */
+#eos-energy-design .overview-grid {display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:start;}
+#eos-energy-design .overview-grid > * {min-width:0;margin-top:0;}
+@media(max-width:860px){#eos-energy-design .overview-grid {grid-template-columns:minmax(0,1fr);}}
+#eos-energy-design #overview-kpis {grid-template-columns:repeat(4,minmax(0,1fr));}
+@media(max-width:760px){#eos-energy-design #overview-kpis {grid-template-columns:repeat(2,minmax(0,1fr));}}
+#eos-energy-design .flow {max-width:none;}
+#eos-energy-design .node {--orb:52px;transform:translateY(-50%);width:auto;display:grid;grid-template-columns:var(--orb) auto;column-gap:8px;row-gap:0;align-items:center;align-content:center;justify-items:start;text-align:left;left:calc(var(--x) - var(--orb)/2);max-width:calc(100% - var(--x) + var(--orb)/2);}
+#eos-energy-design .node.l {grid-template-columns:auto var(--orb);justify-items:end;text-align:right;left:auto;right:calc(100% - var(--x) - var(--orb)/2);max-width:calc(var(--x) + var(--orb)/2);}
+#eos-energy-design .node > .orb {grid-column:1;grid-row:1 / span 3;width:var(--orb);height:var(--orb);position:relative;}
+#eos-energy-design .node.l > .orb {grid-column:2;}
+#eos-energy-design .node > span:nth-child(2),#eos-energy-design .node > strong,#eos-energy-design .node > .reading-age {grid-column:2;background:transparent;padding:0;text-align:inherit;max-width:none;min-width:0;}
+#eos-energy-design .node.l > span:nth-child(2),#eos-energy-design .node.l > strong,#eos-energy-design .node.l > .reading-age {grid-column:1;}
+#eos-energy-design .node > span:nth-child(2) {grid-row:1;align-self:end;color:var(--dim);}
+#eos-energy-design .node > strong {grid-row:2;font-size:18px;}
+#eos-energy-design .node > .reading-age {grid-row:3;align-self:start;}
+#eos-energy-design .node .backup-indicator {left:auto;right:-10px;top:-12px;}
+#eos-energy-design .node .flag {position:absolute;z-index:2;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--warn);color:var(--surface);font-size:12px;font-weight:800;line-height:1;}
+#eos-energy-design .node.problem-error .flag {background:var(--crit);}
+#eos-energy-design .node.problem-error .orb {outline:2px dashed var(--crit);outline-offset:3px;}
+#eos-energy-design .flow-footer {justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+#eos-energy-design .plan-link {display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;font-size:13.5px;text-decoration:none;padding:6px 0;}
+#eos-energy-design .flow-footer .plan-link {margin-top:0;}
+#eos-energy-design .plan-track-wrap {position:relative;margin-top:6px;}
+#eos-energy-design .plan-track {display:flex;height:30px;border-radius:6px;overflow:hidden;}
+#eos-energy-design .plan-track .mode-segment {color:var(--surface);font-size:11px;font-weight:650;text-align:left;padding:0 0 0 6px;overflow:hidden;white-space:nowrap;}
+#eos-energy-design .plan-track .mode-segment[aria-pressed="true"] {outline:2px solid var(--ink);outline-offset:-2px;}
+#eos-energy-design .plan-now {position:absolute;top:-4px;bottom:-4px;border-left:2px solid var(--ink);pointer-events:none;}
+#eos-energy-design .plan-axis {position:relative;height:18px;margin-top:4px;font-size:11.5px;color:var(--dim);}
+#eos-energy-design .plan-axis span {position:absolute;top:0;white-space:nowrap;transform:translateX(-50%);}
+#eos-energy-design .plan-axis span:first-child {transform:none;}
+#eos-energy-design .plan-axis span:last-child {transform:translateX(-100%);}
+#eos-energy-design .list-title {font-size:14px;margin:14px 0 2px;}
+@media(max-width:640px){
+  #eos-energy-design .node {--orb:44px;column-gap:6px;}
+  #eos-energy-design .node > strong {font-size:15px;}
+  #eos-energy-design .node > span:nth-child(2) {font-size:11px;}
+  #eos-energy-design .node.node .orb > svg:not(.power-ring) {width:24px;height:24px;}
+}
+#eos-energy-design #day-balance:empty {display:none;}

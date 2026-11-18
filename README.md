@@ -23,8 +23,17 @@ Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screens
 ### Übersicht: Energiefluss, Wetter und Tagesbilanz
 
 Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
-Energiefluss. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
-Ein Klick auf ein Gerätesymbol öffnet die zugehörige Detailansicht.
+Energiefluss. Name und Wert stehen neben dem jeweiligen Symbol. Hat ein Gerät einen
+offenen Hinweis, trägt sein Symbol ein Warnzeichen; welcher Hinweis zu welchem
+Gerät gehört, legt das Backend fest. Ein Klick auf PV, Netz oder Speicher öffnet
+die Detailansicht, auf Haus und Wärmepumpe deren Verbrauchsauswertung, auf das
+Auto die Fahrzeugseite und auf das EOS-Symbol in der Mitte die Gesamtbilanz. Der
+Link **Leistungsverlauf** unter dem Diagramm öffnet alle Leistungskurven.
+Daneben steht der EOS-Plan der nächsten 12 Stunden als bedienbarer Zeitstrahl und
+darunter die Liste **Was als Nächstes passiert**: geplante Moduswechsel von
+Speicher und Fahrzeugen, der erwartete Zeitpunkt für einen vollen Speicher und
+für das Erreichen des Ladeziels, jeweils mit dem Netzstrompreis zu diesem
+Zeitpunkt. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
 
 ![Desktop-Übersicht mit Energiefluss, Wetter, Ladezuständen und Tagesverbrauch samt Kosten](docs/screenshots/overview.png)
 
@@ -640,7 +649,7 @@ weiter erscheinen. Der daraus berechnete Hausverbrauch trägt `≈` und den Hinw
 auf die ältere WP-Meldung. Diese Anzeige wird nicht als frische Messung an die
 Regelung oder den lokalen Verlauf übergeben.
 
-Die unteren EOS-Modus-Karten zeigen die **Planung**. Im Lesemodus steuert die
+Zeitstrahl und Liste **Was als Nächstes passiert** zeigen die **Planung**. Im Lesemodus steuert die
 Integration keine Geräte; der reale Speicherbetrieb kann daher davon abweichen.
 Für den tatsächlichen Stromfluss zählen die konfigurierten Leistungssensoren.
 
@@ -809,9 +818,8 @@ EOS-Zeitplan. Bis zu acht Fahrzeuge stehen untereinander im Diagramm; dessen Hö
 passt sich der Anzahl sichtbarer Verbraucher an. Nicht angeschlossene oder nicht
 erreichbare Fahrzeuge bleiben ausgegraut, ohne Hinweismeldung im Knoten; der
 Zustand ist im Tooltip und für Screenreader verfügbar. Unbekannte Messwerte bleiben
-unbekannt. Unterhalb der Verbrauchsauswertung steht für jedes Fahrzeug eine eigene
-EOS-Modus-Kachel mit aktuellem Modus und nächstem geplanten Moduswechsel. Der
-Fahrzeugname verlinkt auf die jeweilige Detailansicht. Es entstehen eigene native Sensoren
+unbekannt. Geplante Moduswechsel und das erwartete Erreichen des Ladeziels erscheinen je
+Fahrzeug mit dessen Namen in der Liste **Was als Nächstes passiert**. Es entstehen eigene native Sensoren
 für Leistung, SoC und Status jedes Fahrzeugs. Die Fahrzeug-ID bestimmt deren Identität.
 
 Alle Regler verwenden denselben Netzanschluss. Nicht gemessene Leistungserhöhungen

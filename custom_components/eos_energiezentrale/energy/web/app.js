@@ -101,9 +101,14 @@ const power = value => valid(value) ? `${decimal(Math.abs(value) / 1000, 2)} ${t
 const percent = value => valid(value) ? `${decimal(value)} %` : '—';
 const price = value => valid(value) ? `${decimal(value)} ${t('unit.price')}` : '—';
 const time = value => value ? new Intl.DateTimeFormat(language.locale, {timeZone: snapshot.zone, dateStyle:'short', timeStyle:'short'}).format(new Date(value)) : '—';
-// Same local day: clock time only; otherwise date and time.
-const when = value => value ? new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(value))===new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(windowNow()))
-  ? new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'}).format(new Date(value)) : time(value) : '—';
+// Same local day: clock time; within six days: weekday and time; otherwise date and time.
+const when = value => {
+  if (!value) return '—';
+  const stamp=new Date(value).getTime(), today=windowNow(), dayOf=ms=>new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(ms));
+  const options={timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'};
+  if (dayOf(stamp)===dayOf(today)) return new Intl.DateTimeFormat(language.locale,options).format(stamp);
+  return Math.abs(stamp-today)<6*day ? new Intl.DateTimeFormat(language.locale,{...options,weekday:'short'}).format(stamp) : time(value);
+};
 const modes = {
   IDLE:['mode.idle','grid'], NON_EXPORT:['mode.pv','battery'], SELF_CONSUMPTION:['mode.own','house'],
   FORCED_CHARGE:['mode.grid','car'], GRID_SUPPORT_IMPORT:['mode.grid','car'],
@@ -176,10 +181,6 @@ function actualPoints(key) {
   return [...influx.filter(row => !first || Date.parse(row.time) < first), ...local];
 }
 
-function nextPlan(key,source=snapshot) {
-  return source.next_mode?.[key];
-}
-
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
 
 function solarRemaining() {
@@ -248,7 +249,7 @@ function layoutFlow() {
     container.replaceChildren();paths.replaceChildren();
     vehicles.forEach(vehicle=>{
       const node=document.createElement('a');
-      node.className='node car';node.href='#car/'+encodeURIComponent(vehicle.id);
+      node.className='node car r';node.href='#car/'+encodeURIComponent(vehicle.id);
       node.innerHTML=`<span class="orb" aria-hidden="true">${carIcon(null)}</span><span></span><strong></strong>`;
       container.append(node);
       const path=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -266,8 +267,8 @@ function layoutFlow() {
   byId('energy-flow').style.height=height+'px';
   right.forEach((entry,index)=>{
     const y=(index+.5)*100/right.length;
-    entry.node.style.setProperty('--x','82%');entry.node.style.setProperty('--y',y+'%');
-    entry.flow.setAttribute('d',`M57 50 Q66 ${y} 82 ${y}`);
+    entry.node.style.setProperty('--x','70%');entry.node.style.setProperty('--y',y+'%');
+    entry.flow.setAttribute('d',`M56 50 Q62 ${y} 70 ${y}`);
   });
   byId('flow-wires').setAttribute('d',[...entries.slice(0,3).filter(entry=>entry.enabled),...right]
     .map(entry=>entry.flow.getAttribute('d')).join(' '));
@@ -354,6 +355,17 @@ function renderFlow() {
       node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
     }
     updatePowerRing(node,key,value,source);
+    // The backend maps open notices to flow nodes; the browser only marks them.
+    const problem=snapshot.node_problems?.[vehicle ? 'car/'+vehicle.id : key];
+    node.classList.toggle('problem-error',problem==='error');
+    node.classList.toggle('problem-warning',problem==='warning');
+    const orb=node.querySelector('.orb');
+    let flag=orb.querySelector('.flag');
+    if (problem && !flag) {
+      flag=document.createElement('span');flag.className='flag';flag.setAttribute('aria-hidden','true');flag.textContent='!';orb.append(flag);
+    }
+    if (flag) flag.hidden=!problem;
+    if (problem) node.setAttribute('aria-label',node.getAttribute('aria-label')+' · '+t('flow.problem_'+problem));
     flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
     flow.classList.toggle('reverse', value < 0);
     flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
@@ -367,16 +379,40 @@ function renderFlow() {
   });
 }
 
-function modeCards() {
-  const entries=[{key:'battery',source:snapshot,name:t('device.battery'),href:'#battery'}];
-  if (consumerEnabled('car')) {
-    if (snapshot.vehicles?.length) entries.push(...snapshot.vehicles.map(vehicle=>({key:'car',source:vehicle,name:vehicle.name,href:'#car/'+encodeURIComponent(vehicle.id)})));
-    else entries.push({key:'car',source:snapshot,name:t('node.car'),href:'#car'});
-  }
-  return entries.map(({key,source,name,href})=>{
-    const item=nextPlan(key,source);
-    return `<div><small>${th('metric.eos_mode')} · <a href="${html(href)}">${html(name)}</a></small><b>${html(modeLabel(source.live[key+'_mode']))}</b><span>${item ? html(time(item.time)+' · '+modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
+const planWindow = {before:3*3_600_000, after:12*3_600_000};
+const clock = value => new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'}).format(new Date(value));
+function overviewTrack(now) {
+  const start=now-planWindow.before, end=now+planWindow.after, span=end-start;
+  const rows=(snapshot.mode_timeline?.battery??[]).map(row=>({...row,start:Math.max(start,row.start),end:Math.min(end,row.end)}))
+    .filter(row=>row.end>row.start);
+  if (!rows.some(row=>row.kind==='plan'&&row.mode)) return `<p class="footnote">${th('plan.no_valid')}</p>`;
+  const legend=new Map();
+  const segments=rows.map(row=>{
+    const color=Object.hasOwn(modes,row.mode) ? modes[row.mode][1] : 'edge';
+    const label=row.mode ? modeLabel(row.mode) : t('timeline.no_data');
+    legend.set(label,color);
+    const info=t('timeline.interval',{kind:t(`timeline.${row.kind}`),start:when(row.start),end:when(row.end),mode:label});
+    return `<button type="button" class="mode-segment${row.kind==='plan' ? ' future' : ''}" style="--duration:${(row.end-row.start)/span};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${row.end-row.start>=5_400_000 ? `<span>${html(label)}</span>` : ''}</button>`;
   }).join('');
+  const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
+  return `<div class="plan-track-wrap"><div class="plan-track" role="group" aria-label="${th('timeline.aria')}">${segments}</div><span class="plan-now" style="left:${at(now)}" aria-hidden="true"></span></div>
+    <div class="plan-axis" aria-hidden="true"><span style="left:0">${html(clock(start))}</span><span style="left:${at(now)}">${th('chart.now')}</span><span style="left:${at(now+6*3_600_000)}">${html(clock(now+6*3_600_000))}</span><span style="left:100%">${html(clock(end))}</span></div>
+    <div class="mode-legend">${[...legend].map(([label,color])=>`<span><i style="--mode:var(--${color})"></i>${html(label)}</span>`).join('')}</div>`;
+}
+function planEventText(event) {
+  const vehicle=event.vehicle_name ?? snapshot.vehicle_name ?? t('node.car');
+  if (event.kind==='battery_full') return t('plan_event.battery_full',{soc:decimal(event.soc,0)});
+  if (event.kind==='car_target') return t('plan_event.car_target',{vehicle,soc:decimal(event.soc,0)});
+  if (event.device==='battery') {
+    const key='plan_event.battery_'+event.mode;
+    return Object.hasOwn(language.messages,key) ? t(key) : t('plan_event.battery',{mode:modeLabel(event.mode)});
+  }
+  return t('plan_event.car',{vehicle,mode:modeLabel(event.mode)});
+}
+function nextEvents() {
+  const events=snapshot.plan_events ?? [];
+  if (!events.length) return `<p class="footnote">${th('status.no_next_mode')}</p>`;
+  return events.map(event=>`<div class="row"><span><b>${html(planEventText(event))}</b>${valid(event.price_ct) ? `<br><small>${th('plan_event.price',{price:price(event.price_ct)})}</small>` : ''}</span><span class="tag">${html(when(event.time))}</span></div>`).join('');
 }
 
 function overview() {
@@ -407,16 +443,19 @@ function overview() {
     weatherNode.title = description+' · '+t('forecast.open');
   }
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
-  byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');
+  byId('live-time').textContent = live.time ? t('flow.as_of',{time:when(Date.parse(live.time)-flowAge*1000)}) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
     [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
     [t('metric.price_now'),price(displayed('price')),t('metric.import')],
     [t('metric.grid_connection'),backup ? t('power_supply.backup') : displayedPower('grid'),
       backup ? t('power_supply.grid_disconnected') : snapshot.power_supply?.state === 'unknown' ? t('power_supply.unknown')
-      : valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
+      : valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—'],
+    [t('node.battery'),percent(displayed('battery_soc')),valid(displayed('battery')) && Math.abs(displayed('battery'))>=10
+      ? `${displayed('battery') < 0 ? t('metric.discharging') : t('mode.charging')} · ${displayedPower('battery')}` : t('metric.battery_idle')]
   ]);
   renderFlow();
-  byId('next').innerHTML=modeCards();
+  byId('overview-track').innerHTML=overviewTrack(windowNow());
+  byId('next-events').innerHTML=nextEvents();
 }
 
 const chartModels = new Map();
@@ -905,6 +944,12 @@ byId('status-band').addEventListener('click', async event => {
   }
   render();
   if(action==='take'||action==='release')byId('status-band').querySelector('[data-control="confirm"]')?.focus();
+});
+byId('overview-track').addEventListener('click',event => {
+  const button = event.target.closest('[data-mode]');
+  if (!button) return;
+  byId('overview-track').querySelectorAll('[data-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+  byId('overview-track-detail').textContent = button.dataset.mode;
 });
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');

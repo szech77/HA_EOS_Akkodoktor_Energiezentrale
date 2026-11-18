@@ -19,7 +19,7 @@ from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
-from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline
+from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline, node_problems, plan_events
 from .weather_forecast import WeatherForecast
 
 _LOGGER = logging.getLogger(__name__)
@@ -137,6 +137,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         since = self.issue_log.active_since('state')
         result['notices'] = [{**notice, 'since':since.get(notice['id'])} for notice in result['notices']]
         result['resolved_notices'] = self.issue_log.recently_resolved('state', now)
+        result['node_problems'] = node_problems(result['notices'], result.get('vehicles') or ())
+        result['plan_events'] = plan_events(result, now)
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])
         if result['control_status'] != self.control_status:

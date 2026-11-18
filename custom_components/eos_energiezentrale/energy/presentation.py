@@ -174,3 +174,91 @@ def mode_timeline(data, rows, now):
         if end < now+timedelta(days=1):
             result[key] += intervals([], max(now,end), now+timedelta(days=1), None, 'plan')
     return result
+
+
+# Notice codes and measurements that belong to one energy-flow node.
+NODE_CODES = {'battery_read':'battery', 'battery_limits':'battery', 'wallbox':'car', 'wallbox_stop':'car',
+              'wallbox_read':'car', 'goal':'car', 'vehicle_limits':'car', 'backup_power_unknown':'grid'}
+MEASUREMENT_NODES = {'solar':'solar', 'inverter_ac':'solar', 'grid':'grid', 'house_total':'house', 'heat':'heat',
+                     'heat_load':'heat', 'car':'car', 'car_soc':'car', 'battery_soc':'battery',
+                     'battery_charge':'battery', 'battery_discharge':'battery'}
+
+
+def node_problems(notices, vehicles=()):
+    """Worst open warning or error per flow node; vehicle nodes are keyed car/<id>."""
+    rank = {'warning':1, 'error':2}
+    identities = [vehicle.get('id') for vehicle in vehicles or () if isinstance(vehicle.get('id'), str)]
+    result = {}
+    for notice in notices:
+        severity = notice.get('severity')
+        if severity not in rank:
+            continue
+        nodes = {NODE_CODES[notice.get('code')]} if notice.get('code') in NODE_CODES else set()
+        nodes |= {MEASUREMENT_NODES[key] for key in notice.get('measurements', []) if key in MEASUREMENT_NODES}
+        scope = notice.get('scope') or 'system'
+        for node in nodes:
+            key = node
+            if node == 'car' and identities:
+                index = int(scope.split('/')[1]) - 1 if scope.startswith('vehicle/') and scope.split('/')[1].isdigit() else 0
+                if not 0 <= index < len(identities):
+                    continue
+                key = 'car/' + identities[index]
+            if rank[severity] > rank.get(result.get(key), 0):
+                result[key] = severity
+    return result
+
+
+def plan_events(data, now, hours=24, limit=6):
+    """Upcoming mode changes and forecast milestones in time order, with the import price at that time."""
+    from datetime import timedelta
+    end = now + timedelta(hours=hours)
+    prices = [(instant(row.get('time')), instant(row.get('end')), number(row.get('price')))
+              for row in data.get('forecast') or []]
+    prices = [row for row in prices if None not in row]
+
+    def price_at(stamp):
+        return next((price for start, stop, price in prices if start <= stamp < stop), None)
+
+    events = []
+
+    def changes(rows, current, device, extra):
+        previous = current
+        ordered = sorted(((instant(row.get('time')), row.get('mode')) for row in rows or []
+                          if instant(row.get('time')) is not None), key=lambda item: item[0])
+        for stamp, mode in ordered:
+            if not isinstance(mode, str) or not now < stamp <= end or mode == previous:
+                continue
+            previous = mode
+            events.append({'time':stamp.isoformat(), 'kind':'mode', 'device':device, 'mode':mode,
+                           'price_ct':price_at(stamp), **extra})
+
+    def reached(rows, current, target, kind, extra):
+        if target is None or (current is not None and current >= target - .5):
+            return
+        lower = current is not None
+        for row in rows or []:
+            stamp, soc = instant(row.get('time')), number(row.get(kind_key[kind]))
+            if stamp is None or soc is None or not now <= stamp <= end:
+                continue
+            if soc < target - .5:
+                lower = True
+            elif lower:
+                events.append({'time':stamp.isoformat(), 'kind':kind, 'soc':target, 'price_ct':price_at(stamp), **extra})
+                return
+
+    kind_key = {'battery_full':'battery_soc', 'car_target':'car_soc'}
+    live = data.get('live') or {}
+    changes((data.get('plan') or {}).get('battery'), live.get('battery_mode'), 'battery', {})
+    reached(data.get('forecast'), number(live.get('battery_soc')),
+            number((data.get('settings') or {}).get('battery_max_soc')), 'battery_full', {})
+    vehicles = data.get('vehicles') or []
+    if vehicles:
+        for vehicle in vehicles:
+            extra = {'vehicle_id':vehicle.get('id'), 'vehicle_name':vehicle.get('name')}
+            changes((vehicle.get('plan') or {}).get('car'), (vehicle.get('live') or {}).get('car_mode'), 'car', extra)
+            reached(vehicle.get('forecast'), number((vehicle.get('live') or {}).get('car_soc')),
+                    number(vehicle.get('charge_target_soc')), 'car_target', dict(extra))
+    elif (data.get('features') or {}).get('car', True):
+        changes((data.get('plan') or {}).get('car'), live.get('car_mode'), 'car', {})
+        reached(data.get('forecast'), number(live.get('car_soc')), number(data.get('charge_target_soc')), 'car_target', {})
+    return sorted(events, key=lambda item: item['time'])[:limit]

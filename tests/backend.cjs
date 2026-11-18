@@ -7,7 +7,7 @@ const script=`import json,sys
 from datetime import datetime,timezone
 from custom_components.eos_energiezentrale.energy.report_values import amount_values,current_day_values
 from custom_components.eos_energiezentrale.energy.status import view_state
-from custom_components.eos_energiezentrale.energy.presentation import daily_pv_forecast,next24_pv_forecast
+from custom_components.eos_energiezentrale.energy.presentation import daily_pv_forecast,next24_pv_forecast,plan_events,node_problems
 args=json.load(sys.stdin)
 now=datetime.fromtimestamp(args.get('now',0)/1000,timezone.utc)
 op=args['operation']
@@ -16,6 +16,8 @@ elif op=='report': result=current_day_values(args['data'],args.get('historical')
 elif op=='view': result=view_state(args['data'],now)
 elif op=='dailySolar': result=daily_pv_forecast(args['data'],now,args['zone'])
 elif op=='pvSummary': result=next24_pv_forecast(args['data'],now)
+elif op=='planEvents': result=plan_events(args['data'],now)
+elif op=='nodeProblems': result=node_problems(args['data'],args.get('vehicles',[]))
 else: raise ValueError('Unknown test operation')
 print(json.dumps(result,allow_nan=False))`;
 const cache=new Map();
