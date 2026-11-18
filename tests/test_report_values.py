@@ -107,3 +107,65 @@ def test_balance_combines_consumers_feed_in_storage_and_base_price_without_doubl
     assert not balance['cost_partial']
     empty_balance = report_values({'consumers':{}}, ['house'])['balance']
     assert empty_balance['autarky_percent'] is None and empty_balance['grid_price_ct'] is None and empty_balance['net_eur'] == 0
+
+
+def _sources(**sources):
+    result = empty()
+    for key, (kwh, cost) in sources.items():
+        result['sources'][key].update(kwh=kwh, cost_eur=cost, cost_unknown_kwh=0)
+        result['kwh'] += kwh
+        result['cost_eur'] += cost
+    return result
+
+
+def test_report_views_supply_key_figures_prices_and_notable_bins_per_page():
+    sunny, evening = _sources(pv=(3, .24), grid=(1, .30)), _sources(grid=(4, 1.20))
+    house = _sources(pv=(3, .24), grid=(5, 1.50))
+    export, storage = _sources(pv=(2, .16)), _sources(pv=(1, .08), grid=(1, .30))
+    report = {'period':'month', 'base_days':10, 'settings':{'base_price_eur_month':36.5},
+              'consumers':{'house':{'total':house, 'bins':[{'time':'2026-11-01', **sunny}, {'time':'2026-11-02', **evening}]},
+                           'car':{'total':empty(), 'bins':[]},
+                           'export':{'total':export, 'bins':[{'time':'2026-11-01', **export}]},
+                           'storage':{'total':storage, 'bins':[{'time':'2026-11-02', **storage}]}}}
+    result = report_values(report, ['house', 'car'])
+    balance, views = result['balance'], result['views']
+    house_view = views['house']
+    assert house_view['kwh'] == 8 and house_view['self_percent'] == pytest.approx(37.5)
+    assert house_view['grid_price_ct'] == pytest.approx(30) and house_view['self_price_ct'] == pytest.approx(8)
+    # Self-supplied energy compared with the period's grid price.
+    assert house_view['savings_eur'] == pytest.approx(3 * .30 - .24)
+    assert house_view['per_day_kwh'] == pytest.approx(.8) and house_view['per_day_eur'] == pytest.approx(.174)
+    facts = {fact['id']: fact for fact in house_view['facts']}
+    assert facts['best'] == {'id':'best', 'time':'2026-11-01', 'unit':'day', 'percent':pytest.approx(75)}
+    assert facts['max_grid'] == {'id':'max_grid', 'time':'2026-11-02', 'unit':'day', 'kwh':pytest.approx(4)}
+    assert facts['savings']['grid_price_ct'] == pytest.approx(30) and 'charge_days' not in facts
+    assert views['car']['facts'] == [{'id':'no_charging'}]
+    # Grid-charged battery energy counts for the grid balance, not again for consumers.
+    assert balance['grid_import_kwh'] == 6 and balance['grid_import_cost_eur'] == pytest.approx(1.80)
+    assert balance['grid_import_price_ct'] == pytest.approx(30) and balance['storage_grid_kwh'] == 1
+    assert balance['base_eur'] == pytest.approx(12) and balance['total_cost_eur'] == pytest.approx(1.74 + 12)
+    assert balance['grid_balance_eur'] == pytest.approx(1.80 + 12 - .16)
+    assert balance['pv_use']['direct'] == {'kwh':3, 'share_percent':pytest.approx(50)}
+    assert balance['pv_use']['export']['kwh'] == 2 and balance['pv_export_kwh'] == 2
+    grid = {fact['id']: fact for fact in views['grid']['facts']}
+    assert grid['max_export'] == {'id':'max_export', 'time':'2026-11-01', 'unit':'day', 'kwh':2, 'eur':pytest.approx(.16)}
+    assert grid['max_import']['time'] == '2026-11-02' and grid['max_import']['kwh'] == 5
+    assert grid['grid_per_day'] == {'id':'grid_per_day', 'export_kwh':pytest.approx(.2), 'import_kwh':pytest.approx(.6)}
+    total = views['total']
+    assert [fact['id'] for fact in total['facts']] == ['consumer', 'consumer', 'export']
+    assert total['facts'][0] == {'id':'consumer', 'key':'house', 'kwh':8, 'self_percent':pytest.approx(37.5),
+                                 'cost_eur':pytest.approx(1.74), 'cost_available':True}
+    assert 'export' not in views and 'storage' not in views
+
+
+def test_report_view_facts_cover_car_charging_days_and_empty_grid_exchange():
+    days = [{'time':f'2026-11-0{index}', **_sources(pv=(kwh, 0), grid=(0, 0))} for index, kwh in ((1, 5), (2, .01), (3, 4))]
+    car = _sources(pv=(9.01, 0))
+    report = {'period':'month', 'base_days':3, 'consumers':{'car':{'total':car, 'bins':days}}}
+    views = report_values(report, ['car'])['views']
+    facts = {fact['id']: fact for fact in views['car']['facts']}
+    assert facts['charge_days'] == {'id':'charge_days', 'count':2, 'days':3}
+    assert 'max_grid' not in facts and 'savings' not in facts
+    assert views['grid']['facts'] == [{'id':'no_exchange'}]
+    day = report_values({'period':'day', 'consumers':{'house':{'total':_sources(grid=(1, .3)), 'bins':[]}}}, ['house'])['views']
+    assert day['house']['per_day_kwh'] is None and day['house']['facts'] == [{'id':'no_consumption'}]

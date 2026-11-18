@@ -20,7 +20,7 @@ function browser(localStorage){
   vm.runInContext('initializeBilling()',context);
   return {context,elements,requests,
     period:()=>vm.runInContext('billing.period',context),
-    select:value=>elements['billing-period'].listeners.change({target:{value}}),
+    select:value=>elements.usage.listeners.click({target:{closest:selector=>selector==='[data-billing-period]'?{dataset:{billingPeriod:value}}:null}}),
     bin:date=>elements.usage.listeners.click({target:{closest:selector=>selector==='[data-billing-bin]'?{dataset:{billingBin:date}}:null}})};
 }
 const settled=()=>new Promise(resolve=>setImmediate(resolve));

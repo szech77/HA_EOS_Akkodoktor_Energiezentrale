@@ -44,7 +44,7 @@
             <g id="vehicle-flows"></g>
           </svg>
           <a class="node solar l" style="--x:30%;--y:19%" href="#solar" data-node="solar"><span class="orb" aria-hidden="true">☀</span><span data-i18n="node.solar"></span><strong>—</strong></a>
-          <a class="node grid l" style="--x:30%;--y:50%" href="#grid" data-node="grid"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m8 21 3-18h2l3 18M7 7h10M5 12h14M9.2 14l5.5 5M14.8 14l-5.5 5M3 7v3m18-3v3M2 7h5m10 0h5M3 12v3m18-3v3M3 21h5m8 0h5"/></svg></span><span data-i18n="node.grid"></span><strong>—</strong></a>
+          <a class="node grid l" style="--x:30%;--y:50%" href="#usage/grid" data-node="grid"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m8 21 3-18h2l3 18M7 7h10M5 12h14M9.2 14l5.5 5M14.8 14l-5.5 5M3 7v3m18-3v3M2 7h5m10 0h5M3 12v3m18-3v3M3 21h5m8 0h5"/></svg></span><span data-i18n="node.grid"></span><strong>—</strong></a>
           <a class="node battery l" style="--x:30%;--y:81%" href="#battery" data-node="battery"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect class="battery-bar" x="4" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="7" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="10" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="13" y="9" width="2" height="6" rx="0.45"/><rect class="battery-bar" x="16" y="9" width="2" height="6" rx="0.45"/></svg></span><span data-i18n="node.battery"></span><strong>—</strong></a>
           <a class="hub" href="#usage/total" data-i18n-aria="flow.open_total"><svg class="energy-logo" viewBox="0 0 128 128" aria-hidden="true" focusable="false"><use data-logo href="./logo.svg#mark"/></svg></a>
           <a class="node house r" style="--x:70%;--y:19%" href="#usage/house" data-node="house"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 10.5 12 3l9 7.5M5.5 9v11h13V9M10 20v-6h4v6M16 4v3"/><path d="M8 11h.01M16 11h.01"/></svg></span><span data-i18n="node.house"></span><strong>—</strong></a>
@@ -97,21 +97,34 @@
       </section>
     </section>
     <section id="usage" hidden>
-      <a class="back" id="usage-back" data-i18n="nav.back"></a>
-      <div class="page-top"><h1 id="usage-title"></h1></div>
-      <h2 id="billing-range"></h2>
-      <div class="billing-toolbar">
-        <label><span data-i18n="billing.period"></span><select id="billing-period"><option value="day" data-i18n="billing.day"></option><option value="month" data-i18n="billing.month"></option><option value="year" data-i18n="billing.year"></option></select></label>
-        <button data-billing-move="-1" type="button" data-i18n-aria="billing.previous">‹</button>
-        <input type="date" id="billing-date" min="2000-01-01" max="2100-12-31" data-i18n-aria="billing.date">
-        <button data-billing-move="1" type="button" data-i18n-aria="billing.next">›</button>
-        <button data-billing-move="now" type="button" data-i18n="billing.current"></button>
+      <div class="d-head"><a class="back" id="usage-back" data-i18n="nav.back"></a><nav class="subnav" id="usage-nav" data-i18n-aria="usage.choose"></nav></div>
+      <div class="period">
+        <div class="segctl" id="usage-period" role="group" data-i18n-aria="billing.period">
+          <button type="button" data-billing-period="day" data-i18n="billing.day"></button><button type="button" data-billing-period="month" data-i18n="billing.month"></button><button type="button" data-billing-period="year" data-i18n="billing.year"></button>
+        </div>
+        <div class="pnav">
+          <button type="button" class="pbtn" data-billing-move="-1" data-i18n-aria="billing.previous">‹</button>
+          <b id="billing-range" aria-live="polite"></b>
+          <button type="button" class="pbtn" data-billing-move="1" data-i18n-aria="billing.next">›</button>
+          <button type="button" class="btn ghost" data-billing-move="now" data-i18n="billing.current"></button>
+        </div>
       </div>
+      <div class="usage-head"><div><p class="eyebrow" id="usage-eyebrow"></p><h1 id="usage-title"></h1><p class="lead" id="usage-lead"></p></div><a class="plan-link" id="usage-device" hidden data-i18n="usage.device_link"></a></div>
       <p id="billing-message" role="status"></p>
-      <div class="kpis" id="usage-kpis"></div><div id="usage-charts"></div>
-      <section class="plan-panel"><h2 data-i18n="billing.breakdown"></h2><div id="usage-table"></div>
-        <details><summary data-i18n="billing.quality"></summary><p id="billing-quality"></p><p data-i18n="billing.inventory_note"></p></details>
+      <div class="kpis" id="usage-kpis"></div>
+      <section class="chart-panel">
+        <div class="panel-heading"><h2 data-i18n="usage.history"></h2><span class="tag" id="usage-unit"></span></div>
+        <div class="series-legend" id="usage-legend"></div>
+        <div id="usage-charts"></div>
+        <p class="footnote" id="usage-bin" aria-live="polite"></p>
       </section>
+      <div class="usage-two">
+        <details class="plan-panel acc" open><summary><h2 data-i18n="usage.prices"></h2><span class="tag" id="usage-price-tag"></span></summary><div id="usage-prices"></div></details>
+        <details class="plan-panel acc" open><summary><h2 id="usage-mix-title"></h2><span class="tag" id="usage-mix-total"></span></summary><div id="usage-table"></div></details>
+      </div>
+      <details class="plan-panel acc" open><summary><h2 data-i18n="usage.facts"></h2></summary><div class="list" id="usage-facts"></div></details>
+      <details class="plan-panel"><summary data-i18n="billing.quality"></summary><p id="billing-quality"></p><p data-i18n="billing.inventory_note"></p></details>
+    </section>
     </section>
     <section id="notices" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>

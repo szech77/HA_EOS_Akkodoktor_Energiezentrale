@@ -64,6 +64,7 @@ def report_values(report, consumers=('house', 'heat', 'car')):
     result['total'] = {'total': amount_values(total),
                        'bins': [amount_values({'time': key, **bins[key]}) for key in sorted(bins)]}
     result['balance'] = balance_values(report, consumers)
+    result['views'] = view_values(result, consumers)
     return result
 
 
@@ -117,6 +118,12 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
             if key != EXPORT:
                 target['grid_import_kwh'] += (row.get('sources', {}).get('grid') or {}).get('kwh', 0)
     unknown = used['cost_unknown_kwh'] + export['cost_unknown_kwh']
+    storage_grid = storage['sources']['grid']
+    import_cost = source['grid']['cost_eur'] + storage_grid['cost_eur']
+    import_known = grid_known + storage_grid['kwh'] - storage_grid['cost_unknown_kwh']
+    pv_export = export['sources']['pv']['kwh']
+    pv_use = {key: {'kwh': value, 'share_percent': _ratio(value, pv_kwh)} for key, value in
+              (('direct', source['pv']['kwh']), ('storage', storage['sources']['pv']['kwh']), ('export', pv_export))}
     return {
         'consumption_kwh': used['kwh'], 'self_kwh': self_kwh, 'unknown_source_kwh': source['unknown']['kwh'],
         'autarky_percent': _ratio(self_kwh, used['kwh'] - source['unknown']['kwh']),
@@ -125,9 +132,118 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
         'self_cost_eur': self_cost, 'self_price_ct': _ratio(self_cost, self_known),
         'pv_kwh': pv_kwh, 'pv_direct_kwh': source['pv']['kwh'], 'pv_storage_kwh': storage['sources']['pv']['kwh'],
         'export_kwh': export['kwh'], 'export_eur': export['cost_eur'], 'feed_in_price_ct': feed_in_price,
-        'self_consumption_percent': _ratio(pv_kwh - export['sources']['pv']['kwh'], pv_kwh),
+        'self_consumption_percent': _ratio(pv_kwh - pv_export, pv_kwh), 'pv_export_kwh': pv_export, 'pv_use': pv_use,
+        'storage_grid_kwh': storage_grid['kwh'], 'grid_import_cost_eur': import_cost,
+        'grid_import_price_ct': _ratio(import_cost, import_known),
+        'grid_balance_eur': import_cost + base - export['cost_eur'], 'total_cost_eur': used['cost_eur'] + base,
         'base_days': base_days, 'base_price_eur_month': base_month, 'base_eur': base,
         'cost_eur': used['cost_eur'], 'savings_eur': savings, 'net_eur': used['cost_eur'] + base - export['cost_eur'],
         'cost_partial': unknown > .0001, 'estimated': used.get('estimated_kwh', 0) + export.get('estimated_kwh', 0) > 0,
         'bins': [bins[key] for key in sorted(bins)],
     }
+
+
+# Chart bins per period: hours for a day, days for a month, months for a year.
+UNITS = {'day': 'hour', 'month': 'day', 'year': 'month'}
+NOTABLE_KWH = .05
+
+
+def _source(amount, key):
+    return amount.get('sources', {}).get(key) or {'kwh': 0., 'cost_eur': 0., 'cost_unknown_kwh': 0.}
+
+
+def _self_kwh(amount):
+    return _source(amount, 'pv')['kwh'] + _source(amount, 'battery')['kwh']
+
+
+def consumer_view(entry, balance, period, days, car=False):
+    """Key figures of one consumer (or all consumers) for its report page."""
+    amount = complete_sources(entry['total'])
+    kwh = amount['kwh']
+    pv, battery, grid, unknown = (amount['sources'][key] for key in ('pv', 'battery', 'grid', 'unknown'))
+    self_kwh = pv['kwh'] + battery['kwh']
+    self_cost = pv['cost_eur'] + battery['cost_eur']
+    self_known = self_kwh - pv['cost_unknown_kwh'] - battery['cost_unknown_kwh']
+    # Savings compare the self-supplied energy with the period's average grid price.
+    reference = balance.get('grid_price_ct')
+    savings = self_kwh * reference / 100 - self_cost if reference is not None and self_kwh > 0 else None
+    per_day = period != 'day' and days > 1
+    view = {
+        'kwh': kwh, 'self_kwh': self_kwh, 'self_percent': _ratio(self_kwh, kwh - unknown['kwh']),
+        'pv_kwh': pv['kwh'], 'battery_kwh': battery['kwh'], 'grid_kwh': grid['kwh'], 'unknown_kwh': unknown['kwh'],
+        'grid_cost_eur': grid['cost_eur'], 'grid_price_ct': _ratio(grid['cost_eur'], grid['kwh'] - grid['cost_unknown_kwh']),
+        'self_cost_eur': self_cost, 'self_price_ct': _ratio(self_cost, self_known),
+        'cost_eur': amount['cost_eur'], 'price_ct': entry['total'].get('average_price_ct'),
+        'cost_available': entry['total'].get('cost_available', False), 'cost_partial': entry['total'].get('cost_partial', False),
+        'estimated': entry['total'].get('estimated', False), 'savings_eur': savings,
+        'reference_price_ct': reference, 'days': days,
+        'per_day_kwh': kwh / days if per_day else None, 'per_day_eur': amount['cost_eur'] / days if per_day else None,
+    }
+    view['facts'] = consumer_facts(entry.get('bins', []), view, period, car)
+    return view
+
+
+def consumer_facts(bins, view, period, car=False):
+    """Notable bins of a consumer: best self-supply, highest grid draw, averages and savings."""
+    unit = UNITS.get(period, 'hour')
+    used = [row for row in bins if (number(row.get('kwh')) or 0) > 0]
+    if not used:
+        return [{'id': 'no_charging' if car else 'no_consumption'}]
+    average = sum(row['kwh'] for row in used) / len(used)
+    candidates = [row for row in used if row['kwh'] > max(NOTABLE_KWH, average * .3)] or used
+
+    def share(row):
+        return _self_kwh(row) / row['kwh']
+
+    best = max(candidates, key=share)
+    facts = [{'id': 'best', 'time': best['time'], 'unit': unit, 'percent': share(best) * 100}]
+    worst = max(candidates, key=lambda row: _source(row, 'grid')['kwh'])
+    if _source(worst, 'grid')['kwh'] > NOTABLE_KWH:
+        facts.append({'id': 'max_grid', 'time': worst['time'], 'unit': unit, 'kwh': _source(worst, 'grid')['kwh']})
+    if car and period == 'month':
+        facts.append({'id': 'charge_days', 'count': sum(row['kwh'] > NOTABLE_KWH for row in used), 'days': view['days']})
+    if view['per_day_kwh'] is not None:
+        facts.append({'id': 'per_day', 'kwh': view['per_day_kwh'], 'eur': view['per_day_eur'],
+                      'cost_available': view['cost_available']})
+    if view['savings_eur'] is not None:
+        facts.append({'id': 'savings', 'eur': view['savings_eur'], 'self_price_ct': view['self_price_ct'],
+                      'grid_price_ct': view['reference_price_ct']})
+    return facts
+
+
+def grid_facts(balance, period):
+    """Notable bins of the grid exchange: most feed-in, highest import and daily averages."""
+    unit = UNITS.get(period, 'hour')
+    bins = balance['bins']
+    facts = []
+    for fact, field, price in (('max_export', 'export_kwh', 'feed_in_price_ct'),
+                               ('max_import', 'grid_import_kwh', 'grid_import_price_ct')):
+        row = max(bins, key=lambda item: item[field], default=None)
+        if row is not None and row[field] > NOTABLE_KWH:
+            rate = balance[price]
+            facts.append({'id': fact, 'time': row['time'], 'unit': unit, 'kwh': row[field],
+                          'eur': row[field] * rate / 100 if rate is not None else None})
+    days = balance['base_days']
+    if facts and period != 'day' and days > 1:
+        facts.append({'id': 'grid_per_day', 'export_kwh': balance['export_kwh'] / days,
+                      'import_kwh': balance['grid_import_kwh'] / days})
+    return facts or [{'id': 'no_exchange'}]
+
+
+def view_values(result, consumers):
+    """Everything a report page shows, per consumer plus the totals and the grid exchange."""
+    from .accounting import EXPORT, STORAGE
+    balance, period = result['balance'], result.get('period', 'day')
+    days = balance['base_days']
+    views = {}
+    for key, entry in result.get('consumers', {}).items():
+        if key not in (EXPORT, STORAGE):
+            views[key] = consumer_view(entry, balance, period, days, car=key == 'car' or key.startswith('car/'))
+    total = consumer_view(result['total'], balance, period, days)
+    total['facts'] = [{'id': 'consumer', 'key': key, 'kwh': views[key]['kwh'], 'self_percent': views[key]['self_percent'],
+                       'cost_eur': views[key]['cost_eur'], 'cost_available': views[key]['cost_available']}
+                      for key in consumers if key in views]
+    total['facts'].append({'id': 'export', 'kwh': balance['export_kwh'], 'eur': balance['export_eur']})
+    views['total'] = total
+    views['grid'] = {'facts': grid_facts(balance, period)}
+    return views

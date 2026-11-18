@@ -431,3 +431,50 @@
   #eos-energy-design .toast {bottom:calc(130px + env(safe-area-inset-bottom,0px));}
 }
 #eos-energy-design #daily {margin-top:0;}
+/* Reports: sub navigation, period switch, collapsible sections and price rows. */
+#eos-energy-design .d-head {display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+#eos-energy-design .subnav {display:flex;gap:6px;flex-wrap:wrap;}
+#eos-energy-design .subnav a {border:1px solid var(--edge);background:var(--surface);border-radius:99px;padding:5px 12px;text-decoration:none;color:var(--dim);font-size:13px;min-height:34px;box-sizing:border-box;display:inline-flex;align-items:center;}
+#eos-energy-design .subnav a[aria-current="page"] {background:var(--ink);color:var(--bg);border-color:var(--ink);}
+#eos-energy-design .period {display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--edge);border-radius:12px;padding:8px;margin-bottom:14px;}
+#eos-energy-design .segctl {display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface2);border-radius:9px;padding:3px;gap:2px;}
+#eos-energy-design .segctl button {border:0;background:transparent;border-radius:7px;padding:6px 18px;min-height:38px;font:inherit;font-weight:600;color:var(--dim);cursor:pointer;}
+#eos-energy-design .segctl button[aria-pressed="true"] {background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0 / .15);}
+#eos-energy-design .pnav {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#eos-energy-design .pnav b {min-width:150px;text-align:center;font-variant-numeric:tabular-nums;}
+#eos-energy-design .pbtn {width:42px;height:42px;border:1px solid var(--edge);background:var(--surface2);color:var(--ink);border-radius:8px;font-size:22px;line-height:1;display:grid;place-items:center;padding:0;cursor:pointer;}
+#eos-energy-design .pbtn:disabled {opacity:.35;cursor:default;}
+#eos-energy-design .usage-head {display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;}
+#eos-energy-design .usage-head .lead {margin:4px 0 0;color:var(--dim);font-size:14px;}
+#eos-energy-design #usage .kpis {grid-template-columns:repeat(4,minmax(0,1fr));}
+#eos-energy-design .usage-two {display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px;margin:14px 0;align-items:start;}
+#eos-energy-design #usage > details.plan-panel {margin-top:14px;}
+#eos-energy-design details.acc > summary {display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;list-style:none;min-height:32px;}
+#eos-energy-design details.acc > summary::-webkit-details-marker {display:none;}
+#eos-energy-design details.acc > summary h2 {margin:0;font-size:17px;}
+#eos-energy-design details.acc > summary h2::before {content:"›";display:inline-block;width:18px;margin-right:4px;text-align:center;font-size:20px;line-height:1;color:var(--dim);transition:transform .15s;}
+#eos-energy-design details.acc[open] > summary h2::before {transform:rotate(90deg);}
+#eos-energy-design details.acc[open] > summary {margin-bottom:10px;}
+#eos-energy-design .ph {font-size:12px;font-weight:650;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 2px;}
+#eos-energy-design .prow {display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:3px 12px;align-items:center;padding:7px 0;border-top:1px solid var(--edge);font-size:13.5px;}
+#eos-energy-design .ph + .prow {border-top:0;}
+#eos-energy-design .prow .num {text-align:right;font-variant-numeric:tabular-nums;}
+#eos-energy-design .prow .dim {color:var(--dim);}
+#eos-energy-design .prow.sum {font-weight:700;border-top:2px solid var(--ink);}
+#eos-energy-design #usage-table .source-bar {margin-bottom:8px;}
+#eos-energy-design .tag.accent {color:var(--accent);}
+#eos-energy-design .rowlink {text-decoration:none;color:inherit;}
+#eos-energy-design .rowlink:hover b {color:var(--accent);}
+#eos-energy-design .balance-card .more {color:var(--accent);font-weight:600;}
+#eos-energy-design .balance-card.feed {background:color-mix(in srgb,var(--solar) 7%,var(--surface));}
+#eos-energy-design .billing-chart g[aria-pressed="true"] rect:last-child {stroke:var(--ink);stroke-width:2;}
+@media (prefers-reduced-motion:reduce) {#eos-energy-design details.acc > summary h2::before {transition:none;}}
+@media (max-width:860px) {#eos-energy-design .usage-two {grid-template-columns:minmax(0,1fr);}}
+@media (max-width:640px) {
+  #eos-energy-design #usage .kpis {grid-template-columns:repeat(2,minmax(0,1fr));}
+  #eos-energy-design .period {justify-content:center;}
+  #eos-energy-design .pnav b {min-width:0;flex:1;}
+  #eos-energy-design .subnav {flex-wrap:nowrap;overflow-x:auto;max-width:100%;}
+  #eos-energy-design .subnav a {white-space:nowrap;}
+  #eos-energy-design .d-head {flex-wrap:wrap;}
+}

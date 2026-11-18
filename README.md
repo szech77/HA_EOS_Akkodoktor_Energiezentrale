@@ -25,9 +25,10 @@ Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screens
 Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
 Energiefluss. Name und Wert stehen unter dem jeweiligen Symbol. Hat ein Gerät einen
 offenen Hinweis, trägt sein Symbol ein Warnzeichen; welcher Hinweis zu welchem
-Gerät gehört, legt das Backend fest. Ein Klick auf PV, Netz oder Speicher öffnet
-die Detailansicht, auf Haus und Wärmepumpe deren Verbrauchsauswertung, auf das
-Auto die Fahrzeugseite und auf das EOS-Symbol in der Mitte die Gesamtbilanz. Der
+Gerät gehört, legt das Backend fest. Ein Klick auf PV oder Speicher öffnet
+die Detailansicht, auf Netz die Auswertung Netz & Einspeisung, auf Haus und Wärmepumpe
+die Verbrauchsauswertung, auf das Auto die Fahrzeugseite und auf das EOS-Symbol
+in der Mitte die Gesamtbilanz. Der
 Link **Leistungsverlauf** unter dem Diagramm öffnet alle Leistungskurven.
 Daneben steht der EOS-Plan der nächsten 12 Stunden als bedienbarer Zeitstrahl und
 darunter die Liste **Was als Nächstes passiert**: geplante Moduswechsel von
@@ -936,23 +937,22 @@ Teilsummen und werden nicht auf die gesamte Energiemenge hochgerechnet.
 Ohne ausreichende bewertete Energiemenge oder ohne Verbrauch bleibt der Preis
 **— ct/kWh**. Ein tatsächlich kostenloser bewerteter Verbrauch zeigt **0 ct/kWh**.
 
-In der Tagesübersicht öffnet die Karte **Gesamtverbrauch** eine eigene Auswertung für
-die Summe aus Hausverbrauch, Wärmepumpe und Fahrzeugen. Sie zeigt Energie, Kosten,
-gewichteten Durchschnittspreis und die Aufteilung nach Energiequelle gemeinsam
-für alle aktivierten Verbraucher. Einzelne Fahrzeuge werden neben der gemeinsamen
-Fahrzeugbilanz nicht erneut addiert. Bestehende lokale Aufzeichnungen und historische
-Rekonstruktionen werden berücksichtigt; geschätzte und unbekannte Kostenanteile
-bleiben gekennzeichnet.
+Die Kacheln **Heute** in der Übersicht zeigen je Verbraucher Energie, Eigenanteil und
+Kosten, dazu **Einspeisung** (Vergütung und Netzbezug) und **Gesamtverbrauch**
+(Kosten und Netto). Jede Kachel öffnet ihre Auswertung; der Netz-Knoten im
+Energiefluss öffnet **Netz & Einspeisung**, Haus und Wärmepumpe ihre Verbrauchsauswertung.
 
-Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** die Einzelauswertung.
-Für beide Auswertungen gelten dieselben Ansichten und Bedienelemente:
+Alle Auswertungen sind gleich aufgebaut. Oben wechseln Chips zwischen Haus, Auto
+(bei mehreren Fahrzeugen auch je Fahrzeug), Wärmepumpe, Netz & Einspeisung und Gesamt:
 
-- **Tag:** stündliche Werte; **Monat:** Tageswerte; **Jahr:** Monatswerte.
-- Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert und wird beim nächsten Öffnen wiederhergestellt. Ohne verfügbaren Browserspeicher bleibt die Auswahl für die laufende Sitzung erhalten.
-- Pfeile wechseln den Zeitraum; **Aktuell** springt in den aktuellen Zeitraum.
-- Ein Tages-/Monatsbalken öffnet die nächstfeinere Ansicht. Die Datumswahl ermöglicht direkte Sprünge.
-- Getrennte gestapelte Diagramme zeigen kWh und Euro nach PV, Akku, Netz und unbekannter Quelle.
-- Maus/Fokus zeigt die Werte eines Balkens; die Tabelle enthält die Summen je Quelle.
+- **Tag / Monat / Jahr:** stündliche Werte, Tageswerte oder Monatswerte. Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert; ohne Browserspeicher gilt die Auswahl für die laufende Sitzung.
+- **‹ ›** blättern; **Aktuell** springt zurück in den laufenden Zeitraum. Ein Tages- oder Monatsbalken öffnet die nächstfeinere Ansicht, ein Stundenbalken zeigt seine Werte.
+- **Kernaussage und vier Kennzahlen:** bei Verbrauchern Verbrauch, Eigenversorgung, Kosten und Ersparnis gegenüber reinem Netzbezug (Eigenstrommenge × Ø-Netzstrompreis des Zeitraums − Eigenstromkosten); in der Gesamtbilanz Verbrauch, Autarkie, Kosten inklusive Grundpreis und Netto; bei Netz & Einspeisung Einspeisung, Bezug, Eigenverbrauchsquote und Autarkie.
+- **Verlauf:** gestapelt nach PV, Akku, Netz und unbekannter Quelle; bei Netz & Einspeisung der Bezug nach oben und die Einspeisung nach unten.
+- **Preise & Kosten:** Ø-Netzstrompreis, Netzbezug, Eigenstrom (PV zum PV-Kostenansatz, Akku zum Speicherpreis) und Summe. Gesamtbilanz und Netz & Einspeisung enthalten zusätzlich den anteiligen Grundpreis und die Einspeisevergütung; Netz & Einspeisung zeigt den Saldo gegenüber dem Netz einschließlich Speicherladung aus dem Netz.
+- **Woher kam der Strom?** bzw. bei Netz & Einspeisung **Wohin ging der PV-Strom?** (direkt verbraucht, in den Speicher, eingespeist).
+- **Was auffällt:** Das Backend wählt beste und schwächste Zeitabschnitte, höchste Einspeisung und höchsten Bezug, Tagesdurchschnitte, Ladetage und die Ersparnis aus; die Gesamtbilanz verlinkt hier die einzelnen Verbraucher.
+- Auf schmalen Bildschirmen sind Preise, Herkunft und „Was auffällt“ zunächst eingeklappt.
 
 Die neue lokale Bilanz speichert Stundenaggregate dauerhaft in
 `.storage/eos_energiezentrale/<entry_id>/accounting.sqlite3` und ist unabhängig vom
