@@ -720,6 +720,46 @@ function batteryGroupDetails(group) {
     (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');
 }
 
+// Numeric source diagnostics: the backend supplies values and the balance rule.
+function diagnosticNumber(value,unit) {
+  if(!valid(value))return '—';
+  const digits=unit==='W'?0:unit==='ct/kWh'?2:1;
+  return `${value<0?'−':''}${decimal(Math.abs(value),digits)} ${html(unit)}`;
+}
+function diagnosticTable(head,rows,numeric=[1]) {
+  return `<div class="diagnostics-scroll"><table class="diagnostics"><thead><tr>${head.map((label,index)=>`<th${numeric.includes(index)?' class="num"':''}>${label}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+function diagnosticSource(row) {
+  if(!row.source)return '—';
+  const kind=row.source_type?th(`diagnostics.source_${row.source_type}`)+': ':'';
+  return kind+(row.source_type==='sensor'?`<code>${html(row.source)}</code>`:html(row.source));
+}
+function diagnosticStatus(row) {
+  return row.available?th('diagnostics.ok'):th(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
+}
+function sourceDiagnostics(view) {
+  if(!view)return `<p>${th('diagnostics.empty')}</p>`;
+  const W='W',sources=diagnosticTable([th('diagnostics.measurement'),th('diagnostics.source'),th('diagnostics.value'),th('diagnostics.age'),th('diagnostics.status')],
+    (view.sources??[]).map(row=>`<tr class="${row.available?'':'warn'}"><td>${th(`measurement.${row.key}`)}</td><td>${diagnosticSource(row)}</td><td class="num">${diagnosticNumber(row.value,row.unit)}</td><td class="num">${valid(row.age_s)?decimal(row.age_s,0)+' s':'—'}</td><td>${diagnosticStatus(row)}</td></tr>`),[2,3]);
+  const derived=view.derived??{},balance=view.balance;
+  const line=(label,value)=>`<tr><td>${label}</td><td class="num">${diagnosticNumber(value,W)}</td></tr>`;
+  const state=!balance?'incomplete':balance.balanced?'balanced':'unbalanced';
+  const derivedRows=[line(th('diagnostics.house_total'),derived.house_total),line(th('diagnostics.minus_car'),derived.car),
+    line(th('diagnostics.minus_heat'),derived.heat),line(`<strong>${th('diagnostics.house')}</strong>`,derived.house),
+    line(th('diagnostics.supplied'),balance?.supplied_w),line(th('diagnostics.consumed'),balance?.consumed_w),
+    line(`<strong>${th('diagnostics.residual')}</strong>`,balance?.residual_w),line(th('diagnostics.tolerance'),balance?.tolerance_w),
+    `<tr class="${state==='balanced'?'':'warn'}"><td colspan="2"><strong>${th(`diagnostics.${state}`)}</strong></td></tr>`];
+  const devices=(view.devices??[]).map(device=>`<h3>${html(device.name)}${device.plugin?' · '+html(device.plugin):''}</h3>
+    <p class="footnote">${th(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+th('diagnostics.read_error',{error:device.read_error}):''}</p>`+
+    diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],Object.entries(device.values??{}).map(([key,value])=>
+      `<tr><td>${th(`measurement.${key}`)}</td><td class="num">${diagnosticNumber(value,key==='battery_soc'?'%':W)}</td></tr>`))).join('');
+  const vehicles=(view.vehicles??[]).length?`<h3>${th('diagnostics.vehicles')}</h3>`+diagnosticTable([th('source.vehicle'),th('measurement.car'),th('measurement.car_soc')],
+    view.vehicles.map(item=>`<tr><td>${html(item.name)} · ${th(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}</td><td class="num">${diagnosticNumber(item.car,W)}</td><td class="num">${diagnosticNumber(item.car_soc,'%')}${item.soc_source==='estimate'?' ('+th('source.estimate')+')':''}</td></tr>`),[1,2]):'';
+  return `<p class="footnote">${th('diagnostics.time',{time:view.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,timeStyle:'medium'}).format(new Date(view.time)):'—'})}</p>${sources}
+    <h3>${th('diagnostics.derived')}</h3>${diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],derivedRows)}
+    ${devices?`<h3>${th('diagnostics.devices')}</h3>${devices}`:''}${vehicles}`;
+}
+
 function settings() {
   document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   if (!formReady && 'schedule' in snapshot.settings) {
@@ -736,6 +776,7 @@ function settings() {
     <dt>InfluxDB</dt><dd>${th(`status.${history.status??'connecting'}`)}</dd>`;
   for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}${(plugin.measurements??[]).length?' · '+plugin.measurements.map(key=>th(`measurement.${key}`)).join(', '):''}</dd>`;}
   byId('connections').innerHTML+=batteryGroupDetails(snapshot.battery_group);
+  byId('source-diagnostics').innerHTML=sourceDiagnostics(snapshot.source_diagnostics);
 
 }
 function render() {

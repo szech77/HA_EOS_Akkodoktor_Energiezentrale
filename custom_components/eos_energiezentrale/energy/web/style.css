@@ -175,6 +175,14 @@
 #eos-energy-design #usage th:first-child,#eos-energy-design #usage td:first-child {text-align:left;}
 #eos-energy-design .source-dot {display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;}
 #eos-energy-design #usage summary,#eos-energy-design #cost-settings-open summary {cursor:pointer;padding:8px 0;min-height:36px;}
+#eos-energy-design #source-diagnostics-panel summary {cursor:pointer;padding:8px 0;min-height:36px;font-weight:700;}
+#eos-energy-design .diagnostics-scroll {overflow-x:auto;margin:8px 0 16px;}
+#eos-energy-design table.diagnostics {width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;}
+#eos-energy-design table.diagnostics th,#eos-energy-design table.diagnostics td {text-align:left;padding:8px;border-bottom:1px solid var(--edge);vertical-align:top;}
+#eos-energy-design table.diagnostics .num {text-align:right;white-space:nowrap;}
+#eos-energy-design table.diagnostics tr.warn td {color:var(--heat);}
+#eos-energy-design table.diagnostics code {font-size:12px;overflow-wrap:anywhere;}
+#eos-energy-design #source-diagnostics h3 {margin:16px 0 4px;font-size:15px;}
 #eos-energy-design #usage-charts {display:grid;gap:16px;margin:16px 0;}
 #eos-energy-design .billing-links {display:flex;gap:12px;flex-wrap:wrap;}
 #eos-energy-design .billing-links a {color:var(--accent);padding:12px;}

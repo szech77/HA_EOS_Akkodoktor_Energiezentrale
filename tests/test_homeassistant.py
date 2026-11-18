@@ -135,6 +135,8 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             coordinator._present(raw)
         assert first['power_supply']['grid_active'] is False
         assert sum('backup_power_active' in item for item in logs.output) == 1
+        # The settings diagnostics are presented by the backend with every snapshot.
+        assert first['source_diagnostics']['sources'] == [] and first['source_diagnostics']['balance'] is None
 
     async def asyncTearDown(self):
         await self.hass.async_stop(force=True)

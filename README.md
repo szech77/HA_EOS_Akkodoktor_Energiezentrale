@@ -633,6 +633,31 @@ Die unteren EOS-Modus-Karten zeigen die **Planung**. Im Lesemodus steuert die
 Integration keine Geräte; der reale Speicherbetrieb kann daher davon abweichen.
 Für den tatsächlichen Stromfluss zählen die konfigurierten Leistungssensoren.
 
+### Diagnose der Messquellen
+
+Unter **Einstellungen → Diagnose · Messquellen** zeigt das Panel alle
+konfigurierten Quellen numerisch: Messgröße, Quelle (HA-Sensor mit Entitäts-ID
+oder Plugin), aktueller Wert in W, %, oder ct/kWh, Alter der letzten Meldung und
+Status. Ungültige oder veraltete Werte erscheinen ohne Zahlenwert mit Grund.
+Fehlende Pflichtquellen bleiben sichtbar, nicht konfigurierte optionale Quellen
+werden ausgelassen.
+
+Darunter stehen die abgeleiteten Werte und die Energiebilanz, die das Backend
+auch für die Auswertung verwendet:
+
+- Hausverbrauch ohne Auto und Wärmepumpe = Hausverbrauch gesamt − Fahrzeug − Wärmepumpe.
+- Quellen = PV + Netzbezug + Speicherentladung; Senken = Hausverbrauch gesamt +
+  Speicherladung + Einspeisung.
+- Weicht der Bilanzrest um mehr als 10 % bzw. mindestens 300 W ab, wird der
+  Verbrauch dieses Moments in der Auswertung als „Unbekannt“ verbucht. Ein
+  dauerhaft großer Rest deutet auf eine fehlende Quelle oder einen falsch
+  gemessenen Gesamtverbrauch hin.
+
+Für Gerätegruppen folgen die Einzelwerte jedes Geräts (z. B. PV, Netz,
+Hausverbrauch, Speicher-SoC, Lade- und Entladeleistung), bei mehreren Fahrzeugen
+Ladeleistung und SoC je Fahrzeug. Die Anzeige wird mit jedem Snapshot
+aktualisiert und enthält keine Zugangsdaten.
+
 
 ## Wechsel vom bisherigen Energiezentrale-Add-on
 

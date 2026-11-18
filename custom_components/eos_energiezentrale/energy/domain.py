@@ -20,6 +20,19 @@ def instant(value):
         return None
 
 
+def energy_balance(pv, grid, discharge, charge, load):
+    """AC balance of one sample in W. Sources: PV, grid import and battery
+    discharge; sinks: site consumption, battery charge and export. A residual
+    above 10 %/300 W is not attributed to sources (shown as unknown)."""
+    if any(value is None for value in (pv, grid, discharge, charge, load)):
+        return None
+    supplied = pv + max(0, grid) + discharge
+    consumed = load + charge + max(0, -grid)
+    tolerance = max(300, consumed * .1)
+    return {"supplied_w": supplied, "consumed_w": consumed, "residual_w": supplied - consumed,
+            "tolerance_w": tolerance, "balanced": abs(supplied - consumed) <= tolerance}
+
+
 def house_only(total, car, heat):
     if any(value is None or value < 0 for value in (total, car, heat)):
         return None

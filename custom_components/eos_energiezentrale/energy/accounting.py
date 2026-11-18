@@ -10,7 +10,7 @@ from copy import deepcopy
 from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 
-from .domain import instant, number
+from .domain import energy_balance, instant, number
 from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, known_rate
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
@@ -275,14 +275,12 @@ class Accounting:
             return max(0, value) if value is not None else None
         pv, grid, discharge, charge = positive("solar"), number(row.get("grid")), positive("battery_discharge"), positive("battery_charge")
         outputs = {}
-        sources_ok = all(value is not None for value in (pv, grid, discharge, charge))
         # At most 10%/300W balance residual is tolerated. Larger residuals are
         # visible as unknown rather than assigning async meter jumps to PV/grid.
-        load = positive("house_total")
-        supplied = pv + max(0, grid) + discharge if sources_ok else 0
-        sinks = load + charge + max(0, -grid) if sources_ok and load is not None else None
-        balanced = sinks is not None and abs(supplied-sinks) <= max(300, sinks*.1)
-        ratios = {"pv": pv/supplied, "grid": max(0,grid)/supplied, "battery": discharge/supplied} if balanced and supplied > 0 else {}
+        balance = energy_balance(pv, grid, discharge, charge, positive("house_total"))
+        supplied = balance["supplied_w"] if balance else 0
+        ratios = ({"pv": pv/supplied, "grid": max(0,grid)/supplied, "battery": discharge/supplied}
+                  if balance and balance["balanced"] and supplied > 0 else {})
         self.value_unknown(row,effective)
         battery_rate, battery_unknown, battery_estimated = 0., 1., 0.
         if discharge is not None and discharge > 0 and effective is not None and self.stock is not None:

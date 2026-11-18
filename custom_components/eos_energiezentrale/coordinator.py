@@ -17,6 +17,7 @@ from .energy.controller import Controller
 from .energy.domain import next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload
+from .energy.source_diagnostics import source_diagnostics
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
 from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline
@@ -133,6 +134,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], now)
         for vehicle in result.get('vehicles', []):
             vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
+        result['source_diagnostics'] = source_diagnostics(result, now)
         self.issue_log.update('state', result['notices'])
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])
