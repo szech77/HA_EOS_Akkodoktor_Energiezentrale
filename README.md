@@ -34,7 +34,11 @@ Daneben steht der EOS-Plan der nächsten 12 Stunden als bedienbarer Zeitstrahl u
 darunter die Liste **Was als Nächstes passiert**: geplante Moduswechsel von
 Speicher und Fahrzeugen, der erwartete Zeitpunkt für einen vollen Speicher und
 für das Erreichen des Ladeziels, jeweils mit dem Netzstrompreis zu diesem
-Zeitpunkt. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
+Zeitpunkt. Moduswechsel, die kürzer als 30 Minuten gelten, erscheinen nicht in der
+Liste. Bei Speicherwechseln steht, was der Speicher laut EOS-Prognose in der ersten
+Stunde tut (lädt mit PV-Überschuss, lädt aus dem Netz, deckt das Haus, hält seinen
+Ladestand); der EOS-Modus steht klein darunter. Folgen zwei Wechsel mit derselben
+Wirkung aufeinander, erscheint nur der erste. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
 
 ![Desktop-Übersicht mit Energiefluss, Wetter, Ladezuständen und Tagesverbrauch samt Kosten](docs/screenshots/overview.png)
 

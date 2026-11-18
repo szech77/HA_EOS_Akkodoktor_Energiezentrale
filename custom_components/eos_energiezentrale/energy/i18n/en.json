@@ -590,6 +590,11 @@
     "usage.fact_no_charging": "Not charged",
     "usage.fact_no_charging_text": "No charging in this period.",
     "usage.fact_no_exchange": "No grid exchange",
-    "usage.fact_no_exchange_text": "No import or feed-in was recorded for this period."
+    "usage.fact_no_exchange_text": "No import or feed-in was recorded for this period.",
+    "plan_event.effect_charge_pv": "Battery charges from PV surplus",
+    "plan_event.effect_charge_grid": "Battery charges from the grid",
+    "plan_event.effect_discharge": "Battery supplies the house",
+    "plan_event.effect_hold": "Battery holds its charge level",
+    "plan_event.eos_mode": "EOS mode {mode}"
   }
 }

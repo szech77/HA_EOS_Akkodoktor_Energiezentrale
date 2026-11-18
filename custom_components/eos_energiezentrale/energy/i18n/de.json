@@ -590,6 +590,11 @@
     "usage.fact_no_charging": "Nicht geladen",
     "usage.fact_no_charging_text": "In diesem Zeitraum wurde nicht geladen.",
     "usage.fact_no_exchange": "Kein Netzaustausch",
-    "usage.fact_no_exchange_text": "Für diesen Zeitraum ist kein Bezug und keine Einspeisung erfasst."
+    "usage.fact_no_exchange_text": "Für diesen Zeitraum ist kein Bezug und keine Einspeisung erfasst.",
+    "plan_event.effect_charge_pv": "Speicher lädt mit PV-Überschuss",
+    "plan_event.effect_charge_grid": "Speicher lädt aus dem Netz",
+    "plan_event.effect_discharge": "Speicher deckt das Haus",
+    "plan_event.effect_hold": "Speicher hält seinen Ladestand",
+    "plan_event.eos_mode": "EOS-Modus {mode}"
   }
 }

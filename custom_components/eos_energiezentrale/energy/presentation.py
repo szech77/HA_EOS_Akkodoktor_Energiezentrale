@@ -208,8 +208,40 @@ def node_problems(notices, vehicles=()):
     return result
 
 
+# Plan segments shorter than this are EOS interval noise and do not make an upcoming event.
+MIN_PLAN_SEGMENT_S = 1800
+# Forecast battery power below this counts as holding the charge level.
+BATTERY_IDLE_W = 150
+
+
+def battery_effect(rows, start, stop):
+    """What the battery does according to the forecast between start and stop: charge_pv, charge_grid, discharge or hold."""
+    weights = power = solar = 0.
+    for row in rows or []:
+        begin, end = instant(row.get('time')), instant(row.get('end'))
+        battery = number(row.get('battery'))
+        if begin is None or end is None or battery is None:
+            continue
+        overlap = (min(end, stop) - max(begin, start)).total_seconds()
+        if overlap <= 0:
+            continue
+        weights += overlap
+        power += battery * overlap
+        solar += (number(row.get('solar')) or 0.) * overlap
+    if not weights:
+        return None
+    power, solar = power / weights, solar / weights
+    if power > BATTERY_IDLE_W:
+        return 'charge_pv' if solar >= power * .8 else 'charge_grid'
+    return 'discharge' if power < -BATTERY_IDLE_W else 'hold'
+
+
 def plan_events(data, now, hours=24, limit=6):
-    """Upcoming mode changes and forecast milestones in time order, with the import price at that time."""
+    """Upcoming mode changes and forecast milestones in time order, with the import price at that time.
+
+    Mode changes lasting less than MIN_PLAN_SEGMENT_S are skipped. Battery changes carry the
+    forecast effect; consecutive changes with the same effect are listed once.
+    """
     from datetime import timedelta
     end = now + timedelta(hours=hours)
     prices = [(instant(row.get('time')), instant(row.get('end')), number(row.get('price')))
@@ -220,17 +252,44 @@ def plan_events(data, now, hours=24, limit=6):
         return next((price for start, stop, price in prices if start <= stamp < stop), None)
 
     events = []
+    plan_end = instant(data.get('plan_end')) or end
 
-    def changes(rows, current, device, extra):
-        previous = current
+    def changes(rows, current, device, extra, forecast=None):
         ordered = sorted(((instant(row.get('time')), row.get('mode')) for row in rows or []
-                          if instant(row.get('time')) is not None), key=lambda item: item[0])
-        for stamp, mode in ordered:
-            if not isinstance(mode, str) or not now < stamp <= end or mode == previous:
+                          if instant(row.get('time')) is not None and isinstance(row.get('mode'), str)), key=lambda item: item[0])
+        # Only the segment in progress is kept from the past; it never merges with future rows.
+        past = [item for item in ordered if item[0] <= now][-1:]
+        segments = []
+        for stamp, mode in past + [item for item in ordered if item[0] > now]:
+            if segments and segments[-1][1] == mode and stamp > now and segments[-1][0] > now:
                 continue
-            previous = mode
-            events.append({'time':stamp.isoformat(), 'kind':'mode', 'device':device, 'mode':mode,
-                           'price_ct':price_at(stamp), **extra})
+            segments.append([stamp, mode])
+        bounded = [(stamp, mode, segments[index+1][0] if index+1 < len(segments) else max(plan_end, stamp))
+                   for index, (stamp, mode) in enumerate(segments)]
+        previous, previous_effect = current, None
+        for stamp, mode, stop in bounded:
+            if stamp > end:
+                break
+            if stop <= now:
+                continue
+            begin = max(now, stamp)
+            # The first hour tells what starts with the change; later hours belong to later events.
+            effect = battery_effect(forecast, begin, min(stop, begin + timedelta(hours=1))) if device == 'battery' else None
+            if stamp <= now:
+                previous_effect = effect
+                continue
+            last = stop == bounded[-1][2]
+            if (stop - stamp).total_seconds() < MIN_PLAN_SEGMENT_S and not last:
+                continue
+            if mode == previous or (effect is not None and effect == previous_effect):
+                previous = mode
+                continue
+            previous, previous_effect = mode, effect
+            event = {'time':stamp.isoformat(), 'kind':'mode', 'device':device, 'mode':mode,
+                     'price_ct':price_at(stamp), **extra}
+            if effect is not None:
+                event['effect'] = effect
+            events.append(event)
 
     def reached(rows, current, target, kind, extra):
         if target is None or (current is not None and current >= target - .5):
@@ -248,7 +307,7 @@ def plan_events(data, now, hours=24, limit=6):
 
     kind_key = {'battery_full':'battery_soc', 'car_target':'car_soc'}
     live = data.get('live') or {}
-    changes((data.get('plan') or {}).get('battery'), live.get('battery_mode'), 'battery', {})
+    changes((data.get('plan') or {}).get('battery'), live.get('battery_mode'), 'battery', {}, data.get('forecast'))
     reached(data.get('forecast'), number(live.get('battery_soc')),
             number((data.get('settings') or {}).get('battery_max_soc')), 'battery_full', {})
     vehicles = data.get('vehicles') or []

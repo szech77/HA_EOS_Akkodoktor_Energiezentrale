@@ -64,7 +64,7 @@ def test_plan_events_list_changes_milestones_and_prices_in_time_order():
                  'battery_soc':min(95, 60 + 5*i), 'car_soc':min(80, 40 + i)} for i in range(100)]
     data = {'live':{'battery_mode':'NON_EXPORT', 'car_mode':'IDLE', 'battery_soc':60, 'car_soc':40},
             'settings':{'battery_max_soc':95}, 'charge_target_soc':80, 'forecast':forecast,
-            'plan':{'battery':[{'time':at(-60), 'mode':'SELF_CONSUMPTION'}, {'time':at(30), 'mode':'NON_EXPORT'},
+            'plan':{'battery':[{'time':at(-60), 'mode':'SELF_CONSUMPTION'}, {'time':at(90), 'mode':'NON_EXPORT'},
                                {'time':at(28), 'mode':'SELF_CONSUMPTION'}, {'time':at(60*30), 'mode':'IDLE'}],
                     'car':[{'time':at(12*60+30), 'mode':'FORCED_CHARGE'}]}}
     events = plan_events(data, now)
@@ -83,3 +83,29 @@ def test_plan_events_list_changes_milestones_and_prices_in_time_order():
     fleet = plan_events(vehicles, now)
     assert {row['vehicle_id'] for row in fleet if row.get('device') == 'car' or row['kind'] == 'car_target'} == {'a'}
     assert len(plan_events(vehicles, now, limit=2)) == 2
+
+
+def test_plan_events_skip_short_mode_blips_and_describe_the_forecast_battery_effect():
+    from datetime import datetime, timedelta, timezone
+    from custom_components.eos_energiezentrale.energy.presentation import battery_effect, plan_events
+    now = datetime(2026, 11, 19, 4, 55, tzinfo=timezone.utc)
+    at = lambda minutes: (now + timedelta(minutes=minutes)).isoformat()
+    # Night: grid charging until 05:15, then the battery holds; PV charging starts at 08:00.
+    def row(index):
+        minutes = 15 * index
+        battery = 2600 if minutes < 15 else 2000 if minutes >= 185 else 0
+        return {'time':at(minutes), 'end':at(minutes + 15), 'price':28.1, 'battery':battery,
+                'solar':3000 if minutes >= 185 else 0, 'battery_soc':93}
+    forecast = [row(index) for index in range(40)]
+    plan = [{'time':at(-30), 'mode':'FORCED_CHARGE'}, {'time':at(20), 'mode':'NON_EXPORT'},
+            {'time':at(110), 'mode':'FORCED_CHARGE'}, {'time':at(125), 'mode':'NON_EXPORT'},
+            {'time':at(140), 'mode':'SELF_CONSUMPTION'}, {'time':at(155), 'mode':'NON_EXPORT'}]
+    data = {'live':{'battery_mode':'FORCED_CHARGE', 'battery_soc':93}, 'settings':{}, 'features':{'car':False},
+            'forecast':forecast, 'plan':{'battery':plan}}
+    events = plan_events(data, now)
+    # The 15-minute blips at 06:45 and 07:15 are skipped; NON_EXPORT at night holds the charge level.
+    assert [(row['mode'], row['effect'], row['time']) for row in events] == [('NON_EXPORT', 'hold', at(20))]
+    assert battery_effect(forecast, now + timedelta(minutes=190), now + timedelta(minutes=300)) == 'charge_pv'
+    assert battery_effect(forecast, now, now + timedelta(minutes=15)) == 'charge_grid'
+    assert battery_effect([{'time':at(0), 'end':at(60), 'battery':-900}], now, now + timedelta(minutes=60)) == 'discharge'
+    assert battery_effect([], now, now + timedelta(minutes=60)) is None

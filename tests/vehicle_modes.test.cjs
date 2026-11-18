@@ -52,3 +52,15 @@ test('no plan and disabled cars render a calm empty state without car entries',(
  ctx=fixture({...base,plan:{battery:[{time:at(1),mode:'NEW_MODE'}]}});
  assert.ok(ctx.nextEvents().includes(ctx.t('plan_event.battery',{mode:'NEW_MODE'})));
 });
+
+test('battery events name what the forecast battery does and keep the EOS mode as detail',()=>{
+ for(const language of ['de','en']){
+  // Night: EOS plans NON_EXPORT, but without PV the battery only holds its charge level.
+  const forecast=[{time:at(0),end:at(1),price:28.1,battery:2600,solar:0},{time:at(1),end:at(3),price:28.4,battery:0,solar:0}];
+  const ctx=fixture({...base,live:{battery_mode:'FORCED_CHARGE'},forecast,plan:{battery:[{time:at(1),mode:'NON_EXPORT'}]}},language);
+  const result=ctx.nextEvents();
+  assert.ok(result.includes(ctx.th('plan_event.effect_hold')));
+  assert.ok(!result.includes(ctx.th('plan_event.battery_NON_EXPORT')));
+  assert.ok(result.includes(ctx.th('plan_event.eos_mode',{mode:ctx.t('mode.pv')}))&&result.includes('28.4 ct'));
+ }
+});

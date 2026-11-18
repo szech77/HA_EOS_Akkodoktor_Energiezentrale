@@ -407,6 +407,8 @@ function planEventText(event) {
   if (event.kind==='battery_full') return t('plan_event.battery_full',{soc:decimal(event.soc,0)});
   if (event.kind==='car_target') return t('plan_event.car_target',{vehicle,soc:decimal(event.soc,0)});
   if (event.device==='battery') {
+    // The backend derives what the battery does from the forecast; the EOS mode name alone can mislead at night.
+    if (event.effect) return t('plan_event.effect_'+event.effect);
     const key='plan_event.battery_'+event.mode;
     return Object.hasOwn(language.messages,key) ? t(key) : t('plan_event.battery',{mode:modeLabel(event.mode)});
   }
@@ -415,7 +417,10 @@ function planEventText(event) {
 function nextEvents() {
   const events=snapshot.plan_events ?? [];
   if (!events.length) return `<p class="footnote">${th('status.no_next_mode')}</p>`;
-  return events.map(event=>`<div class="row"><span><b>${html(planEventText(event))}</b>${valid(event.price_ct) ? `<br><small>${th('plan_event.price',{price:price(event.price_ct)})}</small>` : ''}</span><span class="tag">${html(when(event.time))}</span></div>`).join('');
+  return events.map(event=>{
+    const details=[event.effect ? t('plan_event.eos_mode',{mode:modeLabel(event.mode)}) : '',valid(event.price_ct) ? t('plan_event.price',{price:price(event.price_ct)}) : ''].filter(Boolean).join(' · ');
+    return `<div class="row"><span><b>${html(planEventText(event))}</b>${details ? `<br><small>${html(details)}</small>` : ''}</span><span class="tag">${html(when(event.time))}</span></div>`;
+  }).join('');
 }
 
 function overview() {
