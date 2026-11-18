@@ -14,7 +14,7 @@ from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
 from .energy.controller import Controller
-from .energy.domain import next_departure
+from .energy.domain import instant, next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload
 from .energy.status import IssueLog, view_state, failure_details
@@ -132,9 +132,12 @@ class EnergyCoordinator(DataUpdateCoordinator):
             and row.get('kwh') is not None and measured is not None else row.get('kwh'),
             'includes_measured':index == 0 and row.get('kwh') is not None and measured is not None}
             for index, row in enumerate(result.get('pv_daily_forecast', []))]
-        result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], now)
+        # The panel draws "now" at the snapshot time; split history and plan at the same instant.
+        stamp = instant((result.get('live') or {}).get('time'))
+        split = stamp if stamp is not None and stamp <= now else now
+        result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], split)
         for vehicle in result.get('vehicles', []):
-            vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
+            vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), split)
         self.issue_log.update('state', result['notices'])
         since = self.issue_log.active_since('state')
         result['notices'] = [{**notice, 'since':since.get(notice['id'])} for notice in result['notices']]

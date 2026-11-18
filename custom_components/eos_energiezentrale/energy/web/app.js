@@ -395,7 +395,7 @@ function overviewTrack(now) {
     const label=row.mode ? modeLabel(row.mode) : t('timeline.no_data');
     legend.set(label,color);
     const info=t('timeline.interval',{kind:t(`timeline.${row.kind}`),start:when(row.start),end:when(row.end),mode:label});
-    return `<button type="button" class="mode-segment${row.kind==='plan' ? ' future' : ''}" style="--duration:${(row.end-row.start)/span};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${row.end-row.start>=5_400_000 ? `<span>${html(label)}</span>` : ''}</button>`;
+    return `<button type="button" class="mode-segment${row.kind==='plan' ? ' future' : ''}" style="--start:${(row.start-start)/span};--duration:${(row.end-row.start)/span};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${row.end-row.start>=5_400_000 ? `<span>${html(label)}</span>` : ''}</button>`;
   }).join('');
   const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
   return `<div class="plan-track-wrap"><div class="plan-track" role="group" aria-label="${th('timeline.aria')}">${segments}</div><span class="plan-now" style="left:${at(now)}" aria-hidden="true"></span></div>
@@ -582,7 +582,10 @@ function timeline(key, now) {
     legend.set(label,color);
     const info = t('timeline.interval', {kind:t(`timeline.${kind}`),
       start:time(start), end:time(end), mode:label});
-    return `<button type="button" class="mode-segment${kind==='plan' ? ' future' : ''}" style="--duration:${(end-start)/day};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
+    // Segments are placed by time, so the centre line is "now" however many segments EOS sends.
+    const first=Math.max(start,now-day), last=Math.min(end,now+day);
+    if (last<=first) return '';
+    return `<button type="button" class="mode-segment${kind==='plan' ? ' future' : ''}" style="--start:${(first-now+day)/(2*day)};--duration:${(last-first)/(2*day)};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
   }).join('');
   return `<h2>${key === 'car' ? th('timeline.car_title') : th('timeline.battery_title')}</h2>
     <div class="mode-halves"><span>${th('timeline.history_range')}</span><span>${th('timeline.plan_range')}</span></div>
@@ -926,7 +929,8 @@ function carPlanPanel(plan) {
   const track=segments.map((segment,index)=>{
     const from=Math.max(start,Date.parse(segment.start)), to=Math.min(end,Date.parse(segment.end)), share=(to-from)/span;
     const info=segmentText(segment);
-    return `<button type="button" class="mode-segment" style="--duration:${share.toFixed(4)};--mode:var(--${chargeKinds[segment.kind]})" data-charge="${index}" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${share>=.12 ? `<span>${th('car.short_'+segment.kind)}</span>` : ''}</button>`;
+    if (share<=0) return '';
+    return `<button type="button" class="mode-segment" style="--start:${((from-start)/span).toFixed(4)};--duration:${share.toFixed(4)};--mode:var(--${chargeKinds[segment.kind]})" data-charge="${index}" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${share>=.12 ? `<span>${th('car.short_'+segment.kind)}</span>` : ''}</button>`;
   }).join('');
   const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
   const step=span>12*3_600_000 ? 4*3_600_000 : span>4*3_600_000 ? 2*3_600_000 : 3_600_000;

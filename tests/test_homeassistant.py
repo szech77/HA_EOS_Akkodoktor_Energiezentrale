@@ -136,6 +136,16 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         assert first['power_supply']['grid_active'] is False
         assert sum('backup_power_active' in item for item in logs.output) == 1
 
+    async def test_mode_timeline_splits_history_and_plan_at_the_snapshot_time(self):
+        from datetime import timedelta
+        coordinator, _ = self.controller()
+        measured = datetime.now(timezone.utc) - timedelta(minutes=10)
+        raw = {'live':{'time':measured.isoformat()}, 'plan':{'battery':[{'time':measured.isoformat(), 'mode':'IDLE'}]}}
+        battery = coordinator._present(raw)['mode_timeline']['battery']
+        split = measured.timestamp() * 1000
+        assert max(row['end'] for row in battery if row['kind'] == 'history') == split
+        assert min(row['start'] for row in battery if row['kind'] == 'plan') == split
+
     async def asyncTearDown(self):
         await self.hass.async_stop(force=True)
         self.directory_context.__exit__(None, None, None)

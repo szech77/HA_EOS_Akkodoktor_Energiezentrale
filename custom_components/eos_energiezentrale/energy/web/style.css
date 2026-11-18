@@ -68,9 +68,10 @@
   #eos-energy-design .chart .curve { stroke:var(--series,var(--accent)); stroke-width:2; stroke-linejoin:round; }
   #eos-energy-design .chart .forecast { stroke-dasharray:5 4; }
   #eos-energy-design #eos-storage-timeline { margin:14px 0; }
-  #eos-energy-design .mode-track { position:relative; display:flex; height:28px; margin-left:38px; }
+  #eos-energy-design .mode-track { position:relative; height:28px; margin-left:38px; }
   #eos-energy-design .mode-track::after { content:""; position:absolute; pointer-events:none; left:50%; top:-3px; bottom:-3px; border-left:2px solid var(--ink); }
-  #eos-energy-design .mode-segment { flex:var(--duration) 1 0; min-width:0; padding:0; border:0; border-right:1px solid var(--surface); background:var(--mode); }
+  /* Absolute placement keeps every segment aligned with the time axis and the now marker. */
+  #eos-energy-design .mode-segment { position:absolute; top:0; bottom:0; left:calc(var(--start) * 100%); width:calc(var(--duration) * 100%); box-sizing:border-box; min-width:0; padding:0; border:0; border-right:1px solid var(--surface); background:var(--mode); }
   #eos-energy-design .mode-segment:focus-visible { z-index:1; }
   #eos-energy-design .mode-segment.future { background:repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb,var(--surface) 38%,transparent) 4px 7px),var(--mode); }
   #eos-energy-design .mode-halves { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:5px 0 4px 38px; color:var(--dim); font-size:12px; }
@@ -313,7 +314,7 @@
 #eos-energy-design .plan-link {display:inline-block;margin-top:8px;color:var(--accent);font-weight:600;font-size:13.5px;text-decoration:none;padding:6px 0;}
 #eos-energy-design .flow-footer .plan-link {margin-top:0;}
 #eos-energy-design .plan-track-wrap {position:relative;margin-top:6px;}
-#eos-energy-design .plan-track {display:flex;height:30px;border-radius:6px;overflow:hidden;}
+#eos-energy-design .plan-track {position:relative;height:30px;border-radius:6px;overflow:hidden;}
 #eos-energy-design .plan-track .mode-segment {color:var(--surface);font-size:11px;font-weight:650;text-align:left;padding:0 0 0 6px;overflow:hidden;white-space:nowrap;}
 #eos-energy-design .plan-track .mode-segment[aria-pressed="true"] {outline:2px solid var(--ink);outline-offset:-2px;}
 #eos-energy-design .plan-now {position:absolute;top:-4px;bottom:-4px;border-left:2px solid var(--ink);pointer-events:none;}
