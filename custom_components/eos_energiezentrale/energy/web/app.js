@@ -606,7 +606,10 @@ function vehicleForecastNote(vehicle) {
     ? `<p class="footnote">${th(`forecast.vehicle_${source}`)}</p>` : '';
 }
 function detail(key) {
-  byId('vehicle-settings').hidden=key!=='car'&&!key.startsWith('car/');
+  const carPage=key==='car'||key.startsWith('car/');
+  byId('car-view').hidden=!carPage;
+  byId('vehicle-goals').hidden=!carPage;
+  byId('detail-kpis').hidden=false;
   byId('detail-kpis').classList.toggle('vehicle-inactive', (key === 'car' || key.startsWith('car/')) && !vehicleActive(snapshot));
   const usageLink=byId('usage-link');
   usageLink.hidden=!['house','car','heat'].includes(key)&&!key.startsWith('car/');
@@ -624,7 +627,7 @@ function detail(key) {
     } finally {snapshot=original;history=originalHistory;}
     return;
   }
-  if (key==='car') vehicleSettings();
+  if (key==='car') {vehicleSettings();carView();}
   if (key==='car' && snapshot.vehicles?.length) {
     chartModels.clear();
     byId('detail-title').textContent=t('fleet.title');
@@ -664,6 +667,8 @@ function detail(key) {
     + (['battery','car','grid','heat'].includes(key) ? chart(t('chart.price'),'price',1,t('unit.price'),'heat',now) : '');
   if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
   const upcoming = snapshot.upcoming_plan?.[key] ?? [];
+  // The car page answers goal and plan above; its raw KPIs and mode list would repeat them.
+  if (key === 'car' && snapshot.charge_plan) {byId('detail-kpis').hidden=true;byId('plan').hidden=true;return;}
   byId('plan').hidden = !withPlan && key !== 'heat' && key !== 'house';
   byId('plan').innerHTML = withPlan
     ? `<h2>${th('plan.next')}</h2>${upcoming.length ? '<dl>'+upcoming.map(item => `<dt>${html(time(item.time))}</dt><dd>${html(modeLabel(item.mode))}</dd>`).join('')+'</dl>' : `<p>${th('plan.no_valid')}</p>`}`
@@ -690,8 +695,15 @@ function holidayFields() {
   if(catholic.disabled) catholic.checked=false;
 }
 const vehicleForm=byId('vehicle-daily');
+const goalForm=byId('vehicle-goals');
 let vehicleFormKey=null;
 let chargePlanCounter=0;
+let vehicleSaving=false;
+let planScrollPending=false;
+function selectedVehicle() {
+  const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
+  return vehicles.find(item=>item.id===selector.value)??snapshot;
+}
 function vehicleSettings() {
   const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
   byId('vehicle-selector-label').hidden=!vehicles.length;
@@ -699,34 +711,62 @@ function vehicleSettings() {
     selector.innerHTML=vehicles.map(item=>`<option value="${html(item.id)}">${html(item.name)}</option>`).join('');
     selector.dataset.vehicles=vehicles.map(item=>item.id).join(',');
   }
-  const selected=vehicles.find(item=>item.id===selector.value)??snapshot;
+  const selected=selectedVehicle();
   const identity=selected.id??'primary';
   const key=(location.hash??'')+':'+identity;
-  if(vehicleFormKey===key) return;
-  vehicleFormKey=key;
   vehicleForm.dataset.vehicleId=selected.id??'';
-  for(const name of ['pv','fast','phase_auto']) vehicleForm.elements[name].checked=selected.settings[name];
-  vehicleForm.elements.pv_target_soc.value=selected.settings.pv_target_soc;
-  vehicleForm.elements.fast_target_soc.value=selected.settings.target_soc;
+  goalForm.dataset.vehicleId=selected.id??'';
+  // Switches follow the backend on every refresh; a running save keeps the user's choice visible.
+  if(!vehicleSaving) for(const name of ['pv','fast','phase_auto']) vehicleForm.elements[name].checked=selected.settings[name];
   vehicleForm.elements.phase_auto.disabled=selected.plugins?.wallbox?.features?.phase_switching===false;
   if(vehicleForm.elements.phase_auto.disabled)vehicleForm.elements.phase_auto.checked=false;
+  const hint=byId('car-pv-hint'), fastHint=byId('car-fast-hint');
+  if(hint) hint.textContent=t('car.pv_hint',{soc:decimal(selected.settings.pv_target_soc,0)});
+  if(fastHint) fastHint.textContent=t('car.fast_hint',{soc:decimal(selected.settings.target_soc,0)});
+  // Before the first snapshot there are no goals yet; do not lock the editor to that empty state.
+  if(vehicleFormKey===key || !selected.charge_plan_view) return;
+  vehicleFormKey=key;
+  vehicleForm.elements.pv_target_soc.value=selected.settings.pv_target_soc;
+  vehicleForm.elements.fast_target_soc.value=selected.settings.target_soc;
   byId('charge-plans').innerHTML='';
   for(const row of selected.charge_plan_view??[]) appendChargePlan(row);
   byId('vehicle-saved').textContent='';
 }
-function appendChargePlan(row) {
+const weekdayKeys=['mon','tue','wed','thu','fri','sat','sun'];
+function weekdayText(days) {
+  const sorted=[...new Set(days)].sort((a,b)=>a-b), label=index=>t(`weekday.${weekdayKeys[index]}`);
+  if(sorted.length===7) return t('car.goal_daily');
+  const runs=[];
+  for(const value of sorted) {
+    const run=runs.at(-1);
+    if(run && value===run[1]+1) run[1]=value; else runs.push([value,value]);
+  }
+  return runs.map(([first,last])=>last-first>=2 ? `${label(first)}–${label(last)}` : first===last ? label(first) : `${label(first)}, ${label(last)}`).join(', ');
+}
+function goalSummary(row) {
+  const schedule=row.schedule==='weekly'
+    ? `${weekdayText(row.weekdays??[])} ${row.departure_time??''}`.trim()
+    : row.next_departure ? when(row.next_departure) : (row.departure_local??'').replace('T',' ');
+  const next=row.next_departure===undefined ? t('car.goal_unsaved') : row.next_departure ? t('plans.next',{date:when(row.next_departure)}) : t('plans.no_next');
+  const tags=[row.selected ? `<span class="tag accent">${th('car.goal_next')}</span>` : '',
+    row.active===false ? `<span class="tag">${th('car.goal_inactive')}</span>` : '',
+    row.schedule==='weekly' && row.holidays ? `<span class="tag">${th('car.goal_holidays')}</span>` : ''].join('');
+  return `<span class="goal-when"><b>${html(decimal(row.target_soc,0))} %</b></span>
+    <span class="goal-text"><b>${html(schedule||t('plans.no_next'))}</b><small>${html(next)}</small></span>
+    <span class="goal-tags">${tags}<button type="button" class="btn goal-edit" aria-expanded="false">${th('car.goal_edit')}</button></span>`;
+}
+function appendChargePlan(row, open=false) {
   const card=document.createElement('fieldset');
-  card.className='charge-goal';card.dataset.id=row.id;
-  card.innerHTML=`<legend>${th('plans.goal')}</legend><div class="goal-header">
+  card.className='charge-goal'+(row.selected?' selected':'');card.dataset.id=row.id;
+  card.innerHTML=`<legend class="sr-only">${th('plans.goal')}</legend><div class="goal-summary">${goalSummary(row)}</div><div class="goal-editor"${open?'':' hidden'}><div class="goal-header">
     <label class="check"><input name="active" type="checkbox" ${row.active?'checked':''}>${th('plans.active')}</label>
     <button type="button" class="delete-goal">${th('plans.delete')}</button></div>
     <div class="fields"><label>${th('settings.schedule')}<select name="schedule"><option value="once">${th('settings.once')}</option><option value="weekly">${th('settings.weekly')}</option></select></label>
     <label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required value="${html(row.target_soc)}"></label>
     <label data-goal-schedule="once">${th('settings.departure')}<input name="departure_local" type="datetime-local" value="${html(row.departure_local??'')}"></label>
     <label data-goal-schedule="weekly">${th('settings.departure_time')}<input name="departure_time" type="time" value="${html(row.departure_time??'07:30')}"></label></div>
-    <div data-goal-schedule="weekly" class="checks">${['mon','tue','wed','thu','fri','sat','sun'].map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}
-    <label><input name="holidays" type="checkbox" ${row.holidays?'checked':''}>${th('plans.holidays')}</label></div>
-    <p class="footnote">${row.next_departure===undefined?th('plans.save_preview'):row.next_departure?th('plans.next',{date:time(row.next_departure)}):th('plans.no_next')}</p>`;
+    <div data-goal-schedule="weekly" class="checks">${weekdayKeys.map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}
+    <label><input name="holidays" type="checkbox" ${row.holidays?'checked':''}>${th('plans.holidays')}</label></div></div>`;
   card.querySelector('[name=schedule]').value=row.schedule;
   const update=()=>{
     const mode=card.querySelector('[name=schedule]').value;
@@ -736,6 +776,13 @@ function appendChargePlan(row) {
   };
   card.querySelector('[name=schedule]').addEventListener('change',update);
   card.querySelector('.delete-goal').addEventListener('click',()=>{if(confirm(t('plans.delete_confirm')))card.remove();});
+  const edit=card.querySelector('.goal-edit'), editor=card.querySelector('.goal-editor');
+  if(edit && editor) {
+    edit.setAttribute?.('aria-expanded',String(open));
+    edit.addEventListener('click',()=>{editor.hidden=!editor.hidden;edit.setAttribute?.('aria-expanded',String(!editor.hidden));
+      edit.textContent=t(editor.hidden?'car.goal_edit':'car.goal_close');});
+    if(open) edit.textContent=t('car.goal_close');
+  }
   update();byId('charge-plans').append(card);
 }
 function chargePlanValues() {
@@ -746,6 +793,168 @@ function chargePlanValues() {
       departure_time:value('departure_time').value,holidays:value('holidays').checked,
       weekdays:[...card.querySelectorAll('[name=day]:checked')].map(input=>Number(input.value))};
   });
+}
+async function saveVehicleSwitch(input) {
+  const output=byId('vehicle-switch-saved'), values={};
+  if(input.type==='checkbox') values[input.name]=input.checked;
+  else {
+    const value=Number(input.value);
+    if(input.value===''||!Number.isFinite(value)||value<1||value>100) {output.textContent=t('car.invalid');return;}
+    values[input.name==='fast_target_soc' ? 'target_soc' : input.name]=value;
+  }
+  if(vehicleForm.dataset.vehicleId) values.vehicle_id=vehicleForm.dataset.vehicleId;
+  vehicleSaving=true;output.textContent=t('car.saving');
+  try {await api('settings',values);output.textContent=t('settings.saved');}
+  catch(error) {
+    if(input.type==='checkbox') input.checked=!input.checked;
+    output.textContent=error.message;
+  } finally {vehicleSaving=false;}
+  await refresh();
+}
+
+const kwhText=value=>`${decimal(value,1)} kWh`;
+const euro=value=>new Intl.NumberFormat(language.locale,{style:'currency',currency:'EUR'}).format(value);
+const chargeKinds={pv:'solar',grid:'grid',pause:'edge',ready:'car'};
+function durationText(seconds) {
+  const minutes=Math.round(seconds/60), hours=Math.floor(minutes/60);
+  return hours ? t('car.duration',{h:hours,m:minutes%60}) : t('car.duration_min',{m:minutes});
+}
+function phaseText(phases) {
+  return phases===1||phases===3 ? t('car.phases_'+phases) : '';
+}
+function chargePowerText(segment) {
+  return [`${decimal(segment.power_w/1000,1)} ${t('unit.kw')}`,phaseText(segment.phases)].filter(Boolean).join(' ');
+}
+function chargeSummary(plan) {
+  if(plan.state==='disconnected') return t('car.summary_disconnected');
+  if(plan.state==='reached') return t('car.summary_reached');
+  if(!plan.segments?.length) return t('car.summary_no_plan');
+  const parts=[];
+  if(plan.pv_kwh>=.05) parts.push(t('car.summary_pv',{kwh:kwhText(plan.pv_kwh),time:when(plan.pv_until)}));
+  if(plan.grid_kwh>=.05) parts.push(t('car.summary_grid',{kwh:kwhText(plan.grid_kwh),time:when(plan.grid_from),price:price(plan.grid_price_ct)}));
+  const text=[valid(plan.remaining_kwh) ? t('car.remaining',{kwh:kwhText(plan.remaining_kwh)}) : '',
+    parts.length ? t('car.summary_plan',{parts:parts.join(t('car.summary_and'))}) : t('car.summary_none')];
+  const late=plan.departure && (!plan.reached_at || Date.parse(plan.reached_at)>Date.parse(plan.departure));
+  if(late) text.push(t('car.summary_late'));
+  return text.filter(Boolean).join(' ');
+}
+function socRing(soc, target) {
+  const circle=301.6, value=valid(soc) ? Math.max(0,Math.min(100,soc)) : 0;
+  const goal=valid(target) ? `<circle class="goal" cx="60" cy="60" r="48" stroke-dasharray="2 ${circle}" stroke-dashoffset="${(-target/100*circle).toFixed(1)}" transform="rotate(-90 60 60)"/>` : '';
+  const label=t('car.ring',{soc:percent(soc),target:percent(target)});
+  return `<svg class="soc-ring" viewBox="0 0 120 120" role="img" aria-label="${html(label)}"><circle class="t" cx="60" cy="60" r="48"/>
+    <circle class="v" cx="60" cy="60" r="48" stroke-dasharray="${(value/100*circle).toFixed(1)} ${circle}" transform="rotate(-90 60 60)"/>${goal}
+    <text x="60" y="62" text-anchor="middle">${html(valid(soc) ? decimal(soc,0)+' %' : '—')}</text>${valid(target) ? `<text class="sub" x="60" y="80" text-anchor="middle">${html(t('car.ring_target',{soc:decimal(target,0)}))}</text>` : ''}</svg>`;
+}
+function carGoal(plan) {
+  const live=snapshot.live??{}, target=plan.target_soc;
+  const title=plan.departure ? t('car.goal_until',{when:when(plan.departure),soc:decimal(target,0)}) : t('car.goal_open',{soc:decimal(target,0)});
+  const charging=valid(live.car) && live.car>=100;
+  const tags=[charging ? `<span class="tag">${html([power(live.car),phaseText(live.phases)].filter(Boolean).join(' · '))}</span>` : '',
+    `<span class="tag">${html(modeLabel(live.car_mode))}</span>`,
+    live.soc_source ? `<span class="tag">${html(t('car.soc_source',{source:stateLabel('source',live.soc_source)}))}</span>` : ''].join('');
+  return `<div class="soc-goal-head">${socRing(plan.soc,target)}<div class="goal-copy"><h2>${html(title)}</h2>
+    <p class="dim">${html(chargeSummary(plan))}${plan.segments?.length ? ` <a href="#car-plan" class="to-plan">${th('car.to_plan')}</a>` : ''}</p>
+    <div class="goal-tags">${tags}</div></div></div>`;
+}
+const chargeAlerts={suspended:['crit','error'],overridden:['warn','override'],read_only:['info','info'],disconnected:['off','info']};
+function chargeAlert(plan) {
+  const alert=chargeAlerts[plan.state];
+  if(!alert) return '';
+  const immediate=plan.immediate_cost?.reached_at;
+  const meta=plan.state==='overridden' && immediate ? t('car.alert_overridden_at',{soc:decimal(plan.target_soc,0),time:when(immediate)}) : t(`car.alert_${plan.state}`);
+  const link=plan.state==='suspended' ? `<a href="#notices">${th('car.alert_diagnose')}</a>` : '<span></span>';
+  return `<div class="notice-card tone-${alert[0]}" role="${alert[0]==='crit'?'alert':'status'}"><span class="sev">${th('car.sev_'+alert[1])}</span>
+    <div><b>${th(`car.alert_${plan.state}_title`)}</b><small>${html(meta)}</small></div>${link}</div>`;
+}
+function socPlot(plan, start, span) {
+  const points=(plan.curve??[]).map(point=>({x:Math.max(0,Math.min(100,(Date.parse(point.time)-start)*100/span)),y:100-Math.max(0,Math.min(100,point.soc))}));
+  if(!points.length) return '';
+  points.push({x:100,y:points.at(-1).y});
+  const line=points.map(point=>`${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  const target=valid(plan.target_soc) ? 100-plan.target_soc : null;
+  const reached=plan.reached_at ? t('car.plot_target_at',{soc:decimal(plan.target_soc,0),time:when(plan.reached_at)}) : valid(plan.target_soc) ? t('car.ring_target',{soc:decimal(plan.target_soc,0)}) : '';
+  return `<div class="socplot" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none">
+    <polygon class="soc-area" points="${line} 100,100 0,100"/>${target===null ? '' : `<line class="soc-target" x1="0" y1="${target}" x2="100" y2="${target}"/>`}
+    <polyline class="soc-line" points="${line}"/></svg>
+    <span class="soclbl" style="left:0;top:calc(${points[0].y.toFixed(1)}% - 20px)">${html(decimal(plan.soc,0))} %</span>
+    ${target===null ? '' : `<span class="soclbl" style="right:0;top:calc(${Math.max(0,target).toFixed(1)}% - 20px)">${html(reached)}</span>`}</div>`;
+}
+function segmentText(segment) {
+  const parts=[`${clock(segment.start)}–${clock(segment.end)}`,t('car.kind_'+segment.kind)];
+  if(segment.kwh>=.05) {
+    parts.push(chargePowerText(segment));
+    parts.push(t('car.seg_energy',{kwh:kwhText(segment.kwh),from:decimal(segment.soc_start,0),to:decimal(segment.soc_end,0)}));
+    parts.push(segment.kind==='pv' && valid(segment.value_ct) ? t('car.seg_valued',{price:price(segment.value_ct)}) : price(segment.price_ct));
+  } else if(segment.kind==='pause' && valid(segment.price_ct)) parts.push(t('car.row_pause_price',{price:price(segment.price_ct)}));
+  return parts.filter(Boolean).join(' · ');
+}
+function segmentRow(segment, plan) {
+  let title, detail, stamp=when(segment.start);
+  if(segment.kind==='pv') {
+    title=t('car.row_pv');stamp=t('car.row_until',{time:when(segment.end)});
+    detail=[t('car.row_charge',{kwh:kwhText(segment.kwh),soc:decimal(segment.soc_end,0)}),valid(segment.cost_eur) ? euro(segment.cost_eur) : ''];
+  } else if(segment.kind==='grid') {
+    title=t(segment.phases ? 'car.row_grid_phases' : 'car.row_grid',{power:`${decimal(segment.power_w/1000,1)} ${t('unit.kw')}`,phases:phaseText(segment.phases)});
+    detail=[t('car.row_charge',{kwh:kwhText(segment.kwh),soc:decimal(segment.soc_end,0)}),price(segment.price_ct),valid(segment.cost_eur) ? euro(segment.cost_eur) : ''];
+  } else if(segment.kind==='ready') {
+    title=t('car.row_ready',{soc:decimal(plan.target_soc,0)});
+    detail=[plan.buffer_s && plan.departure ? t('car.row_buffer',{duration:durationText(plan.buffer_s),when:when(plan.departure)}) : ''];
+  } else {
+    title=t('car.row_pause');detail=[valid(segment.price_ct) ? t('car.row_pause_price',{price:price(segment.price_ct)}) : ''];
+  }
+  detail=detail.filter(Boolean).join(' · ');
+  return `<div class="row"><span><b>${html(title)}</b>${detail ? `<br><small>${html(detail)}</small>` : ''}</span><span class="tag">${html(stamp)}</span></div>`;
+}
+function chargeCompare(plan) {
+  const planned=plan.plan_cost, now=plan.immediate_cost, fast=plan.state==='overridden';
+  if(!planned && !now) return '';
+  const box=(label,cost,approximate,win)=>`<div class="${win ? 'win' : ''}"><small>${html(label)}</small><strong>${cost ? html((approximate ? '≈ ' : '')+euro(cost.eur)) : '—'}</strong>
+    <small>${cost ? html([valid(cost.price_ct) ? t('car.compare_avg',{price:price(cost.price_ct)}) : '',
+      cost.reached_at ? t(approximate ? 'car.compare_at_estimated' : 'car.compare_at',{soc:decimal(plan.target_soc,0),time:when(cost.reached_at)}) : ''].filter(Boolean).join(' · ')) : html(t('car.compare_none'))}</small></div>`;
+  const cheaper=planned && now ? planned.eur<=now.eur : Boolean(planned);
+  const note=valid(plan.pv_price_ct) ? t('car.compare_note',{price:price(plan.pv_price_ct)}) : t('car.compare_note_free');
+  return `<div class="cp-compare">${box(t('car.compare_plan'),planned,false,!fast&&cheaper)}${box(t(fast ? 'car.compare_now_active' : 'car.compare_now'),now,true,fast)}</div>
+    <p class="footnote">${html(note)}</p>`;
+}
+function carPlanPanel(plan) {
+  const start=windowNow(), end=Math.max(start+3_600_000,Date.parse(plan.end)), span=end-start;
+  const title=plan.departure ? t('car.plan_title',{when:when(plan.departure)}) : t('car.plan_title_open');
+  const tag=chargeAlerts[plan.state] ? t('car.state_'+plan.state)
+    : plan.generated_at ? t('car.plan_from',{time:when(plan.generated_at)}) : '';
+  const segments=plan.segments??[];
+  const track=segments.map((segment,index)=>{
+    const from=Math.max(start,Date.parse(segment.start)), to=Math.min(end,Date.parse(segment.end)), share=(to-from)/span;
+    const info=segmentText(segment);
+    return `<button type="button" class="mode-segment" style="--duration:${share.toFixed(4)};--mode:var(--${chargeKinds[segment.kind]})" data-charge="${index}" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${share>=.12 ? `<span>${th('car.short_'+segment.kind)}</span>` : ''}</button>`;
+  }).join('');
+  const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
+  const step=span>12*3_600_000 ? 4*3_600_000 : span>4*3_600_000 ? 2*3_600_000 : 3_600_000;
+  const ticks=[];
+  for(let stamp=Math.ceil((start+step/2)/step)*step;stamp<end-step/2;stamp+=step) ticks.push(stamp);
+  const legend=[...new Set(segments.map(segment=>segment.kind))].map(kind=>`<span><i style="--mode:var(--${chargeKinds[kind]})"></i>${th('car.kind_'+kind)}</span>`).join('');
+  const body=segments.length ? `<div class="plan-track-wrap"><div class="plan-track charge-track" role="group" aria-label="${th('car.track_aria')}">${track}</div></div>
+    <div class="plan-axis" aria-hidden="true"><span style="left:0">${th('chart.now')}</span>${ticks.map(stamp=>`<span style="left:${at(stamp)}">${html(clock(stamp))}</span>`).join('')}<span style="left:100%">${html(when(end))}</span></div>
+    <div class="mode-legend">${legend}</div>
+    <p class="mode-detail" id="car-plan-detail" aria-live="polite">${th('car.track_hint')}</p>
+    <div class="list">${segments.filter(segment=>segment.kind!=='pause'||Date.parse(segment.end)-Date.parse(segment.start)>=1_800_000).map(segment=>segmentRow(segment,plan)).join('')}</div>
+    ${chargeCompare(plan)}` : `<p class="footnote">${th(plan.state==='disconnected' ? 'car.summary_disconnected' : 'car.no_plan')}</p>`;
+  return `<div class="panel-heading"><h2>${html(title)}</h2>${tag ? `<span class="tag">${html(tag)}</span>` : ''}</div>
+    ${chargeAlert(plan)}${socPlot(plan,start,span)}${body}`;
+}
+function carView() {
+  const plan=snapshot.charge_plan;
+  const fleet=Boolean(snapshot.vehicles?.length);
+  byId('car-goal').hidden=fleet||!plan;
+  byId('car-plan').hidden=fleet||!plan;
+  if(fleet||!plan) {planScrollPending=false;return;}
+  byId('car-goal').innerHTML=carGoal(plan);
+  byId('car-plan').innerHTML=carPlanPanel(plan);
+  byId('car-plan').classList.toggle('overridden',plan.state==='overridden'||plan.state==='read_only');
+  if(planScrollPending) {
+    planScrollPending=false;
+    requestAnimationFrame(()=>byId('car-plan').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}));
+  }
 }
 function batteryGroupDetails(group) {
   if(!group)return '';
@@ -1036,15 +1245,18 @@ form.elements.holiday_state.addEventListener('change',holidayFields);
 byId('add-charge-plan').addEventListener('click',()=>{
   if(byId('charge-plans').querySelectorAll('.charge-goal').length>=32)return;
   appendChargePlan({id:'plan_'+Date.now()+'_'+(++chargePlanCounter),active:true,schedule:'weekly',
-    target_soc:80,departure_time:'07:30',weekdays:[0,1,2,3,4],holidays:false});
+    target_soc:80,departure_time:'07:30',weekdays:[0,1,2,3,4],holidays:false},true);
 });
-vehicleForm.addEventListener('submit',async event=>{
+// Switches and limits save immediately; goals are edited together and saved with one button.
+vehicleForm.addEventListener('change',event=>{
+  const input=event.target;
+  if(input?.name && ['pv','fast','phase_auto','pv_target_soc','fast_target_soc'].includes(input.name)) saveVehicleSwitch(input);
+});
+vehicleForm.addEventListener('submit',event=>{event.preventDefault();document.activeElement?.blur?.();});
+goalForm.addEventListener('submit',async event=>{
   event.preventDefault();
   const values={charge_plans:chargePlanValues()};
-  for(const name of ['pv','fast','phase_auto'])values[name]=vehicleForm.elements[name].checked;
-  values.pv_target_soc=Number(vehicleForm.elements.pv_target_soc.value);
-  values.target_soc=Number(vehicleForm.elements.fast_target_soc.value);
-  if(vehicleForm.dataset.vehicleId)values.vehicle_id=vehicleForm.dataset.vehicleId;
+  if(goalForm.dataset.vehicleId)values.vehicle_id=goalForm.dataset.vehicleId;
   try{await api('settings',values);vehicleFormKey=null;await refresh();byId('vehicle-saved').textContent=t('settings.saved');}
   catch(error){byId('vehicle-saved').textContent=error.message;}
 });
@@ -1087,6 +1299,18 @@ byId('overview-track').addEventListener('click',event => {
   if (!button) return;
   byId('overview-track').querySelectorAll('[data-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
   byId('overview-track-detail').textContent = button.dataset.mode;
+});
+byId('car-plan').addEventListener('click',event => {
+  const button = event.target.closest('[data-charge]');
+  if (!button) return;
+  byId('car-plan').querySelectorAll('[data-charge]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+  byId('car-plan-detail').textContent = button.dataset.mode;
+});
+document.addEventListener('click',event => {
+  const link = event.target.closest('.to-plan, .plan-link[href="#car"]');
+  if (!link) return;
+  planScrollPending = true;
+  if (link.classList.contains('to-plan')) {event.preventDefault();carView();}
 });
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');

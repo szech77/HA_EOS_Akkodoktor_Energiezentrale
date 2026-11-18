@@ -19,6 +19,7 @@ from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
+from .energy.charge_view import charge_plan
 from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline, node_problems, plan_events
 from .weather_forecast import WeatherForecast
 
@@ -106,12 +107,14 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self.history_for_view = {'local':local, 'vehicles':self.app.vehicle_histories(now)
                     if callable(getattr(type(self.app), 'vehicle_histories', None)) else {}}
                 result['pv_today_kwh'] = measured_pv_energy(local, self.influx_rows, now, result['zone'])
+                result['pv_price_ct'] = ledger.pv_price(now.isoformat())
                 self.app.errors.pop("accounting", None)
             except (OSError, sqlite3.Error, ValueError, TypeError, KeyError) as error:
                 # Reporting failures must never stop an otherwise safe charge.
                 self.app.errors["accounting"] = type(error).__name__
                 result['accounting'] = None
                 result['pv_today_kwh'] = None
+                result['pv_price_ct'] = None
                 if isinstance(self.app, Controller):
                     self.app.record_failure("accounting", error)
             result["errors"] = self.app.visible_errors(now) if isinstance(self.app, Controller) else dict(self.app.errors)
@@ -121,7 +124,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
 
     def _present(self, data):
         now = datetime.now(timezone.utc)
-        retained = {key:self.data[key] for key in ('accounting', 'pv_today_kwh') if self.data and key in self.data}
+        retained = {key:self.data[key] for key in ('accounting', 'pv_today_kwh', 'pv_price_ct') if self.data and key in self.data}
         result = view_state({**retained, **data}, now)
         measured = result.get('pv_today_kwh')
         result['pv_forecast_totals'] = [{**row, 'total_kwh':row['kwh'] + measured if index == 0
@@ -139,6 +142,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
         result['resolved_notices'] = self.issue_log.recently_resolved('state', now)
         result['node_problems'] = node_problems(result['notices'], result.get('vehicles') or ())
         result['plan_events'] = plan_events(result, now)
+        if result.get('features', {}).get('car'):
+            result['charge_plan'] = charge_plan(result, now, result.get('pv_price_ct'))
+        for vehicle in result.get('vehicles', []):
+            vehicle['charge_plan'] = charge_plan({'armed':result.get('armed'), **vehicle}, now, result.get('pv_price_ct'))
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])
         if result['control_status'] != self.control_status:

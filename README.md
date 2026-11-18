@@ -53,8 +53,29 @@ Linien zeigen Messwerte, gestrichelte Linien die Prognose.
 <details>
 <summary><strong>E-Auto: Ladeleistung, Ladeziel und Prognose</strong></summary>
 
-Die Fahrzeugansicht zeigt Ladeziel und Abfahrtszeit sowie die EOS-Lademodi,
-Wallbox-Leistung, PV-Produktion, SoC und Bezugspreise.
+Die Fahrzeugansicht beantwortet zuerst, ob das Auto rechtzeitig voll ist: Ein
+Ring zeigt Ladestand und Ziel, daneben stehen Abfahrt, die noch fehlende Energie
+und was EOS plant (z. B. „5,4 kWh aus PV bis 16:00 und 27,5 kWh Netzladen ab
+02:00“). Die Schalter PV-Überschussladen, Schnellladen und Phasenautomatik sowie
+die eingeklappten Ladegrenzen wirken sofort und melden „Gespeichert“.
+
+Der **EOS-Ladeplan** bis zur Abfahrt (ohne Abfahrt: 24 Stunden) zeigt die
+Ladestandskurve mit Zielzeitpunkt, einen antippbaren Zeitstrahl mit den Abschnitten
+PV-Überschuss, Pause, Netzladen und Ziel erreicht sowie eine Liste mit Leistung,
+Phasen, Energie, Preis und Kosten je Abschnitt. Darunter vergleicht er die Kosten
+des Plans mit sofortigem Laden bei voller Leistung (≈, mit dem PV-Anteil aus der
+Prognose). Netzstrom wird mit dem Preis des jeweiligen Intervalls, PV-Strom mit der
+Einspeisevergütung bewertet. Das Backend leitet die Abschnitte aus der EOS-Prognose
+ab; ein Intervall gilt als Netzladen, wenn mehr als die Hälfte aus dem Netz kommt.
+Ist Schnellladen an, ist der Plan „überstimmt“; meldet die Wallbox einen Fehler,
+ist er „ausgesetzt“; im Lesemodus dient er „nur zur Anzeige“. Ohne EOS-Kurve für
+das Fahrzeug gibt es keine Abschnitte und keinen Kostenvergleich.
+
+Die **Ladeziele** erscheinen als kompakte Zeilen mit Ziel-SoC, Termin und nächster
+Abfahrt; das Ziel, das den Plan bestimmt, ist hervorgehoben. **Bearbeiten** öffnet
+die Details, neue Ziele starten geöffnet, **Speichern** übernimmt alle Ziele.
+Darunter folgen EOS-Lademodi, Wallbox-Leistung, PV-Produktion, SoC und
+Bezugspreise.
 Auch bei nur einem verwalteten Fahrzeug wird eine vorhandene EOS-SoC-Prognose
 angezeigt, einschließlich eines eigenen SoC-Diagramms in der gemeinsamen
 Autoübersicht. Ohne passende EOS-Kurve wird der aktuelle gültige SoC für die
@@ -701,7 +722,7 @@ auf den neuen nativen Auto-SoC-Faktor umstellen.
 
 Allgemeine Einstellungen für Kosten/Bilanzierung, Hausspeicher, PV-Ladestart und
 Regelintervall stehen im Panel unter **Einstellungen**. Fahrzeugbezogene
-Ladeoptionen und Ladeziele stehen in der Detailansicht **Auto → Ladeplanung**.
+Ladeoptionen und Ladeziele stehen in der Detailansicht **Auto**.
 Native Entitäten ergänzen die Bedienung einzelner Parameter.
 Inbetriebnahme-Einstellungen findest du unter Geräte & Dienste → EOS Energiezentrale
 → **Konfigurieren**. Nach deren Änderung wird die Integration neu geladen. Die
@@ -796,9 +817,9 @@ verwenden die gemeinsame EOS-API-Basisadresse; es sind keine zusätzlichen
 EOS-Verbindungen nötig. Ohne Fahrzeugliste bleibt das Feld für die bisherige
 Einzelkonfiguration sichtbar. Neue Fahrzeuge weiterhin unter **Geräte** hinzufügen.
 
-Unter **Auto → Ladeplanung** das Fahrzeug auswählen und PV-Überschussladen mit
-PV-Ziel-SoC, Schnellladen mit eigenem Ziel-SoC sowie automatische Phasenwahl
-einstellen. Die Liste **Ladeziele** unterstützt bis zu 32 Einträge je Fahrzeug:
+In der Ansicht des Fahrzeugs (bzw. unter **Auto** mit Fahrzeugauswahl) wirken
+PV-Überschussladen mit PV-Ziel-SoC, Schnellladen mit eigenem Ziel-SoC sowie die
+automatische Phasenwahl sofort. Die Liste **Ladeziele** unterstützt bis zu 32 Einträge je Fahrzeug:
 einmalige Abfahrt oder wiederkehrende Abfahrt mit Uhrzeit, Wochentagen und
 zusätzlichen Feiertagen, jeweils mit Ziel-SoC und Aktivschalter. Einträge lassen
 sich hinzufügen und nach einer Bestätigung entfernen; erst **Speichern** übernimmt

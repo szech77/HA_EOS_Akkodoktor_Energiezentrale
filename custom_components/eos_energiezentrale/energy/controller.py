@@ -944,6 +944,7 @@ class Controller:
             vehicle_resource=opts.get('vehicle_resource') if opts.get('wallbox_type')!='none' else None
             forecast=vehicle_forecast(self.forecast,self.forecast_vehicle_resource,vehicle_resource) if current else []
             projection = 'unavailable'
+            charge_limits = None
             if vehicle_resource:
                 phases = self.live.get('phases')
                 auto = (self.config.daily['phase_auto'] and
@@ -955,6 +956,10 @@ class Controller:
                     {**self.config.options, **self.config.daily}, connected=self.vehicle_connected,
                     maximum_w=maximum or 0, minimum_w=minimum or 0, pv_share=pv_share,
                     foreign_vehicle=self.forecast_vehicle_resource != vehicle_resource)
+                # Display-only inputs for the charge plan view; control keeps its own limits.
+                charge_limits = {"capacity_wh": opts.get("capacity_wh"), "efficiency": opts.get("charging_efficiency"),
+                                 "maximum_w": maximum or None, "max_current_a": opts.get("max_current_a"),
+                                 "phases": None if auto else phases}
             driver=getattr(self.config.battery,'driver',self.config.battery)
             plugin_reads={kind:getattr(value,'telemetry_status',[]) for kind,value in
                           (('battery',driver),('wallbox',self.config.wallbox))}
@@ -966,6 +971,9 @@ class Controller:
                     "eos_run": self.eos_run_state(now),
                     "vehicle_forecast_source": projection,
                     "charge_target_soc": self.goal_target(now),
+                    "charge_limits": charge_limits,
+                    "charge_departure": departure.isoformat() if (departure := next_departure(self.config.daily, now, self.config.zone)) else None,
+                    "plan_generated_at": generated.isoformat() if current else None,
                     "source_configuration":self.pv_availability.decorate(deepcopy(self.source_configuration), now),
                     "plugin_read_issues":{key:deepcopy(value) if isinstance(value,list) else [] for key,value in plugin_reads.items()},
                     "battery_group":deepcopy(group) if isinstance(group,dict) else None,
