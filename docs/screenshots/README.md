@@ -3,13 +3,20 @@
 Echte Browseraufnahmen des integrierten Panels, erstellt mit synthetischen
 Beispieldaten und deutschem Sprachpaket. Es werden keine privaten Messwerte,
 Serveradressen oder Zugangsdaten gezeigt. Die Screenshots bilden den Stand der
-Oberfläche vom 9. November 2026 ab und sind keine Entwurfsgrafiken.
+Oberfläche nach dem Redesign (Stand 18. November 2026) und sind keine Entwurfsgrafiken.
 
-- `overview.png`: Desktop-Übersicht einschließlich Tagesverbrauch und Kosten.
+- `overview.png`: Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten
+  Ereignissen und Heute-Kacheln.
 - `battery.png`: Speicherverlauf, EOS-Modi und Prognosen.
-- `vehicle.png`: Fahrzeugplanung und Ladeverlauf.
-- `solar.png`: PV-Ertrag und Prognosen für drei Tage.
+- `vehicle.png`: Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan und Ladezielen.
+- `pv.png`: PV & Wetter mit stündlicher Prognose, Tageskarten und Planfolgen.
+- `usage.png`: Tagesauswertung Hausverbrauch.
 - `mobile.png`: oberer Bereich der Übersicht bei 390 Pixeln Breite.
+
+Abgeleitete Anzeigewerte (Statusband, Zeitstrahl, nächste Ereignisse, Ladeplan,
+PV-Stunden und -Tage, „Was EOS daraus macht“ und der Tagesbericht) entstehen aus
+denselben Beispieldaten über die Backend-Funktionen der Integration. Das stündliche
+Wetter ist ein zur Sonneneinstrahlung des Modells passendes Beispiel.
 
 Bei Änderungen am Layout oder an sichtbaren Funktionen die betroffenen Aufnahmen
 aktualisieren. Weiterhin ausschließlich Beispieldaten verwenden und die deutsche

@@ -15,6 +15,8 @@ GRID_SHARE = .5
 SOC_TOLERANCE = .5
 # Without a departure the plan covers this horizon.
 HORIZON_H = 24
+# A segment shorter than this between two segments of the same kind is forecast noise and joins them.
+MIN_SEGMENT_S = 600
 # Errors that keep the wallbox from following the plan.
 WALLBOX_ERRORS = frozenset({'wallbox', 'wallbox_stop', 'vehicle_limits'})
 
@@ -39,6 +41,24 @@ def _phases(power, limits):
     if not current or power is None:
         return None
     return 1 if power <= current * 230 * 1.05 else 3
+
+
+def _absorb_short(segments):
+    """Merge a short segment sandwiched between two of the same kind; energy and cost totals stay exact."""
+    merged = list(segments)
+    index = 1
+    while index < len(merged) - 1:
+        before, item, after = merged[index - 1], merged[index], merged[index + 1]
+        if before['kind'] == after['kind'] and (item['end'] - item['start']).total_seconds() < MIN_SEGMENT_S:
+            for part in (item, after):
+                for key in ('kwh', 'grid_kwh', 'pv_kwh', 'cost_eur', 'energy_h', 'price_sum', 'price_h'):
+                    before[key] += part[key]
+                before['priced'] = before['priced'] and part['priced']
+            before['end'], before['soc_end'] = after['end'], after['soc_end']
+            del merged[index:index + 2]
+            continue
+        index += 1
+    return merged
 
 
 def _state(data, connected, soc, target, has_plan):
@@ -164,6 +184,7 @@ def charge_plan(data, now, pv_price_ct=None):
             segment['price_h'] += hours
         segment['soc_end'] = level if row_soc is None or capacity is None else min(
             100., row_soc + kwh * efficiency * 100000 / capacity)
+    segments = _absorb_short(segments)
     for segment in segments:
         segment['power_w'] = segment['kwh'] * 1000 / segment['energy_h'] if segment['energy_h'] else 0.
         segment['phases'] = _phases(segment['power_w'], limits) if segment['kwh'] else None

@@ -941,7 +941,7 @@ function carPlanPanel(plan) {
     <div class="plan-axis" aria-hidden="true"><span style="left:0">${th('chart.now')}</span>${ticks.map(stamp=>`<span style="left:${at(stamp)}">${html(clock(stamp))}</span>`).join('')}<span style="left:100%">${html(when(end))}</span></div>
     <div class="mode-legend">${legend}</div>
     <p class="mode-detail" id="car-plan-detail" aria-live="polite">${th('car.track_hint')}</p>
-    <div class="list">${segments.filter(segment=>segment.kind!=='pause'||Date.parse(segment.end)-Date.parse(segment.start)>=1_800_000).map(segment=>segmentRow(segment,plan)).join('')}</div>
+    <div class="list">${segments.filter(segment=>Date.parse(segment.end)-Date.parse(segment.start)>=(segment.kind==='pause' ? 1_800_000 : 600_000)||segment.kwh>=.5).map(segment=>segmentRow(segment,plan)).join('')}</div>
     ${chargeCompare(plan)}` : `<p class="footnote">${th(plan.state==='disconnected' ? 'car.summary_disconnected' : 'car.no_plan')}</p>`;
   return `<div class="panel-heading"><h2>${html(title)}</h2>${tag ? `<span class="tag">${html(tag)}</span>` : ''}</div>
     ${chargeAlert(plan)}${socPlot(plan,start,span)}${body}`;

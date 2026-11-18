@@ -94,3 +94,14 @@ def test_charge_plan_without_departure_covers_24_hours():
     plan = charge_plan(data(plan_rows(), charge_departure=None), NOW, 8.)
     assert plan['end'] == (NOW + timedelta(hours=24)).isoformat() and plan['buffer_s'] is None
     assert plan['segments'][-1]['kind'] == 'ready'
+
+
+def test_short_segment_between_two_pauses_joins_them_without_losing_energy():
+    rows = [row(0, 3700, 40, solar=5000), row(1, 0, 47.4), row(2, 3700, 47.4, solar=5000, length=1 / 30),
+            row(2 + 1 / 30, 0, 47.6, length=2 - 1 / 30), row(4, 7400, 47.6, grid=7900, price=24, length=2.5)]
+    plan = charge_plan(data(rows), NOW, pv_price_ct=8.)
+    assert [item['kind'] for item in plan['segments']] == ['pv', 'pause', 'grid']
+    pause = plan['segments'][1]
+    assert pause['start'] == (NOW + timedelta(hours=1)).isoformat() and pause['end'] == (NOW + timedelta(hours=4)).isoformat()
+    assert pause['pv_kwh'] == pytest.approx(3.7 / 30)
+    assert plan['pv_kwh'] == pytest.approx(3.7 + 3.7 / 30) and plan['pv_until'] == (NOW + timedelta(hours=1)).isoformat()

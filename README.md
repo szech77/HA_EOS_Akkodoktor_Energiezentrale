@@ -40,7 +40,7 @@ Stunde tut (lädt mit PV-Überschuss, lädt aus dem Netz, deckt das Haus, hält 
 Ladestand); der EOS-Modus steht klein darunter. Folgen zwei Wechsel mit derselben
 Wirkung aufeinander, erscheint nur der erste. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
 
-![Desktop-Übersicht mit Energiefluss, Wetter, Ladezuständen und Tagesverbrauch samt Kosten](docs/screenshots/overview.png)
+![Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten Ereignissen und Heute-Kacheln](docs/screenshots/overview.png)
 
 ### Hausspeicher: Verlauf und EOS-Plan
 
@@ -87,17 +87,28 @@ Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
 Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt
 dann beim aktuellen SoC und berücksichtigt verfügbare PV-Überschussprognosen.
 
-![E-Auto-Detailansicht mit Ladeziel, Moduszeitleiste, Wallbox-Leistung, SoC und Strompreis](docs/screenshots/vehicle.png)
+![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.png)
 
 </details>
 
 <details>
-<summary><strong>Photovoltaik: Ertrag und Tagesprognosen</strong></summary>
+<summary><strong>PV & Wetter: Prognose und was EOS daraus macht</strong></summary>
 
-Aktuelle PV-Leistung, heutiger Ertrag und Prognosen für heute, morgen und
-übermorgen stehen über dem gemeinsamen Verlauf aus Messung und Prognose.
+Aktuelle PV-Leistung und Wetter, stündliche Leiste mit Wetter über dem erwarteten
+PV-Ertrag, Tageskarten für drei Tage und die Folgen für Speicher, Einspeisung und
+Auto. Der bisherige Leistungsverlauf ist über **Verlauf & Diagramme** erreichbar.
 
-![PV-Detailansicht mit Tagesertrag, Prognosen für drei Tage und Leistungsverlauf](docs/screenshots/solar.png)
+![PV & Wetter mit stündlicher Prognose, Tageskarten und „Was EOS daraus macht“](docs/screenshots/pv.png)
+
+</details>
+
+<details>
+<summary><strong>Auswertung: Verbrauch, Herkunft und Kosten</strong></summary>
+
+Jede Auswertung hat Tag/Monat/Jahr, eine Kernaussage, vier Kennzahlen, den Verlauf
+nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt“.
+
+![Auswertung Hausverbrauch für einen Tag mit Kennzahlen, Verlauf nach Herkunft, Preisen und Auffälligkeiten](docs/screenshots/usage.png)
 
 </details>
 
@@ -107,7 +118,7 @@ Aktuelle PV-Leistung, heutiger Ertrag und Prognosen für heute, morgen und
 Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
 Übersicht; Tagesbilanz und weitere Informationen folgen darunter beim Scrollen.
 
-<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit aktuellen Energiewerten, Wettersymbol und Energieflussdiagramm">
+<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit Statusband, Kennzahlen, Energiefluss und EOS-Plan">
 
 </details>
 
