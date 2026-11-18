@@ -40,7 +40,7 @@ function fixture(){
   html:String,time:String,confirm:()=>false,api:async(op,values)=>{ctx.sent={op,values};},refresh:async()=>{},Date};
  vm.createContext(ctx);
  vm.runInContext(script.slice(script.indexOf("const form = byId('daily')"),script.indexOf('function batteryGroupDetails(')),ctx);
- vm.runInContext(script.slice(script.indexOf("byId('vehicle-selector').addEventListener"),script.indexOf("byId('control').addEventListener")),ctx);
+ vm.runInContext(script.slice(script.indexOf("byId('vehicle-selector').addEventListener"),script.indexOf("byId('status-band').addEventListener")),ctx);
  nodes['vehicle-selector'].value='second';ctx.vehicleSettings();
  return {ctx,nodes};
 }

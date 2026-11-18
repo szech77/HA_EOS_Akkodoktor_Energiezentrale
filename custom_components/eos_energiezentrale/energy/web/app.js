@@ -101,6 +101,9 @@ const power = value => valid(value) ? `${decimal(Math.abs(value) / 1000, 2)} ${t
 const percent = value => valid(value) ? `${decimal(value)} %` : '—';
 const price = value => valid(value) ? `${decimal(value)} ${t('unit.price')}` : '—';
 const time = value => value ? new Intl.DateTimeFormat(language.locale, {timeZone: snapshot.zone, dateStyle:'short', timeStyle:'short'}).format(new Date(value)) : '—';
+// Same local day: clock time only; otherwise date and time.
+const when = value => value ? new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(value))===new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(windowNow()))
+  ? new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'}).format(new Date(value)) : time(value) : '—';
 const modes = {
   IDLE:['mode.idle','grid'], NON_EXPORT:['mode.pv','battery'], SELF_CONSUMPTION:['mode.own','house'],
   FORCED_CHARGE:['mode.grid','car'], GRID_SUPPORT_IMPORT:['mode.grid','car'],
@@ -144,7 +147,7 @@ function showStartupError(stage,error) {
   if(byId('startup-details'))byId('startup-details').hidden=false;
   if(byId('startup-details-title'))byId('startup-details-title').textContent=t('startup.details');
   if(byId('startup-detail'))byId('startup-detail').textContent=[stage,error?.code??error?.name??'Error',error?.asset??'',error?.code?'':String(error?.message??'').slice(0,200)].filter(Boolean).join(' · ');
-  for(const id of ['overview','detail','settings','usage'])if(byId(id))byId(id).hidden=true;
+  for(const id of ['overview','detail','settings','usage','notices','status-band','top-notices','notice-pill'])if(byId(id))byId(id).hidden=true;
 }
 
 async function api(path, body) {
@@ -217,12 +220,6 @@ function vehicleStatus(vehicle) {
 
 function socBarCount(soc) {
   return valid(soc) && soc>=0 && soc<=100 ? Math.ceil(soc/20) : null;
-}
-
-function controlStatus(value) {
-  const control=t(`control.${value.control_status??'read_only'}`),run=value.eos_run;
-  return ['calculating','updating'].includes(run?.state)
-    ? control+' · '+t(`eos.run_${run.state}`,{seconds:run.elapsed_s??0}) : control;
 }
 
 function carIcon(soc) {
@@ -409,7 +406,6 @@ function overview() {
     weatherNode.setAttribute('aria-label', description+' · '+t('forecast.open'));
     weatherNode.title = description+' · '+t('forecast.open');
   }
-  byId('connection').textContent = controlStatus(snapshot);
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
   byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
@@ -721,14 +717,10 @@ function batteryGroupDetails(group) {
 }
 
 function settings() {
-  document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   if (!formReady && 'schedule' in snapshot.settings) {
     fillForm();
     formReady = true;
   }
-  byId('ownership').textContent = controlStatus(snapshot);
-  byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
-  byId('control').disabled = !formReady;
   const limits = snapshot.battery_limits;
   byId('battery-limits-status').textContent = t(`settings.battery_limits_${snapshot.battery_limits_status??'unmanaged'}`, {
       minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc});
@@ -750,27 +742,70 @@ function noticeText(notice, translate=t) {
   return (notice.vehicle_name?notice.vehicle_name+': ':'')+message;
 }
 
+let shownRoute=null;
+const control={confirming:null,busy:false,result:''};
+const statusContext=()=>({t,html,time:when,modeLabel,text:notice=>noticeText(notice)});
+function browserNotices() {
+  // Browser-side failures stay in the browser; they are shown, never reported to the backend.
+  return [...(connectionFailure?[{severity:'warning',message:'notice.connection',browser:true}]:[]),
+    ...(forecastOpenFailure?[{severity:'warning',message:'forecast.open_failed',browser:true}]:[])];
+}
+function resolvedText(item) {
+  const key=item.code?.startsWith('sources_')?'notice_card.sources_resolved':'notice.'+item.code;
+  return Object.hasOwn(language.messages,key)?t(key,{values:''}):t('notice.unknown');
+}
+const toneOf=severity=>({error:'crit',info:'info'}[severity]??'warn');
+function renderStatus(route) {
+  const ctx=statusContext(), ready='control_status' in snapshot;
+  const notices=EosStatus.sortNotices([...(snapshot.notices??[]),...browserNotices()]);
+  const bandNode=byId('status-band');
+  bandNode.hidden=!ready;
+  if(ready){
+    const view=EosStatus.band(snapshot,ctx,{...control,ready:'schedule' in (snapshot.settings??{}),car:consumerEnabled('car')});
+    bandNode.className='status-band tone-'+view.tone;
+    bandNode.innerHTML=view.html;
+  }
+  const top=byId('top-notices'), pill=byId('notice-pill');
+  top.hidden=route==='notices';
+  top.innerHTML=route==='notices'?'':notices.slice(0,2).map(notice=>EosStatus.noticeCard(notice,ctx,{compact:true})).join('');
+  pill.hidden=route==='notices'||!notices.length;
+  if(notices.length){
+    pill.className='notice-pill tone-'+toneOf(notices[0].severity);
+    pill.innerHTML='<span class="sev">'+th('notice_card.'+(notices[0].severity??'warning'))+'</span><span class="txt">'+html(noticeText(notices[0]))
+      +(notices.length>1?' · '+th('notice_card.more',{count:notices.length-1}):'')+'</span><span aria-hidden="true">→</span>';
+  }
+  const badge=byId('nav-badge');
+  badge.hidden=!notices.length;badge.textContent=String(notices.length);
+  badge.className='badge tone-'+toneOf(notices[0]?.severity);
+  if(route!=='notices')return;
+  byId('notice-count').textContent=notices.length?t('notice_card.open_count',{count:notices.length}):t('notice_card.none_open');
+  byId('all-notices').innerHTML=notices.length?notices.map(notice=>EosStatus.noticeCard(notice,ctx)).join('')
+    :'<div class="plan-panel"><b>'+th('notice_card.all_clear')+'</b><p class="footnote">'+th('notice_card.all_clear_text')+'</p></div>';
+  const resolved=snapshot.resolved_notices??[];
+  byId('resolved-panel').hidden=!resolved.length;
+  byId('resolved-notices').innerHTML=resolved.map(item=>EosStatus.resolvedRow(item,{...ctx,text:resolvedText})).join('');
+}
 function renderView() {
   const requested = location.hash.slice(1);
   if (requested !== route) hideProbe();
   const vehicleRoute=requested.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===requested.slice(4));
   const usageRoute=billingRoute(requested);
-  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || requested === 'settings' ? requested : 'overview';
+  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || ['settings','notices'].includes(requested) ? requested : 'overview';
+  document.querySelectorAll('[data-optional]').forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
+  const section=route.startsWith('car')?'car':['settings','notices'].includes(route)?route:'overview';
+  document.querySelectorAll('nav a[data-route]').forEach(link=>{if(link.dataset.route===section)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
   byId('usage').hidden=!usageRoute;
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
+  byId('notices').hidden = route !== 'notices';
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
-  const notices = snapshot.notices??[];
-  const information = notices.filter(notice=>notice.severity==='info').map(notice=>noticeText(notice));
-  const warnings = notices.filter(notice=>notice.severity!=='info').map(notice=>noticeText(notice));
-  if(connectionFailure)warnings.push(t('notice.connection'));
-  if(forecastOpenFailure)warnings.push(t('forecast.open_failed'));
-  byId('notice').textContent = [...information, ...(warnings.length ? [`${t('notice.check')} · ${warnings.join(', ')}`] : [])].join(' · ');
-  byId('notice').classList.toggle('information', information.length>0 && warnings.length===0);
+  renderStatus(route);
+  // Routes share their names with section ids; keep the status band in view after navigation.
+  if (route !== shownRoute) { if (shownRoute !== null) window.scrollTo(0,0); else requestAnimationFrame(()=>window.scrollTo(0,0)); shownRoute = route; }
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();
-  else detail(route);
+  else if (route !== 'notices') detail(route);
   forecastView?.update();
 }
 let connectionFailure=false;
@@ -853,11 +888,23 @@ form.addEventListener('submit', async event => {
   try { await api('settings',values); vehicleFormKey=null; byId('saved').textContent = t('settings.saved'); await refresh(); }
   catch (error) { byId('saved').textContent = error.message; }
 });
-byId('control').addEventListener('click', async () => {
-  const enabled = !snapshot.armed && !snapshot.release_pending;
-  if (enabled && !confirm(t('control.confirm'))) return;
-  try { await api('control',{enabled}); byId('control-result').textContent = enabled ? t('control.taken') : t('control.released'); await refresh(); }
-  catch (error) { byId('control-result').textContent = error.message; await refresh(); }
+byId('status-band').addEventListener('click', async event => {
+  const action=event.target.closest('[data-control]')?.dataset.control;
+  if(!action||control.busy)return;
+  if(action==='take'||action==='release'){control.confirming=action;control.result='';}
+  else if(action==='cancel')control.confirming=null;
+  else if(action==='confirm'&&control.confirming){
+    // The confirmation sends an explicit boolean; the backend confirms the device release.
+    const enabled=control.confirming==='take';
+    control.busy=true;render();
+    try{await api('control',{enabled});control.result=t(enabled?'control.taken':'control.released');}
+    catch(error){control.result=error.message;}
+    control.busy=false;control.confirming=null;
+    await refresh();
+    return;
+  }
+  render();
+  if(action==='take'||action==='release')byId('status-band').querySelector('[data-control="confirm"]')?.focus();
 });
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');
@@ -886,8 +933,8 @@ async function start() {
   if(!loaded||typeof loaded.locale!=='string'||!loaded.messages||typeof loaded.messages!=='object')throw requestError('language_invalid','language');
   language={locale:loaded.locale,messages:{...startupMessages[startupLanguage],...loaded.messages}};
   startupStage='view';
-  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
-    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
+  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof globalThis.EosStatus?.band!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
+    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof globalThis.EosStatus?.band!=='function'?'status.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
   }
   document.documentElement.lang = language.locale;
   document.querySelectorAll('[data-i18n]').forEach(element => {

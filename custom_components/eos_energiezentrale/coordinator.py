@@ -134,6 +134,9 @@ class EnergyCoordinator(DataUpdateCoordinator):
         for vehicle in result.get('vehicles', []):
             vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
         self.issue_log.update('state', result['notices'])
+        since = self.issue_log.active_since('state')
+        result['notices'] = [{**notice, 'since':since.get(notice['id'])} for notice in result['notices']]
+        result['resolved_notices'] = self.issue_log.recently_resolved('state', now)
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])
         if result['control_status'] != self.control_status:

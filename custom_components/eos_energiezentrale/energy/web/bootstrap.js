@@ -28,7 +28,7 @@
       }
     }
   }
-  const known=['chart-data.js','accounting.js','forecast.js','app.js'];
+  const known=['chart-data.js','accounting.js','forecast.js','status.js','app.js'];
   // Parse/runtime errors before app startup must also produce a visible message.
   window.addEventListener('error',event=>{
     const file=String(event.filename||'').split('/').pop().split('?')[0];

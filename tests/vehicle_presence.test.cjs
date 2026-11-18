@@ -29,8 +29,13 @@ test('presence labels are translated in German and English',()=>{
 });
 
 test('normal EOS planning has a distinct status and preserves recovery priorities',()=>{
-  for(const status of ['planning_vehicle','syncing_vehicle','cached_eos','waiting','read_only','active'])
-    assert.equal(context.controlStatus({control_status:status}),'control.'+status);
+  const status={};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'web/status.js'),'utf8'),status);
+  const ctx={t:key=>key,html:String,time:String,modeLabel:String};
+  const title=snapshot=>status.EosStatus.band(snapshot,ctx,{ready:true}).html.match(/<h2>([^<]*)<\/h2>/)[1];
+  for(const name of ['planning_vehicle','syncing_vehicle','cached_eos','waiting','read_only','active','backup','power_supply_waiting'])
+    assert.equal(title({control_status:name,armed:name!=='read_only'}),'control.'+name);
   // Technical flags cannot override the backend's decision in the browser.
-  assert.equal(context.controlStatus({control_status:'waiting',armed:true,vehicle_planning:null}),'control.waiting');
+  assert.equal(title({control_status:'waiting',armed:true,vehicle_planning:null}),'control.waiting');
+  assert.equal(title({control_status:'unexpected'}),'control.read_only');
 });

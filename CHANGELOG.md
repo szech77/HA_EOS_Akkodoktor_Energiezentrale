@@ -7,7 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- Panel-Redesign, Teil 1: Ein Statusband auf jeder Seite zeigt den Steuerzustand mit Ursache, Folge und der passenden Aktion. „Steuerung übernehmen“ und „Steuerung zurückgeben“ werden direkt im Band bestätigt, statt über einen Browser-Dialog bzw. ohne Rückfrage; der Schalter liegt nicht mehr unten in den Einstellungen. Die bisher zu einem Absatz verketteten Meldungen erscheinen als eine Karte pro Hinweis, nach Schwere sortiert, mit Backend-Kennung, Zeitpunkt seit Auftreten und Link zur betroffenen Geräteseite; die neue Seite „Hinweise“ zeigt zusätzlich die in den letzten 24 Stunden behobenen Hinweise. Kurze Meldungen wie „Ladeziel“ oder „Gerätefreigabe“ sind ganze Sätze mit Folge und nächstem Schritt. Die Navigation enthält „Auto“ und „Hinweise“ mit Zähler und liegt auf dem Smartphone unten. Die Vorlage liegt unter `docs/redesign/`.
 
 ### Bugfixes
 

@@ -572,6 +572,17 @@ vollständige Browser-Aktualisierung, beispielsweise Strg + F5.
 
 ## Steuerfreigabe über Neustarts erhalten
 
+Im Panel steht der Steuerzustand auf jeder Seite im Statusband oben, zusammen
+mit Ursache, Folge und der passenden Aktion **Steuerung übernehmen** oder
+**Steuerung zurückgeben**. Beide Aktionen werden direkt im Band bestätigt; die
+Bestätigung nennt, was mit Speicher und Wallbox geschieht. Offene Hinweise stehen
+als eigene Karten unter **Hinweise**, nach Schwere sortiert, mit derselben
+Kennung wie im Integrationslog (zum Beispiel `system/eos` oder `vehicle/2/goal`)
+und dem Zeitpunkt seit dem der Hinweis besteht. In den letzten 24 Stunden behobene
+Hinweise bleiben dort kurz sichtbar. Fehler, die nur im Browser auftreten (etwa
+eine unterbrochene Verbindung), werden als „nur in diesem Browser“ markiert und
+nicht an das Backend gemeldet.
+
 Der Schalter **Energiesteuerung** wird beim bewussten Ein- und Ausschalten
 dauerhaft in `.storage/eos_energiezentrale/<config-entry-id>/control.json` gespeichert.
 Beim normalen Herunterfahren oder Neuladen werden die Geräte freigegeben, ohne
@@ -876,7 +887,7 @@ kann Fehler nicht unterdrücken. Gerätestörungen und Konfigurationsfehler blei
 sichtbar; die Gültigkeit vorhandener Steuerpläne wird nicht verlängert.
 Zustandswechsel werden im Integrationslog auf INFO-Ebene protokolliert.
 
-Die Panel-Meldung **Daten oder Steuerung prüfen · Prognose** erscheint erst,
+Die Panel-Warnung zur EOS-Prognose (Kennung `system/forecast`) erscheint erst,
 wenn der EOS-Prognoseabruf fünf Minuten durchgehend fehlschlägt. Die Frist beginnt
 beim ersten Fehlversuch und wird durch weitere Fehler nicht verlängert. Eine
 erfolgreiche Prognoseantwort entfernt die Warnung sofort und setzt die Frist

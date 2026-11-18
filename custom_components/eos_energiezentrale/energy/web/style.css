@@ -291,3 +291,62 @@
 #eos-energy-design .delete-goal {color:var(--heat);background:transparent;}
 #eos-energy-design #vehicle-settings {margin-top:24px;}
 #eos-energy-design #vehicle-daily>.checks {margin:20px 0;}
+
+/* App shell: status band on every page, one card per notice, bottom navigation on phones. */
+#eos-energy-design { --ok:light-dark(#277448,#75dba0); --ok-bg:light-dark(#e3f3e9,#16302a); --warn:light-dark(#8a5a00,#ffd27a); --warn-bg:light-dark(#fff3d6,#33290f); --crit:light-dark(#b42318,#ff8a80); --crit-bg:light-dark(#fde8e6,#3a1a1a); --info:light-dark(#185da4,#8ec5ff); --info-bg:light-dark(#e4effb,#172a40); --on-accent:light-dark(#fff,#0b1420); }
+#eos-energy-design .tone-ok {--tone:var(--ok);--tone-bg:var(--ok-bg);}
+#eos-energy-design .tone-warn {--tone:var(--warn);--tone-bg:var(--warn-bg);}
+#eos-energy-design .tone-crit {--tone:var(--crit);--tone-bg:var(--crit-bg);}
+#eos-energy-design .tone-info {--tone:var(--info);--tone-bg:var(--info-bg);}
+#eos-energy-design .tone-off {--tone:var(--dim);--tone-bg:var(--surface2);}
+#eos-energy-design nav a {display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 12px;border-radius:8px;color:var(--dim);font-weight:550;}
+#eos-energy-design nav a[aria-current="page"] {background:var(--surface2);color:var(--ink);}
+#eos-energy-design nav a svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+#eos-energy-design .badge {min-width:18px;height:18px;padding:0 5px;border-radius:99px;font-size:11px;font-weight:700;display:inline-grid;place-items:center;background:var(--tone);color:var(--surface);}
+#eos-energy-design .btn {border:1px solid var(--edge);background:var(--surface2);border-radius:8px;padding:8px 14px;min-height:42px;font-weight:600;}
+#eos-energy-design .btn.primary {background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+#eos-energy-design .btn.danger {background:transparent;border-color:var(--crit);color:var(--crit);}
+#eos-energy-design .btn.ghost {background:transparent;}
+#eos-energy-design .btn:disabled {opacity:.55;cursor:default;}
+#eos-energy-design .status-band {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px 14px;align-items:center;margin-bottom:10px;background:var(--surface);border:1px solid var(--edge);border-left:5px solid var(--tone);border-radius:12px;padding:12px 16px;}
+#eos-energy-design .status-dot {width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--tone-bg);color:var(--tone);}
+#eos-energy-design .status-dot svg {width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+#eos-energy-design .status-text h2 {font-size:16px;}
+#eos-energy-design .status-text p {color:var(--dim);font-size:13px;margin-top:2px;}
+#eos-energy-design .status-text .status-result {color:var(--ink);}
+#eos-energy-design .status-actions {display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+#eos-energy-design .status-confirm {grid-column:1/-1;display:grid;gap:10px;border-top:1px solid var(--edge);padding-top:12px;}
+#eos-energy-design .status-confirm ul {margin:0;padding-left:18px;color:var(--dim);font-size:13px;}
+#eos-energy-design .status-confirm .status-actions {justify-content:flex-start;}
+#eos-energy-design .label-short {display:none;}
+#eos-energy-design .notices {display:grid;gap:8px;margin-bottom:10px;}
+#eos-energy-design .notices:empty {display:none;}
+#eos-energy-design .notice-card {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:start;background:var(--tone-bg);border:1px solid color-mix(in srgb,var(--tone) 35%,transparent);border-radius:10px;padding:10px 12px;}
+#eos-energy-design .notice-card .sev,#eos-energy-design .notice-pill .sev {font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tone);padding-top:2px;white-space:nowrap;}
+#eos-energy-design .notice-card b {display:block;font-weight:600;}
+#eos-energy-design .notice-card small {display:block;margin-top:3px;}
+#eos-energy-design .notice-card a {white-space:nowrap;font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;}
+#eos-energy-design .notice-pill {display:none;align-items:center;gap:8px;margin-bottom:10px;background:var(--tone-bg);border:1px solid color-mix(in srgb,var(--tone) 35%,transparent);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--ink);text-decoration:none;min-height:40px;}
+#eos-energy-design .notice-pill .txt {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#eos-energy-design #notices .notices {margin-top:16px;}
+#eos-energy-design .list .row {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--edge);}
+#eos-energy-design .list .row:first-child {border-top:0;}
+@media(max-width:520px){#eos-energy-design .notice-card {grid-template-columns:minmax(0,1fr);}}
+@media(max-width:640px){
+  #eos-energy-design main {padding-bottom:96px;}
+  #eos-energy-design nav {position:fixed;left:0;right:0;bottom:0;z-index:4;flex-wrap:nowrap;justify-content:space-around;gap:0;background:var(--surface);border-top:1px solid var(--edge);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));}
+  #eos-energy-design nav a {flex-direction:column;gap:2px;font-size:11px;padding:4px 8px;position:relative;}
+  #eos-energy-design nav a .badge {position:absolute;top:0;right:4px;}
+  #eos-energy-design .status-band {gap:10px;padding:10px 12px;}
+  #eos-energy-design .status-dot {width:30px;height:30px;}
+  #eos-energy-design .status-dot svg {width:17px;height:17px;}
+  #eos-energy-design .status-text h2 {font-size:14.5px;}
+  #eos-energy-design .status-text p:not(.status-result) {display:none;}
+  #eos-energy-design .status-band > .status-actions .btn {min-height:38px;padding:6px 12px;font-size:13.5px;}
+  #eos-energy-design .status-confirm .status-actions .btn {flex:1;}
+  #eos-energy-design .label-long {display:none;}
+  #eos-energy-design .label-short {display:inline;}
+  #eos-energy-design #top-notices {display:none;}
+  #eos-energy-design .notice-pill {display:flex;}
+  #eos-energy-design .notice-pill[hidden] {display:none;}
+}

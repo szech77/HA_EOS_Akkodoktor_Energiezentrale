@@ -157,3 +157,26 @@ def test_http_debug_logs_operation_and_timing_without_urls_headers_or_bodies(mon
     assert 'eos_config' in caplog.text and 'elapsed_ms' in caplog.text and 'TimeoutError' in caplog.text
     for private in ('private-host','test-secret','private-reading','private-setting','Authorization'):
         assert private not in caplog.text
+
+
+def test_notice_since_survives_cause_changes_and_resolution_is_listed_without_details():
+    from datetime import datetime, timedelta, timezone
+    log = IssueLog()
+    state = {'errors':{'eos':'TimeoutError'}, 'vehicles':[{}, {'name':'private-car', 'errors':{'goal':'TimeoutError'}}]}
+    log.update('state', view_state(state, NOW)['notices'])
+    since = log.active_since('state')
+    assert set(since) == {'system/eos', 'vehicle/2/goal'}
+    state['errors'] = {'eos':'URLError'}
+    log.update('state', view_state(state, NOW)['notices'])
+    assert log.active_since('state')['system/eos'] == since['system/eos']
+    log.update('other', [{'id':'api/settings', 'code':'invalid_settings', 'severity':'warning'}])
+    log.update('other', [])
+    state['errors'] = {}
+    log.update('state', view_state(state, NOW)['notices'])
+    assert set(log.active_since('state')) == {'vehicle/2/goal'}
+    now = datetime.now(timezone.utc)
+    resolved = log.recently_resolved('state', now)
+    assert [row['id'] for row in resolved] == ['system/eos']
+    assert resolved[0]['since'] == since['system/eos'] and resolved[0]['code'] == 'eos'
+    assert 'details' not in resolved[0] and 'private-car' not in json.dumps(resolved)
+    assert log.recently_resolved('state', now + timedelta(hours=25)) == []
