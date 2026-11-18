@@ -760,6 +760,58 @@ function sourceDiagnostics(view) {
     ${devices?`<h3>${th('diagnostics.devices')}</h3>${devices}`:''}${vehicles}`;
 }
 
+// Plain-text copy of the same backend diagnostics for analysis outside the panel.
+function diagnosticsText(view) {
+  const plain=value=>String(value??'').replace(/[\r\n\t]+/g,' ').trim();
+  const columns=(rows,right=[1])=>{
+    const widths=rows[0].map((_,index)=>Math.max(...rows.map(row=>plain(row[index]).length)));
+    return rows.map(row=>row.map((cell,index)=>right.includes(index)?plain(cell).padStart(widths[index]):plain(cell).padEnd(widths[index])).join('  ').trimEnd());
+  };
+  const number=(value,unit)=>valid(value)?`${decimal(value,unit==='W'?0:unit==='ct/kWh'?2:1)} ${unit}`:'—';
+  const stamp=view?.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,dateStyle:'short',timeStyle:'medium'}).format(new Date(view.time)):'—';
+  const lines=[`EOS Energiezentrale · ${t('diagnostics.title')}`,`${t('diagnostics.time',{time:stamp})} (${view?.time??'—'})`,''];
+  if(!view)return [...lines,t('diagnostics.empty')].join('\n')+'\n';
+  const source=row=>row.source?(row.source_type?t(`diagnostics.source_${row.source_type}`)+': ':'')+row.source:'—';
+  const status=row=>row.available?t('diagnostics.ok'):t(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
+  lines.push(...columns([[t('diagnostics.measurement'),t('diagnostics.source'),t('diagnostics.value'),t('diagnostics.age'),t('diagnostics.status')],
+    ...(view.sources??[]).map(row=>[t(`measurement.${row.key}`),source(row),number(row.value,row.unit),valid(row.age_s)?decimal(row.age_s,0)+' s':'—',status(row)])],[2,3]));
+  const derived=view.derived??{},balance=view.balance;
+  const state=!balance?'incomplete':balance.balanced?'balanced':'unbalanced';
+  lines.push('',t('diagnostics.derived'),...columns([[t('diagnostics.house_total'),number(derived.house_total,'W')],
+    [t('diagnostics.minus_car'),number(derived.car,'W')],[t('diagnostics.minus_heat'),number(derived.heat,'W')],
+    [t('diagnostics.house'),number(derived.house,'W')],[t('diagnostics.supplied'),number(balance?.supplied_w,'W')],
+    [t('diagnostics.consumed'),number(balance?.consumed_w,'W')],[t('diagnostics.residual'),number(balance?.residual_w,'W')],
+    [t('diagnostics.tolerance'),number(balance?.tolerance_w,'W')]]),t(`diagnostics.${state}`));
+  for(const device of view.devices??[]){
+    lines.push('',`${t('diagnostics.devices')}: ${plain(device.name)}${device.plugin?' · '+plain(device.plugin):''} · ${t(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+t('diagnostics.read_error',{error:device.read_error}):''}`,
+      ...columns(Object.entries(device.values??{}).map(([key,value])=>[t(`measurement.${key}`),number(value,key==='battery_soc'?'%':'W')])));
+  }
+  if((view.vehicles??[]).length)lines.push('',t('diagnostics.vehicles'),...columns(view.vehicles.map(item=>[`${plain(item.name)} · ${t(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}`,
+    number(item.car,'W'),number(item.car_soc,'%')+(item.soc_source==='estimate'?' ('+t('source.estimate')+')':'')]),[1,2]));
+  return lines.join('\n')+'\n';
+}
+async function copyDiagnostics() {
+  const text=diagnosticsText(snapshot.source_diagnostics);
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    // Fallback where the async clipboard is unavailable (e.g. plain HTTP).
+    const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');
+    area.style.cssText='position:fixed;left:-9999px;top:0;';document.body.append(area);area.select();
+    const copied=document.execCommand?.('copy');area.remove();
+    if(!copied){byId('diagnostics-result').textContent=t('diagnostics.copy_failed');return;}
+  }
+  byId('diagnostics-result').textContent=t('diagnostics.copied');
+}
+function exportDiagnostics() {
+  const view=snapshot.source_diagnostics;
+  const stamp=(view?.time??new Date().toISOString()).slice(0,19).replace(/[:T]/g,'-');
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(new Blob([diagnosticsText(view)],{type:'text/plain;charset=utf-8'}));
+  link.download=`eos-messwerte-${stamp}.txt`;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  byId('diagnostics-result').textContent=t('diagnostics.exported',{file:link.download});
+}
+
 function settings() {
   document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   if (!formReady && 'schedule' in snapshot.settings) {
@@ -900,6 +952,8 @@ byId('control').addEventListener('click', async () => {
   try { await api('control',{enabled}); byId('control-result').textContent = enabled ? t('control.taken') : t('control.released'); await refresh(); }
   catch (error) { byId('control-result').textContent = error.message; await refresh(); }
 });
+byId('diagnostics-copy').addEventListener('click',copyDiagnostics);
+byId('diagnostics-export').addEventListener('click',exportDiagnostics);
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');
   if (button) byId('mode-detail').textContent = button.dataset.mode;

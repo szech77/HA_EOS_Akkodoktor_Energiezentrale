@@ -466,6 +466,11 @@
     "diagnostics.read_error": "Lesefehler: {error}",
     "diagnostics.vehicles": "Fahrzeuge",
     "diagnostics.connected": "verbunden",
-    "diagnostics.disconnected": "nicht verbunden"
+    "diagnostics.disconnected": "nicht verbunden",
+    "diagnostics.copy": "Messwerte kopieren",
+    "diagnostics.export": "Messwerte exportieren",
+    "diagnostics.copied": "Messwerte in die Zwischenablage kopiert.",
+    "diagnostics.copy_failed": "Kopieren nicht möglich. Bitte „Messwerte exportieren“ verwenden.",
+    "diagnostics.exported": "Datei {file} gespeichert."
   }
 }

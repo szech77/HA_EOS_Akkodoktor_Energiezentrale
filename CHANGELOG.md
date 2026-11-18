@@ -7,7 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Einstellungen enthalten die Diagnose „Messquellen“: alle konfigurierten Quellen mit Quelle, aktuellem Zahlenwert, Alter und Status, die abgeleiteten Hausverbrauchswerte, die Energiebilanz mit Bilanzrest und erlaubter Abweichung sowie die Einzelwerte der Geräte (einschließlich Lade- und Entladeleistung je Speicher) und Fahrzeuge. Die Bilanzregel ist dieselbe wie in der Auswertung; ein großer Rest erklärt dort verbuchte „Unbekannt“-Anteile.
+- Einstellungen enthalten die Diagnose „Messquellen“: alle konfigurierten Quellen mit Quelle, aktuellem Zahlenwert, Alter und Status, die abgeleiteten Hausverbrauchswerte, die Energiebilanz mit Bilanzrest und erlaubter Abweichung sowie die Einzelwerte der Geräte (einschließlich Lade- und Entladeleistung je Speicher) und Fahrzeuge. Die Bilanzregel ist dieselbe wie in der Auswertung; ein großer Rest erklärt dort verbuchte „Unbekannt“-Anteile. Mit „Messwerte kopieren“ landen die Werte als Text in der Zwischenablage, mit „Messwerte exportieren“ als Textdatei für eine Analyse.
 
 ### Bugfixes
 

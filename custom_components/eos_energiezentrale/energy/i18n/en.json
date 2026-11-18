@@ -466,6 +466,11 @@
     "diagnostics.read_error": "Read error: {error}",
     "diagnostics.vehicles": "Vehicles",
     "diagnostics.connected": "connected",
-    "diagnostics.disconnected": "not connected"
+    "diagnostics.disconnected": "not connected",
+    "diagnostics.copy": "Copy measurements",
+    "diagnostics.export": "Export measurements",
+    "diagnostics.copied": "Measurements copied to the clipboard.",
+    "diagnostics.copy_failed": "Copying is not possible. Please use “Export measurements”.",
+    "diagnostics.exported": "File {file} saved."
   }
 }

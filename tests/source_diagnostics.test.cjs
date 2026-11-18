@@ -5,16 +5,18 @@ const script=fs.readFileSync(path.join(root,'web/app.js'),'utf8');
 const markupFile=fs.readFileSync(path.join(root,'web/index.html'),'utf8');
 const now=Date.parse('2026-11-18T17:50:00Z'),iso=new Date(now).toISOString();
 
-function render(view,code='de'){
+function context(code='de',extra={}){
   const language=JSON.parse(fs.readFileSync(path.join(root,`i18n/${code}.json`),'utf8'));
   const html=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const t=(key,values={})=>{assert.equal(typeof language.messages[key],'string',key);return language.messages[key].replace(/\{(\w+)\}/g,(_,name)=>values[name]??`{${name}}`);};
   const ctx={language,snapshot:{zone:'Europe/Berlin'},html,t,th:(key,values)=>html(t(key,values)),valid:Number.isFinite,Intl,Date,
     decimal:(value,digits=1)=>new Intl.NumberFormat(language.locale,{maximumFractionDigits:digits}).format(value)};
+  Object.assign(ctx,extra);
   vm.createContext(ctx);
   vm.runInContext(script.slice(script.indexOf('// Numeric source diagnostics'),script.indexOf('function settings()')),ctx);
-  return ctx.sourceDiagnostics(view);
+  return ctx;
 }
+const render=(view,code='de')=>context(code).sourceDiagnostics(view);
 const plugin={type:'plugin',name:'Configured devices'};
 const data={live:{time:iso,solar:0,grid:10,house_total:940,house:940,heat:0,car:0,battery_soc:87,battery_charge:0,battery_discharge:510},
   features:{car:true,heat:true},
@@ -47,4 +49,50 @@ test('the energy balance explains why consumption is booked as unknown',()=>{
 test('no diagnostics yet and the settings panel exists',()=>{
   assert.match(render(undefined),/Noch keine Messwerte/);
   assert.match(markupFile,/<details class="plan-panel" id="source-diagnostics-panel"><summary data-i18n="diagnostics.title"><\/summary>/);
+});
+
+test('copy puts an aligned plain-text report into the clipboard',async()=>{
+  const view=backend('sourceDiagnostics',data,{now}),result={textContent:''};let copied;
+  const ctx=context('de',{byId:()=>result,navigator:{clipboard:{writeText:async text=>{copied=text;}}}});
+  ctx.snapshot.source_diagnostics=view;
+  await ctx.copyDiagnostics();
+  assert.equal(result.textContent,'Messwerte in die Zwischenablage kopiert.');
+  const lines=copied.split('\n');
+  assert.equal(lines[0],'EOS Energiezentrale · Diagnose · Messquellen');
+  assert.match(lines[1],/^Stand 18\.11\.26, 18:50:00 \(2026-11-18T17:50:00/);
+  assert.ok(lines.some(line=>/^Netzanschlussleistung +Plugin: Configured devices +10 W +0 s +OK$/.test(line)));
+  assert.ok(lines.some(line=>/^Wärmepumpenleistung +Sensor: sensor\.heat_pump +— +300 s +veraltet \(max\. 120 s\)$/.test(line)));
+  assert.match(copied,/Bilanzrest \(Quellen − Senken\) +-420 W\nErlaubte Abweichung +300 W\nBilanz geht nicht auf/);
+  assert.ok(lines.includes('Geräte: Victron · Victron GX · Messwerte vollständig'));
+  assert.match(copied,/Speicher-Entladeleistung +510 W/);
+  // Plain text keeps names unescaped.
+  assert.match(copied,/Plugin: go-e <v2>/);assert.doesNotMatch(copied,/&lt;|&amp;/);
+  // Right-aligned value and age columns end below their headings in every source row.
+  const header=lines.find(line=>line.startsWith('Messgröße'));
+  const rows=lines.slice(lines.indexOf(header)+1,lines.indexOf(header)+1+view.sources.length);
+  const valueEnd=header.indexOf('Wert')+4,ageEnd=header.indexOf('Alter')+5;
+  assert.equal(rows.length,8);
+  rows.forEach(line=>{assert.match(line.slice(0,valueEnd),/(W|%|—)$/,line);assert.match(line.slice(0,ageEnd),/( s|—)$/,line);});
+});
+test('copy falls back to a selected text area and reports a blocked clipboard',async()=>{
+  const result={textContent:''},appended=[];
+  const area={style:{},setAttribute(){},select(){},remove(){}};
+  const document={createElement:()=>area,body:{append:item=>appended.push(item)},execCommand:()=>true};
+  const ctx=context('en',{byId:()=>result,document,navigator:{clipboard:{writeText:async()=>{throw new Error('denied');}}}});
+  ctx.snapshot.source_diagnostics=backend('sourceDiagnostics',data,{now});
+  await ctx.copyDiagnostics();
+  assert.equal(result.textContent,'Measurements copied to the clipboard.');assert.match(area.value,/Balance does not close/);
+  document.execCommand=()=>false;await ctx.copyDiagnostics();
+  assert.match(result.textContent,/Copying is not possible/);
+});
+test('export downloads a dated UTF-8 text file with the same report',async()=>{
+  const result={textContent:''},link={click(){this.clicked=true;},remove(){}};let blob;
+  const ctx=context('de',{byId:()=>result,document:{createElement:()=>link,body:{append(){}}},
+    URL:{createObjectURL:value=>{blob=value;return 'blob:x';},revokeObjectURL(){}},Blob,setTimeout:()=>{}});
+  ctx.snapshot.source_diagnostics=backend('sourceDiagnostics',data,{now});
+  ctx.exportDiagnostics();
+  assert.equal(link.download,'eos-messwerte-2026-11-18-17-50-00.txt');assert.equal(link.clicked,true);
+  assert.equal(blob.type,'text/plain;charset=utf-8');assert.match(await blob.text(),/Speicher-Entladeleistung +510 W/);
+  assert.equal(result.textContent,'Datei eos-messwerte-2026-11-18-17-50-00.txt gespeichert.');
+  assert.match(markupFile,/id="diagnostics-copy" data-i18n="diagnostics.copy"/);assert.match(markupFile,/id="diagnostics-export" data-i18n="diagnostics.export"/);
 });

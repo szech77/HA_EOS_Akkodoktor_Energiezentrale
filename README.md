@@ -658,6 +658,13 @@ Hausverbrauch, Speicher-SoC, Lade- und Entladeleistung), bei mehreren Fahrzeugen
 Ladeleistung und SoC je Fahrzeug. Die Anzeige wird mit jedem Snapshot
 aktualisiert und enthält keine Zugangsdaten.
 
+**Messwerte kopieren** legt dieselben Werte als ausgerichteten Text in die
+Zwischenablage, z. B. zum Einfügen in ein GitHub-Issue. **Messwerte exportieren**
+speichert sie als Textdatei `eos-messwerte-<Zeitpunkt>.txt` für eine Analyse.
+Ist die Zwischenablage im Browser gesperrt, meldet das Panel dies; der Export
+funktioniert weiterhin. Der Text enthält Entitäts-IDs und Messwerte, aber keine
+Zugangsdaten. Vor dem Teilen bitte prüfen, ob die Angaben veröffentlicht werden sollen.
+
 
 ## Wechsel vom bisherigen Energiezentrale-Add-on
 
