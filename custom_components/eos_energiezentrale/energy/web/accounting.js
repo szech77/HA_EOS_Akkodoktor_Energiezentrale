@@ -136,6 +136,56 @@ function stackedAreas(slots, rows, layers, x, y) {
   }).join('');
 }
 
+// Day view: the backend's power profile (short averages from the local minute history) in kW
+// over time, as stacked areas. Hours stay tappable for their energy and cost.
+function profilePoints(key) {
+  const profile=billing.period==='day' ? billing.data?.power_profile : null;
+  const points=(profile?.points??[]).filter(point=>key==='grid' ? point.grid : point[key]);
+  return points.length ? {...profile,points} : null;
+}
+function powerChart(key, profile, entry, balance) {
+  const width=Math.max(280,Math.min(1000,window.innerWidth-100)),height=240,left=44,right=12,top=18,bottom=38;
+  const slots=billingSlots(),step=(width-left-right)/Math.max(1,slots.length),starts=slots.map(slot=>Date.parse(slot.key));
+  const half=(profile.step_s??120)*500,gap=(profile.gap_s??600)*1000;
+  // Position on the hour slots, so a 23- or 25-hour day keeps its real hours.
+  const position=stamp=>{
+    const index=Math.max(0,starts.findLastIndex(start=>start<=stamp));
+    return left+(index+Math.min(1,Math.max(0,(stamp-starts[index])/3600000)))*step;
+  };
+  const grid=key==='grid',kw=value=>(value??0)/1000;
+  const layers=grid ? [{color:sourceColors.grid,value:point=>kw(point.grid.import)},{color:sourceColors.pv,value:point=>-kw(point.grid.export)}]
+    : Object.entries(sourceColors).map(([source,color])=>({color,value:point=>kw(point[key][source])}));
+  const entries=[],rows=[],xs=[];
+  let previous=null;
+  for(const point of profile.points){
+    const stamp=Date.parse(point.time)+half;
+    if(previous!==null && stamp-previous>gap){entries.push({key:'gap'+entries.length});xs.push(null);}
+    entries.push({key:point.time});rows.push({...point,time:point.time});xs.push(position(stamp));previous=stamp;
+  }
+  const sums=rows.map(row=>layers.reduce((sum,layer)=>sum+Math.max(0,layer.value(row)),0));
+  const lows=rows.map(row=>layers.reduce((sum,layer)=>sum+Math.min(0,layer.value(row)),0));
+  const maximum=Math.max(.1,...sums),minimum=Math.min(0,...lows),span=maximum-minimum,plot=height-top-bottom;
+  const y=value=>top+(maximum-value)/span*plot;
+  const x=index=>{const base=Math.round(index);return (xs[base]??left)+(index-base)*step/30;};
+  const ticks=minimum<0?[0,maximum,maximum/2,minimum,minimum/2].filter((value,index)=>index===0||Math.abs(y(value)-y(0))>=14):Array.from({length:5},(_,i)=>minimum+span*i/4);
+  const axis=ticks.map(value=>`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"${value===0&&minimum<0?' stroke-width="2"':''}/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(Math.abs(value),span<3?2:1))}</text>`).join('');
+  const areas=stackedAreas(entries,rows,layers,x,y);
+  const hours=key==='grid' ? (balance?.bins??[]) : (entry?.bins??[]);
+  const hits=slots.map((slot,index)=>{
+    const row=hours.find(item=>item.time===slot.key);if(!row)return '';
+    const tooltip=grid ? gridTooltip(row,slot) : binTooltip(row,slot);
+    return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title><rect x="${left+index*step}" y="${top}" width="${step}" height="${plot}" fill="transparent"/></g>`;
+  }).join('');
+  const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*step}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
+  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(grid?'usage.grid_power_chart':'usage.power_chart'))}">${axis}${areas}${hits}${labels}</svg>`;
+}
+const binTooltip=(row,slot)=>`${slot.label} · ${energyValue(row.kwh)} · ${costWithPrice(row)}\n${Object.entries(row.sources).map(([source,item])=>`${t('billing.'+source)}: ${energyValue(item.kwh)} · ${costWithPrice(item)}`).join('\n')}`;
+const gridTooltip=(row,slot)=>{
+  const amounts=valid(row.grid_import_eur) ? ` (${money(row.grid_import_eur)}${row.cost_partial?' '+t('billing.known_portion'):''})` : '';
+  const credit=valid(row.export_eur) ? ` (+${money(row.export_eur)})` : '';
+  return `${slot.label} · ${t('usage.import')} ${energyValue(row.grid_import_kwh)}${amounts} · ${t('usage.feed_in')} ${energyValue(row.export_kwh)}${credit}`;
+};
+
 function billingChart(entry, cost=false) {
   const rows=entry?.bins ?? [];
   if (!rows.length) return `<p class="empty-state">${th('billing.no_data')}</p>`;
@@ -158,7 +208,7 @@ function billingChart(entry, cost=false) {
       if(value>=0)positive=to;else negative=to;
       return `<rect x="${x-barWidth/2}" y="${Math.min(y(from),y(to))}" width="${barWidth}" height="${Math.max(0,Math.abs(y(from)-y(to)))}" fill="${sourceColors[source]}"/>`;
     }).join('');
-    const tooltip=`${slot.label} · ${energyValue(row.kwh)} · ${costWithPrice(row)}\n${Object.entries(row.sources).map(([source,item])=>`${t('billing.'+source)}: ${energyValue(item.kwh)} · ${costWithPrice(item)}`).join('\n')}`;
+    const tooltip=binTooltip(row,slot);
     return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>${area?'':shapes}<rect x="${x-(width-left-right)/slots.length/2}" y="${top}" width="${(width-left-right)/slots.length}" height="${plot}" fill="transparent"/></g>`;
   }).join('');
   const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*(width-left-right)/slots.length}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
@@ -182,9 +232,7 @@ function gridChart(balance, cost=false) {
   const bars=slots.map((slot,index)=>{
     const row=rows.find(item=>item.time===slot.key);if(!row) return '';
     const x=left+(index+.5)*step;
-    const amounts=valid(row.grid_import_eur) ? ` (${money(row.grid_import_eur)}${row.cost_partial?' '+t('billing.known_portion'):''})` : '';
-    const credit=valid(row.export_eur) ? ` (+${money(row.export_eur)})` : '';
-    const tooltip=`${slot.label} · ${t('usage.import')} ${energyValue(row.grid_import_kwh)}${amounts} · ${t('usage.feed_in')} ${energyValue(row.export_kwh)}${credit}`;
+    const tooltip=gridTooltip(row,slot);
     return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>`
       +(area?'':`<rect x="${x-barWidth/2}" y="${y(up(row))}" width="${barWidth}" height="${Math.max(0,y(0)-y(up(row)))}" fill="${sourceColors.grid}"/>`
       +`<rect x="${x-barWidth/2}" y="${y(0)}" width="${barWidth}" height="${Math.max(0,y(-down(row))-y(0))}" fill="${sourceColors.pv}"/>`)
@@ -332,13 +380,18 @@ function usageDetail(key, fetch=true) {
   const figures=usageFigures(key,view,amount,balance);
   byId('usage-lead').textContent=figures.lead;
   byId('usage-kpis').innerHTML=cards(figures.kpis);
-  const cost=billing.unit==='eur';
-  byId('usage-chart-unit').querySelectorAll('[data-chart-unit]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.chartUnit===billing.unit)));
-  byId('usage-unit').textContent=t((cost?'usage.unit_eur_':'usage.unit_')+usageUnits[period]);
+  const cost=billing.unit==='eur',profile=cost ? null : profilePoints(key);
+  // On the day view the energy choice shows power (kW); costs stay hourly.
+  byId('usage-chart-unit').querySelectorAll('[data-chart-unit]').forEach(button=>{
+    button.setAttribute('aria-pressed',String(button.dataset.chartUnit===billing.unit));
+    if(button.dataset.chartUnit==='kwh')button.textContent=period==='day' ? 'kW' : 'kWh';
+  });
+  byId('usage-unit').textContent=profile ? t('usage.unit_power') : t((cost?'usage.unit_eur_':'usage.unit_')+usageUnits[period]);
   byId('usage-legend').innerHTML=(key==='grid' ? [['↑','import',sourceColors.grid],['↓','feed_in',sourceColors.pv]].map(([arrow,name,color])=>`<span><i style="background:${color}"></i>${arrow} ${th('usage.'+name)}</span>`)
     : Object.entries(sourceColors).filter(([source])=>source!=='unknown'||amount?.sources?.unknown?.kwh>.0001).map(([source,color])=>`<span><i style="background:${color}"></i>${th('billing.'+source)}</span>`)).join('');
-  byId('usage-charts').innerHTML=key==='grid' ? gridChart(balance,cost) : billingChart(entry,cost);
-  byId('usage-bin').textContent=t(period==='day' ? 'usage.bin_hint' : 'usage.bin_drill');
+  byId('usage-charts').innerHTML=profile ? powerChart(key,profile,entry,balance) : key==='grid' ? gridChart(balance,cost) : billingChart(entry,cost);
+  // Older days have no minute values left; their day view shows hourly energy instead.
+  byId('usage-bin').textContent=t(period==='day' ? 'usage.bin_hint' : 'usage.bin_drill')+(period==='day'&&!cost&&!profile&&data ? ' '+t('usage.profile_hourly') : '');
   byId('usage-price-tag').textContent=price(key==='grid' ? balance?.grid_import_price_ct : view?.grid_price_ct);
   byId('usage-prices').innerHTML=priceRows(key,view,balance);
   const mix=mixRows(key,amount,balance);

@@ -390,3 +390,29 @@ test('the day view draws stacked areas over time; hours without data split them'
  assert.equal(polygons[1][1],'26.5,80.0 33.5,80.0 33.5,100.0 26.5,100.0');
  assert.equal(polygons[2][1],'0.0,70.0 10.0,60.0 10.0,70.0 0.0,90.0');
 });
+
+test('the day view draws the power profile in kW; costs and older days stay hourly',()=>{
+ const {ctx,elements}=uiFixture();
+ const hours=['2026-11-18T08:00:00+00:00','2026-11-18T09:00:00+00:00'];
+ const point=(time,pv,grid)=>({time,house:{pv,battery:0,grid,unknown:0},total:{pv,battery:0,grid,unknown:0},grid:{import:grid,export:0}});
+ ctx.report={period:'day',date:'2026-11-18',end:'2026-11-19',hours,base_days:1,settings:{},
+  consumers:{house:{total:amount(2,.6),bins:hours.map(time=>({time,...amount(1,.3)}))}},
+  power_profile:{step_s:120,gap_s:600,points:[point('2026-11-18T08:00:00+00:00',1500,500),point('2026-11-18T08:02:00+00:00',1200,800),point('2026-11-18T09:30:00+00:00',0,2000)]}};
+ ctx.cards=()=>'';
+ vm.runInContext("billing.data=report;billing.period='day';billing.date=report.date;selectBillingUnit('kwh');usageDetail('house',false)",ctx);
+ const chart=elements['usage-charts'].innerHTML;
+ assert.match(chart,/aria-label="usage.power_chart"/);
+ assert.equal(elements['usage-unit'].textContent,'usage.unit_power');
+ // PV and grid as areas; the gap after 08:02 splits them (no PV at 09:30); hours stay tappable with their energy.
+ assert.equal((chart.match(/<polygon class="area"/g)??[]).length,3);
+ assert.equal((chart.match(/data-billing-bin=/g)??[]).length,2);
+ assert.match(chart,/<title>[^<]*1 kWh/);
+ vm.runInContext("usageDetail('grid',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.grid_power_chart"/);
+ vm.runInContext("selectBillingUnit('eur');usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.cost_chart"/);
+ assert.doesNotMatch(elements['usage-bin'].textContent,/usage.profile_hourly/);
+ vm.runInContext("selectBillingUnit('kwh');billing.data={...report,power_profile:{points:[]}};usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
+ assert.match(elements['usage-bin'].textContent,/usage.profile_hourly/);
+});

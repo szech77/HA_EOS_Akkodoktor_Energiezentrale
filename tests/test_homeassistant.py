@@ -310,6 +310,15 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report["settings"]["pv_price_ct"],8)
         self.assertEqual(report["date"],"2026-11-01")
         self.assertEqual(report["consumers"],{})
+        self.assertNotIn("power_profile",report)
+        # A day report carries the power profile from the local minute history.
+        from custom_components.eos_energiezentrale.energy.history import History
+        app.history = History(self.directory/"profile.sqlite3")
+        stamp = datetime(2026,11,9,9,tzinfo=timezone.utc)
+        app.history.write(stamp,{"time":stamp.isoformat(),"solar":2000,"grid":0,"battery_charge":0,"battery_discharge":0,"house_total":2000})
+        app.config.options["timezone"] = "Europe/Berlin"
+        day = await coordinator.async_accounting({"period":"day","date":"2026-11-09"})
+        self.assertEqual(day["power_profile"]["points"][0]["total"],{"pv":2000,"battery":0,"grid":0,"unknown":0})
         with self.assertRaises(ValueError):
             await coordinator.async_accounting({"settings":{"charge_efficiency":0}})
 

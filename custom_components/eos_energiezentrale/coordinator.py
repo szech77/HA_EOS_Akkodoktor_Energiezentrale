@@ -22,6 +22,7 @@ from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
 from .energy.charge_view import charge_plan
 from .energy.pv_view import pv_effects, pv_hours, pv_now, weather_days
+from .energy.power_profile import day_bounds, power_profile
 from .energy.presentation import measured_pv_energy, mode_timeline, node_problems, plan_events
 from .weather_forecast import WeatherForecast
 
@@ -506,7 +507,13 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     ledger.configure(values["settings"])
                     self.accounting_revision += 1
                     return {"ok":True}
-                return ledger.report(values, datetime.now(timezone.utc))
+                report = ledger.report(values, datetime.now(timezone.utc))
+                if report.get('period') == 'day':
+                    # The power profile of the day from the local minute history (about two days).
+                    zone = self.app.config.options['timezone']
+                    start, end = day_bounds(report['date'], zone)
+                    report['power_profile'] = power_profile(self.app.history.read_range(start, end), report['date'], zone)
+                return report
             result = await self.hass.async_add_executor_job(read)
         if "settings" in values:
             self.accounting_cache.clear()
