@@ -400,6 +400,8 @@
 #eos-energy-design .segctl {display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface2);border-radius:9px;padding:3px;gap:2px;}
 #eos-energy-design .segctl button {border:0;background:transparent;border-radius:7px;padding:6px 18px;min-height:38px;font:inherit;font-weight:600;color:var(--dim);cursor:pointer;}
 #eos-energy-design .segctl button[aria-pressed="true"] {background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0 / .15);}
+#eos-energy-design .segctl.small button {padding:4px 12px;min-height:32px;}
+#eos-energy-design .chart-tools {display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
 #eos-energy-design .pnav {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 #eos-energy-design .pnav b {min-width:150px;text-align:center;font-variant-numeric:tabular-nums;}
 #eos-energy-design .pbtn {width:42px;height:42px;border:1px solid var(--edge);background:var(--surface2);color:var(--ink);border-radius:8px;font-size:22px;line-height:1;display:grid;place-items:center;padding:0;cursor:pointer;}

@@ -304,7 +304,18 @@ test('the grid report shows import above and feed-in below, prices and where the
  assert.equal(elements['usage-title'].textContent,'usage.grid_title');
  assert.equal(ctx.kpis[0][1],'3 kWh');
  assert.equal(ctx.kpis[1][1],'5 kWh');
- assert.match(elements['usage-charts'].innerHTML,/usage.import 5 kWh · usage.feed_in 3 kWh/);
+ assert.match(elements['usage-charts'].innerHTML,/usage.import 5 kWh \([^)]*1,50[^)]*\) · usage.feed_in 3 kWh \(\+[^)]*0,24[^)]*\)/);
+ assert.equal(elements['usage-unit'].textContent,'usage.unit_day');
+ // The euro chart draws import cost up and feed-in credit down; only the drawing changes.
+ vm.runInContext("selectBillingUnit('eur');usageDetail('grid',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.grid_cost_chart"/);
+ assert.equal(elements['usage-unit'].textContent,'usage.unit_eur_day');
+ vm.runInContext("usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.cost_chart"/);
+ assert.equal(vm.runInContext("selectBillingUnit('W')",ctx),false);
+ vm.runInContext("selectBillingUnit('kwh');usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
+ vm.runInContext("usageDetail('grid',false)",ctx);
  assert.match(elements['usage-legend'].innerHTML,/↓ usage.feed_in/);
  assert.match(elements['usage-prices'].innerHTML,/usage.grid_balance/);
  assert.match(elements['usage-prices'].innerHTML,/−0,24/);

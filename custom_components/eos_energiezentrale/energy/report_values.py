@@ -114,10 +114,17 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
     for key, field in ((EXPORT, 'export_kwh'), (STORAGE, 'storage_kwh'), *((key, 'consumption_kwh') for key in consumers)):
         for row in entries.get(key, {}).get('bins', []):
             target = bins.setdefault(row['time'], {'time':row['time'], 'consumption_kwh':0., 'export_kwh':0.,
-                                                   'storage_kwh':0., 'grid_import_kwh':0.})
+                                                   'storage_kwh':0., 'grid_import_kwh':0., 'grid_import_eur':0.,
+                                                   'export_eur':0., 'cost_partial':False})
             target[field] += row.get('kwh', 0)
-            if key != EXPORT:
-                target['grid_import_kwh'] += (row.get('sources', {}).get('grid') or {}).get('kwh', 0)
+            # Money per bin for the euro chart: grid import cost (consumers and storage) and feed-in credit.
+            grid = row if key == EXPORT else (row.get('sources', {}).get('grid') or {})
+            if key == EXPORT:
+                target['export_eur'] += row.get('cost_eur', 0)
+            else:
+                target['grid_import_kwh'] += grid.get('kwh', 0)
+                target['grid_import_eur'] += grid.get('cost_eur', 0)
+            target['cost_partial'] = target['cost_partial'] or grid.get('cost_unknown_kwh', 0) > .0001
     unknown = used['cost_unknown_kwh'] + export['cost_unknown_kwh']
     storage_grid = storage['sources']['grid']
     import_cost = source['grid']['cost_eur'] + storage_grid['cost_eur']

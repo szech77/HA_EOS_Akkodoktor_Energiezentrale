@@ -8,7 +8,23 @@ function savedBillingPeriod() {
   } catch { /* Browser storage may be disabled. */ }
   return 'month';
 }
-const billing = {period:savedBillingPeriod(),date:null,data:null,key:null,loading:false,at:0,error:null};
+// The report charts show energy (kWh) or money (€); the choice is a per-viewer convenience.
+const billingUnits = ['kwh','eur'];
+const billingUnitKey = 'eos-energiezentrale.billing-unit';
+function savedBillingUnit() {
+  try {
+    const value=window.localStorage.getItem(billingUnitKey);
+    if(billingUnits.includes(value))return value;
+  } catch { /* Browser storage may be disabled. */ }
+  return 'kwh';
+}
+const billing = {period:savedBillingPeriod(),unit:savedBillingUnit(),date:null,data:null,key:null,loading:false,at:0,error:null};
+function selectBillingUnit(value) {
+  if(!billingUnits.includes(value))return false;
+  billing.unit=value;
+  try {window.localStorage.setItem(billingUnitKey,value);} catch { /* Keep the in-memory selection. */ }
+  return true;
+}
 function selectBillingPeriod(value) {
   if(!billingPeriods.includes(value))return false;
   billing.period=value;
@@ -100,7 +116,7 @@ function billingChart(entry, cost=false) {
   const maximum=Math.max(.01,...sums),span=maximum-minimum,plot=height-top-bottom;
   const y=value=>top+(maximum-value)/span*plot;
   const slots=billingSlots(),barWidth=Math.max(1,(width-left-right)/slots.length*.7);
-  const axis=Array.from({length:5},(_,i)=>{const value=minimum+span*i/4;return `<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(value,1))}</text>`;}).join('');
+  const axis=Array.from({length:5},(_,i)=>{const value=minimum+span*i/4;return `<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(value,cost&&span<10?2:1))}</text>`;}).join('');
   const bars=slots.map((slot,index)=>{
     const row=rows.find(item=>item.time===slot.key);if(!row) return '';
     const x=left+(index+.5)*(width-left-right)/slots.length;
@@ -117,25 +133,32 @@ function billingChart(entry, cost=false) {
   return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(cost?'billing.cost_chart':'billing.energy_chart'))}">${axis}${bars}${labels}</svg>`;
 }
 
-function gridChart(balance) {
+function gridChart(balance, cost=false) {
   const rows=balance?.bins ?? [];
   if (!rows.length) return `<p class="empty-state">${th('billing.no_data')}</p>`;
   const width=Math.max(280,Math.min(1000,window.innerWidth-100)),height=240,left=44,right=12,top=18,bottom=38;
-  const maximum=Math.max(.01,...rows.map(row=>row.grid_import_kwh)),minimum=-Math.max(.01,...rows.map(row=>row.export_kwh));
+  // Up: grid import (energy or its cost); down: feed-in (energy or its credit).
+  const up=row=>Math.max(0,(cost?row.grid_import_eur:row.grid_import_kwh)??0),down=row=>Math.max(0,(cost?row.export_eur:row.export_kwh)??0);
+  const maximum=Math.max(.01,...rows.map(up)),minimum=-Math.max(.01,...rows.map(down));
   const span=maximum-minimum,plot=height-top-bottom,y=value=>top+(maximum-value)/span*plot;
   const slots=billingSlots(),step=(width-left-right)/slots.length,barWidth=Math.max(1,step*.7);
-  const axis=[maximum,maximum/2,0,minimum/2,minimum].map(value=>`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"${value===0?' stroke-width="2"':''}/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(Math.abs(value),1))}</text>`).join('');
+  // A small feed-in (or import) squeezes its ticks against zero; drop ticks that would overlap.
+  const apart=(a,b)=>Math.abs(y(a)-y(b))>=14;
+  const ticks=[0,...[maximum,minimum].flatMap(edge=>[edge,edge/2].filter(value=>apart(value,0)&&(value===edge||apart(value,edge))))];
+  const axis=ticks.map(value=>`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"${value===0?' stroke-width="2"':''}/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(Math.abs(value),cost&&span<10?2:1))}</text>`).join('');
   const bars=slots.map((slot,index)=>{
     const row=rows.find(item=>item.time===slot.key);if(!row) return '';
     const x=left+(index+.5)*step;
-    const tooltip=`${slot.label} · ${t('usage.import')} ${energyValue(row.grid_import_kwh)} · ${t('usage.feed_in')} ${energyValue(row.export_kwh)}`;
+    const amounts=valid(row.grid_import_eur) ? ` (${money(row.grid_import_eur)}${row.cost_partial?' '+t('billing.known_portion'):''})` : '';
+    const credit=valid(row.export_eur) ? ` (+${money(row.export_eur)})` : '';
+    const tooltip=`${slot.label} · ${t('usage.import')} ${energyValue(row.grid_import_kwh)}${amounts} · ${t('usage.feed_in')} ${energyValue(row.export_kwh)}${credit}`;
     return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>`
-      +`<rect x="${x-barWidth/2}" y="${y(row.grid_import_kwh)}" width="${barWidth}" height="${Math.max(0,y(0)-y(row.grid_import_kwh))}" fill="${sourceColors.grid}"/>`
-      +`<rect x="${x-barWidth/2}" y="${y(0)}" width="${barWidth}" height="${Math.max(0,y(-row.export_kwh)-y(0))}" fill="${sourceColors.pv}"/>`
+      +`<rect x="${x-barWidth/2}" y="${y(up(row))}" width="${barWidth}" height="${Math.max(0,y(0)-y(up(row)))}" fill="${sourceColors.grid}"/>`
+      +`<rect x="${x-barWidth/2}" y="${y(0)}" width="${barWidth}" height="${Math.max(0,y(-down(row))-y(0))}" fill="${sourceColors.pv}"/>`
       +`<rect x="${x-step/2}" y="${top}" width="${step}" height="${plot}" fill="transparent"/></g>`;
   }).join('');
   const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*step}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
-  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t('usage.grid_chart'))}">${axis}${bars}${labels}</svg>`;
+  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(cost?'usage.grid_cost_chart':'usage.grid_chart'))}">${axis}${bars}${labels}</svg>`;
 }
 
 function billingSlots() {
@@ -276,10 +299,12 @@ function usageDetail(key, fetch=true) {
   const figures=usageFigures(key,view,amount,balance);
   byId('usage-lead').textContent=figures.lead;
   byId('usage-kpis').innerHTML=cards(figures.kpis);
-  byId('usage-unit').textContent=t('usage.unit_'+usageUnits[period]);
+  const cost=billing.unit==='eur';
+  byId('usage-chart-unit').querySelectorAll('[data-chart-unit]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.chartUnit===billing.unit)));
+  byId('usage-unit').textContent=t((cost?'usage.unit_eur_':'usage.unit_')+usageUnits[period]);
   byId('usage-legend').innerHTML=(key==='grid' ? [['↑','import',sourceColors.grid],['↓','feed_in',sourceColors.pv]].map(([arrow,name,color])=>`<span><i style="background:${color}"></i>${arrow} ${th('usage.'+name)}</span>`)
     : Object.entries(sourceColors).filter(([source])=>source!=='unknown'||amount?.sources?.unknown?.kwh>.0001).map(([source,color])=>`<span><i style="background:${color}"></i>${th('billing.'+source)}</span>`)).join('');
-  byId('usage-charts').innerHTML=key==='grid' ? gridChart(balance) : billingChart(entry);
+  byId('usage-charts').innerHTML=key==='grid' ? gridChart(balance,cost) : billingChart(entry,cost);
   byId('usage-bin').textContent=t(period==='day' ? 'usage.bin_hint' : 'usage.bin_drill');
   byId('usage-price-tag').textContent=price(key==='grid' ? balance?.grid_import_price_ct : view?.grid_price_ct);
   byId('usage-prices').innerHTML=priceRows(key,view,balance);
@@ -298,6 +323,9 @@ function initializeBilling() {
   byId('usage').addEventListener('click',event=>{
     const choice=event.target.closest('[data-billing-period]');
     if(choice){if(selectBillingPeriod(choice.dataset.billingPeriod))void fetchBilling(true);return;}
+    // Switching kWh/€ only redraws; the report already carries both.
+    const unit=event.target.closest('[data-chart-unit]');
+    if(unit){if(selectBillingUnit(unit.dataset.chartUnit)&&route.startsWith('usage/'))usageDetail(route.slice(6),false);return;}
     const navigation=event.target.closest('[data-billing-move]'),bin=event.target.closest('[data-billing-bin]');
     if(bin&&billing.period!=='day'){billing.date=bin.dataset.billingBin;selectBillingPeriod(billing.period==='year'?'month':'day');void fetchBilling(true);return;}
     if(bin){
