@@ -70,3 +70,18 @@ def test_shared_balance_rule_matches_accounting_tolerance():
     assert energy_balance(1000, -200, 0, 0, 500)['balanced'] is True
     assert energy_balance(1000, 0, 0, 0, 650)['balanced'] is False
     assert energy_balance(0, 10000, 0, 0, 9100)['tolerance_w'] == 910
+
+
+def test_vehicle_soc_row_shows_the_sensor_reading_even_when_the_shared_live_data_has_none():
+    # Issue #33: in a fleet the shared live data carries no SoC; the row showed "—"
+    # although the sensor delivered 76 %. An estimate never replaces the reading.
+    data = snapshot(car_soc=None)
+    data['source_configuration']['sources']['car_soc'] = {
+        'source': {'type': 'sensor', 'name': 'sensor.car_soc'}, 'available': True, 'reason': None,
+        'max_age_s': 43200, 'sample': NOW.isoformat(), 'value': 76.0}
+    rows = {row['key']: row for row in source_diagnostics(data, NOW)['sources']}
+    assert rows['car_soc']['value'] == 76.
+    data['live']['car_soc'] = 80.6
+    data['source_configuration']['sources']['car_soc'].update(available=False, value=None)
+    rows = {row['key']: row for row in source_diagnostics(data, NOW)['sources']}
+    assert rows['car_soc']['value'] is None

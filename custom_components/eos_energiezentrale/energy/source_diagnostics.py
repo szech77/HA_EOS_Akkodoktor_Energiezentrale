@@ -19,8 +19,10 @@ def _age(sample, now):
     return max(0., (now - stamp).total_seconds()) if stamp else None
 
 
-def _value(live, key):
-    value = number(live.get(key))
+def _value(live, key, entry):
+    # The vehicle SoC row shows the sensor reading, not the controller's
+    # estimate (fleets carry the SoC per vehicle, not in the shared live data).
+    value = number(entry['value'] if key == 'car_soc' and 'value' in entry else live.get(key))
     if key == 'heat_load' and value is not None:
         return value * 100
     return value
@@ -37,7 +39,7 @@ def _rows(data, now):
         if not isinstance(entry, dict) or (entry.get('source') is None and key not in missing):
             continue
         source = entry.get('source') or {}
-        rows.append({'key': key, 'unit': UNITS[key], 'value': _value(live, key) if entry.get('available') else None,
+        rows.append({'key': key, 'unit': UNITS[key], 'value': _value(live, key, entry) if entry.get('available') else None,
                      'source_type': source.get('type'), 'source': source.get('name'),
                      'available': bool(entry.get('available')), 'reason': entry.get('reason'),
                      'age_s': _age(entry.get('sample'), now), 'max_age_s': entry.get('max_age_s')})

@@ -12,6 +12,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Bugfixes
 
 - Die Verbrauchs- und Kostenbilanz fällt nicht mehr aus („vorübergehend nicht verfügbar“, PV heute „—“), wenn zuvor eine neuere Version (z. B. die Beta des Panel-Redesigns) zusätzliche Abrechnungseinstellungen wie den Grundpreis gespeichert hat. Solche Einstellungen werden beim Laden übersprungen und beim Speichern unverändert erhalten; unbekannte Eingaben aus dem Panel werden weiterhin abgelehnt.
+- Die Diagnose „Messquellen“ zeigt beim Fahrzeug-SoC den Wert des konfigurierten Sensors. Bisher stand dort bei mehreren Fahrzeugen bzw. Ladepunkten „—“, obwohl der Sensor einen gültigen Wert lieferte; eine SoC-Schätzung ersetzt den Sensorwert dort nicht.
 
 ### Breaking Changes
 

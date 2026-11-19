@@ -480,6 +480,7 @@ class Controller:
         if source is None:
             return
         source['available'] = raw is not None
+        source['value'] = raw
         for status in ('missing', 'unavailable'):
             report[status] = [key for key in report[status] if key != 'car_soc']
         if self.soc_missing_since is not None and (now-self.soc_missing_since).total_seconds() > 300:
