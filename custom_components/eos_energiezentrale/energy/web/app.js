@@ -724,32 +724,27 @@ let vehicleRangeFactor=null;
 function rangeText(soc, factor=vehicleRangeFactor) {
   return valid(factor)&&valid(soc)&&soc>=0&&soc<=100 ? t('car.range',{range:decimal(soc*factor,0)}) : '';
 }
-// Each SoC field has a SoC and a range slider; both follow the number field. The range
-// slider exists only with a learned factor; the slider being dragged is not snapped back.
+// SoC with its expected range, e.g. "70 % · ≈ 294 km"; without a learned factor only the SoC.
+function socValueText(soc) {
+  if(!valid(soc)) return '';
+  const range=rangeText(soc);
+  return `${decimal(soc,0)} %`+(range ? ' · '+range : '');
+}
+// Each SoC field has a slider; field, slider and the value with its range follow each other.
+// The slider being dragged is not moved back by a refresh.
 function socRanges(root=document, active=null) {
-  const factor=vehicleRangeFactor, focused=document.activeElement;
+  const focused=document.activeElement;
   for(const input of root.querySelectorAll('input[data-soc-range]')) {
     const field=input.closest('.soc-field'), soc=Number(input.value), known=input.value!=='' && soc>=1 && soc<=100;
-    const output=field?.querySelector('.soc-range');
-    if(output) output.textContent=known ? rangeText(soc) : '';
-    const socSlider=field?.querySelector('[data-soc-slider="soc"]'), rangeSlider=field?.querySelector('[data-soc-slider="range"]');
-    const socValue=field?.querySelector('[data-soc-value]'), rangeRow=field?.querySelector('[data-soc-row="range"]');
-    if(socValue) socValue.textContent=known ? `${decimal(soc,0)} %` : '';
-    if(socSlider && socSlider!==active && socSlider!==focused && known) socSlider.value=String(soc);
-    if(!rangeSlider || !rangeRow) continue;
-    rangeRow.hidden=!valid(factor) || factor<=0;
-    if(rangeRow.hidden) continue;
-    rangeSlider.max=String(Math.round(100*factor));
-    if(rangeSlider!==active && rangeSlider!==focused && known) rangeSlider.value=String(Math.round(soc*factor));
+    const slider=field?.querySelector('[data-soc-slider]'), value=field?.querySelector('[data-soc-value]');
+    if(value) value.textContent=known ? socValueText(soc) : '';
+    if(slider && slider!==active && slider!==focused && known) slider.value=String(soc);
   }
 }
-// Moving a slider sets the SoC field; the range slider converts with the backend factor.
+// Moving the slider sets the SoC field.
 function socFromSlider(slider) {
-  const input=slider.closest('.soc-field')?.querySelector('input[data-soc-range]');
-  if(!input) return null;
-  const factor=vehicleRangeFactor, value=Number(slider.value);
-  const soc=slider.dataset.socSlider==='range' ? (valid(factor)&&factor>0 ? value/factor : NaN) : value;
-  if(!valid(soc)) return null;
+  const input=slider.closest('.soc-field')?.querySelector('input[data-soc-range]'), soc=Number(slider.value);
+  if(!input || !valid(soc)) return null;
   input.value=String(Math.max(1,Math.min(100,Math.round(soc))));
   return input;
 }
@@ -816,7 +811,7 @@ function appendChargePlan(row, open=false) {
     <label class="check"><input name="active" type="checkbox" ${row.active?'checked':''}>${th('plans.active')}</label>
     <button type="button" class="delete-goal">${th('plans.delete')}</button></div>
     <div class="fields"><label>${th('settings.schedule')}<select name="schedule"><option value="once">${th('settings.once')}</option><option value="weekly">${th('settings.weekly')}</option></select></label>
-    <div class="soc-field"><label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required data-soc-range value="${html(row.target_soc)}"></label><div class="soc-slide"><span>${th('car.slider_soc_label')}</span><input type="range" class="soc-slider" data-soc-slider="soc" min="1" max="100" step="1" aria-label="${th('car.slider_soc')}"><output data-soc-value></output></div><div class="soc-slide" data-soc-row="range" hidden><span>${th('car.slider_range_label')}</span><input type="range" class="soc-slider" data-soc-slider="range" min="0" step="1" aria-label="${th('car.slider_range')}"><output class="soc-range" aria-live="polite">${html(rangeText(row.target_soc))}</output></div></div>
+    <div class="soc-field"><label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required data-soc-range value="${html(row.target_soc)}"></label><div class="soc-slide"><span>${th('car.slider_soc_label')}</span><input type="range" class="soc-slider" data-soc-slider="soc" min="1" max="100" step="1" aria-label="${th('car.slider_soc')}"><output data-soc-value aria-live="polite">${html(socValueText(row.target_soc))}</output></div></div>
     <label data-goal-schedule="once">${th('settings.departure')}<input name="departure_local" type="datetime-local" value="${html(row.departure_local??'')}"></label>
     <label data-goal-schedule="weekly">${th('settings.departure_time')}<input name="departure_time" type="time" value="${html(row.departure_time??'07:30')}"></label></div>
     <div data-goal-schedule="weekly" class="checks">${weekdayKeys.map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}

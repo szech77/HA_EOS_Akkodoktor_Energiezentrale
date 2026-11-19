@@ -481,7 +481,6 @@
 #eos-energy-design .goal-summary {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;}
 #eos-energy-design .goal-when b {font-size:18px;}
 #eos-energy-design .goal-when small {display:block;color:var(--dim);white-space:nowrap;}
-#eos-energy-design .soc-range {color:var(--dim);min-height:1.2em;}
 #eos-energy-design .soc-field {display:grid;gap:6px;min-width:0;}
 #eos-energy-design .soc-slider {width:100%;margin:0;accent-color:var(--car);}
 #eos-energy-design .soc-slide {display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'label value' 'slider slider';gap:2px 8px;align-items:center;color:var(--dim);font-size:13px;}

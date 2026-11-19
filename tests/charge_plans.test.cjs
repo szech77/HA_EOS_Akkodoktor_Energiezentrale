@@ -114,52 +114,44 @@ test('once and weekly inputs switch validation and submit local date without bro
 
 function socField(value) {
  const field={},input={value,dataset:{},matches:selector=>selector==='input[data-soc-range]',closest:()=>field,name:'pv_target_soc',type:'number'};
- const slider=kind=>({value:'',hidden:false,max:'',dataset:{socSlider:kind},closest:()=>field,matches:selector=>selector==='input[data-soc-slider]'});
- Object.assign(field,{input,output:{textContent:''},soc:slider('soc'),range:slider('range')});
- Object.assign(field,{value:{textContent:''},row:{hidden:true}});
- field.querySelector=selector=>({'.soc-range':field.output,'[data-soc-slider="soc"]':field.soc,'[data-soc-slider="range"]':field.range,'input[data-soc-range]':input,'[data-soc-value]':field.value,'[data-soc-row="range"]':field.row})[selector];
+ const slider={value:'',dataset:{socSlider:'soc'},closest:()=>field,matches:selector=>selector==='input[data-soc-slider]'};
+ Object.assign(field,{input,slider,value:{textContent:''}});
+ field.querySelector=selector=>({'[data-soc-slider]':slider,'[data-soc-value]':field.value,'input[data-soc-range]':input})[selector];
  return field;
 }
 test('SoC fields show the expected range with the backend factor while the value is typed',()=>{
  const {ctx,nodes}=fixture(),form=nodes['vehicle-daily'];
  assert.equal(ctx.rangeText(80),'≈ 320 km');
- assert.match(nodes['charge-plans'].children[0].markup,/≈ 288 km/);
- assert.match(nodes['charge-plans'].children[0].markup,/data-soc-slider="range"/);
+ const markup=nodes['charge-plans'].children[0].markup;
+ assert.match(markup,/≈ 288 km/);assert.match(markup,/72 % · ≈ 288 km/);assert.doesNotMatch(markup,/data-soc-slider="range"/);
  const field=socField('75');
  form.querySelectorAll=()=>[field.input];
  form.events.input({target:field.input});
- assert.equal(field.output.textContent,'≈ 300 km');
- assert.equal(field.soc.value,'75');assert.equal(field.value.textContent,'75 %');assert.equal(field.row.hidden,false);assert.equal(field.range.value,'300');assert.equal(field.range.max,'400');
+ assert.equal(field.value.textContent,'75 % · ≈ 300 km');assert.equal(field.slider.value,'75');
  field.input.value='';form.events.input({target:field.input});
- assert.equal(field.output.textContent,'');
- // Without a learned factor no range is invented and the range slider is hidden.
+ assert.equal(field.value.textContent,'');
+ // Without a learned factor no range is invented; the SoC stays.
  ctx.snapshot.vehicles[1].live={};ctx.vehicleSettings();
  assert.equal(ctx.rangeText(80),'');
  field.input.value='60';form.events.input({target:field.input});
- assert.equal(field.row.hidden,true);assert.equal(field.soc.value,'60');assert.equal(field.value.textContent,'60 %');
+ assert.equal(field.value.textContent,'60 %');assert.equal(field.slider.value,'60');
  assert.equal(ctx.currentRange({car_range:212,car_range_source:'vehicle'}),'212 km');
  assert.equal(ctx.currentRange({car_range:212,car_range_source:'estimate'}),'≈ 212 km');
 });
-test('SoC and range sliders move together and a released limit slider saves',async()=>{
+test('the SoC slider shows the range while it moves and a released limit slider saves',async()=>{
  const {ctx,nodes}=fixture(),form=nodes['vehicle-daily'],field=socField('50');
  form.querySelectorAll=()=>[field.input];
- // Dragging the range slider sets the SoC; the dragged slider itself is not snapped.
- field.range.value='322';form.events.input({target:field.range});
- assert.equal(field.input.value,'81');assert.equal(field.soc.value,'81');assert.equal(field.range.value,'322');
- field.soc.value='40';form.events.input({target:field.soc});
- assert.equal(field.input.value,'40');assert.equal(field.range.value,'160');assert.equal(field.output.textContent,'≈ 160 km');
- field.range.value='0';form.events.change({target:field.range});await new Promise(resolve=>setTimeout(resolve));
- assert.equal(field.input.value,'1');
- assert.deepEqual(JSON.parse(JSON.stringify(ctx.sent.values)),{pv_target_soc:1,vehicle_id:'second'});
+ field.slider.value='81';form.events.input({target:field.slider});
+ assert.equal(field.input.value,'81');assert.equal(field.value.textContent,'81 % · ≈ 324 km');
+ field.slider.value='40';form.events.change({target:field.slider});await new Promise(resolve=>setTimeout(resolve));
+ assert.equal(field.input.value,'40');
+ assert.deepEqual(JSON.parse(JSON.stringify(ctx.sent.values)),{pv_target_soc:40,vehicle_id:'second'});
 });
-
-test('sliders keep the shown vehicle factor when events run against the whole fleet snapshot',()=>{
+test('the slider keeps the shown vehicle factor when events run against the whole fleet snapshot',()=>{
  const {ctx,nodes}=fixture(),form=nodes['vehicle-daily'],field=socField('50');
  form.querySelectorAll=()=>[field.input];
  // A vehicle page renders with that vehicle's data; later events see the fleet without a factor.
  ctx.snapshot={vehicles:[],live:{car_range_per_soc:null}};
- field.input.value='60';form.events.input({target:field.input});
- assert.equal(field.row.hidden,false);assert.equal(field.output.textContent,'≈ 240 km');
- field.range.value='200';form.events.input({target:field.range});
- assert.equal(field.input.value,'50');assert.equal(field.output.textContent,'≈ 200 km');
+ field.slider.value='60';form.events.input({target:field.slider});
+ assert.equal(field.value.textContent,'60 % · ≈ 240 km');
 });

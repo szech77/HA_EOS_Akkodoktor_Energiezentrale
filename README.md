@@ -212,12 +212,12 @@ das Verhältnis Kilometer je Prozent. Es wird nur bei einem gemessenen, nicht
 geschätzten SoC ab 10 % neu bestimmt und bleibt bis zur nächsten passenden Meldung
 erhalten. Die Auto-Ansicht zeigt die aktuelle Reichweite; liefert das Fahrzeug
 gerade keine, wird sie aus dem SoC geschätzt (≈). Unter den SoC-Feldern für
-PV-Ladeziel, Schnellladeziel und die Ladeziele stehen zwei gekoppelte
-Schieberegler: SoC und erwartete Reichweite. Verschiebt man einen, folgen der
-andere und das Zahlenfeld sofort; die Reichweite wird auf ganze Prozent SoC
-gerundet. PV- und Schnellladeziel werden beim Loslassen gespeichert, Ladeziele wie
-bisher mit „Speichern“. Ohne Sensor oder ohne gelerntes Verhältnis entfällt der
-Reichweitenregler; der SoC-Regler bleibt. Regelung und Ladeplanung nutzen die
+PV-Ladeziel, Schnellladeziel und die Ladeziele steht ein SoC-Schieberegler mit dem
+eingestellten SoC und der dazu erwarteten Reichweite (z. B. „70 % · ≈ 294 km“).
+Regler und Zahlenfeld folgen einander, und die Reichweite aktualisiert sich schon
+während des Verschiebens oder Eintippens. PV- und Schnellladeziel werden beim
+Loslassen gespeichert, Ladeziele wie bisher mit „Speichern“. Ohne Sensor oder ohne
+gelerntes Verhältnis zeigt der Regler nur den SoC. Regelung und Ladeplanung nutzen die
 Reichweite nicht. Die Diagnose „Messquellen“ zeigt den Sensorwert.
 
 Der dargestellte Hausverbrauch wird so berechnet:
