@@ -18,7 +18,7 @@
   }
   function create({document,request,getSnapshot,t,html,decimal,getLocale,now=Date.now}){
     const byId=id=>document.getElementById(id);
-    let data=null,status='loading',generation=0,key='',selected=null;
+    let data=null,status='loading',generation=0,key='',selected=null,loadedAt=0;
     const zone=()=>getSnapshot().zone;
     const format=(stamp,options)=>new Intl.DateTimeFormat(getLocale(),{timeZone:zone(),...options}).format(stamp);
     const clock=stamp=>valid(Date.parse(stamp))?format(Date.parse(stamp),{hour:'2-digit',minute:'2-digit'}):'—';
@@ -34,7 +34,10 @@
     // Rounding must not show a negative zero.
     const temperature=value=>valid(value)?`${decimal(Math.round(value)||0,0)}°`:'—';
     const condition=value=>value?t('weather.'+value):t('pv.no_weather');
-    const forecastKey=()=>{const snapshot=getSnapshot();return JSON.stringify([snapshot.forecast,snapshot.pv_forecast_totals]);};
+    // Only the PV forecast itself counts: totals and vehicle estimates change with every poll and
+    // would reload the view every few seconds. The strip still refreshes at least every RELOAD_MS.
+    const forecastKey=()=>JSON.stringify((getSnapshot().forecast??[]).filter(row=>valid(row?.solar)).map(row=>[row.time,row.end,row.solar]));
+    const RELOAD_MS=15*60000;
 
     function lead(){
       const snapshot=getSnapshot(),totals=snapshot.pv_forecast_totals??[];
@@ -124,9 +127,11 @@
       byId('pv-detail').textContent=item?hourText(item):t('pv.hour_hint');
     }
     async function load(){
-      const token=++generation;status='loading';key=forecastKey();draw();
+      // A reload keeps the current strip visible; only the first load shows the loading state.
+      const token=++generation,first=!data;key=forecastKey();loadedAt=now();
+      if(first){status='loading';draw();}
       try{const result=await request('weather_forecast');if(token!==generation)return;data=result;status=result.status;}
-      catch{if(token!==generation)return;data=null;status='unavailable';}
+      catch{if(token!==generation)return;if(first){data=null;status='unavailable';}}
       if(!STATUSES.includes(status))status='unavailable';
       draw();
     }
@@ -141,7 +146,7 @@
     return {
       open(){selected=null;load();},
       // Snapshot refreshes update live values; a new PV forecast reloads the hourly strip.
-      update(){if(status!=='loading'&&forecastKey()!==key)load();else drawSnapshot();},
+      update(){if(status!=='loading'&&(forecastKey()!==key||now()-loadedAt>=RELOAD_MS))load();else drawSnapshot();},
       close(){generation++;}
     };
   }

@@ -43,10 +43,12 @@ def _weather_at(rows, stamp):
     return next((row for row in rows if instant(row.get('time')) <= stamp < instant(row.get('end'))), None)
 
 
-def pv_hours(forecast, weather, now, zone):
+def pv_hours(forecast, weather, now, zone, current=None):
     """Local hours from now to the end of tomorrow with weather above the expected PV energy.
 
     Runs of dark hours (measured forecast below DARK_KWH) become one night block; unknown PV stays visible.
+    Many weather services start the hourly forecast at the next full hour; the current hour then
+    shows the current weather (``current``) instead of an unknown condition.
     """
     local = ZoneInfo(zone)
     weather = [row for row in weather or [] if instant(row.get('time')) and instant(row.get('end'))]
@@ -58,6 +60,9 @@ def pv_hours(forecast, weather, now, zone):
     while stamp < stop:
         end = stamp + HOUR
         row = _weather_at(weather, stamp) or {}
+        if stamp <= now < end and row.get('condition') in (None, 'unknown') and isinstance(current, dict)                 and current.get('condition') not in (None, 'unknown'):
+            row = {**row, 'condition': current['condition'],
+                   'temperature': row.get('temperature') if row.get('temperature') is not None else current.get('temperature')}
         kwh = _energy(solar, max(stamp, now), end)
         hours.append({'kind':'hour', 'start':stamp.isoformat(), 'end':end.isoformat(), 'now':stamp <= now < end,
                       'pv_kwh':kwh, 'condition':row.get('condition'), 'temperature':row.get('temperature'),

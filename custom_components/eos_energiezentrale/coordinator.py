@@ -544,7 +544,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         result = await self.weather_forecast.async_read(self.app.config.options)
         data, now = self.data or {}, datetime.now(timezone.utc)
         # Pure in-memory presentation of already loaded data; no I/O in the event loop.
-        result['hours'] = pv_hours(data.get('forecast'), result['rows'], now, data.get('zone') or self.app.config.options['timezone'])
+        result['hours'] = pv_hours(data.get('forecast'), result['rows'], now, data.get('zone') or self.app.config.options['timezone'],
+                                   (data.get('live') or {}).get('weather'))
         result['days'] = weather_days(result['rows'], data.get('pv_forecast_totals'), data.get('pv_today_kwh'), now,
                                       data.get('zone') or self.app.config.options['timezone'])
         if result['status'] != 'available':

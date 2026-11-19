@@ -1337,7 +1337,10 @@ PV-Ertrag je Stunde sowie Tageskarten für heute, morgen und übermorgen. Stunde
 PV-Ertrag fasst das Backend zu einem Nachtblock mit Tiefsttemperatur zusammen;
 Stunden ohne PV-Prognose bleiben sichtbar und gelten nicht als Nacht. Antippen einer
 Stunde zeigt Wetter, Niederschlag, Regenwahrscheinlichkeit und PV-Ertrag. Die
-Tageskarten zeigen einen Erwartungswert, keine Spanne.
+Tageskarten zeigen einen Erwartungswert, keine Spanne. Beginnt die stündliche
+Wetterprognose erst mit der nächsten vollen Stunde, zeigt „Jetzt“ das aktuelle Wetter.
+Die Leiste lädt neu, wenn sich die PV-Prognose ändert, spätestens alle 15 Minuten;
+bis die neue Prognose da ist, bleibt die bisherige Anzeige stehen.
 
 **Was EOS daraus macht** fasst die nächsten 24 Stunden zusammen: deutlich weniger
 oder mehr Sonne morgen (unter 50 % bzw. über 150 % von heute), Speicher wird mit PV

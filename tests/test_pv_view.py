@@ -93,3 +93,16 @@ def test_effects_skip_reached_cars_and_report_pv_only_charging():
                                           {'id': 'b', 'name': 'B', 'charge_plan': {**plan, 'state': 'reached'}}]}
     assert pv_effects(data, NOW) == [{'id': 'car_pv', 'vehicle_name': 'A', 'vehicle_id': 'a', 'kwh': 4, 'end': plan['pv_until']}]
     assert pv_effects({'forecast': []}, NOW) == []
+
+
+def test_current_hour_without_hourly_weather_shows_the_current_weather():
+    # The hourly forecast starts at the next full hour, as many weather services do.
+    later = [row for row in weather() if row['time'] != slot(0)['time']]
+    current = {'condition': 'cloudy', 'temperature': 9.5, 'unit': '°C'}
+    first = pv_hours(forecast(), later, NOW, ZONE, current)[0]
+    assert first['now'] and first['condition'] == 'cloudy' and first['temperature'] == 9.5
+    assert first['cloud_coverage'] is None
+    # A current hour with hourly weather keeps it; unknown current weather adds nothing.
+    assert pv_hours(forecast(), weather(), NOW, ZONE, current)[0]['condition'] == 'sunny'
+    assert pv_hours(forecast(), later, NOW, ZONE, {'condition': 'unknown'})[0]['condition'] is None
+    assert pv_hours(forecast(), later, NOW, ZONE)[1]['condition'] == 'sunny'

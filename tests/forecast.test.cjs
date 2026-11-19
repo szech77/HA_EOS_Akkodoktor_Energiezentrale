@@ -20,7 +20,7 @@ class Element {
   setAttribute(key,value){this.attributes[key]=value;}
   querySelectorAll(){return [];}
 }
-function fixture({request,code='de',snapshotValues={}}={}){
+function fixture({request,code='de',snapshotValues={},clock=()=>now}={}){
   const language=JSON.parse(fs.readFileSync(path.join(__dirname,`../custom_components/eos_energiezentrale/energy/i18n/${code}.json`),'utf8'));
   const ids=Object.fromEntries(['pv-lead','pv-now','pv-source','pv-status','pv-strip','pv-detail','pv-days','pv-effects'].map(id=>[id,new Element()]));
   const snapshot={zone:'Europe/Berlin',live:{solar:1800,weather:{condition:'sunny',temperature:7,unit:'°C'}},forecast:solar,
@@ -33,7 +33,7 @@ function fixture({request,code='de',snapshotValues={}}={}){
   const calls=[];
   const view=forecast.create({document:{getElementById:id=>ids[id]},getSnapshot:()=>snapshot,
     request:request??(async action=>{calls.push(action);return response;}),t,html,
-    decimal:(value,digits=1)=>new Intl.NumberFormat(language.locale,{maximumFractionDigits:digits}).format(value),getLocale:()=>language.locale,now:()=>now});
+    decimal:(value,digits=1)=>new Intl.NumberFormat(language.locale,{maximumFractionDigits:digits}).format(value),getLocale:()=>language.locale,now:clock});
   return {view,ids,snapshot,calls,response};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -98,4 +98,17 @@ test('English renders the same structure',async()=>{
   const f=fixture({code:'en'});f.view.open();await flush();
   assert.match(f.ids['pv-lead'].textContent,/1\.8 kW now · 9 kWh generated today/);
   assert.match(f.ids['pv-days'].markup,/<b>Today<\/b>/);assert.match(f.ids['pv-strip'].markup,/Night/);
+});
+test('poll-driven totals and vehicle rows do not reload; a reload keeps the strip visible',async()=>{
+  let time=now,release;const calls=[];
+  const f=fixture({clock:()=>time,request:async action=>{calls.push(action);if(calls.length>1)await new Promise(resolve=>{release=resolve;});return f.response;}});
+  f.view.open();await flush();const strip=f.ids['pv-strip'].markup;assert.equal(calls.length,1);
+  // Every poll changes the rest of today and adds vehicle estimate rows without PV.
+  f.snapshot.pv_forecast_totals=[{...totals[0],kwh:2.9},...totals.slice(1)];
+  f.snapshot.forecast=[...solar,{time:iso(now),end:iso(now+60000),car_soc:41}];
+  f.view.update();await flush();assert.equal(calls.length,1);
+  // At the latest after 15 minutes the strip reloads, without blanking it meanwhile.
+  time=now+15*60000;f.view.update();await flush();assert.equal(calls.length,2);
+  assert.equal(f.ids['pv-strip'].markup,strip);assert.equal(f.ids['pv-status'].hidden,true);
+  release();await flush();assert.match(f.ids['pv-strip'].markup,/data-hour="0"/);
 });
