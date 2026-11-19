@@ -492,6 +492,12 @@
       "control": {
         "name": "Energy control"
       },
+      "control_battery": {
+        "name": "Storage control"
+      },
+      "control_vehicle": {
+        "name": "Vehicle charging control"
+      },
       "pv": {
         "name": "PV surplus charging"
       },

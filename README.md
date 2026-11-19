@@ -136,7 +136,9 @@ erreichbar sein; die Änderungen müssen zuvor nach GitHub übertragen worden se
 4. Einstellungen → Geräte & Dienste → Integration hinzufügen → **EOS Energiezentrale**.
 5. EOS-Adresse, Quellsensoren, Hardware und technische Grenzen im Assistenten einrichten.
 6. Das Panel **EOS Energiezentrale** in der Seitenleiste öffnen. Messwerte zunächst
-   im Lesemodus prüfen. Erst danach die Energiesteuerung einschalten.
+   im Lesemodus prüfen. Erst danach über **Steuerung übernehmen** im Statusband alle
+   steuerbaren Bereiche oder unter **Einstellungen → System → Gerätesteuerung** nur die
+   Speichersteuerung bzw. die E-Auto-Ladesteuerung einschalten.
 
 Alternativ `custom_components/eos_energiezentrale` nach
 `/config/custom_components/eos_energiezentrale` kopieren und HA neu starten.
@@ -402,7 +404,9 @@ an Mindest- und Maximal-SoC, wenn der Mindestwert nicht kleiner ist). Die
 
 | Einstellung | Bedeutung |
 |---|---|
-| Energiesteuerung | Explizite Freigabe der Geräteansteuerung; bleibt über Neustarts erhalten. Bei der ersten Einrichtung aus. |
+| Energiesteuerung | Explizite Freigabe der Geräteansteuerung aller steuerbaren Bereiche; bleibt über Neustarts erhalten. Bei der ersten Einrichtung aus. Eingeschaltet, solange mindestens ein Bereich gesteuert wird. |
+| Speichersteuerung | Freigabe nur für den Speicher. Nur vorhanden, wenn das Speicher-Plugin Lade- und Entladegrenzen setzen kann (z. B. nicht bei Victron ohne aktivierte ESS-Steuerung). |
+| E-Auto-Ladesteuerung | Freigabe nur für die Wallbox(en). Nur vorhanden, wenn eine Wallbox konfiguriert ist. |
 | Speicher Mindest-SoC | 0–99 %; kleiner als der Maximal-SoC. Startwert 20 %. Wird an EOS übergeben und lokal beachtet. |
 | Speicher Maximal-SoC | 1–100 %; größer als der Mindest-SoC. Startwert 100 %. Wird an EOS übergeben und lokal beachtet. |
 | Ziel-SoC | 1–100 %; Fahrzeug-Ziel für Terminplanung und Schnellladen. |
@@ -625,6 +629,34 @@ Template-Änderungen können alternativ über die angebotene Template-Neuladefun
 HA-Neustart erforderlich; reine Panel-JavaScript-/CSS-Updates benötigen eine
 vollständige Browser-Aktualisierung, beispielsweise Strg + F5.
 
+## Speicher und E-Auto getrennt steuern
+
+Unter **Einstellungen → System → Gerätesteuerung** lassen sich Speicher und E-Auto-Laden
+getrennt übernehmen und zurückgeben; beide Aktionen werden dort direkt bestätigt.
+**Steuerung übernehmen** im Statusband übernimmt alle steuerbaren Bereiche, **Steuerung
+zurückgeben** gibt alle gesteuerten Bereiche zurück. Wird nur ein Bereich gesteuert,
+nennt das Statusband, welcher. Ein Bereich wird nur angeboten, wenn ein
+passendes steuerbares Gerät konfiguriert ist:
+
+- **Speicher:** Das Speicher-Plugin (bzw. alle Speicher einer Gruppe) muss Lade- und
+  Entladegrenzen setzen können. Ein nur lesendes Plugin, z. B. Victron ohne aktivierte
+  ESS-Steuerung, liefert weiter Messwerte, bietet aber keine Speichersteuerung an.
+- **E-Auto-Laden:** Eine Wallbox muss konfiguriert sein; bei mehreren Fahrzeugen gilt
+  die Freigabe für alle Wallboxen.
+
+Ein nicht gesteuerter Bereich erhält keine Befehle der Energiezentrale, auch keine
+Freigabe- oder Pausenbefehle; er bleibt in seinem eigenen Automatikbetrieb. Ohne
+Speichersteuerung entfallen PV-Ladeunterstützung und der Start mit Speicherunterstützung,
+die PV-Überschussladung nutzt dann nur den gemessenen Überschuss. Ohne E-Auto-Ladesteuerung
+werden keine Fahrzeugziele an EOS übertragen. Beim Zurückgeben eines Bereichs wird nur
+dieser freigegeben (Speicher in den Automatikbetrieb, Wallbox pausiert); der andere
+Bereich wird weiter geregelt. Eine nicht bestätigte Freigabe bleibt sichtbar und wird
+in jedem Zyklus wiederholt.
+
+Der Schalter **Energiesteuerung** schaltet alle steuerbaren Bereiche gemeinsam; die
+Schalter **Speichersteuerung** und **E-Auto-Ladesteuerung** schalten je einen Bereich
+und werden nur bei passendem Gerät angelegt.
+
 ## Steuerfreigabe über Neustarts erhalten
 
 Im Panel steht der Steuerzustand auf jeder Seite im Statusband oben, zusammen
@@ -638,8 +670,13 @@ Hinweise bleiben dort kurz sichtbar. Fehler, die nur im Browser auftreten (etwa
 eine unterbrochene Verbindung), werden als „nur in diesem Browser“ markiert und
 nicht an das Backend gemeldet.
 
-Der Schalter **Energiesteuerung** wird beim bewussten Ein- und Ausschalten
-dauerhaft in `.storage/eos_energiezentrale/<config-entry-id>/control.json` gespeichert.
+Die Steuerfreigabe wird beim bewussten Ein- und Ausschalten dauerhaft in
+`.storage/eos_energiezentrale/<config-entry-id>/control_scope.json` (getrennt je
+Bereich) gespeichert. Zusätzlich bleibt `control.json` im bisherigen Format erhalten:
+Sie ist nur eingeschaltet, wenn alle steuerbaren Bereiche freigegeben sind. Eine ältere
+Version übernimmt nach einem Downgrade daher nie mehr Geräte als hier freigegeben;
+eine dort später geänderte Freigabe gilt nach dem nächsten Update für alle Bereiche.
+Bestehende Installationen übernehmen die bisherige Freigabe für alle steuerbaren Bereiche.
 Beim normalen Herunterfahren oder Neuladen werden die Geräte freigegeben, ohne
 diese gespeicherte Einstellung auf aus zu setzen.
 
@@ -647,6 +684,8 @@ Nach einem Neustart bleibt ein zuvor aktivierter Schalter eingeschaltet. Die
 Anzeige **Aktiv · warte auf Messwerte und Plan** bedeutet, dass die Freigabe
 gespeichert ist, die Integration aber noch auf gültige Eingangsdaten und einen
 aktuellen EOS-Speicherplan wartet. Anschließend setzt sie die Regelung selbstständig fort.
+Den EOS-Speicherplan braucht nur die Speichersteuerung; die Wallbox wird nur geprüft,
+wenn die E-Auto-Ladesteuerung freigegeben ist.
 Nach einem unsauberen Ende können Geräte noch die letzten Vorgaben halten. Sind
 Speicher und Wallbox bereits lesbar, fehlen aber EOS-Plan oder Messwerte, werden
 sie während des Wartens freigegeben und die Wallbox pausiert. Ist nur der Speicher
@@ -722,7 +761,7 @@ in `control.json` gespeichert; fehlt diese Datei bei der erstmaligen Einrichtung
 - Animierter Stromfluss mit PV, Netz, Haus, Speicher, Auto und Wärmepumpe.
 - Detailseiten mit historischen Messwerten, EOS-Prognosen, Strompreis und Modus-Zeitlinien.
 - Native Leistungssensoren in **kW**, SoC in **%**, zusätzlicher Auto-SoC-Faktor **0–1**.
-- Native Schalter für Steuerfreigabe, PV-Überschussladen, Schnellladen und Phasenautomatik.
+- Native Schalter für Steuerfreigabe (gesamt sowie getrennt für Speicher und E-Auto), PV-Überschussladen, Schnellladen und Phasenautomatik.
 - Ziel-SoC, PV-Ziel, Einspeisereserve und Regelintervall als `number`-Entitäten.
 - Einmalige und wiederkehrende Abfahrtsplanung mit Wochentagsauswahl im Panel.
 - Geschätzter Auto-SoC während der Ladung, falls das Fahrzeug keine neuen Werte meldet.

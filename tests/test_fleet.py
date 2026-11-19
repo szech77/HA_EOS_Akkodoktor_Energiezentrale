@@ -260,6 +260,7 @@ class FleetRequirements(unittest.TestCase):
                 raise OSError("charger offline")
             return original_set(entity,value)
         ha.set=fail_first
+        app.set_armed(True)  # Release acts on the enabled control areas.
         with self.assertRaises(OSError):
             app.release(ha.states(),NOW)
         self.assertIn(("switch.second_enabled",False),ha.writes)
@@ -358,5 +359,30 @@ def test_waiting_primary_vehicle_never_releases_a_vehicle_that_already_regulates
             assert first.restore_pending
         app.battery_driver.release.assert_not_called()
         assert not any(entity.startswith("switch.second") and value is False for entity, value in ha.writes)
+    finally:
+        case.doCleanups()
+
+
+def test_fleet_vehicle_area_release_pauses_every_wallbox_and_keeps_the_storage():
+    case = FleetRequirements()
+    try:
+        directory = case.enterContext(temporary_project_directory())
+        opts = {**DEFAULTS, "vehicles":json.dumps(definitions()), "heat_entity":"", "phase_wait_s":10}
+        # A restored intent: devices may still hold commands of every area.
+        create_controller(LocalHA(opts), opts, directory).set_armed(True)
+        app = create_controller(LocalHA(opts), opts, directory)
+        app.battery_driver.release = Mock()
+        pauses = []
+        for _, child, _ in app.controllers:
+            child.config.wallbox.pause = Mock(side_effect=lambda state, child=child: pauses.append(child))
+        app.set_control(vehicle=False)
+        assert pauses == [child for _, child, _ in app.controllers]
+        app.battery_driver.release.assert_not_called()
+        assert app.control_domains() == {'battery'}
+        assert not any('vehicle' in child.holding for _, child, _ in app.controllers)
+        # The persisted choice is restored for every vehicle of the fleet.
+        restored = create_controller(LocalHA(opts), opts, directory)
+        assert restored.control_domains() == {'battery'}
+        assert all(child.control_domains() == {'battery'} for _, child, _ in restored.controllers)
     finally:
         case.doCleanups()

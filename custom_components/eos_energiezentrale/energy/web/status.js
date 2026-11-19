@@ -22,22 +22,32 @@
     return {state,releasing,tone:releasing?'warn':BAND[state][0],icon:releasing?'wait':BAND[state][1],
       action:snapshot.armed||releasing?'release':'take'};
   }
+  // Control areas from the backend; older snapshots without them fall back to the configured consumers.
+  function controlAreas(snapshot,view){
+    const areas=snapshot.control;
+    if(!areas)return {available:[...(view.car?['vehicle']:[]),'battery'],held:[...(view.car?['vehicle']:[]),'battery'],enabled:null};
+    const list=filter=>['vehicle','battery'].filter(key=>areas[key]&&filter(areas[key]));
+    return {available:list(area=>area.available),held:list(area=>area.enabled||area.release_pending),enabled:list(area=>area.enabled)};
+  }
   function band(snapshot,ctx,view={}){
     const {t,html,time,modeLabel}=ctx,info=bandState(snapshot);
     const run=snapshot.eos_run;
     let title=t('control.'+info.state);
     if(['calculating','updating'].includes(run?.state))title+=' · '+t('eos.run_'+run.state,{seconds:run.elapsed_s??0});
-    let text=t(info.releasing?'status_band.release_pending':'status_band.'+info.state);
+    const areas=controlAreas(snapshot,view);
+    const only=areas.enabled?.length===1?areas.enabled[0]:null;
+    let text=t(info.releasing?'status_band.release_pending':'status_band.'+info.state+(info.state==='active'&&only?'_'+only:''));
     const next=snapshot.next_mode?.battery;
-    if(info.state==='active'&&!info.releasing&&next?.time)text+=' '+t('status_band.next_change',{time:time(next.time),mode:modeLabel(next.mode)});
+    if(info.state==='active'&&!info.releasing&&only!=='vehicle'&&next?.time)text+=' '+t('status_band.next_change',{time:time(next.time),mode:modeLabel(next.mode)});
     const primary=info.action==='take';
     let content=`<span class="status-dot" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONS[info.icon]}</svg></span>
       <div class="status-text"><h2>${html(title)}</h2><p>${html(text)}</p>${view.result?`<p class="status-result" role="status">${html(view.result)}</p>`:''}</div>
       <div class="status-actions"><button type="button" class="btn${primary?' primary':''}" data-control="${info.action}"${view.ready&&!view.busy&&!view.confirming?'':' disabled'}><span class="label-long">${html(t('control.'+info.action))}</span><span class="label-short">${html(t('status_band.'+info.action+'_short'))}</span></button></div>`;
     if(view.confirming){
+      const take=areas.available.length>1?'control.take_devices':'control.take_'+(areas.available[0]??'battery');
       const items=view.confirming==='release'
-        ?[...(view.car?['control.release_wallbox']:[]),'control.release_battery','control.release_persist']
-        :[view.car?'control.take_devices':'control.take_battery','control.take_start','control.take_persist'];
+        ?[...areas.held.map(key=>key==='vehicle'?'control.release_wallbox':'control.release_battery'),'control.release_persist']
+        :[take,'control.take_start','control.take_persist'];
       content+=`<div class="status-confirm"><b>${html(t('control.'+view.confirming+'_title'))}</b><ul>${items.map(key=>`<li>${html(t(key))}</li>`).join('')}</ul>
         <div class="status-actions"><button type="button" class="btn ${view.confirming==='release'?'danger':'primary'}" data-control="confirm"${view.busy?' disabled':''}>${html(t('control.'+view.confirming+'_confirm'))}</button><button type="button" class="btn ghost" data-control="cancel"${view.busy?' disabled':''}>${html(t('control.cancel'))}</button></div></div>`;
     }

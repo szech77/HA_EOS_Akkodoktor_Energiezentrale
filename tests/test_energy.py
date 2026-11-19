@@ -224,11 +224,28 @@ class DriverTests(unittest.TestCase):
         with temporary_project_directory() as directory:
             ha = Mock()
             ha.states.return_value = {"automation.eos_auto_laderegler":{"state":"on"}}
-            app = Controller(ha, SimpleNamespace(directory=Path(directory)))
+            from custom_components.eos_energiezentrale.energy.contracts import BatteryFeatures
+            battery = SimpleNamespace(features=BatteryFeatures())
+            app = Controller(ha, SimpleNamespace(directory=Path(directory), battery=battery))
             app.set_armed(True)
             self.assertTrue(app.armed)
             ha.states.assert_not_called()
             ha.set.assert_not_called()
+
+    def test_control_cannot_be_enabled_without_a_controllable_device(self):
+        from custom_components.eos_energiezentrale.energy.contracts import BatteryFeatures
+        with temporary_project_directory() as directory:
+            read_only = SimpleNamespace(features=BatteryFeatures(False, False, False, False))
+            app = Controller(Mock(), SimpleNamespace(directory=Path(directory), battery=read_only,
+                                                     options={"wallbox_type": "none"}))
+            with self.assertRaises(ValueError):
+                app.set_armed(True)
+            with self.assertRaises(ValueError):
+                app.set_control(battery=True)
+            self.assertFalse(app.armed)
+            self.assertEqual(app.control_view(), {
+                'battery': {'available': False, 'enabled': False, 'release_pending': False},
+                'vehicle': {'available': False, 'enabled': False, 'release_pending': False}})
 
 
 class ClientTests(unittest.TestCase):

@@ -68,6 +68,18 @@ test('control changes need an inline confirmation that matches the devices',()=>
   band=status.band({control_status:'active',armed:true},ctx,{ready:true,confirming:'release',busy:true});
   assert.match(band.html,/data-control="confirm"[^>]*disabled/);
   // An unconfirmed release keeps offering the release instead of a take-over.
+  // Separate control areas: the confirmation names only controllable or controlled devices.
+  const areas=(battery,vehicle)=>({battery:{available:true,enabled:false,release_pending:false,...battery},vehicle:{available:true,enabled:false,release_pending:false,...vehicle}});
+  band=status.band({control_status:'read_only',armed:false,control:areas({available:false},{})},ctx,{ready:true,car:true,confirming:'take'});
+  assert.ok(band.html.includes(messages['control.take_vehicle'])&&!band.html.includes(messages['control.take_devices']));
+  band=status.band({control_status:'read_only',armed:false,control:areas({},{})},ctx,{ready:true,car:false,confirming:'take'});
+  assert.ok(band.html.includes(messages['control.take_devices']));
+  band=status.band({control_status:'active',armed:true,control:areas({enabled:true},{})},ctx,{ready:true,car:true,confirming:'release'});
+  assert.ok(band.html.includes(messages['control.release_battery'])&&!band.html.includes(messages['control.release_wallbox']));
+  band=status.band({control_status:'active',armed:true,control:areas({},{enabled:true}),next_mode:{battery:{time:'X',mode:'SELF_CONSUMPTION'}}},ctx,{ready:true,car:true});
+  assert.ok(band.html.includes(ctx.html(messages['status_band.active_vehicle']))&&!band.html.includes('TX'));
+  band=status.band({control_status:'active',armed:true,control:areas({enabled:true},{enabled:true})},ctx,{ready:true,car:true});
+  assert.ok(band.html.includes(ctx.html(messages['status_band.active'])));
   const pending=status.band({control_status:'read_only',armed:false,release_pending:true},ctx,{ready:true});
   assert.equal(pending.tone,'warn');
   assert.ok(pending.html.includes('data-control="release"')&&pending.html.includes(messages['status_band.release_pending']));

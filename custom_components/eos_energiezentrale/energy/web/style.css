@@ -92,6 +92,14 @@
   #eos-energy-design .checks,#eos-energy-design .form-footer { display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; }
   #eos-energy-design .checks label,#eos-energy-design .check { display:inline-flex; align-items:center; gap:4px; min-height:36px; }
   #eos-energy-design .form-footer { margin-top:12px; }
+  #eos-energy-design .control-areas { display:grid; gap:8px; margin:12px 0 8px; }
+  #eos-energy-design .control-area { display:flex; align-items:center; justify-content:space-between; gap:8px 12px; flex-wrap:wrap; padding:8px 12px; border:1px solid var(--edge); border-radius:6px; }
+  #eos-energy-design .control-area > div { display:grid; gap:2px; min-width:0; }
+  #eos-energy-design .control-area-state { color:var(--dim); }
+  #eos-energy-design .control-area > .control-area-confirm { flex-basis:100%; gap:10px; border-top:1px solid var(--edge); padding-top:10px; }
+  #eos-energy-design .control-area > .control-area-confirm[hidden] { display:none; }
+  #eos-energy-design .control-area-confirm p { margin:0; }
+  #eos-energy-design .control-area-confirm .status-actions { display:flex; gap:8px; flex-wrap:wrap; }
   #eos-energy-design .save { background:var(--accent); color:var(--bg); border:0; border-radius:7px; padding:8px 12px; min-height:44px; font-weight:650; }
   #eos-energy-design output { color:var(--dim); }
   @media(max-width:450px) {

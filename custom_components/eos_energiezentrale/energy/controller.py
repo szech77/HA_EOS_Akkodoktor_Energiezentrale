@@ -25,6 +25,9 @@ from .pv_availability import PVAvailability
 from .power_supply import configured_supply, requires_pause, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
 
+# Independently enabled control areas: the storage and the vehicle charging.
+DOMAINS = ('battery', 'vehicle')
+
 
 class Controller:
     def __init__(self, ha, config):
@@ -34,7 +37,11 @@ class Controller:
         self.history = History(config.directory / "history.sqlite3")
         self.lock = RLock()
         self.stop_event = Event()
+        self.holding = set()
         self.armed = getattr(config, "control_enabled", False)
+        scope = getattr(config, "control_scope", None)
+        if isinstance(scope, Mapping):
+            self.scope = {domain: scope.get(domain) is True for domain in DOMAINS}
         self.restore_pending = self.armed
         # A remembered intent may follow an unclean stop: devices can still hold
         # the last commands, so explicit OFF or a failed restore must release them.
@@ -95,22 +102,154 @@ class Controller:
         self.pv_support = PVSupport()
         self.stop_unconfirmed = False
 
+    @property
+    def armed(self):
+        """Any control area is enabled and has a matching controllable device."""
+        return bool(self.control_domains())
+
+    @armed.setter
+    def armed(self, enabled):
+        self.scope = {domain: bool(enabled) for domain in DOMAINS}
+
+    @property
+    def owned(self):
+        """Devices may hold commands of this controller (per area: ``holding``)."""
+        return bool(self.holding)
+
+    @owned.setter
+    def owned(self, value):
+        # Keep an area whose release is still unconfirmed until it is released.
+        self.holding = self.holding | self.control_domains() if value else set()
+
+    def battery_controllable(self):
+        battery = getattr(self.config, 'battery', None)
+        driver = (getattr(self, 'support_driver', None) or getattr(self, 'battery_driver', None)
+                  or (battery if hasattr(battery, 'features') else getattr(battery, 'driver', None)))
+        features = getattr(driver, 'features', None)
+        # Every battery command needs charge and discharge limits; a read-only
+        # plugin (e.g. Victron without ESS control) offers no storage control.
+        return bool(getattr(features, 'charge_limit', False) and getattr(features, 'discharge_limit', False))
+
+    def vehicle_controllable(self):
+        return getattr(self.config, 'options', {}).get('wallbox_type', 'none') != 'none'
+
+    def controllable(self, domain):
+        return self.battery_controllable() if domain == 'battery' else self.vehicle_controllable()
+
+    def control_domains(self):
+        scope = getattr(self, 'scope', {})
+        return {domain for domain in DOMAINS if scope.get(domain) and self.controllable(domain)}
+
+    def control_view(self):
+        domains = self.control_domains()
+        return {domain: {'available': self.controllable(domain), 'enabled': domain in domains,
+                         'release_pending': domain in self.holding and domain not in domains} for domain in DOMAINS}
+
     def remember_control(self, enabled):
-        store = getattr(self.config, "set_control_enabled", None)
+        scope = dict(enabled) if isinstance(enabled, Mapping) else {domain: enabled for domain in DOMAINS}
+        store = getattr(self.config, "set_control_scope", None)
+        if store is not None:
+            # Legacy flag for older versions: every controllable area enabled.
+            arguments = (scope, any(scope.values()) and all(
+                scope[domain] for domain in DOMAINS if self.controllable(domain)))
+        else:
+            store = getattr(self.config, "set_control_enabled", None)
+            arguments = (any(scope.values()),)
         if store is None:
             return
         try:
-            store(enabled)
+            store(*arguments)
         except Exception as error:
             self.record_failure("control_persistence", error)
             raise
         self.errors.pop("control_persistence", None)
+
+    def set_control(self, *, battery=None, vehicle=None, persist=True):
+        """Enable or release single control areas. Only an area with a matching
+        controllable device can be enabled."""
+        with self.lock:
+            requested = {'battery': battery, 'vehicle': vehicle}
+            if all(value is None for value in requested.values()):
+                raise ValueError("Control area required")
+            for domain, value in requested.items():
+                if value is not None and type(value) is not bool:
+                    raise ValueError("Explicit boolean required for control setting")
+                if value and not self.controllable(domain):
+                    raise ValueError("No controllable device for " + domain)
+            scope = {domain: bool(self.scope.get(domain) if value is None else value) and self.controllable(domain)
+                     for domain, value in requested.items()}
+            if not any(scope.values()):
+                return self.set_armed(False, persist=persist)
+            was_armed = self.armed
+            added = {domain for domain in DOMAINS if scope[domain]} - self.control_domains()
+            persistence_error = None
+            if persist:
+                try:
+                    self.remember_control(scope)
+                except Exception as error:
+                    if added:
+                        raise
+                    persistence_error = error
+            self.scope = scope
+            if not was_armed:
+                # A fresh takeover waits for valid readings and an EOS plan.
+                self.restore_pending = True
+            self.errors.pop("runtime", None)
+            self.release_areas(self.holding - self.control_domains())
+            if persistence_error is not None:
+                raise persistence_error
+
+    def release_areas(self, domains):
+        """Return areas that are no longer controlled to autonomous operation."""
+        if not domains:
+            return
+        # A charge started with storage support cannot continue without it.
+        supported = [app for _, app, _ in getattr(self, 'controllers', ((None, self, None),))
+                     if app.pv_support.session]
+        for app in supported:
+            app.pv_support.reset()
+        self.pv_support.reset()
+        if 'vehicle' in domains:
+            self.commanded_car_w = None
+            self.pv_session = False
+            self.phase_target = self.candidate = None
+        states, now, errors = self.ha.states(), datetime.now(timezone.utc), []
+        if 'battery' in domains and 'vehicle' not in domains and 'vehicle' in self.control_domains():
+            for app in supported:
+                try:
+                    app.config.wallbox.pause(app.config.wallbox.read(states, now))
+                except Exception as error:
+                    errors.append(error)
+                else:
+                    app.commanded_car_w = 0
+                    app.pv_session = False
+        for domain in DOMAINS:
+            if domain not in domains:
+                continue
+            try:
+                if domain == 'vehicle':
+                    self.pause_vehicles(states, now)
+                else:
+                    self.release_battery(states)
+            except Exception as error:
+                errors.append(error)
+            else:
+                self.holding.discard(domain)
+        if errors:
+            self.errors["release"] = "Gerätefreigabe nicht bestätigt"
+            raise errors[0]
+        self.errors.pop("release", None)
+
+    def pause_vehicles(self, states, now):
+        self.config.wallbox.pause(self.config.wallbox.read(states, now))
 
     def set_armed(self, enabled, *, persist=True):
         with self.lock:
             if type(enabled) is not bool:
                 raise ValueError("Explicit boolean required for control setting")
             if enabled:
+                if not any(self.controllable(domain) for domain in DOMAINS):
+                    raise ValueError("No controllable device")
                 if persist:
                     self.remember_control(True)
                 self.restore_pending = True
@@ -139,11 +278,13 @@ class Controller:
 
     def release(self, states, now, *, pause_wallbox=True):
         self.pv_support.reset()
+        held = self.holding | self.control_domains()
         try:
-            if pause_wallbox:
-                self.config.wallbox.pause(self.config.wallbox.read(states, now))
+            if pause_wallbox and 'vehicle' in held:
+                self.pause_vehicles(states, now)
         finally:
-            self.config.battery.release(states)
+            if 'battery' in held:
+                self.config.battery.release(states)
         self.owned = False
         self.pv_session = False
         self.phase_target = None
@@ -164,7 +305,7 @@ class Controller:
         try:
             if pause_wallbox:
                 self.release(states, now)
-            else:
+            elif 'battery' in self.holding | self.control_domains():
                 self.release_battery(states)
         except (OSError, ValueError) as error:
             # Keep the intent; retry on the next poll and keep the failure visible.
@@ -174,7 +315,16 @@ class Controller:
 
     def retry_release(self, states, now):
         """Devices still owned while disarmed: an earlier release failed."""
-        if self.armed or not self.owned:
+        if self.armed:
+            # A single released area failed to confirm; retry only that area.
+            if self.holding - self.control_domains():
+                self.control_step = 'release_retry'
+                try:
+                    self.release_areas(self.holding - self.control_domains())
+                except (OSError, ValueError) as error:
+                    self.record_failure('release', error)
+            return
+        if not self.owned:
             return
         self.control_step = 'release_retry'
         try:
@@ -227,7 +377,7 @@ class Controller:
             self.errors.pop('release', None)
             self.backup_pause_applied = True
             just_released = True
-        if self.armed and not allow_ev and not just_released:
+        if 'vehicle' in self.control_domains() and not allow_ev and not just_released:
             if box.enabled or box.status == 'charging' or (box.watts or 0) > 0:
                 try:
                     self.config.wallbox.pause(box)
@@ -649,7 +799,7 @@ class Controller:
             self.display['solar'] = retained
         times=report_times(states,opts,battery_ids if isinstance(battery_ids,Mapping) else {},
                            wallbox_ids if isinstance(wallbox_ids,Mapping) else {},now)
-        self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if self.armed else None,command_at=self.last_write)
+        self.flow_display=self.flow_alignment.update(live,times,now,car_enabled,heat_enabled,self.display,expected_car_w=self.commanded_car_w if 'vehicle' in self.control_domains() else None,command_at=self.last_write)
         battery_order = self.order_for(opts["battery_resource"], now)
         car_order = self.order_for(opts["vehicle_resource"], now) if car_enabled else None
         live["battery_mode"] = battery_order.mode if battery_order else None
@@ -677,19 +827,25 @@ class Controller:
             # ready. Devices which already report their control state may still
             # hold commands from before an unclean stop, so release them meanwhile.
             battery_reachable, wallbox_reachable, switch_known = self.device_readiness(states, battery, box)
-            ready = (battery_order is not None and battery_reachable and switch_known
+            # Only the enabled areas must be ready; measurements are always needed.
+            domains = self.control_domains()
+            ready = ((battery_order is not None and battery_reachable if 'battery' in domains else True)
                      and all(live[key] is not None for key in
                              ("solar", "grid", "battery_charge", "battery_discharge"))
-                     and (self.vehicle_connected is False or
+                     and ('vehicle' not in domains or (switch_known and (self.vehicle_connected is False or
                           (wallbox_reachable and box.watts is not None
-                           and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)))
+                           and box.phases in (1, 3) and box.amps is not None and box.step and box.maximum)))))
             if not ready:
-                if battery_reachable:
+                if battery_reachable or 'battery' not in self.holding | self.control_domains():
                     self.release_until_ready(states, now, pause_wallbox=wallbox_reachable or not car_enabled)
                 return
             self.restore_pending = False
             self.backup_paused = self.backup_pause_applied = False
         self.owned = True
+        domains = self.control_domains()
+        car_enabled = car_enabled and 'vehicle' in domains
+        if not car_enabled:
+            self.pv_session = False
         published = (round(self.soc, 4) if self.soc is not None else None, measured)
         if car_enabled and published != self.last_soc_publish:
             self.ha.publish_soc(self.soc, measured)
@@ -725,6 +881,9 @@ class Controller:
         if self.pv_support.active:
             command = BatteryCommand('limits', 0, opts['battery_discharge_w'])
         self.control_step = "battery_control"
+        if 'battery' not in domains:
+            live["battery_control"] = "auto"
+            return
         if command is None:
             self.config.battery.release(states)
         else:
@@ -752,12 +911,14 @@ class Controller:
         battery_driver = getattr(self, 'support_driver', getattr(self.config,'battery',None))
         features = getattr(battery_driver, 'features', None)
         support_floor = max(daily['battery_min_soc'],daily['battery_pv_min_soc'])
-        floor_stop = (daily['battery_pv_start'] and pv and planned == 0 and box.enabled
+        # PV support and its SoC floor need storage control.
+        battery_control = 'battery' in self.control_domains()
+        floor_stop = (battery_control and daily['battery_pv_start'] and pv and planned == 0 and box.enabled
                       and (live.get('battery_soc') is None or live['battery_soc'] <= support_floor)
                       and (balance is None or balance < box.watts))
         was_supported = self.pv_support.session
         supported = self.pv_support.update(
-            enabled=daily['battery_pv_start'] and daily['battery_pv_support'],
+            enabled=battery_control and daily['battery_pv_start'] and daily['battery_pv_support'],
             eligible=bool(pv and planned == 0 and valid and
                           getattr(features,'charge_limit',False) is True and
                           getattr(features,'discharge_limit',False) is True),
@@ -917,7 +1078,7 @@ class Controller:
     def vehicle_planning_state(self, now):
         """Describe normal synchronization separately from API failures."""
         daily = self.config.daily
-        if (not self.armed or self.config.options.get("wallbox_type") == "none"
+        if ('vehicle' not in self.control_domains() or self.config.options.get("wallbox_type") == "none"
                 or daily["fast"] or self.vehicle_connected is False
                 or (self.vehicle_profile is not None and not self.vehicle_profile[-1])
                 or (self.soc is not None and self.soc >= self.goal_target(now))):
@@ -992,7 +1153,8 @@ class Controller:
                             if self.battery_limits_confirmed_at else None},
                     "control_waiting": self.armed and self.restore_pending,
                     "control_paused": self.backup_paused,
-                    "armed": self.armed, "release_pending": self.owned and not self.armed,
+                    "armed": self.armed, "release_pending": bool(self.holding - self.control_domains()),
+                    "control": self.control_view(),
                     "eos_cache": {resource:{"remaining_s":max(0,300-(now-failed).total_seconds())} for resource,failed in self.eos_failure_since.items() if resource in self.resource_plans and (now-failed).total_seconds()<300 and self.order_for(resource,now) is not None},
                     "errors": self.visible_errors(now), "error_details": dict(self.error_details), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},

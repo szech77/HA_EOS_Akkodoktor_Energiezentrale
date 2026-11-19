@@ -229,6 +229,21 @@
             </form>
           </section>
           <section data-settings-section="system" hidden>
+            <h2 data-i18n="control.title"></h2>
+            <p class="footnote" data-i18n="control.restart_info"></p>
+            <div class="control-areas" id="control-areas">
+              <div class="control-area" data-control-area="battery">
+                <div><strong data-i18n="control.area.battery"></strong><small class="control-area-state"></small></div>
+                <button type="button" class="btn" data-area-action="toggle"></button>
+                <div class="control-area-confirm" hidden><p></p><div class="status-actions"><button type="button" class="btn" data-area-action="confirm"></button><button type="button" class="btn ghost" data-area-action="cancel" data-i18n="control.cancel"></button></div></div>
+              </div>
+              <div class="control-area" data-control-area="vehicle">
+                <div><strong data-i18n="control.area.vehicle"></strong><small class="control-area-state"></small></div>
+                <button type="button" class="btn" data-area-action="toggle"></button>
+                <div class="control-area-confirm" hidden><p></p><div class="status-actions"><button type="button" class="btn" data-area-action="confirm"></button><button type="button" class="btn ghost" data-area-action="cancel" data-i18n="control.cancel"></button></div></div>
+              </div>
+            </div>
+            <p class="footnote" id="control-result" role="status"></p>
             <h2 data-i18n="settings.setup"></h2>
             <p class="footnote" data-i18n="settings.setup_info"></p>
             <dl id="connections"></dl>

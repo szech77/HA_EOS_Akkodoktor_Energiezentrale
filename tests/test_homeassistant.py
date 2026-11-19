@@ -1254,6 +1254,16 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             connection.send_error.assert_called_once()
         app.set_armed.assert_not_called()
 
+    async def test_websocket_control_switches_single_areas_and_rejects_unknown_ones(self):
+        coordinator, app = self.controller()
+        for values in ({}, {"battery": 1}, {"battery": True, "heat": True}, {"enabled": True, "battery": True}):
+            connection = await self.invoke({"action": "control", "values": values})
+            connection.send_error.assert_called_once()
+        app.set_control.assert_not_called()
+        connection = await self.invoke({"action": "control", "values": {"vehicle": False}})
+        connection.send_result.assert_called_once()
+        app.set_control.assert_called_once_with(vehicle=False)
+
     async def test_backend_source_warning_is_logged_without_a_frontend_request(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
         app.tick = Mock()

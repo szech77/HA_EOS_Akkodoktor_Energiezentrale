@@ -1098,6 +1098,32 @@ function discardSettings() {
   updateSavebar();toast(t('settings.discarded'));
 }
 
+/* Storage and vehicle charging control are enabled separately; the backend reports which areas have a matching device. */
+const areaControl={confirming:null,busy:false,result:''};
+function controlAreas() {
+  for (const area of document.querySelectorAll('[data-control-area]')) {
+    const key=area.dataset.controlArea, view=snapshot.control?.[key] ?? {};
+    const held=Boolean(view.enabled || view.release_pending), confirming=areaControl.confirming===key;
+    const button=area.querySelector('[data-area-action="toggle"]');
+    button.hidden=!view.available;
+    button.disabled=!formReady || areaControl.busy || Boolean(areaControl.confirming);
+    button.className='btn'+(held?'':' primary');
+    button.textContent=t(held ? 'control.release' : 'control.take');
+    area.querySelector('.control-area-state').textContent=!view.available ? t(`control.area_unavailable.${key}`)
+      : t(view.release_pending ? 'control.area_releasing' : view.enabled ? 'control.area_on' : 'control.area_off');
+    const box=area.querySelector('.control-area-confirm');
+    box.hidden=!confirming || !view.available;
+    if (box.hidden) continue;
+    box.querySelector('p').textContent=t(held ? `control.area_release_confirm.${key}` : `control.area_confirm.${key}`);
+    const confirmButton=box.querySelector('[data-area-action="confirm"]');
+    confirmButton.className='btn '+(held?'danger':'primary');
+    confirmButton.textContent=t(held ? 'control.release_confirm' : 'control.take_confirm');
+    confirmButton.disabled=areaControl.busy;
+    box.querySelector('[data-area-action="cancel"]').disabled=areaControl.busy;
+  }
+  byId('control-result').textContent=areaControl.result;
+}
+
 function settings() {
   // Without local edits the form follows backend changes, e.g. from native HA entities.
   if ('schedule' in snapshot.settings && (!formReady || !dirtySettings().some(item=>item.group==='daily'))) {
@@ -1107,6 +1133,7 @@ function settings() {
   }
   showSettingsSection(settingsUi.section);
   updateSavebar();
+  controlAreas();
   byId('battery-limits-status').textContent = t(`settings.battery_limits_${snapshot.battery_limits_status??'unmanaged'}`, {
       minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc});
   byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${th(`status.${snapshot.eos_status??'connecting'}`)}</dd>
@@ -1329,6 +1356,25 @@ document.addEventListener('click',event => {
   if (!link) return;
   planScrollPending = true;
   if (link.classList.contains('to-plan')) {event.preventDefault();carView();}
+});
+byId('control-areas').addEventListener('click', async event => {
+  const action=event.target.closest('[data-area-action]')?.dataset.areaAction;
+  const key=event.target.closest('[data-control-area]')?.dataset.controlArea;
+  if (!action || !key || areaControl.busy) return;
+  if (action==='toggle') {areaControl.confirming=key;areaControl.result='';}
+  else if (action==='cancel') areaControl.confirming=null;
+  else if (action==='confirm' && areaControl.confirming===key) {
+    // Only this area changes; the backend rejects an area without a matching device.
+    const view=snapshot.control?.[key] ?? {}, enabled=!view.enabled && !view.release_pending;
+    areaControl.busy=true;controlAreas();
+    try {await api('control',{[key]:enabled});areaControl.result=t(enabled ? `control.area_taken.${key}` : `control.area_released.${key}`);}
+    catch (error) {areaControl.result=error.message;}
+    areaControl.busy=false;areaControl.confirming=null;
+    await refresh();
+    return;
+  }
+  controlAreas();
+  if (action==='toggle') document.querySelector(`[data-control-area="${key}"] [data-area-action="confirm"]`)?.focus();
 });
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');
