@@ -135,6 +135,8 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             coordinator._present(raw)
         assert first['power_supply']['grid_active'] is False
         assert sum('backup_power_active' in item for item in logs.output) == 1
+        # The settings diagnostics are presented by the backend with every snapshot.
+        assert first['source_diagnostics']['sources'] == [] and first['source_diagnostics']['balance'] is None
 
     async def test_mode_timeline_splits_history_and_plan_at_the_snapshot_time(self):
         from datetime import timedelta

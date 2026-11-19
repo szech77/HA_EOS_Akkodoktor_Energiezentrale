@@ -127,6 +127,8 @@ class DeviceSite(BatteryDriver):
                 'measurements':{key:get(key) for key in ('solar','inverter_ac','house_total','grid')
                                 if key in driver.measurement_keys},
                 'soc':value.soc if isinstance(value,BatteryReading) else None,
+                'charge':value.charge if isinstance(value,BatteryReading) else None,
+                'discharge':value.discharge if isinstance(value,BatteryReading) else None,
                 'read_error':read_error,'read_diagnostics':deepcopy(getattr(driver,'read_diagnostics',None)),
                 'telemetry_status':deepcopy(getattr(driver,'telemetry_status',[])),
                 'available':value is not None and all(item.value is not None for item in measurements.values()) and

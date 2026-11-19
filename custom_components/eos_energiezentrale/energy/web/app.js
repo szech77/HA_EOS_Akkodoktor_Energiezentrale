@@ -1124,6 +1124,98 @@ function controlAreas() {
   byId('control-result').textContent=areaControl.result;
 }
 
+// Numeric source diagnostics: the backend supplies values and the balance rule.
+function diagnosticNumber(value,unit) {
+  if(!valid(value))return '—';
+  const digits=unit==='W'?0:unit==='ct/kWh'?2:1;
+  return `${value<0?'−':''}${decimal(Math.abs(value),digits)} ${html(unit)}`;
+}
+function diagnosticTable(head,rows,numeric=[1]) {
+  return `<div class="diagnostics-scroll"><table class="diagnostics"><thead><tr>${head.map((label,index)=>`<th${numeric.includes(index)?' class="num"':''}>${label}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+function diagnosticSource(row) {
+  if(!row.source)return '—';
+  const kind=row.source_type?th(`diagnostics.source_${row.source_type}`)+': ':'';
+  return kind+(row.source_type==='sensor'?`<code>${html(row.source)}</code>`:html(row.source));
+}
+function diagnosticStatus(row) {
+  return row.available?th('diagnostics.ok'):th(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
+}
+function sourceDiagnostics(view) {
+  if(!view)return `<p>${th('diagnostics.empty')}</p>`;
+  const W='W',sources=diagnosticTable([th('diagnostics.measurement'),th('diagnostics.source'),th('diagnostics.value'),th('diagnostics.age'),th('diagnostics.status')],
+    (view.sources??[]).map(row=>`<tr class="${row.available?'':'warn'}"><td>${th(`measurement.${row.key}`)}</td><td>${diagnosticSource(row)}</td><td class="num">${diagnosticNumber(row.value,row.unit)}</td><td class="num">${valid(row.age_s)?decimal(row.age_s,0)+' s':'—'}</td><td>${diagnosticStatus(row)}</td></tr>`),[2,3]);
+  const derived=view.derived??{},balance=view.balance;
+  const line=(label,value)=>`<tr><td>${label}</td><td class="num">${diagnosticNumber(value,W)}</td></tr>`;
+  const state=!balance?'incomplete':balance.balanced?'balanced':'unbalanced';
+  const derivedRows=[line(th('diagnostics.house_total'),derived.house_total),line(th('diagnostics.minus_car'),derived.car),
+    line(th('diagnostics.minus_heat'),derived.heat),line(`<strong>${th('diagnostics.house')}</strong>`,derived.house),
+    line(th('diagnostics.supplied'),balance?.supplied_w),line(th('diagnostics.consumed'),balance?.consumed_w),
+    line(`<strong>${th('diagnostics.residual')}</strong>`,balance?.residual_w),line(th('diagnostics.tolerance'),balance?.tolerance_w),
+    `<tr class="${state==='balanced'?'':'warn'}"><td colspan="2"><strong>${th(`diagnostics.${state}`)}</strong></td></tr>`];
+  const devices=(view.devices??[]).map(device=>`<h3>${html(device.name)}${device.plugin?' · '+html(device.plugin):''}</h3>
+    <p class="footnote">${th(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+th('diagnostics.read_error',{error:device.read_error}):''}</p>`+
+    diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],Object.entries(device.values??{}).map(([key,value])=>
+      `<tr><td>${th(`measurement.${key}`)}</td><td class="num">${diagnosticNumber(value,key==='battery_soc'?'%':W)}</td></tr>`))).join('');
+  const vehicles=(view.vehicles??[]).length?`<h3>${th('diagnostics.vehicles')}</h3>`+diagnosticTable([th('source.vehicle'),th('measurement.car'),th('measurement.car_soc')],
+    view.vehicles.map(item=>`<tr><td>${html(item.name)} · ${th(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}</td><td class="num">${diagnosticNumber(item.car,W)}</td><td class="num">${diagnosticNumber(item.car_soc,'%')}${item.soc_source==='estimate'?' ('+th('source.estimate')+')':''}</td></tr>`),[1,2]):'';
+  return `<p class="footnote">${th('diagnostics.time',{time:view.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,timeStyle:'medium'}).format(new Date(view.time)):'—'})}</p>${sources}
+    <h3>${th('diagnostics.derived')}</h3>${diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],derivedRows)}
+    ${devices?`<h3>${th('diagnostics.devices')}</h3>${devices}`:''}${vehicles}`;
+}
+
+// Plain-text copy of the same backend diagnostics for analysis outside the panel.
+function diagnosticsText(view) {
+  const plain=value=>String(value??'').replace(/[\r\n\t]+/g,' ').trim();
+  const columns=(rows,right=[1])=>{
+    const widths=rows[0].map((_,index)=>Math.max(...rows.map(row=>plain(row[index]).length)));
+    return rows.map(row=>row.map((cell,index)=>right.includes(index)?plain(cell).padStart(widths[index]):plain(cell).padEnd(widths[index])).join('  ').trimEnd());
+  };
+  const number=(value,unit)=>valid(value)?`${decimal(value,unit==='W'?0:unit==='ct/kWh'?2:1)} ${unit}`:'—';
+  const stamp=view?.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,dateStyle:'short',timeStyle:'medium'}).format(new Date(view.time)):'—';
+  const lines=[`EOS Energiezentrale · ${t('diagnostics.title')}`,`${t('diagnostics.time',{time:stamp})} (${view?.time??'—'})`,''];
+  if(!view)return [...lines,t('diagnostics.empty')].join('\n')+'\n';
+  const source=row=>row.source?(row.source_type?t(`diagnostics.source_${row.source_type}`)+': ':'')+row.source:'—';
+  const status=row=>row.available?t('diagnostics.ok'):t(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
+  lines.push(...columns([[t('diagnostics.measurement'),t('diagnostics.source'),t('diagnostics.value'),t('diagnostics.age'),t('diagnostics.status')],
+    ...(view.sources??[]).map(row=>[t(`measurement.${row.key}`),source(row),number(row.value,row.unit),valid(row.age_s)?decimal(row.age_s,0)+' s':'—',status(row)])],[2,3]));
+  const derived=view.derived??{},balance=view.balance;
+  const state=!balance?'incomplete':balance.balanced?'balanced':'unbalanced';
+  lines.push('',t('diagnostics.derived'),...columns([[t('diagnostics.house_total'),number(derived.house_total,'W')],
+    [t('diagnostics.minus_car'),number(derived.car,'W')],[t('diagnostics.minus_heat'),number(derived.heat,'W')],
+    [t('diagnostics.house'),number(derived.house,'W')],[t('diagnostics.supplied'),number(balance?.supplied_w,'W')],
+    [t('diagnostics.consumed'),number(balance?.consumed_w,'W')],[t('diagnostics.residual'),number(balance?.residual_w,'W')],
+    [t('diagnostics.tolerance'),number(balance?.tolerance_w,'W')]]),t(`diagnostics.${state}`));
+  for(const device of view.devices??[]){
+    lines.push('',`${t('diagnostics.devices')}: ${plain(device.name)}${device.plugin?' · '+plain(device.plugin):''} · ${t(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+t('diagnostics.read_error',{error:device.read_error}):''}`,
+      ...columns(Object.entries(device.values??{}).map(([key,value])=>[t(`measurement.${key}`),number(value,key==='battery_soc'?'%':'W')])));
+  }
+  if((view.vehicles??[]).length)lines.push('',t('diagnostics.vehicles'),...columns(view.vehicles.map(item=>[`${plain(item.name)} · ${t(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}`,
+    number(item.car,'W'),number(item.car_soc,'%')+(item.soc_source==='estimate'?' ('+t('source.estimate')+')':'')]),[1,2]));
+  return lines.join('\n')+'\n';
+}
+async function copyDiagnostics() {
+  const text=diagnosticsText(snapshot.source_diagnostics);
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    // Fallback where the async clipboard is unavailable (e.g. plain HTTP).
+    const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');
+    area.style.cssText='position:fixed;left:-9999px;top:0;';document.body.append(area);area.select();
+    const copied=document.execCommand?.('copy');area.remove();
+    if(!copied){byId('diagnostics-result').textContent=t('diagnostics.copy_failed');return;}
+  }
+  byId('diagnostics-result').textContent=t('diagnostics.copied');
+}
+function exportDiagnostics() {
+  const view=snapshot.source_diagnostics;
+  const stamp=(view?.time??new Date().toISOString()).slice(0,19).replace(/[:T]/g,'-');
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(new Blob([diagnosticsText(view)],{type:'text/plain;charset=utf-8'}));
+  link.download=`eos-messwerte-${stamp}.txt`;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  byId('diagnostics-result').textContent=t('diagnostics.exported',{file:link.download});
+}
+
 function settings() {
   // Without local edits the form follows backend changes, e.g. from native HA entities.
   if ('schedule' in snapshot.settings && (!formReady || !dirtySettings().some(item=>item.group==='daily'))) {
@@ -1140,6 +1232,7 @@ function settings() {
     <dt>InfluxDB</dt><dd>${th(`status.${history.status??'connecting'}`)}</dd>`;
   for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}${(plugin.measurements??[]).length?' · '+plugin.measurements.map(key=>th(`measurement.${key}`)).join(', '):''}</dd>`;}
   byId('connections').innerHTML+=batteryGroupDetails(snapshot.battery_group);
+  byId('source-diagnostics').innerHTML=sourceDiagnostics(snapshot.source_diagnostics);
 
 }
 function render() {
@@ -1376,6 +1469,8 @@ byId('control-areas').addEventListener('click', async event => {
   controlAreas();
   if (action==='toggle') document.querySelector(`[data-control-area="${key}"] [data-area-action="confirm"]`)?.focus();
 });
+byId('diagnostics-copy').addEventListener('click',copyDiagnostics);
+byId('diagnostics-export').addEventListener('click',exportDiagnostics);
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');
   if (button) byId('mode-detail').textContent = button.dataset.mode;

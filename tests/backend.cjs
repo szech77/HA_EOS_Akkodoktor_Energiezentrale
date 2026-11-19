@@ -10,6 +10,7 @@ from custom_components.eos_energiezentrale.energy.status import view_state
 from custom_components.eos_energiezentrale.energy.presentation import daily_pv_forecast,plan_events,node_problems
 from custom_components.eos_energiezentrale.energy.charge_view import charge_plan
 from custom_components.eos_energiezentrale.energy.pv_view import pv_effects,pv_hours,pv_now,weather_days
+from custom_components.eos_energiezentrale.energy.source_diagnostics import source_diagnostics
 args=json.load(sys.stdin)
 now=datetime.fromtimestamp(args.get('now',0)/1000,timezone.utc)
 op=args['operation']
@@ -24,6 +25,7 @@ elif op=='pvDays': result=weather_days(args.get('weather'),args['data'],args.get
 elif op=='pvEffects': result=pv_effects(args['data'],now)
 elif op=='pvNow': result=pv_now(args['data'],now)
 elif op=='nodeProblems': result=node_problems(args['data'],args.get('vehicles',[]))
+elif op=='sourceDiagnostics': result=source_diagnostics(args['data'],now)
 else: raise ValueError('Unknown test operation')
 print(json.dumps(result,allow_nan=False))`;
 const cache=new Map();

@@ -420,3 +420,26 @@ class TariffCostBasisRequirements(TestCase):
                     self.assertAlmostEqual(result["kwh"],.9025)
                     self.assertAlmostEqual(result["cost_eur"]/result["kwh"],input_price/(.95*.95))
                     self.assertAlmostEqual(result["cost_unknown_kwh"],0)
+
+
+def test_settings_of_a_newer_version_do_not_break_the_ledger_and_survive_a_save():
+    """A downgrade from a beta with additional accounting settings (e.g. a future setting)."""
+    import json, sqlite3
+    from contextlib import closing
+    with temporary_project_directory() as directory:
+        with closing(sqlite3.connect(directory / "accounting.sqlite3")) as db, db:
+            db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.execute("INSERT INTO meta VALUES ('settings',?)",
+                       (json.dumps({"pv_price_source": "manual", "pv_price_ct": 8.2, "future_setting_x": 14.9}),))
+        ledger = Accounting(directory, ZoneInfo("Europe/Berlin"))
+        assert ledger.settings["pv_price_ct"] == 8.2 and "future_setting_x" not in ledger.settings
+        ledger.configure({"capacity_wh": 12000})
+        with closing(sqlite3.connect(directory / "accounting.sqlite3")) as db:
+            saved = json.loads(db.execute("SELECT value FROM meta WHERE key='settings'").fetchone()[0])
+        assert saved["future_setting_x"] == 14.9 and saved["capacity_wh"] == 12000
+        try:
+            ledger.configure({"future_setting_x": 1})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("unknown settings from the panel stay rejected")

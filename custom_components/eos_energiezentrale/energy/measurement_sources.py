@@ -113,7 +113,8 @@ def resolve_sources(options, states, providers, now, keys=None):
             'state_unavailable' if number(row.get('state')) is None else
             'sample_missing' if stamp is None else 'future_sample' if now < stamp else
             'stale' if (now-stamp).total_seconds() >= age else 'unit_invalid')
-        sources[key] = {"source": source, "available": available, 'reason':reason, 'max_age_s':age}
+        sources[key] = {"source": source, "available": available, 'reason':reason, 'max_age_s':age,
+                        'sample': stamp.isoformat() if source and stamp else None}
     required = {"solar", "grid", "house_total", "price"}
     if options.get("wallbox_type") != "none": required.add("car_soc")
     if opts.get("heat_entity"): required.add("heat")
