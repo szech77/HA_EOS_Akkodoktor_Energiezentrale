@@ -82,7 +82,14 @@ angezeigt, einschließlich eines eigenen SoC-Diagramms in der gemeinsamen
 Autoübersicht. Ohne passende EOS-Kurve wird der aktuelle gültige SoC für die
 nächsten 24 Stunden fortgeschrieben. Bei aktiviertem PV-Laden kann das Backend
 anhand verfügbarer PV- und Hauslastprognosen einen Anstieg bis zum PV-Ziel
-abschätzen. Die Anzeige unterscheidet EOS-Prognose und lokale Schätzung;
+abschätzen, beim Schnellladen einen Anstieg mit maximaler Ladeleistung bis zum
+Ladeziel. Die geschätzte Ladeleistung erscheint dann auch im Leistungsdiagramm:
+0 kW, solange keine Ladung zu erwarten ist (Fahrzeug getrennt, Ziel erreicht oder
+zu wenig PV-Überschuss), sonst die erwartete Leistung; bei mehreren Fahrzeugen
+summiert die Gesamtladeleistung die Fahrzeuge, sofern für alle ein Wert vorliegt.
+Ohne PV-Prognose für ein Intervall bleibt die Leistung leer. Geschätzt wird nur bei
+freigegebener E-Auto-Ladesteuerung, da sonst niemand die Wallbox nach diesen Modi
+regelt. Die Anzeige unterscheidet EOS-Prognose und lokale Schätzung;
 aktuelle Messwerte und Regelung bleiben davon unabhängig.
 Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
 Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt

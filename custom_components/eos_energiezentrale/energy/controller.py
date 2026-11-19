@@ -1117,7 +1117,8 @@ class Controller:
                 forecast, projection = projected_vehicle_soc(forecast, self.forecast, now, self.live.get('car_soc'),
                     {**self.config.options, **self.config.daily}, connected=self.vehicle_connected,
                     maximum_w=maximum or 0, minimum_w=minimum or 0, pv_share=pv_share,
-                    foreign_vehicle=self.forecast_vehicle_resource != vehicle_resource)
+                    foreign_vehicle=self.forecast_vehicle_resource != vehicle_resource,
+                    controlled='vehicle' in self.control_domains())
                 # Display-only inputs for the charge plan view; control keeps its own limits.
                 charge_limits = {"capacity_wh": opts.get("capacity_wh"), "efficiency": opts.get("charging_efficiency"),
                                  "maximum_w": maximum or None, "max_current_a": opts.get("max_current_a"),

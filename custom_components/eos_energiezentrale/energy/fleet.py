@@ -10,6 +10,7 @@ from .domain import BatteryCommand, battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, changed_settings, daily_settings, save
 from .history import History
+from .vehicle_projection import average_power
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
@@ -427,5 +428,16 @@ class FleetController(Controller):
         references=[vehicle.get("power_reference",{}).get("car") for vehicle in self.vehicle_snapshots]
         result["power_reference"]["car"]=sum(references) if references and all(value is not None for value in references) else None
         result["vehicle_name"]="E-Autos"
-        result["forecast"]=[{k:v for k,v in row.items() if k not in {"car","car_soc"}} for row in result["forecast"]]
+        # Total charging power: the sum of every vehicle's forecast, only where all of them are known.
+        vehicle_rows=[payload.get("forecast") or [] for payload in self.vehicle_snapshots]
+        def total(row):
+            start,end=instant(row.get("time")),instant(row.get("end"))
+            if start is None or end is None or end<=now or not vehicle_rows:
+                return None
+            values=[average_power(rows,max(start,now),end) for rows in vehicle_rows]
+            return sum(values) if all(value is not None for value in values) else None
+        # Rows that only carried the primary vehicle's local estimate are dropped.
+        rows=[{k:v for k,v in row.items() if k not in {"car","car_soc"}} for row in result["forecast"]]
+        result["forecast"]=[{**row,**({"car":power} if (power:=total(row)) is not None else {})}
+                            for row in rows if set(row)-{"time","end"}]
         return result

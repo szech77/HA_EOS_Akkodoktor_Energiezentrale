@@ -614,7 +614,7 @@ function vehicleSocChart(vehicle, now) {
 }
 function vehicleForecastNote(vehicle) {
   const source=vehicle.vehicle_forecast_source;
-  return ['eos','pv_estimate','constant','unavailable'].includes(source)
+  return ['eos','pv_estimate','fast_estimate','constant','unavailable'].includes(source)
     ? `<p class="footnote">${th(`forecast.vehicle_${source}`)}</p>` : '';
 }
 function detail(key) {
