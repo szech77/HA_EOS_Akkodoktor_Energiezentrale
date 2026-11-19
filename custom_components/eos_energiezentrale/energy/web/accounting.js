@@ -221,7 +221,15 @@ function priceRows(key, view, balance) {
   let result=`<p class="ph">${th('usage.grid_price',{price:price(view.grid_price_ct)})}</p>`
     +row(t('usage.grid_import',{energy:energyValue(view.grid_kwh)}),price(view.grid_price_ct),moneyOr(view.grid_cost_eur,view.cost_partial));
   if (key==='total' && balance) result+=base();
-  result+=row(t('usage.self_power',{energy:energyValue(view.self_kwh)}),price(view.self_price_ct),moneyOr(view.self_cost_eur,view.cost_partial));
+  // Own power is split by origin; grid-charged storage is listed apart instead of as own power.
+  const origin=view.self_origin;
+  if (origin) {
+    for (const part of ['pv_direct','battery_pv','battery_grid','battery_unknown']) {
+      const item=origin[part];
+      if (!item || (part!=='pv_direct' && !(item.kwh>.0001))) continue;
+      result+=row(t('usage.self_'+part,{energy:energyValue(item.kwh)}),price(item.price_ct),moneyOr(item.cost_eur,view.cost_partial));
+    }
+  } else result+=row(t('usage.self_power',{energy:energyValue(view.self_kwh)}),price(view.self_price_ct),moneyOr(view.self_cost_eur,view.cost_partial));
   if (view.unknown_kwh>.0001) result+=row(t('usage.unknown_origin',{energy:energyValue(view.unknown_kwh)}),'','—');
   if (key==='total' && balance) result+=feed()+row(t('usage.net'),'',moneyOr(balance.net_eur,approx),' sum');
   else result+=row(t('billing.costs'),'',view.cost_available ? moneyOr(view.cost_eur,view.cost_partial) : '—',' sum');

@@ -20,6 +20,11 @@ DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "
 SOURCES = ("pv", "battery", "grid", "unknown")
 # Ledger rows besides consumers: grid export valued with the feed-in tariff, battery charging by origin.
 EXPORT, STORAGE = "export", "storage"
+# Origin of stored energy: the stock tracks how much of its content (and cost) came from
+# PV or the grid; discharged energy passes these shares on to the battery source.
+ORIGINS = ("pv", "grid")
+ORIGIN_FIELDS = ("pv_kwh", "pv_cost_eur", "grid_kwh", "grid_cost_eur")
+STOCK_ORIGIN = ("pv_kwh", "pv_cost", "grid_kwh", "grid_cost")
 
 
 def checked_settings(values):
@@ -43,8 +48,10 @@ def checked_settings(values):
 
 
 def empty():
-    return {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0., "seconds": 0., "estimated_seconds":0.,
-            "sources": {key: {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0.} for key in SOURCES}}
+    result = {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0., "seconds": 0., "estimated_seconds":0.,
+              "sources": {key: {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0.} for key in SOURCES}}
+    result["sources"]["battery"].update(dict.fromkeys(ORIGIN_FIELDS, 0.))
+    return result
 
 
 def add(target, source):
@@ -53,6 +60,10 @@ def add(target, source):
     for name in SOURCES:
         for key in ("kwh", "cost_eur", "cost_unknown_kwh", "estimated_kwh"):
             target["sources"][name][key] = target['sources'][name].get(key,0)+source['sources'][name].get(key,0)
+    # Ledger rows written before the origin split carry no origin; they count as unknown origin.
+    for key in ORIGIN_FIELDS:
+        target["sources"]["battery"][key] = (target["sources"]["battery"].get(key,0)
+                                             + source["sources"]["battery"].get(key,0))
 
 
 class Accounting:
@@ -201,7 +212,7 @@ class Accounting:
             self.stock={'kwh':energy,'cost':0.,'unknown':energy,'estimated':0.}
         elif energy<self.stock['kwh'] and self.stock['kwh']>0:
             ratio=energy/self.stock['kwh']
-            for key in ('cost','unknown','estimated'): self.stock[key]=self.stock.get(key,0)*ratio
+            for key in ('cost','unknown','estimated',*STOCK_ORIGIN): self.stock[key]=self.stock.get(key,0)*ratio
             self.stock['kwh']=energy
         elif energy>self.stock['kwh']:
             self.stock['unknown']+=energy-self.stock['kwh']
@@ -292,10 +303,16 @@ class Accounting:
                   if balance and balance["balanced"] and supplied > 0 else {})
         self.value_unknown(row,effective)
         battery_rate, battery_unknown, battery_estimated = 0., 1., 0.
+        # Per delivered kWh: the share from PV-/grid-charged stock and its cost.
+        origin = dict.fromkeys(ORIGIN_FIELDS, 0.)
         if discharge is not None and discharge > 0 and effective is not None and self.stock is not None:
             needed = discharge*hours_per_thousand/effective["discharge_efficiency"]
             available = min(needed, self.stock["kwh"])
             fraction = available/self.stock["kwh"] if self.stock["kwh"] > 0 else 0
+            delivered = discharge*hours_per_thousand
+            for kind in ORIGINS:
+                origin[kind+"_kwh"] = min(1., self.stock.get(kind+"_kwh",0)*fraction/needed)
+                origin[kind+"_cost_eur"] = self.stock.get(kind+"_cost",0)*fraction/delivered
             cost = self.stock["cost"]*fraction
             unknown = self.stock["unknown"]*fraction + needed-available
             estimated=self.stock.get('estimated',0)*fraction
@@ -307,7 +324,7 @@ class Accounting:
             battery_rate = cost/(discharge*hours_per_thousand)
             battery_unknown = min(1., unknown/needed)
             battery_estimated=min(1.,estimated/needed)
-            for key in ("kwh", "cost", "unknown", "estimated"):
+            for key in ("kwh", "cost", "unknown", "estimated", *STOCK_ORIGIN):
                 self.stock[key] = self.stock.get(key,0)*(1-fraction)
         elif discharge is None or charge is None:
             # Preserve the known book price; flag uncertainty instead of erasing it.
@@ -336,6 +353,8 @@ class Accounting:
                 unknown = part*unknowns.get(source,1)
                 estimated=part*(1 if row.get('estimated') else battery_estimated if source=='battery' else 0)
                 amount["sources"][source] = {"kwh":part,"cost_eur":cost,"cost_unknown_kwh":unknown,'estimated_kwh':estimated}
+                if source == "battery":
+                    amount["sources"][source].update({key: part*share for key, share in origin.items()})
                 amount["cost_eur"] += cost
                 amount["cost_unknown_kwh"] += unknown
                 amount['estimated_kwh']+=estimated
@@ -377,6 +396,9 @@ class Accounting:
             known_ratio = pv_ratio+grid_ratio
             self.stock["kwh"] += energy*effective["charge_efficiency"]
             self.stock["cost"] += energy*(pv_ratio*rates["pv"]+grid_ratio*rates["grid"])
+            for kind, share in (("pv", pv_ratio), ("grid", grid_ratio)):
+                self.stock[kind+"_kwh"] = self.stock.get(kind+"_kwh",0) + energy*effective["charge_efficiency"]*share
+                self.stock[kind+"_cost"] = self.stock.get(kind+"_cost",0) + energy*share*rates[kind]
             self.stock["unknown"] += energy*effective["charge_efficiency"]*min(1.,1-known_ratio+grid_ratio*unknowns["grid"]+pv_ratio*unknowns["pv"])
             if row.get('estimated'): self.stock['estimated']=min(self.stock['kwh'],self.stock.get('estimated',0)+energy*effective['charge_efficiency'])
             self.value_unknown(row,effective)

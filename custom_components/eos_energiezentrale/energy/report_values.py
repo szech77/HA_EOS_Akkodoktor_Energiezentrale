@@ -156,6 +156,23 @@ def _self_kwh(amount):
     return _source(amount, 'pv')['kwh'] + _source(amount, 'battery')['kwh']
 
 
+def battery_origin(pv, battery):
+    """Self-supplied energy split into PV direct and stored energy by its charging origin.
+
+    Stored energy without a recorded origin (e.g. before the split was recorded) stays
+    separate, so grid-charged storage is never shown as own power."""
+    def part(kwh, cost, known):
+        return {'kwh': kwh, 'cost_eur': cost, 'price_ct': _ratio(cost, known)}
+    pv_kwh, grid_kwh = battery.get('pv_kwh', 0.), battery.get('grid_kwh', 0.)
+    pv_cost, grid_cost = battery.get('pv_cost_eur', 0.), battery.get('grid_cost_eur', 0.)
+    rest = max(0., battery['kwh'] - pv_kwh - grid_kwh)
+    rest_known = max(0., battery['kwh'] - battery['cost_unknown_kwh'] - pv_kwh - grid_kwh)
+    return {'pv_direct': part(pv['kwh'], pv['cost_eur'], pv['kwh'] - pv['cost_unknown_kwh']),
+            'battery_pv': part(pv_kwh, pv_cost, pv_kwh),
+            'battery_grid': part(grid_kwh, grid_cost, grid_kwh),
+            'battery_unknown': part(rest, max(0., battery['cost_eur'] - pv_cost - grid_cost), rest_known)}
+
+
 def consumer_view(entry, balance, period, days, car=False):
     """Key figures of one consumer (or all consumers) for its report page."""
     amount = complete_sources(entry['total'])
@@ -173,6 +190,7 @@ def consumer_view(entry, balance, period, days, car=False):
         'pv_kwh': pv['kwh'], 'battery_kwh': battery['kwh'], 'grid_kwh': grid['kwh'], 'unknown_kwh': unknown['kwh'],
         'grid_cost_eur': grid['cost_eur'], 'grid_price_ct': _ratio(grid['cost_eur'], grid['kwh'] - grid['cost_unknown_kwh']),
         'self_cost_eur': self_cost, 'self_price_ct': _ratio(self_cost, self_known),
+        'self_origin': battery_origin(pv, battery),
         'cost_eur': amount['cost_eur'], 'price_ct': entry['total'].get('average_price_ct'),
         'cost_available': entry['total'].get('cost_available', False), 'cost_partial': entry['total'].get('cost_partial', False),
         'estimated': entry['total'].get('estimated', False), 'savings_eur': savings,

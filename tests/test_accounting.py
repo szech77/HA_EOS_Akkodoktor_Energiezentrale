@@ -51,6 +51,45 @@ class EnergyAccountingRequirements(TestCase):
         self.assertEqual(amount["cost_unknown_kwh"],0)
         self.assertAlmostEqual(self.ledger.stock["kwh"],0.)
 
+    def test_discharged_energy_keeps_the_pv_and_grid_origin_of_its_charge(self):
+        from custom_components.eos_energiezentrale.energy.report_values import battery_origin
+        self.ledger.configure({"pv_price_ct":10})
+        self.ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}
+        row=sample(solar=7500,grid=2500,battery_charge=10000,house_total=0,house=0,heat=0,car=0)
+        row["consumers"]={"house":0}
+        self.ledger.allocate(row,.001,self.ledger.effective())
+        self.assertAlmostEqual(self.ledger.stock["pv_kwh"],6.75)
+        self.assertAlmostEqual(self.ledger.stock["grid_kwh"],2.25)
+        # Half of the stock goes to the car; the other half stays with its origin.
+        row=sample(solar=1000,grid=0,battery_discharge=4500,house_total=5500)
+        row["consumers"]={"car":5500}
+        battery=self.ledger.allocate(row,.001,self.ledger.effective())["car"]["sources"]["battery"]
+        self.assertAlmostEqual(battery["kwh"],4.5)
+        self.assertAlmostEqual(battery["pv_kwh"],3.375)
+        self.assertAlmostEqual(battery["grid_kwh"],1.125)
+        # 7.5 kWh PV at 10 ct and 2.5 kWh grid at 30 ct, half of it, before charging losses.
+        self.assertAlmostEqual(battery["pv_cost_eur"],.375)
+        self.assertAlmostEqual(battery["grid_cost_eur"],.375)
+        self.assertAlmostEqual(battery["cost_eur"],.75)
+        self.assertAlmostEqual(self.ledger.stock["grid_kwh"],1.125)
+        origin=battery_origin({"kwh":1.,"cost_eur":.1,"cost_unknown_kwh":0.},battery)
+        self.assertAlmostEqual(origin["battery_grid"]["price_ct"],100/3)
+        self.assertAlmostEqual(origin["battery_pv"]["price_ct"],100/9)
+        self.assertEqual(origin["battery_unknown"]["kwh"],0)
+        self.assertAlmostEqual(origin["pv_direct"]["price_ct"],10)
+
+    def test_stock_without_recorded_origin_is_reported_as_unknown_origin(self):
+        from custom_components.eos_energiezentrale.energy.report_values import report_values
+        self.ledger.stock={"kwh":9.,"cost":2.7,"unknown":0.}
+        self.ledger.initial_pv_valued=True
+        result=self.report_minute(solar=0,grid=0,battery_discharge=3600,battery_soc=90)
+        view=report_values({**self.ledger.report({"period":"day"},NOW),"consumers":result})["views"]["house"]
+        origin=view["self_origin"]
+        self.assertGreater(origin["battery_unknown"]["kwh"],0)
+        self.assertEqual(origin["battery_grid"]["kwh"],0)
+        self.assertEqual(origin["battery_pv"]["kwh"],0)
+        self.assertAlmostEqual(origin["battery_unknown"]["price_ct"],30)
+
     def test_charge_and_discharge_losses_are_applied_once(self):
         self.ledger.configure({"discharge_efficiency":.9})
         self.ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}

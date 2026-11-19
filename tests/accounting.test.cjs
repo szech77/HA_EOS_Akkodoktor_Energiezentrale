@@ -348,3 +348,19 @@ test('total consumption is labelled in German and English',()=>{
   assert.equal(vm.runInContext("billingName('total')",ctx),label);
  }
 });
+
+test('own power is split by origin so grid-charged storage is not listed as own power',()=>{
+ const {ctx}=uiFixture();
+ const part=(kwh,cost,price)=>({kwh,cost_eur:cost,price_ct:price});
+ ctx.view={grid_kwh:1,grid_price_ct:30,grid_cost_eur:.3,self_kwh:4,self_price_ct:10,self_cost_eur:.4,cost_available:true,cost_eur:.7,
+  self_origin:{pv_direct:part(2,.2,10),battery_pv:part(1,.11,11),battery_grid:part(1,.33,33),battery_unknown:part(0,0,null)}};
+ const result=vm.runInContext("priceRows('house',view,null)",ctx);
+ assert.match(result,/usage.self_pv_direct[\s\S]*usage.self_battery_pv[\s\S]*usage.self_battery_grid/);
+ assert.match(result,/33 ct\/kWh/);
+ assert.doesNotMatch(result,/usage.self_battery_unknown|usage.self_power/);
+ ctx.view.self_origin.battery_unknown=part(.5,.15,30);
+ assert.match(vm.runInContext("priceRows('house',view,null)",ctx),/usage.self_battery_unknown/);
+ // Cached reports without the split keep the combined row.
+ delete ctx.view.self_origin;
+ assert.match(vm.runInContext("priceRows('house',view,null)",ctx),/usage.self_power/);
+});
