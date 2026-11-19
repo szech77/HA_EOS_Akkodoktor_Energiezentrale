@@ -1,0 +1,9 @@
+{
+  "branch": "feature/ui-redesign",
+  "channel": "beta",
+  "date": "2026-11-19",
+  "notes_sha256": "2162eb95aa4fd8c47a0d8b4d0cc4ca590b8f7192ac9524d32389de8e3c221c37",
+  "source_changelog_sha256": "97906de1664fb2eead2fbeb7ab46f587b6dd5eca9f2e7d7e23963add308c89aa",
+  "source_commit": "160e7f5630f9e258db0d02084f1c369c76e754d1",
+  "version": "0.23.0b44580114872"
+}
