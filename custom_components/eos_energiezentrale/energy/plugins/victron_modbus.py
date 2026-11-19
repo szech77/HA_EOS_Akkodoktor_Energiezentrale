@@ -34,6 +34,13 @@ def configured_firmware(value):
     return int(major+f'{int(minor):02d}',16),version
 
 
+# Battery power on the AC side from the GX's own AC balance (PV + grid - consumption) is
+# used for reading when it lies within this distance of the efficiency-based estimate;
+# a larger gap points to an unread source, so the estimate stays.
+AC_BALANCE_W = 500
+AC_BALANCE_RATIO = .25
+
+
 class VictronModbus(BatteryDriver):
     info=PluginInfo('victron_modbus','Victron GX direct Modbus TCP','battery')
     uses_dispatch_context=True
@@ -72,7 +79,7 @@ class VictronModbus(BatteryDriver):
         self._firmware_notice=None
         self.read_diagnostics={'phases':self.phases,
             **{key:v[key] for key in ('control_enabled','legacy_control_enabled','grid_meter_enabled','read_consumption',
-                'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None,
+                'dc_pv_enabled','ac_pv_input_enabled','ac_pv_output_enabled')},'failure':None,'battery_power':None,
             'firmware':self._firmware_diagnostics()}
         for key in ('charge_efficiency','discharge_efficiency'):
             if not .1<=v[key]<=1: raise PluginParameterError('Invalid Victron efficiency',key)
@@ -201,6 +208,14 @@ class VictronModbus(BatteryDriver):
             raise ModbusError('GX telemetry snapshot took too long')
         charge=max(0,power)/self.values['charge_efficiency']
         discharge=max(0,-power)*self.values['discharge_efficiency']
+        method='dc_efficiency'
+        if not control and 'grid' in values and 'house_total' in values:
+            # The GX consumption closes its AC balance: what remains of PV and grid
+            # is the inverter/charger's AC power, including its actual conversion losses.
+            net=values.get('solar',0)+values['grid']-values['house_total']
+            if abs(net-(charge-discharge))<=max(AC_BALANCE_W,abs(charge-discharge)*AC_BALANCE_RATIO):
+                charge,discharge,method=max(0.,net),max(0.,-net),'ac_balance'
+        self.read_diagnostics['battery_power']=method
         return voltage,BatteryReading(soc,charge,discharge,now,now,now,
             {key:Measurement(value,now) for key,value in values.items()})
 

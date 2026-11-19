@@ -384,7 +384,7 @@ def test_ac_output_pv_on_three_phases_does_not_require_dc_pv():
         assert sample.soc==60 and sample.measurements['solar'].value==6000
         assert driver.read_diagnostics=={'phases':3,'control_enabled':False,'legacy_control_enabled':False,'grid_meter_enabled':True,
             'read_consumption':True,'dc_pv_enabled':False,'ac_pv_input_enabled':False,
-            'ac_pv_output_enabled':True,'failure':None,'firmware':{
+            'ac_pv_output_enabled':True,'failure':None,'battery_power':'dc_efficiency','firmware':{
                 'version':'v3.50','source':'detected','detected':'v3.50','configured':None,
                 'register_status':'valid','raw_words':[0x0350,0]}}
         assert not any(address in (850,811) for _,_,address,_ in server.requests)
@@ -406,3 +406,41 @@ def test_invalid_configuration_is_rejected_without_connecting(changes):
         with pytest.raises(ValueError):BATTERY_DRIVERS['victron_modbus'](None,{
             'host':'gx.local','control_enabled':True,'release_charge_current':60,'release_discharge_power':4500,**changes})
         connect.assert_not_called()
+
+
+def site(server,*,dc_pv,grid,consumption,battery):
+    server.registers.update({850:dc_pv,820:grid&65535,821:0,822:0,817:consumption,818:0,819:0,842:battery&65535})
+
+
+def test_ac_battery_power_follows_the_gx_balance_including_actual_conversion_losses():
+    # Synthetic grid charge: 5 kW DC need about 6 kW AC, not 5 kW / 0.95.
+    with gx(charge_efficiency=.95,discharge_efficiency=.95) as (driver,server,_):
+        site(server,dc_pv=0,grid=7000,consumption=1000,battery=5000)
+        sample=driver.read({},NOW)
+        assert (sample.charge,sample.discharge)==(6000,0)
+        assert driver.read_diagnostics['battery_power']=='ac_balance'
+        values={key:item.value for key,item in sample.measurements.items()}
+        # The site balance now closes exactly: PV + grid + discharge - charge = consumption.
+        assert values['solar']+values['grid']+sample.discharge-sample.charge==values['house_total']
+        # Discharge with DC PV: the inverter's AC output, not DC power times an assumed efficiency.
+        site(server,dc_pv=500,grid=100,consumption=2400,battery=-2000)
+        sample=driver.read({},NOW)
+        assert (sample.charge,sample.discharge)==(0,1800)
+
+
+def test_ac_balance_is_not_used_for_control_or_with_an_unread_source():
+    with gx(charge_efficiency=.95,discharge_efficiency=.95) as (driver,server,_):
+        # 3 kW AC-PV exist but are not read: the balance would show a phantom discharge.
+        site(server,dc_pv=0,grid=0,consumption=3000,battery=0)
+        sample=driver.read({},NOW)
+        assert (sample.charge,sample.discharge)==(0,0)
+        assert driver.read_diagnostics['battery_power']=='dc_efficiency'
+    with gx(charge_efficiency=1,discharge_efficiency=1) as (driver,server,_):
+        site(server,dc_pv=0,grid=7000,consumption=1000,battery=5000)
+        driver.apply(command('grid_charge',2500,0),{})
+        # Control uses the DC estimate: demand 7000 - 5000 plus 2500 W charge, not the AC balance.
+        assert target(server)==4500
+    with gx(grid_meter_enabled=False) as (driver,server,_):
+        site(server,dc_pv=0,grid=7000,consumption=1000,battery=5000)
+        assert driver.read({},NOW).charge==5000
+        assert driver.read_diagnostics['battery_power']=='dc_efficiency'
