@@ -55,14 +55,33 @@ def test_balance_reveals_a_site_total_that_exceeds_all_sources():
 
 def test_derived_house_matches_the_controller_formula_and_disabled_consumers_count_as_zero():
     data = snapshot(house_total=3000, car=1200, heat=800, house=1000)
-    assert source_diagnostics(data, NOW)['derived'] == {'house': 1000., 'house_total': 3000., 'car': 1200., 'heat': 800.}
+    assert source_diagnostics(data, NOW)['derived'] == {'house': 1000., 'house_total': 3000., 'house_total_measured': 3000.,
+                                                        'car': 1200., 'heat': 800.}
     data['features'] = {'car': False, 'heat': False}
     assert source_diagnostics(data, NOW)['derived']['car'] == 0 and source_diagnostics(data, NOW)['derived']['heat'] == 0
 
 
 def test_empty_snapshot_is_safe():
-    assert source_diagnostics({}, NOW) == {'time': None, 'sources': [], 'derived': {'house': None, 'house_total': None, 'car': 0., 'heat': 0.},
-                                           'balance': None, 'devices': [], 'vehicles': []}
+    assert source_diagnostics({}, NOW) == {'time': None, 'sources': [], 'derived': {'house': None, 'house_total': None,
+        'house_total_measured': None, 'car': 0., 'heat': 0.}, 'balance': None, 'complete': False, 'estimates': [],
+        'deviation_since': None, 'devices': [], 'vehicles': []}
+
+
+def test_balance_values_and_estimates_replace_the_measured_split():
+    from custom_components.eos_energiezentrale.energy.consumption import ConsumptionBalance, apply_balance
+    data = snapshot()
+    balance = ConsumptionBalance()
+    apply_balance(data['live'], balance.update(data['live'], NOW))
+    result = source_diagnostics(data, NOW)
+    # The site total follows the sources; the measured 940 W is the check that fails.
+    assert result['derived']['house_total'] == 520 and result['derived']['house_total_measured'] == 940
+    assert next(row for row in result['sources'] if row['key'] == 'house_total')['value'] == 940
+    assert result['balance']['residual_w'] == -420 and result['balance']['balanced'] is False
+    assert result['complete'] is True and result['deviation_since'] == NOW.isoformat()
+    later = NOW + timedelta(seconds=10)
+    data['live'].update(time=later.isoformat(), heat=None)
+    apply_balance(data['live'], balance.update({**data['live'], 'house_total': 940}, later))
+    assert source_diagnostics(data, later)['estimates'] == [{'key': 'heat', 'reason': 'consumer_hold'}]
 
 
 def test_shared_balance_rule_matches_accounting_tolerance():

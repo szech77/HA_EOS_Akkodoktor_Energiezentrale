@@ -203,11 +203,17 @@ class FleetRequirements(unittest.TestCase):
     def test_house_subtracts_all_vehicle_measurements_once(self):
         app,ha,opts,_=self.setup_fleet()
         ha.rows[opts["house_entity"]]["state"]="5000"
+        # Consistent sources: 7500 W PV and 2500 W export leave 5000 W site consumption.
+        ha.rows[opts["grid_entity"]]["state"]="-2500"
         ha.rows["sensor.first_power"]["state"]="1000"
         ha.rows["sensor.second_power"]["state"]="2000"
         app.tick(NOW,0)
         self.assertEqual(app.live["house"],2000)
         self.assertEqual(app.live["car"],3000)
+        # Accounting receives the balanced split per vehicle on the real (not reserved) grid meter.
+        consumers=app.live["balance"]["consumers"]
+        self.assertEqual((consumers["house"],consumers["car/first"],consumers["car/second"]),(2000,1000,2000))
+        self.assertEqual(app.live["house_total"],5000)
 
     def test_disarm_attempts_every_charger_and_releases_storage(self):
         app,ha,_,_=self.setup_fleet()
@@ -292,6 +298,8 @@ class FleetRequirements(unittest.TestCase):
     def test_retained_fleet_power_sums_all_chargers_without_filling_live_measurements(self):
         app,ha,opts,_=self.setup_fleet()
         ha.rows[opts["house_entity"]]["state"]="5000"
+        # Consistent sources: 7500 W PV and 2500 W export leave 5000 W site consumption.
+        ha.rows[opts["grid_entity"]]["state"]="-2500"
         ha.rows["sensor.first_power"]["state"]="1000"
         ha.rows["sensor.second_power"]["state"]="2000"
         app.tick(NOW,0)

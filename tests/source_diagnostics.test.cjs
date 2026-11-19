@@ -37,14 +37,22 @@ test('settings show every configured source with numeric values, age and status'
   assert.match(markup,/Plugin: go-e &lt;v2&gt;/);assert.doesNotMatch(markup,/<v2>/);
   assert.match(markup,/Stand 18:50:00/);
 });
-test('the energy balance explains why consumption is booked as unknown',()=>{
-  const markup=render(backend('sourceDiagnostics',data,{now}));
-  assert.match(markup,/Quellen: PV \+ Netzbezug \+ Speicherentladung<\/td><td class="num">520 W/);
-  assert.match(markup,/Bilanzrest \(Quellen − Senken\)<\/strong><\/td><td class="num">−420 W/);
-  assert.match(markup,/<tr class="warn"><td colspan="2"><strong>Bilanz geht nicht auf/);
+test('the AC balance replaces a deviating measured house total and says so',()=>{
+  const markup=render(backend('balancedDiagnostics',data,{now}));
+  assert.match(markup,/Hausverbrauch gesamt aus Bilanz \(PV \+ Netz \+ Entladung − Ladung\)<\/td><td class="num">520 W/);
+  assert.match(markup,/Hausverbrauch gesamt gemessen \(Kontrolle\)<\/td><td class="num">940 W/);
+  assert.match(markup,/Abweichung: Bilanz − Messung<\/strong><\/td><td class="num">−420 W/);
+  assert.match(markup,/<tr class="warn"><td colspan="2"><strong>Gemessener Hausverbrauch weicht ab/);
   assert.match(markup,/<h3>Victron · Victron GX<\/h3>/);assert.match(markup,/Speicher-SoC<\/td><td class="num">87 %/);
-  const balanced=render(backend('sourceDiagnostics',{...data,live:{...data.live,house_total:500,house:500}},{now}),'en');
-  assert.match(balanced,/<tr class=""><td colspan="2"><strong>Balance closes/);
+  const balanced=render(backend('balancedDiagnostics',{...data,live:{...data.live,house_total:500,house:500}},{now}),'en');
+  assert.match(balanced,/<tr class=""><td colspan="2"><strong>Measurement matches the balance/);
+});
+test('estimated values are listed with their reason',()=>{
+  const markup=render(backend('sourceDiagnostics',{...data,live:{...data.live,balance:{house_total:520,complete:true,
+    consumers:{house:520,car:0,heat:0},estimated:{heat:'consumer_hold',solar:'source_balance'}}}},{now}));
+  assert.match(markup,/<h3>Geschätzte Werte in diesem Moment<\/h3>/);
+  assert.match(markup,/<td>PV-Leistung<\/td><td>aus gemessenem Hausverbrauch und den übrigen Quellen berechnet<\/td>/);
+  assert.match(markup,/<td>Wärmepumpenleistung<\/td><td>Messwert kurz nicht verfügbar, letzter Wert gehalten<\/td>/);
 });
 test('no diagnostics yet and the settings panel exists',()=>{
   assert.match(render(undefined),/Noch keine Messwerte/);
@@ -53,7 +61,7 @@ test('no diagnostics yet and the settings panel exists',()=>{
 });
 
 test('copy puts an aligned plain-text report into the clipboard',async()=>{
-  const view=backend('sourceDiagnostics',data,{now}),result={textContent:''};let copied;
+  const view=backend('balancedDiagnostics',data,{now}),result={textContent:''};let copied;
   const ctx=context('de',{byId:()=>result,navigator:{clipboard:{writeText:async text=>{copied=text;}}}});
   ctx.snapshot.source_diagnostics=view;
   await ctx.copyDiagnostics();
@@ -63,7 +71,7 @@ test('copy puts an aligned plain-text report into the clipboard',async()=>{
   assert.match(lines[1],/^Stand 18\.11\.26, 18:50:00 \(2026-11-18T17:50:00/);
   assert.ok(lines.some(line=>/^Netzanschlussleistung +Plugin: Configured devices +10 W +0 s +OK$/.test(line)));
   assert.ok(lines.some(line=>/^Wärmepumpenleistung +Sensor: sensor\.heat_pump +— +300 s +veraltet \(max\. 120 s\)$/.test(line)));
-  assert.match(copied,/Bilanzrest \(Quellen − Senken\) +-420 W\nErlaubte Abweichung +300 W\nBilanz geht nicht auf/);
+  assert.match(copied,/Abweichung: Bilanz − Messung +-420 W\nErlaubte Abweichung +300 W\nGemessener Hausverbrauch weicht ab/);
   assert.ok(lines.includes('Geräte: Victron · Victron GX · Messwerte vollständig'));
   assert.match(copied,/Speicher-Entladeleistung +510 W/);
   // Plain text keeps names unescaped.
@@ -80,9 +88,9 @@ test('copy falls back to a selected text area and reports a blocked clipboard',a
   const area={style:{},setAttribute(){},select(){},remove(){}};
   const document={createElement:()=>area,body:{append:item=>appended.push(item)},execCommand:()=>true};
   const ctx=context('en',{byId:()=>result,document,navigator:{clipboard:{writeText:async()=>{throw new Error('denied');}}}});
-  ctx.snapshot.source_diagnostics=backend('sourceDiagnostics',data,{now});
+  ctx.snapshot.source_diagnostics=backend('balancedDiagnostics',data,{now});
   await ctx.copyDiagnostics();
-  assert.equal(result.textContent,'Measurements copied to the clipboard.');assert.match(area.value,/Balance does not close/);
+  assert.equal(result.textContent,'Measurements copied to the clipboard.');assert.match(area.value,/Measured house consumption deviates/);
   document.execCommand=()=>false;await ctx.copyDiagnostics();
   assert.match(result.textContent,/Copying is not possible/);
 });

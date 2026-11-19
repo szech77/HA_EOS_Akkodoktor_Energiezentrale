@@ -140,6 +140,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
         for vehicle in result.get('vehicles', []):
             vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), split)
         result['source_diagnostics'] = source_diagnostics(result, now)
+        # A persistently deviating measured site total hints at a missing source or a wrong meter.
+        since = instant(result['source_diagnostics'].get('deviation_since'))
+        self.issue_log.update('consumption', [{'id': 'consumption/house_total', 'code': 'house_total_deviation',
+            'severity': 'info'}] if since and (now - since).total_seconds() >= 900 else [])
         self.issue_log.update('state', result['notices'])
         since = self.issue_log.active_since('state')
         result['notices'] = [{**notice, 'since':since.get(notice['id'])} for notice in result['notices']]

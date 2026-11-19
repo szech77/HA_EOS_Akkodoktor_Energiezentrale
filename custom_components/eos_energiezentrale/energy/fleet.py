@@ -6,6 +6,7 @@ import re
 
 from .clients import reading
 from .controller import Controller
+from .consumption import ConsumptionBalance, apply_balance, split_vehicles
 from .domain import BatteryCommand, battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, changed_settings, daily_settings, save
@@ -14,7 +15,7 @@ from .vehicle_projection import average_power
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
-from .power_supply import configured_supply, requires_pause
+from .power_supply import configured_supply, requires_pause, supply_view
 
 SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
                            'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w',
@@ -130,6 +131,7 @@ class FleetController(Controller):
         self.global_options=options
         self.primary_history=None
         self.fleet_display_values=DisplayValues(options.get("display_hold_s",900))
+        self.fleet_consumption=ConsumptionBalance()
         self.fleet_alignment=ChargeTransitionDisplay(options.get("display_hold_s",900),options.get("display_transition_s",30))
         for index,(identity,values) in enumerate(vehicles):
             child_dir=directory if index==0 else directory/"vehicles"/identity
@@ -269,8 +271,15 @@ class FleetController(Controller):
         self.live["grid"]=grid
         self.live["car"]=sum(actual.values()) if complete else None
         self.live["car_soc"]=None
-        self.live["house"]=house_only(self.live.get("house_total"),self.live["car"],
-            self.live.get("heat") if opts["heat_entity"] else 0)
+        # The primary tick saw a reserved grid value; balance the fleet on the real meter.
+        self.live["house_total"]=self.live.get("house_total_measured")
+        commanded=[app.commanded_car_w for _,app,_ in self.controllers]
+        balance=self.fleet_consumption.update(self.live,now,car_enabled=True,heat_enabled=bool(opts["heat_entity"]),
+            commanded_car_w=sum(commanded) if self.armed and all(value is not None for value in commanded) else None,
+            island=supply_view(self.power_supply,now)['state']=='backup')
+        balance["consumers"].update({"car/"+identity:value for identity,value in
+            split_vehicles(balance["consumers"]["car"],actual,self.targets).items()})
+        apply_balance(self.live,balance,True,bool(opts["heat_entity"]))
         self.display.pop("car",None)
         self.display.pop("house",None)
         if complete:
@@ -308,7 +317,8 @@ class FleetController(Controller):
         self.flow_display=self.fleet_alignment.update(self.live,times,now,True,bool(opts["heat_entity"]),self.display,
             expected_car_w=expected,command_at=max(commands) if commands else None)
         for payload in snapshots:
-            payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
+            payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"],"house_total":self.live["house_total"],
+                             "house_total_measured":self.live["house_total_measured"],"balance":self.live["balance"]}
         # Diagnostics describe the actual shared meter, rather than temporary
         # headroom suppression when a charger measurement is missing.
         for report in [self.source_configuration]+[payload['source_configuration'] for payload in snapshots]:

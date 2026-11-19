@@ -49,7 +49,8 @@ def test_battery_and_heat_continue_without_vehicle_plan_sync_or_soc_publication(
         for seconds in (0,30,360):
             now=NOW+timedelta(seconds=seconds)
             config.battery.read.return_value=BatteryReading(50,0,0,now,now,now)
-            ha.states.return_value=ControllerRequirements.states(when=now)
+            # Consistent sources: 4000 W PV cover the 4000 W site consumption.
+            ha.states.return_value={**ControllerRequirements.states(when=now),'sensor.pv':ControllerRequirements.states(when=now)['sensor.house']}
             config.eos.plan.return_value={'generated_at':now.isoformat(),'instructions':[instruction(now)]}
             app.tick(now,seconds)
             snapshot=app.snapshot(now)
