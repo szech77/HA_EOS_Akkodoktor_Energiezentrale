@@ -156,6 +156,7 @@ class FleetController(Controller):
             controller.support_driver = self.battery_driver
             # Children follow the fleet's remembered intent, including the
             # assumption that devices may still hold commands after a crash.
+            controller.scope = dict(self.scope)
             controller.owned = self.armed
             self.controllers.append((identity,controller,proxy))
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
@@ -240,7 +241,7 @@ class FleetController(Controller):
                 # plugin row would let source resolution reinsert raw headroom.
                 proxy.rows[opts["grid_entity"]]={"state":None,"attributes":{"unit_of_measurement":"W"}}
             if app is not self:
-                app.armed=self.armed
+                app.scope=dict(self.scope)
                 if self.restore_pending:
                     app.restore_pending=True
             try:
@@ -302,7 +303,7 @@ class FleetController(Controller):
         car_times=[instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")) for _,_,proxy in self.controllers]
         times["car"]=min(car_times) if all(car_times) else None
         commands=[app.last_write for _,app,_ in self.controllers if app.last_write is not None]
-        expected=sum(max(self.targets.get(identity,0),actual[identity] or 0) for identity,_,_ in self.controllers) if self.armed else None
+        expected=sum(max(self.targets.get(identity,0),actual[identity] or 0) for identity,_,_ in self.controllers) if 'vehicle' in self.control_domains() else None
         self.flow_display=self.fleet_alignment.update(self.live,times,now,True,bool(opts["heat_entity"]),self.display,
             expected_car_w=expected,command_at=max(commands) if commands else None)
         for payload in snapshots:
@@ -314,7 +315,7 @@ class FleetController(Controller):
             for status in ('missing','unavailable'):
                 report[status]=sorted((set(report[status])-set(shared_keys))|set(shared_sources[status]))
         self.history.write(now,self.live)
-        if (not self.armed or any(app.backup_paused for _,app,_ in self.controllers)
+        if ('battery' not in self.control_domains() or any(app.backup_paused for _,app,_ in self.controllers)
                 or not any(app.owned for _,app,_ in self.controllers)):
             return
         self.control_step="battery_control"
@@ -340,17 +341,39 @@ class FleetController(Controller):
     def release_battery(self,states):
         self.battery_driver.release(states)
 
+    def pause_vehicles(self,states,now):
+        errors=[]
+        for key,app,_ in self.controllers:
+            app.pv_support.reset()
+            try:
+                app.config.wallbox.pause(app.config.wallbox.read(states,now))
+            except Exception as error:
+                errors.append(error)
+            else:
+                app.holding.discard('vehicle')
+            app.pv_session=False
+            app.commanded_car_w=None
+            app.phase_target=app.candidate=None
+            self.targets[key]=0
+        if errors:
+            raise errors[0]
+
     def release_until_ready(self,states,now,*,pause_wallbox=True):
         """While another vehicle already regulates its wallbox and the shared
         battery, a waiting primary vehicle releases only its own wallbox."""
         if not any(app.owned for _,app,_ in self.controllers if app is not self):
             return Controller.release_until_ready(self,states,now,pause_wallbox=pause_wallbox)
-        if not pause_wallbox:
+        if not pause_wallbox or 'vehicle' not in self.holding|self.control_domains():
             return
         self.control_step='restore_release'
         self.targets[self.controllers[0][0]]=0
         try:
-            Controller.release(self,states,now)  # MeterOnlyBattery: no battery command.
+            # Only the primary wallbox; MeterOnlyBattery: no battery command.
+            self.pv_support.reset()
+            self.config.wallbox.pause(self.config.wallbox.read(states,now))
+            self.owned=False
+            self.pv_session=False
+            self.phase_target=self.candidate=None
         except (OSError,ValueError) as error:
             self.record_failure('release',error)
         else:
@@ -358,10 +381,11 @@ class FleetController(Controller):
 
     def release(self,states,now,*,pause_wallbox=True):
         errors=[]
+        held=set().union(*(app.holding for _,app,_ in self.controllers))|self.control_domains()
         for key,app,_ in self.controllers:
             app.pv_support.reset()
             try:
-                if pause_wallbox:
+                if pause_wallbox and 'vehicle' in held:
                     app.config.wallbox.pause(app.config.wallbox.read(states,now))
             except Exception as error:
                 errors.append(error)
@@ -369,7 +393,8 @@ class FleetController(Controller):
             app.phase_target=app.candidate=None
             self.targets[key]=0
         try:
-            self.battery_driver.release(states)
+            if 'battery' in held:
+                self.battery_driver.release(states)
         except Exception as error:
             errors.append(error)
         if errors:

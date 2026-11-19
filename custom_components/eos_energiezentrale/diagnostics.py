@@ -31,7 +31,7 @@ async def async_get_config_entry_diagnostics(hass, entry):
     data = coordinator.data or {}
     configuration_issues = hass.data.get(DOMAIN, {}).get('configuration_issues')
     return {"plugin_errors":dict(PLUGIN_ERRORS),"plugins":data.get("plugins",{}),"devices":device_diagnostics(data),
-            "version": entry.version, "armed": bool(data.get("armed")),
+            "version": entry.version, "armed": bool(data.get("armed")), "control": data.get("control", {}),
             "control_waiting": bool(data.get("control_waiting")),
             "release_pending": bool(data.get("release_pending")),
             "issues": coordinator.issue_log.diagnostics() if isinstance(getattr(coordinator, 'issue_log', None), IssueLog) else {},

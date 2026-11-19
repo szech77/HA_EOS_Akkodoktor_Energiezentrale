@@ -7,7 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- Speicher und E-Auto-Laden lassen sich unter Einstellungen → Gerätesteuerung getrennt übernehmen und zurückgeben; dazu gibt es die Schalter „Speichersteuerung“ und „E-Auto-Ladesteuerung“. Ein Bereich wird nur angeboten, wenn ein passendes steuerbares Gerät konfiguriert ist: ein Speicher-Plugin mit Lade- und Entladegrenzen (z. B. nicht Victron ohne aktivierte ESS-Steuerung) bzw. eine Wallbox. Ein nicht gesteuerter Bereich erhält keine Befehle; ohne Speichersteuerung entfällt die Speicherunterstützung beim PV-Laden. Der Schalter „Energiesteuerung“ schaltet weiterhin alle steuerbaren Bereiche gemeinsam. Bestehende Freigaben gelten für alle steuerbaren Bereiche; die Auswahl wird zusätzlich in `control_scope.json` gespeichert, `control.json` behält ihr bisheriges Format für ältere Versionen.
 
 ### Bugfixes
 

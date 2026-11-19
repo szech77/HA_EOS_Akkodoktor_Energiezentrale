@@ -91,9 +91,13 @@ async def websocket_request(hass, connection, msg):
                 ha_language=msg.get("language") or hass.config.language))
         else:
             if action == "control":
-                if values.keys() != {"enabled"} or type(values["enabled"]) is not bool:
+                if values.keys() == {"enabled"} and type(values["enabled"]) is bool:
+                    await coordinator.async_change(enabled=values["enabled"])
+                elif (values and values.keys() <= {"battery", "vehicle"}
+                        and all(type(value) is bool for value in values.values())):
+                    await coordinator.async_change(control=dict(values))
+                else:
                     raise ValueError("Explicit boolean required")
-                await coordinator.async_change(enabled=values["enabled"])
             else:
                 await coordinator.async_change(settings=values)
             result = {"ok": True}

@@ -143,7 +143,10 @@
       <section class="plan-panel">
         <h2 data-i18n="control.title"></h2>
         <p id="control-info" data-i18n="control.restart_info"></p>
-        <button id="control" type="button" data-i18n="control.take"></button>
+        <div class="control-areas">
+          <div class="control-area" data-control-area="battery"><div><strong data-i18n="control.area.battery"></strong><small class="control-area-state"></small></div><button type="button" data-i18n="control.take"></button></div>
+          <div class="control-area" data-control-area="vehicle"><div><strong data-i18n="control.area.vehicle"></strong><small class="control-area-state"></small></div><button type="button" data-i18n="control.take"></button></div>
+        </div>
         <output id="control-result" aria-live="polite"></output>
       </section>
       <section class="plan-panel">

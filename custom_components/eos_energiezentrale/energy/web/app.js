@@ -720,6 +720,18 @@ function batteryGroupDetails(group) {
     (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');
 }
 
+function controlAreas() {
+  for (const area of document.querySelectorAll('[data-control-area]')) {
+    const key = area.dataset.controlArea, view = snapshot.control?.[key] ?? {};
+    const button = area.querySelector('button');
+    button.hidden = !view.available;
+    button.disabled = !formReady;
+    button.textContent = t(view.enabled || view.release_pending ? 'control.release' : 'control.take');
+    area.querySelector('.control-area-state').textContent = !view.available ? t(`control.area_unavailable.${key}`)
+      : t(view.release_pending ? 'control.area_releasing' : view.enabled ? 'control.area_on' : 'control.area_off');
+  }
+}
+
 function settings() {
   document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
   if (!formReady && 'schedule' in snapshot.settings) {
@@ -727,8 +739,7 @@ function settings() {
     formReady = true;
   }
   byId('ownership').textContent = controlStatus(snapshot);
-  byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
-  byId('control').disabled = !formReady;
+  controlAreas();
   const limits = snapshot.battery_limits;
   byId('battery-limits-status').textContent = t(`settings.battery_limits_${snapshot.battery_limits_status??'unmanaged'}`, {
       minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc});
@@ -853,12 +864,15 @@ form.addEventListener('submit', async event => {
   try { await api('settings',values); vehicleFormKey=null; byId('saved').textContent = t('settings.saved'); await refresh(); }
   catch (error) { byId('saved').textContent = error.message; }
 });
-byId('control').addEventListener('click', async () => {
-  const enabled = !snapshot.armed && !snapshot.release_pending;
-  if (enabled && !confirm(t('control.confirm'))) return;
-  try { await api('control',{enabled}); byId('control-result').textContent = enabled ? t('control.taken') : t('control.released'); await refresh(); }
+document.querySelectorAll('[data-control-area] button').forEach(button=>button.addEventListener('click', async () => {
+  // Storage and vehicle charging are enabled separately; the backend rejects an area without a matching device.
+  const key = button.closest('[data-control-area]').dataset.controlArea;
+  const view = snapshot.control?.[key] ?? {};
+  const enabled = !view.enabled && !view.release_pending;
+  if (enabled && !confirm(t(`control.area_confirm.${key}`))) return;
+  try { await api('control',{[key]:enabled}); byId('control-result').textContent = t(enabled ? `control.area_taken.${key}` : `control.area_released.${key}`); await refresh(); }
   catch (error) { byId('control-result').textContent = error.message; await refresh(); }
-});
+}));
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');
   if (button) byId('mode-detail').textContent = button.dataset.mode;

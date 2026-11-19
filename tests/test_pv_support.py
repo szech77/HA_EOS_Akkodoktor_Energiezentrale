@@ -334,3 +334,13 @@ def test_assistance_defaults_and_invalid_values():
                    {'battery_pv_min_soc':-1},{'battery_pv_wait_s':9},{'battery_pv_wait_s':True},
                    {'battery_pv_surplus_w':0},{'battery_pv_surplus_w':True},{'battery_pv_surplus_w':5001}):
         with pytest.raises(ValueError): daily_settings(values,20)
+
+
+def test_releasing_storage_control_stops_a_storage_supported_charge(control):
+    start(control)
+    assert control.app.pv_support.session
+    control.box.pause.reset_mock()
+    control.app.set_control(battery=False)
+    control.battery.release.assert_called_once()
+    control.box.pause.assert_called_once()
+    assert not control.app.pv_support.session and control.app.control_domains() == {'vehicle'}

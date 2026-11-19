@@ -241,7 +241,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self._schedule_vehicle_sync()
 
     def _schedule_goal_sync(self):
-        if not getattr(self.app, "armed", False):
+        if not isinstance(self.app, Controller) or 'vehicle' not in self.app.control_domains():
             return
         for app in self._vehicle_controllers():
             if (not app.goal_sync_ready or app.restore_pending
@@ -403,8 +403,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 else:
                     self.report_success('accounting/' + key)
 
-    async def async_change(self, *, enabled=None, settings=None):
-        area = 'api/control' if enabled is not None else 'api/settings'
+    async def async_change(self, *, enabled=None, settings=None, control=None):
+        area = 'api/control' if enabled is not None or control is not None else 'api/settings'
         async with self.work_lock:
             if self.closing:
                 raise ValueError("Integration is stopping")
@@ -420,6 +420,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     manage_limits = bool(settings and settings.keys() & {"battery_min_soc", "battery_max_soc"})
                     if enabled is not None:
                         self.app.set_armed(enabled)
+                    if control is not None:
+                        self.app.set_control(**control)
                     if settings is not None and "vehicle_id" in settings:
                         identity=settings["vehicle_id"]
                         if not hasattr(self.app,"change_vehicle_settings"):
