@@ -718,14 +718,16 @@ function selectedVehicle() {
 }
 /* Range of a SoC with the factor the backend learned from the vehicle's last report (km per %).
    Shown next to every SoC field and updated while the value is typed. */
-function rangeText(soc, live=selectedVehicle().live??{}) {
-  const factor=live.car_range_per_soc;
+// The vehicle page renders with that vehicle's snapshot, but events run later against the whole
+// snapshot; keep the factor of the vehicle whose form is shown.
+let vehicleRangeFactor=null;
+function rangeText(soc, factor=vehicleRangeFactor) {
   return valid(factor)&&valid(soc)&&soc>=0&&soc<=100 ? t('car.range',{range:decimal(soc*factor,0)}) : '';
 }
 // Each SoC field has a SoC and a range slider; both follow the number field. The range
 // slider exists only with a learned factor; the slider being dragged is not snapped back.
 function socRanges(root=document, active=null) {
-  const factor=selectedVehicle().live?.car_range_per_soc, focused=document.activeElement;
+  const factor=vehicleRangeFactor, focused=document.activeElement;
   for(const input of root.querySelectorAll('input[data-soc-range]')) {
     const field=input.closest('.soc-field'), soc=Number(input.value), known=input.value!=='' && soc>=1 && soc<=100;
     const output=field?.querySelector('.soc-range');
@@ -745,7 +747,7 @@ function socRanges(root=document, active=null) {
 function socFromSlider(slider) {
   const input=slider.closest('.soc-field')?.querySelector('input[data-soc-range]');
   if(!input) return null;
-  const factor=selectedVehicle().live?.car_range_per_soc, value=Number(slider.value);
+  const factor=vehicleRangeFactor, value=Number(slider.value);
   const soc=slider.dataset.socSlider==='range' ? (valid(factor)&&factor>0 ? value/factor : NaN) : value;
   if(!valid(soc)) return null;
   input.value=String(Math.max(1,Math.min(100,Math.round(soc))));
@@ -759,6 +761,8 @@ function vehicleSettings() {
     selector.dataset.vehicles=vehicles.map(item=>item.id).join(',');
   }
   const selected=selectedVehicle();
+  const factor=selected.live?.car_range_per_soc;
+  vehicleRangeFactor=valid(factor) && factor>0 ? factor : null;
   const identity=selected.id??'primary';
   const key=(location.hash??'')+':'+identity;
   vehicleForm.dataset.vehicleId=selected.id??'';

@@ -133,7 +133,7 @@ test('SoC fields show the expected range with the backend factor while the value
  field.input.value='';form.events.input({target:field.input});
  assert.equal(field.output.textContent,'');
  // Without a learned factor no range is invented and the range slider is hidden.
- ctx.snapshot.vehicles[1].live={};
+ ctx.snapshot.vehicles[1].live={};ctx.vehicleSettings();
  assert.equal(ctx.rangeText(80),'');
  field.input.value='60';form.events.input({target:field.input});
  assert.equal(field.row.hidden,true);assert.equal(field.soc.value,'60');assert.equal(field.value.textContent,'60 %');
@@ -151,4 +151,15 @@ test('SoC and range sliders move together and a released limit slider saves',asy
  field.range.value='0';form.events.change({target:field.range});await new Promise(resolve=>setTimeout(resolve));
  assert.equal(field.input.value,'1');
  assert.deepEqual(JSON.parse(JSON.stringify(ctx.sent.values)),{pv_target_soc:1,vehicle_id:'second'});
+});
+
+test('sliders keep the shown vehicle factor when events run against the whole fleet snapshot',()=>{
+ const {ctx,nodes}=fixture(),form=nodes['vehicle-daily'],field=socField('50');
+ form.querySelectorAll=()=>[field.input];
+ // A vehicle page renders with that vehicle's data; later events see the fleet without a factor.
+ ctx.snapshot={vehicles:[],live:{car_range_per_soc:null}};
+ field.input.value='60';form.events.input({target:field.input});
+ assert.equal(field.row.hidden,false);assert.equal(field.output.textContent,'≈ 240 km');
+ field.range.value='200';form.events.input({target:field.range});
+ assert.equal(field.input.value,'50');assert.equal(field.output.textContent,'≈ 200 km');
 });
