@@ -33,8 +33,13 @@ test('normal EOS planning has a distinct status and preserves recovery prioritie
   vm.runInNewContext(fs.readFileSync(path.join(root,'web/status.js'),'utf8'),status);
   const ctx={t:key=>key,html:String,time:String,modeLabel:String};
   const title=snapshot=>status.EosStatus.band(snapshot,ctx,{ready:true}).html.match(/<h2>([^<]*)<\/h2>/)[1];
-  for(const name of ['planning_vehicle','syncing_vehicle','cached_eos','waiting','read_only','active','backup','power_supply_waiting'])
+  for(const name of ['planning_vehicle','syncing_vehicle','waiting','read_only','active','backup','power_supply_waiting'])
     assert.equal(title({control_status:name,armed:name!=='read_only'}),'control.'+name);
+  // The cached EOS plan is normal operation: active look, the note only in the text.
+  const cached=status.EosStatus.band({control_status:'cached_eos',armed:true,eos_run:{state:'updating',elapsed_s:73}},ctx,{ready:true});
+  assert.equal(title({control_status:'cached_eos',armed:true}),'control.active');
+  assert.equal(cached.tone,'ok');
+  assert.match(cached.html,/<p>status_band\.active status_band\.cached_eos eos\.run_updating\.<\/p>/);
   // Technical flags cannot override the backend's decision in the browser.
   assert.equal(title({control_status:'waiting',armed:true,vehicle_planning:null}),'control.waiting');
   assert.equal(title({control_status:'unexpected'}),'control.read_only');

@@ -8,7 +8,9 @@
     off:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>'
   };
   // Tone and icon per backend control_status; unknown states fall back to the neutral read-only look.
-  const BAND={active:['ok','ok'],waiting:['info','wait'],cached_eos:['warn','wait'],syncing_vehicle:['info','wait'],
+  // A short EOS outage or computation with the last valid plan is normal operation: it looks
+  // like active control and is mentioned in the text only.
+  const BAND={active:['ok','ok'],waiting:['info','wait'],cached_eos:['ok','ok'],syncing_vehicle:['info','wait'],
     planning_vehicle:['info','wait'],backup:['info','pause'],power_supply_waiting:['warn','pause'],read_only:['off','off']};
   const SEVERITY={error:0,warning:1,info:2};
   const TONE={error:'crit',warning:'warn',info:'info'};
@@ -32,13 +34,16 @@
   function band(snapshot,ctx,view={}){
     const {t,html,time,modeLabel}=ctx,info=bandState(snapshot);
     const run=snapshot.eos_run;
-    let title=t('control.'+info.state);
-    if(['calculating','updating'].includes(run?.state))title+=' · '+t('eos.run_'+run.state,{seconds:run.elapsed_s??0});
+    const cached=info.state==='cached_eos',shown=cached?'active':info.state;
+    const title=t('control.'+shown);
     const areas=controlAreas(snapshot,view);
     const only=areas.enabled?.length===1?areas.enabled[0]:null;
-    let text=t(info.releasing?'status_band.release_pending':'status_band.'+info.state+(info.state==='active'&&only?'_'+only:''));
+    let text=t(info.releasing?'status_band.release_pending':'status_band.'+shown+(shown==='active'&&only?'_'+only:''));
     const next=snapshot.next_mode?.battery;
-    if(info.state==='active'&&!info.releasing&&only!=='vehicle'&&next?.time)text+=' '+t('status_band.next_change',{time:time(next.time),mode:modeLabel(next.mode)});
+    if(shown==='active'&&!info.releasing&&only!=='vehicle'&&next?.time)text+=' '+t('status_band.next_change',{time:time(next.time),mode:modeLabel(next.mode)});
+    // EOS computing or briefly unreachable: an informational note, not a headline.
+    if(cached)text+=' '+t('status_band.cached_eos');
+    if(['calculating','updating'].includes(run?.state))text+=' '+t('eos.run_'+run.state,{seconds:run.elapsed_s??0})+'.';
     const primary=info.action==='take';
     let content=`<span class="status-dot" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONS[info.icon]}</svg></span>
       <div class="status-text"><h2>${html(title)}</h2><p>${html(text)}</p>${view.result?`<p class="status-result" role="status">${html(view.result)}</p>`:''}</div>

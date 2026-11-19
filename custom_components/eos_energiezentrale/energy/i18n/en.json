@@ -419,7 +419,7 @@
     "section.notices": "STATUS",
     "status_band.active": "EOS controls the battery and charger according to the current plan.",
     "status_band.waiting": "Control permission is saved. Control starts automatically once valid readings and a current EOS plan are available.",
-    "status_band.cached_eos": "EOS is not responding. Control uses the last valid plan for at most five minutes.",
+    "status_band.cached_eos": "The last valid EOS plan applies for up to five minutes while EOS is computing or not responding.",
     "status_band.syncing_vehicle": "New vehicle settings are being sent to EOS. All other control continues.",
     "status_band.planning_vehicle": "EOS is replanning the vehicle. All other control continues.",
     "status_band.backup": "New control commands are blocked. Control permission stays saved and resumes automatically once grid power is confirmed.",

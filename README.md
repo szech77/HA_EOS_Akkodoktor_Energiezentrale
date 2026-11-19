@@ -1045,7 +1045,7 @@ damit nach Erholung automatisch fortgesetzt werden kann. Lokale Sicherheitsgrenz
 und die Frische der HA-Messwerte werden weiterhin geprüft. Pro Fahrzeug wird ein
 eigener Plan gepuffert. Die Diagnose zeigt den aktiven Puffer und seine Restzeit.
 
-Vor dem Planabruf wird `/v1/health` gelesen. Im Kopfbereich und unter Einrichtung
+Vor dem Planabruf wird `/v1/health` gelesen. Im Text des Statusbands und unter Einrichtung
 erscheint **EOS berechnet** mit verstrichenen Sekunden, wenn EOS eine laufende
 Phase meldet oder der Laufstart nach dem letzten Abschluss liegt. Ältere
 EOS-Versionen liefern nur gerundete Start- und Abschlusszeitpunkte. Ist damit
@@ -1057,6 +1057,7 @@ verlängern das Fenster nicht. Ein veralteter oder fehlgeschlagener Health-Abruf
 kann Fehler nicht unterdrücken. Gerätestörungen und Konfigurationsfehler bleiben
 sichtbar; die Gültigkeit vorhandener Steuerpläne wird nicht verlängert.
 Zustandswechsel werden im Integrationslog auf INFO-Ebene protokolliert.
+Nutzt die Regelung dabei den letzten gültigen Plan, bleibt das Statusband bei **Steuerung aktiv**; der Hinweis auf den Ersatzplan steht nur als Information im Text.
 Solange EOS **berechnet** meldet, liest die Integration die EOS-Prognose nicht neu
 ab; Diagramme und Plananzeigen behalten die zuletzt fertige Prognose. Nach dem Ende
 der Berechnung wird die neue sofort abgerufen. Meldet EOS länger als 15 Minuten

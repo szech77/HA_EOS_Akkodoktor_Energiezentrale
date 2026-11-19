@@ -45,8 +45,9 @@ test('the band shows the backend calculation state and elapsed seconds',()=>{
     const {status,messages,ctx}=fixture(language);
     for(const state of ['calculating','updating']){
       const band=status.band({control_status:'active',armed:true,eos_run:{state,elapsed_s:240}},ctx,{ready:true});
-      assert.ok(band.html.includes(ctx.html(messages['control.active'])+' · '));
-      assert.ok(band.html.includes('240'));
+      // The calculation state is information in the text, not part of the headline.
+      assert.ok(band.html.includes('<h2>'+ctx.html(messages['control.active'])+'</h2>'));
+      assert.ok(band.html.includes(ctx.html(messages['eos.run_'+state].replace('{seconds}','240'))));
     }
     const next=status.band({control_status:'active',armed:true,next_mode:{battery:{time:'X',mode:'SELF_CONSUMPTION'}}},ctx,{ready:true});
     assert.ok(next.html.includes('TX')&&next.html.includes('MSELF_CONSUMPTION'));

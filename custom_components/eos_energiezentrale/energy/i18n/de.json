@@ -419,7 +419,7 @@
     "section.notices": "ZUSTAND",
     "status_band.active": "EOS steuert Speicher und Wallbox nach dem aktuellen Plan.",
     "status_band.waiting": "Die Freigabe ist gespeichert. Die Regelung startet von selbst, sobald gültige Messwerte und ein aktueller EOS-Plan vorliegen.",
-    "status_band.cached_eos": "EOS antwortet gerade nicht. Die Regelung nutzt höchstens fünf Minuten lang den letzten gültigen Plan.",
+    "status_band.cached_eos": "Bis zu fünf Minuten gilt dabei der letzte gültige EOS-Plan, weil EOS gerade rechnet oder nicht antwortet.",
     "status_band.syncing_vehicle": "Neue Fahrzeugvorgaben werden an EOS übertragen. Die übrige Regelung läuft weiter.",
     "status_band.planning_vehicle": "EOS plant das Fahrzeug neu. Die übrige Regelung läuft weiter.",
     "status_band.backup": "Neue Regelbefehle sind gesperrt. Die Freigabe bleibt gespeichert; nach bestätigter Netzwiederkehr geht es automatisch weiter.",
