@@ -193,14 +193,14 @@ function usageFigures(key, view, amount, balance) {
   if (key==='total') return {
     lead:amount&&balance ? t('usage.lead_total',{energy:estimated+energyValue(amount.kwh),share:percent(balance.autarky_percent),net:moneyOr(balance.net_eur,balance.cost_partial)}) : '',
     kpis:[[t('billing.consumption'),amount?estimated+energyValue(amount.kwh):'—',perDay(view?.per_day_kwh)],
-      [t('usage.autarky'),percent(balance?.autarky_percent),t('usage.autarky_parts',{energy:energyOr(balance?.self_kwh)})],
+      [t('usage.autarky'),percent(balance?.autarky_percent),t('usage.autarky_parts',{energy:energyOr(balance?.own_kwh)})],
       [t('usage.costs_total'),moneyOr(balance?.total_cost_eur,balance?.cost_partial),t('usage.incl_base')],
       [t('usage.net'),moneyOr(balance?.net_eur,balance?.cost_partial),t('usage.net_note',{value:feedInMoney(balance)})]]};
   const car=isCarKey(key);
   return {
     lead:amount?.kwh>0 ? t('usage.lead_consumer',{energy:estimated+energyValue(amount.kwh),share:percent(view?.self_percent),cost:costValue(amount)}) : t(car?'usage.lead_no_charging':'usage.lead_none'),
     kpis:[[t(car?'usage.charged':'billing.consumption'),amount?estimated+energyValue(amount.kwh):'—',perDay(view?.per_day_kwh)],
-      [t('usage.self_supply'),percent(view?.self_percent),t('usage.self_parts',{pv:energyOr(view?.pv_kwh),battery:energyOr(view?.battery_kwh)})],
+      [t('usage.self_supply'),percent(view?.self_percent),t('usage.self_parts',{pv:energyOr(view?.pv_kwh),battery:energyOr(view?.battery_own_kwh)})],
       [t(amount?.cost_partial?'billing.known_costs':'billing.costs'),costValue(amount),averageCostLabel(amount)],
       [t('usage.savings'),moneyOr(view?.savings_eur),t('usage.savings_note')]]};
 }

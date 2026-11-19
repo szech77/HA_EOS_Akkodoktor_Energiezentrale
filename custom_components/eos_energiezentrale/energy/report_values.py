@@ -99,6 +99,7 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
     source = used['sources']
     grid_known = source['grid']['kwh'] - source['grid']['cost_unknown_kwh']
     self_kwh = source['pv']['kwh'] + source['battery']['kwh']
+    own_kwh = _own_kwh(used)
     self_cost = source['pv']['cost_eur'] + source['battery']['cost_eur']
     self_known = self_kwh - source['pv']['cost_unknown_kwh'] - source['battery']['cost_unknown_kwh']
     pv_kwh = source['pv']['kwh'] + storage['sources']['pv']['kwh'] + export['sources']['pv']['kwh']
@@ -125,8 +126,9 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
     pv_use = {key: {'kwh': value, 'share_percent': _ratio(value, pv_kwh)} for key, value in
               (('direct', source['pv']['kwh']), ('storage', storage['sources']['pv']['kwh']), ('export', pv_export))}
     return {
-        'consumption_kwh': used['kwh'], 'self_kwh': self_kwh, 'unknown_source_kwh': source['unknown']['kwh'],
-        'autarky_percent': _ratio(self_kwh, used['kwh'] - source['unknown']['kwh']),
+        'consumption_kwh': used['kwh'], 'self_kwh': self_kwh, 'own_kwh': own_kwh,
+        'unknown_source_kwh': source['unknown']['kwh'],
+        'autarky_percent': _ratio(own_kwh, used['kwh'] - source['unknown']['kwh']),
         'grid_kwh': source['grid']['kwh'], 'grid_import_kwh': source['grid']['kwh'] + storage['sources']['grid']['kwh'],
         'grid_cost_eur': source['grid']['cost_eur'], 'grid_price_ct': grid_price,
         'self_cost_eur': self_cost, 'self_price_ct': _ratio(self_cost, self_known),
@@ -152,8 +154,13 @@ def _source(amount, key):
     return amount.get('sources', {}).get(key) or {'kwh': 0., 'cost_eur': 0., 'cost_unknown_kwh': 0.}
 
 
-def _self_kwh(amount):
-    return _source(amount, 'pv')['kwh'] + _source(amount, 'battery')['kwh']
+def _own_kwh(amount):
+    """Energy covered on site: PV direct and stored energy not charged from the grid.
+
+    Grid-charged storage is grid energy shifted in time and does not count as self-supply.
+    Stored energy without a recorded origin (before the origin was recorded) still counts."""
+    battery = _source(amount, 'battery')
+    return _source(amount, 'pv')['kwh'] + max(0., battery['kwh'] - battery.get('grid_kwh', 0.))
 
 
 def battery_origin(pv, battery):
@@ -179,6 +186,7 @@ def consumer_view(entry, balance, period, days, car=False):
     kwh = amount['kwh']
     pv, battery, grid, unknown = (amount['sources'][key] for key in ('pv', 'battery', 'grid', 'unknown'))
     self_kwh = pv['kwh'] + battery['kwh']
+    own_kwh = _own_kwh(amount)
     self_cost = pv['cost_eur'] + battery['cost_eur']
     self_known = self_kwh - pv['cost_unknown_kwh'] - battery['cost_unknown_kwh']
     # Savings compare the self-supplied energy with the period's average grid price.
@@ -186,8 +194,8 @@ def consumer_view(entry, balance, period, days, car=False):
     savings = self_kwh * reference / 100 - self_cost if reference is not None and self_kwh > 0 else None
     per_day = period != 'day' and days > 1
     view = {
-        'kwh': kwh, 'self_kwh': self_kwh, 'self_percent': _ratio(self_kwh, kwh - unknown['kwh']),
-        'pv_kwh': pv['kwh'], 'battery_kwh': battery['kwh'], 'grid_kwh': grid['kwh'], 'unknown_kwh': unknown['kwh'],
+        'kwh': kwh, 'self_kwh': self_kwh, 'own_kwh': own_kwh, 'self_percent': _ratio(own_kwh, kwh - unknown['kwh']),
+        'pv_kwh': pv['kwh'], 'battery_kwh': battery['kwh'], 'battery_own_kwh': own_kwh - pv['kwh'], 'grid_kwh': grid['kwh'], 'unknown_kwh': unknown['kwh'],
         'grid_cost_eur': grid['cost_eur'], 'grid_price_ct': _ratio(grid['cost_eur'], grid['kwh'] - grid['cost_unknown_kwh']),
         'self_cost_eur': self_cost, 'self_price_ct': _ratio(self_cost, self_known),
         'self_origin': battery_origin(pv, battery),
@@ -211,7 +219,7 @@ def consumer_facts(bins, view, period, car=False):
     candidates = [row for row in used if row['kwh'] > max(NOTABLE_KWH, average * .3)] or used
 
     def share(row):
-        return _self_kwh(row) / row['kwh']
+        return _own_kwh(row) / row['kwh']
 
     best = max(candidates, key=share)
     facts = [{'id': 'best', 'time': best['time'], 'unit': unit, 'percent': share(best) * 100}]

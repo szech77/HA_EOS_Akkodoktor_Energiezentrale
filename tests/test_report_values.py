@@ -169,3 +169,23 @@ def test_report_view_facts_cover_car_charging_days_and_empty_grid_exchange():
     assert views['grid']['facts'] == [{'id':'no_exchange'}]
     day = report_values({'period':'day', 'consumers':{'house':{'total':_sources(grid=(1, .3)), 'bins':[]}}}, ['house'])['views']
     assert day['house']['per_day_kwh'] is None and day['house']['facts'] == [{'id':'no_consumption'}]
+
+
+def test_grid_charged_battery_energy_does_not_count_as_self_supply():
+    house = _sources(pv=(2, .16), battery=(4, .80), grid=(4, 1.20))
+    # 3 kWh of the battery energy came from grid-charged stock, 1 kWh has no recorded origin.
+    house['sources']['battery'].update(grid_kwh=3, grid_cost_eur=.75)
+    bins = [{'time':'2026-11-01', **_sources(pv=(2, .16), grid=(1, .30))},
+            {'time':'2026-11-02', **house}]
+    report = {'period':'month', 'base_days':2, 'consumers':{'house':{'total':house, 'bins':bins}}}
+    result = report_values(report, ['house'])
+    balance, view = result['balance'], result['views']['house']
+    # Own supply: PV direct and battery energy that was not charged from the grid.
+    assert balance['self_kwh'] == pytest.approx(6) and balance['own_kwh'] == pytest.approx(3)
+    assert balance['autarky_percent'] == pytest.approx(30)
+    assert view['own_kwh'] == pytest.approx(3) and view['battery_own_kwh'] == pytest.approx(1)
+    assert view['self_percent'] == pytest.approx(30)
+    # Savings still compare all battery and PV energy, including cheaply grid-charged storage.
+    assert view['savings_eur'] == pytest.approx(6 * .30 - .96)
+    facts = {fact['id']: fact for fact in view['facts']}
+    assert facts['best']['time'] == '2026-11-01' and facts['best']['percent'] == pytest.approx(200 / 3)

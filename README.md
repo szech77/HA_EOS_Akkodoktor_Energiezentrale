@@ -1131,7 +1131,12 @@ Die Speicherladung wird nach PV und Netz aufgeteilt. Daraus berechnet das Backen
 je Zeitraum Autarkie, Eigenverbrauchsquote des PV-Stroms, physischen Netzbezug,
 Ø-Netzstrompreis, Ersparnis gegenüber reinem Netzbezug und Netto (Kosten der
 Verbraucher + Grundpreis − Einspeisevergütung). Netzgeladene Speicherenergie zählt
-dabei nur einmal, nämlich über den Akku-Kostenbestand bei der Entnahme. Einspeisung
+dabei nur einmal, nämlich über den Akku-Kostenbestand bei der Entnahme. Autarkie und
+Eigenversorgung zählen nur PV-Direktstrom und Speicherstrom, der nicht aus dem Netz
+geladen wurde; netzgeladener Speicherstrom ist zeitversetzter Netzstrom. Speicherstrom
+ohne erfasste Herkunft (aus der Zeit vor der Herkunftserfassung) zählt weiterhin als
+eigene Versorgung. Die Ersparnis bewertet dagegen allen PV- und Speicherstrom, weil
+auch günstig geladener Netzstrom gegenüber dem Netzpreis spart. Einspeisung
 wird erst ab diesem Update erfasst; ältere Zeiträume zeigen sie nur, soweit sie aus
 InfluxDB rekonstruiert werden.
 
