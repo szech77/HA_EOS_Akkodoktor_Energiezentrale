@@ -2,8 +2,10 @@
   #eos-energy-design { color-scheme: light dark; --bg:light-dark(#eef2f6,#10151d); --surface:light-dark(#fff,#181f2a); --surface2:light-dark(#f4f7fb,#202938); --ink:light-dark(#162231,#eef4fc); --dim:light-dark(#4f6075,#a7b6ca); --edge:light-dark(#d4dee9,#303c50); --accent:light-dark(#185da4,#8ec5ff); --solar:light-dark(#956400,#ffcb62); --grid:light-dark(#52677e,#9bacc3); --battery:light-dark(#277448,#75dba0); --house:light-dark(#216da7,#7bc9fc); --car:light-dark(#7252aa,#c6a7ff); --heat:light-dark(#a54723,#ffac83); font: 15px/1.45 system-ui,sans-serif; color:var(--ink); }
   #eos-energy-design * { box-sizing:border-box; }
   #eos-energy-design [hidden] { display:none !important; }
-  #eos-energy-design .energy-app { background:var(--bg); border:1px solid var(--edge); border-radius:16px; overflow:hidden; }
-  #eos-energy-design header { display:flex; align-items:center; justify-content:space-between; gap:8px 18px; flex-wrap:wrap; background:var(--surface); padding:12px clamp(12px,3vw,28px); border-bottom:1px solid var(--edge); }
+  /* clip instead of hidden: the title bar below can stay sticky. */
+  #eos-energy-design .energy-app { background:var(--bg); border:1px solid var(--edge); border-radius:16px; overflow:hidden; overflow:clip; }
+  html { scroll-padding-top:calc(var(--header-h, 0px) + 8px); }
+  #eos-energy-design header { position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:8px 18px; flex-wrap:wrap; background:var(--surface); padding:12px clamp(12px,3vw,28px); border-bottom:1px solid var(--edge); }
   #eos-energy-design .brand { display:flex; gap:8px; align-items:center; color:var(--ink); text-decoration:none; }
   #eos-energy-design .brand svg { color:var(--accent); }
   #eos-energy-design button { font:inherit; color:inherit; cursor:pointer; }
@@ -348,7 +350,7 @@
 
 /* Settings: sections on the left, expert values collapsed, errors at the field, one save bar. */
 #eos-energy-design .settings-layout {display:grid;grid-template-columns:200px minmax(0,1fr);gap:14px;align-items:start;margin-top:16px;}
-#eos-energy-design .settings-side {display:grid;gap:2px;position:sticky;top:12px;}
+#eos-energy-design .settings-side {display:grid;gap:2px;position:sticky;top:calc(var(--header-h, 0px) + 12px);}
 #eos-energy-design .settings-side a {padding:9px 12px;border-radius:8px;color:var(--dim);text-decoration:none;font-weight:550;border:1px solid transparent;min-height:40px;}
 #eos-energy-design .settings-side a[aria-current="true"] {background:var(--surface);color:var(--ink);border-color:var(--edge);}
 #eos-energy-design .settings-body {margin-top:0;}

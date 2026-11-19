@@ -1569,6 +1569,11 @@ async function start() {
     element.setAttribute('aria-label', t(element.dataset.i18nAria));
   });
   initializeBilling();
+  // The title bar stays at the top; sticky panels and jump targets keep clear of its height.
+  const header=document.querySelector('header');
+  const headerHeight=()=>document.documentElement.style.setProperty('--header-h',header.offsetHeight+'px');
+  headerHeight();
+  if(typeof ResizeObserver==='function')new ResizeObserver(headerHeight).observe(header);
   window.addEventListener('hashchange',render);
   if(!render())return;
   refresh();
