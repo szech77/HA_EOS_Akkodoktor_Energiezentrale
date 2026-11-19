@@ -1,6 +1,7 @@
 """The optional vehicle range sensor yields a range per SoC percent for display."""
 import json
 from datetime import timedelta
+from unittest.mock import Mock
 
 import pytest
 
@@ -69,3 +70,28 @@ def test_each_vehicle_maps_its_own_range_sensor():
     values = dict(vehicle_options({**requirements.OPTIONS, 'vehicles': json.dumps(rows)}))
     assert values['first']['car_range_entity'] == 'sensor.range_first'
     assert values['second']['car_range_entity'] == ''
+    # The source-sensor setting applies to a single listed vehicle, never to several.
+    shared = {**requirements.OPTIONS, 'car_range_entity': 'sensor.range'}
+    assert dict(vehicle_options({**shared, 'vehicles': json.dumps(definitions()[:1])}))['first']['car_range_entity'] == 'sensor.range'
+    values = dict(vehicle_options({**shared, 'vehicles': json.dumps(definitions())}))
+    assert values['first']['car_range_entity'] == values['second']['car_range_entity'] == ''
+
+
+def test_single_listed_vehicle_uses_the_source_sensor_end_to_end(tmp_path):
+    from custom_components.eos_energiezentrale.const import DEFAULTS
+    from custom_components.eos_energiezentrale.energy.fleet import create_controller
+    from test_fleet import LocalHA
+    options = {**DEFAULTS, 'vehicles': json.dumps(definitions()[:1]), 'heat_entity': '', 'car_range_entity': 'sensor.range'}
+    ha = LocalHA(options)
+    ha.rows['sensor.range'] = {'state': '160', 'attributes': {'unit_of_measurement': 'km'},
+                               'last_reported': NOW.isoformat(), 'last_updated': NOW.isoformat()}
+    app = create_controller(ha, options, tmp_path)
+    app.config.eos = Mock()
+    app.config.eos.plan.return_value = {'generated_at': NOW.isoformat(), 'instructions': []}
+    app.config.eos.solution.return_value = {}
+    app.tick(NOW, 0)
+    snapshot = app.snapshot(NOW)
+    live = snapshot['vehicles'][0]['live']
+    assert live['car_range'] == 160 and live['car_range_per_soc'] == pytest.approx(4)
+    rows = {row['key']: row for row in source_diagnostics(snapshot, NOW)['sources']}
+    assert rows['car_range']['value'] == 160

@@ -43,7 +43,9 @@ def vehicle_options(options):
         identities.add(identity)
         values={**options,"vehicles":"[]","vehicle_name":row.get("name","E-Auto"),
                 "vehicle_resource":row.get("resource",identity),"car_soc_entity":row.get("soc_entity",""),
-                "car_soc_scale":row.get("soc_scale","factor"),"car_range_entity":row.get("range_entity",""),
+                "car_soc_scale":row.get("soc_scale","factor"),
+                # A single listed vehicle may use the range sensor from the source sensors.
+                "car_range_entity":row.get("range_entity") or (options.get("car_range_entity","") if len(rows)==1 else ""),
                 "wallbox_type":row.get("wallbox_type","nrgkick"),
                 "wallbox_parameters":json.dumps(row.get("wallbox_parameters",{}))}
         for key in ("capacity_wh","charging_efficiency","max_current_a"):

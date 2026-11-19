@@ -205,7 +205,7 @@ abweichenden Namen ersetzt werden:
 | Bezugspreis / `price_entity` | `sensor.blumenstrasse_13_strompreis` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
 | Fahrzeug-SoC / `car_soc_entity` | `sensor.id4_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
 | Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
-| Fahrzeugreichweite / `car_range_entity` | leer | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. |
+| Fahrzeugreichweite / `car_range_entity` | leer | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. Mit Fahrzeugliste gilt der Sensor am Fahrzeug (`range_entity`); ist dort keiner eingetragen, wird dieser bei genau einem Fahrzeug verwendet. |
 
 Mit einem Reichweitensensor bildet das Backend aus Reichweite und gemessenem SoC
 das Verhältnis Kilometer je Prozent. Es wird nur bei einem gemessenen, nicht
