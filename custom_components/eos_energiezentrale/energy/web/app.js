@@ -265,16 +265,28 @@ function layoutFlow() {
     flow:document.querySelector(`[data-flow="${key}"]`),enabled:consumerEnabled(key) && !(key==='car' && vehicles.length)}));
   entries.forEach(({node,flow,enabled})=>{node.hidden=!enabled;flow.style.display=enabled ? '' : 'none';});
   const cars=vehicles.map((vehicle,index)=>({key:'car',vehicle,node:container.children[index],flow:paths.children[index],enabled:true}));
+  const left=entries.slice(0,3).filter(entry=>entry.enabled);
   const right=[entries[3],...(vehicles.length ? cars : [entries[4]]),entries[5]].filter(entry=>entry.enabled);
   const height=Math.max(360,right.length*144);
   byId('energy-flow').style.height=height+'px';
-  right.forEach((entry,index)=>{
-    const y=(index+.5)*100/right.length;
-    entry.node.style.setProperty('--x','70%');entry.node.style.setProperty('--y',y+'%');
-    entry.flow.setAttribute('d',`M56 50 Q62 ${y} 70 ${y}`);
+  // Sources and consumers share the same row rule and mirrored wires into the hub, so equal
+  // counts sit on the same heights. The battery wire runs from the hub (charging is positive).
+  const row=(index,count)=>Math.round((index+.5)*1000/count)/10;
+  // Narrow screens spread the columns outwards so the diagram uses the width; the wires end at
+  // the hub edge, which is relatively wider there.
+  const narrow=(globalThis.window?.innerWidth??1000)<600,outer=narrow?17:30,edge=narrow?41:44,bend=value=>Math.round(value*10)/10;
+  const near=bend(outer+(edge-outer)*.57),far=bend(100-outer-(100-outer-(100-edge))*.57);
+  left.forEach((entry,index)=>{
+    const y=row(index,left.length);
+    entry.node.style.setProperty('--x',outer+'%');entry.node.style.setProperty('--y',y+'%');
+    entry.flow.setAttribute('d',entry.key==='battery' ? `M${edge} 50 Q${near} ${y} ${outer} ${y}` : y===50 ? `M${outer} 50 H${edge}` : `M${outer} ${y} Q${near} ${y} ${edge} 50`);
   });
-  byId('flow-wires').setAttribute('d',[...entries.slice(0,3).filter(entry=>entry.enabled),...right]
-    .map(entry=>entry.flow.getAttribute('d')).join(' '));
+  right.forEach((entry,index)=>{
+    const y=row(index,right.length);
+    entry.node.style.setProperty('--x',(100-outer)+'%');entry.node.style.setProperty('--y',y+'%');
+    entry.flow.setAttribute('d',y===50 ? `M${100-edge} 50 H${100-outer}` : `M${100-edge} 50 Q${far} ${y} ${100-outer} ${y}`);
+  });
+  byId('flow-wires').setAttribute('d',[...left,...right].map(entry=>entry.flow.getAttribute('d')).join(' '));
   return [...entries,...cars].filter(entry=>entry.enabled);
 }
 

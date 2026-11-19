@@ -42,7 +42,8 @@
   #eos-energy-design .node strong { font-size:20px; background:var(--surface); padding:2px 5px; }
   #eos-energy-design .node > span:nth-child(2) { background:var(--surface); padding:3px 4px 0; }
   #eos-energy-design .orb,#eos-energy-design .hub { display:grid; place-items:center; border-radius:50%; }
-  #eos-energy-design .orb { width:52px; height:52px; color:var(--energy-color); background:var(--surface2); border:2px solid var(--energy-color); }
+  /* Every node has the same faint circle in its colour; nodes with a load reference add the arc. */
+  #eos-energy-design .orb { width:52px; height:52px; color:var(--energy-color); background:var(--surface2); border:2.5px solid color-mix(in srgb,var(--energy-color) 30%,transparent); }
   #eos-energy-design .node:hover .orb { background:color-mix(in srgb,var(--energy-color) 22%,var(--surface)); }
   #eos-energy-design .node.grid-disconnected { color:var(--dim); --energy-color:var(--dim); }
   #eos-energy-design .node.grid-disconnected .orb { filter:grayscale(1); opacity:.55; border-color:var(--edge); background:var(--surface2); }
@@ -212,7 +213,8 @@
 /* Clockwise power rings start at twelve o'clock; icon SoC remains independent. */
 #eos-energy-design .orb.power-ring-enabled {position:relative;border:0;}
 #eos-energy-design .node .orb svg.power-ring {position:absolute;inset:0;width:100%;height:100%;fill:none;pointer-events:none;stroke-width:2.5;stroke-linecap:butt;}
-#eos-energy-design .power-ring .ring-track {stroke:#101820;}
+/* The track shows the node's colour faintly, so every node reads as the same circle; the arc is the load. */
+#eos-energy-design .power-ring .ring-track {stroke:color-mix(in srgb,var(--energy-color) 30%,transparent);}
 #eos-energy-design .power-ring .ring-value {stroke:var(--energy-color);transition:stroke-dasharray .35s ease;}
 @media(prefers-reduced-motion:reduce){#eos-energy-design .power-ring .ring-value {transition:none;}}
 
