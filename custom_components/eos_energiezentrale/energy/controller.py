@@ -30,6 +30,10 @@ from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
 DOMAINS = ('battery', 'vehicle')
 
 
+# Longest EOS computation during which the last finished forecast stays on display.
+EOS_RUN_HOLD_S = 900
+
+
 class Controller:
     def __init__(self, ha, config):
         self.ha, self.config = ha, config
@@ -93,6 +97,7 @@ class Controller:
         self.pv_session = False
         self.last_minute = None
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
+        self.eos_was_calculating = False
         self.external_eos_polling = False
         self.external_battery_sync = False
         self.external_goal_sync = False
@@ -510,7 +515,14 @@ class Controller:
                 self.apply_eos_plan(None, now, error)
             else:
                 self.apply_eos_plan(candidate, now)
-        if clock - self.last_forecast_fetch >= 60:
+        # While EOS computes, its solution is in flux: keep showing the last finished forecast and
+        # fetch the new one as soon as the run ends. A run stuck beyond EOS_RUN_HOLD_S no longer holds.
+        run = self.eos_run.snapshot(now)
+        calculating = run['state'] == 'calculating' and run['elapsed_s'] < EOS_RUN_HOLD_S
+        if self.eos_was_calculating and not calculating:
+            self.last_forecast_fetch = -1000
+        self.eos_was_calculating = calculating
+        if not calculating and clock - self.last_forecast_fetch >= 60:
             self.last_forecast_fetch = clock
             try:
                 solution = self.config.eos.solution()

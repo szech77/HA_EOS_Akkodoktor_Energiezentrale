@@ -1057,6 +1057,10 @@ verlängern das Fenster nicht. Ein veralteter oder fehlgeschlagener Health-Abruf
 kann Fehler nicht unterdrücken. Gerätestörungen und Konfigurationsfehler bleiben
 sichtbar; die Gültigkeit vorhandener Steuerpläne wird nicht verlängert.
 Zustandswechsel werden im Integrationslog auf INFO-Ebene protokolliert.
+Solange EOS **berechnet** meldet, liest die Integration die EOS-Prognose nicht neu
+ab; Diagramme und Plananzeigen behalten die zuletzt fertige Prognose. Nach dem Ende
+der Berechnung wird die neue sofort abgerufen. Meldet EOS länger als 15 Minuten
+eine laufende Berechnung, wird die Prognose wieder normal jede Minute abgerufen.
 
 Die Panel-Warnung zur EOS-Prognose (Kennung `system/forecast`) erscheint erst,
 wenn der EOS-Prognoseabruf fünf Minuten durchgehend fehlschlägt. Die Frist beginnt

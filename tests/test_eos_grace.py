@@ -133,3 +133,42 @@ class EOSGraceRequirements(unittest.TestCase):
         eos.plan.return_value=self.plan(NOW-timedelta(seconds=30),"GRID_SUPPORT_IMPORT")
         app.update_eos(NOW+timedelta(seconds=15),15)
         self.assertEqual(app.order_for("ev1",NOW+timedelta(seconds=15)).mode,"IDLE")
+
+
+class EOSRunForecastRequirements(unittest.TestCase):
+    controller=EOSGraceRequirements.controller
+
+    @staticmethod
+    def health(stage):
+        return {'status':'alive','energy-management':{'stage':stage}}
+
+    def test_last_forecast_stays_while_eos_computes_and_the_new_one_follows_at_once(self):
+        app,eos=self.controller()
+        solution={'start_solution_datetime':NOW.isoformat(),'interval_seconds':900,
+                  'parameters':{'ems':{'pv_forecast_wh':[1000]}},'result':{}}
+        eos.health.return_value=self.health('IDLE')
+        eos.solution.return_value=solution
+        app.update_eos(NOW,0)
+        shown=deepcopy(app.forecast)
+        self.assertTrue(shown)
+        # During the computation the solution is not read, so its intermediate state never shows.
+        eos.health.return_value=self.health('OPTIMIZATION')
+        eos.solution.side_effect=TimeoutError('busy')
+        for elapsed in (60,120,180):
+            app.update_eos(NOW+timedelta(seconds=elapsed),elapsed)
+        self.assertEqual(eos.solution.call_count,1)
+        self.assertEqual(app.forecast,shown)
+        self.assertEqual(app.snapshot(NOW+timedelta(seconds=180))['eos_run']['state'],'calculating')
+        # The finished run is read at once, not only after the next minute.
+        eos.health.return_value=self.health('IDLE')
+        eos.solution.side_effect=None
+        app.update_eos(NOW+timedelta(seconds=195),195)
+        self.assertEqual(eos.solution.call_count,2)
+
+    def test_a_stuck_computation_no_longer_holds_the_forecast(self):
+        app,eos=self.controller()
+        eos.health.return_value=self.health('OPTIMIZATION')
+        app.update_eos(NOW,0)
+        self.assertEqual(eos.solution.call_count,0)
+        app.update_eos(NOW+timedelta(seconds=900),900)
+        self.assertEqual(eos.solution.call_count,1)
