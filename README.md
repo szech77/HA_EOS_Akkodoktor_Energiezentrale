@@ -211,10 +211,13 @@ Mit einem Reichweitensensor bildet das Backend aus Reichweite und gemessenem SoC
 das Verhältnis Kilometer je Prozent. Es wird nur bei einem gemessenen, nicht
 geschätzten SoC ab 10 % neu bestimmt und bleibt bis zur nächsten passenden Meldung
 erhalten. Die Auto-Ansicht zeigt die aktuelle Reichweite; liefert das Fahrzeug
-gerade keine, wird sie aus dem SoC geschätzt (≈). Neben den SoC-Feldern für
-PV-Ladeziel, Schnellladeziel und die Ladeziele erscheint die zu diesem SoC
-erwartete Reichweite, die sich schon beim Eintippen aktualisiert. Ohne Sensor oder
-ohne gelerntes Verhältnis entfällt die Anzeige. Regelung und Ladeplanung nutzen die
+gerade keine, wird sie aus dem SoC geschätzt (≈). Unter den SoC-Feldern für
+PV-Ladeziel, Schnellladeziel und die Ladeziele stehen zwei gekoppelte
+Schieberegler: SoC und erwartete Reichweite. Verschiebt man einen, folgen der
+andere und das Zahlenfeld sofort; die Reichweite wird auf ganze Prozent SoC
+gerundet. PV- und Schnellladeziel werden beim Loslassen gespeichert, Ladeziele wie
+bisher mit „Speichern“. Ohne Sensor oder ohne gelerntes Verhältnis entfällt der
+Reichweitenregler; der SoC-Regler bleibt. Regelung und Ladeplanung nutzen die
 Reichweite nicht. Die Diagnose „Messquellen“ zeigt den Sensorwert.
 
 Der dargestellte Hausverbrauch wird so berechnet:
