@@ -375,3 +375,18 @@ test('own power is split by origin so grid-charged storage is not listed as own 
  delete ctx.view.self_origin;
  assert.match(vm.runInContext("priceRows('house',view,null)",ctx),/usage.self_power/);
 });
+
+test('the day view draws stacked areas over time; hours without data split them',()=>{
+ const ctx=fixture();
+ const row=(time,pv,grid)=>({time,sources:{pv:{kwh:pv},battery:{kwh:0},grid:{kwh:grid}}});
+ const slots=['h0','h1','h2','h3'].map(key=>({key}));
+ const markup=ctx.stackedAreas(slots,[row('h0',1,2),row('h1',3,1),row('h3',2,0)],
+  [{color:'P',value:item=>item.sources.pv.kwh},{color:'B',value:item=>item.sources.battery.kwh},{color:'G',value:item=>item.sources.grid.kwh}],
+  index=>index*10,value=>100-value*10);
+ const polygons=[...markup.matchAll(/<polygon class="area" points="([^"]+)" fill="(\w)"\/>/g)].map(match=>[match[2],match[1]]);
+ // PV: two segments around the missing hour; grid stacks on PV; an all-zero layer is not drawn.
+ assert.deepEqual(polygons.map(([color])=>color),['P','P','G']);
+ assert.equal(polygons[0][1],'0.0,90.0 10.0,70.0 10.0,100.0 0.0,100.0');
+ assert.equal(polygons[1][1],'26.5,80.0 33.5,80.0 33.5,100.0 26.5,100.0');
+ assert.equal(polygons[2][1],'0.0,70.0 10.0,60.0 10.0,70.0 0.0,90.0');
+});

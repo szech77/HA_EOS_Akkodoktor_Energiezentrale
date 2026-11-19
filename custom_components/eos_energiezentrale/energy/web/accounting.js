@@ -106,6 +106,36 @@ async function fetchBilling(force=false) {
   finally {billing.loading=false;if(`${billing.period}/${billing.date}`!==key){void fetchBilling(true);}else if(route.startsWith('usage/')) usageDetail(route.slice(6),false);}
 }
 
+// Day view: hourly values as filled areas stacked over time instead of bars. Layers stack in
+// order, positive values upwards and negative ones downwards; hours without data split the areas.
+function stackedAreas(slots, rows, layers, x, y) {
+  const stacks=slots.map(slot=>{
+    const row=rows.find(item=>item.time===slot.key);
+    if(!row)return null;
+    let positive=0,negative=0;
+    return layers.map(layer=>{
+      const value=layer.value(row)??0,from=value>=0?positive:negative,to=from+value;
+      if(value>=0)positive=to;else negative=to;
+      return [from,to];
+    });
+  });
+  return layers.map((layer,index)=>{
+    const segments=[];let current=[];
+    stacks.forEach((stack,slot)=>{
+      if(stack)current.push([slot,...stack[index]]);
+      else if(current.length){segments.push(current);current=[];}
+    });
+    if(current.length)segments.push(current);
+    return segments.filter(points=>points.some(([,from,to])=>Math.abs(to-from)>1e-9)).map(points=>{
+      // A single hour between gaps becomes a narrow plateau instead of a line.
+      if(points.length===1)points=[[points[0][0]-.35,points[0][1],points[0][2]],[points[0][0]+.35,points[0][1],points[0][2]]];
+      const edge=points.map(([slot,,to])=>`${x(slot).toFixed(1)},${y(to).toFixed(1)}`);
+      const base=[...points].reverse().map(([slot,from])=>`${x(slot).toFixed(1)},${y(from).toFixed(1)}`);
+      return `<polygon class="area" points="${edge.join(' ')} ${base.join(' ')}" fill="${layer.color}"/>`;
+    }).join('');
+  }).join('');
+}
+
 function billingChart(entry, cost=false) {
   const rows=entry?.bins ?? [];
   if (!rows.length) return `<p class="empty-state">${th('billing.no_data')}</p>`;
@@ -115,11 +145,13 @@ function billingChart(entry, cost=false) {
   const minimum=cost?Math.min(0,...rows.map(row=>Object.values(row.sources).reduce((sum,item)=>sum+Math.min(0,item[field]),0))):0;
   const maximum=Math.max(.01,...sums),span=maximum-minimum,plot=height-top-bottom;
   const y=value=>top+(maximum-value)/span*plot;
-  const slots=billingSlots(),barWidth=Math.max(1,(width-left-right)/slots.length*.7);
+  const slots=billingSlots(),barWidth=Math.max(1,(width-left-right)/slots.length*.7),area=billing.period==='day';
   const axis=Array.from({length:5},(_,i)=>{const value=minimum+span*i/4;return `<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(value,cost&&span<10?2:1))}</text>`;}).join('');
+  const center=index=>left+(index+.5)*(width-left-right)/slots.length;
+  const areas=area?stackedAreas(slots,rows,Object.entries(sourceColors).map(([source,color])=>({color,value:row=>row.sources?.[source]?.[field]})),center,y):'';
   const bars=slots.map((slot,index)=>{
     const row=rows.find(item=>item.time===slot.key);if(!row) return '';
-    const x=left+(index+.5)*(width-left-right)/slots.length;
+    const x=center(index);
     let positive=0,negative=0;
     const shapes=Object.entries(row.sources).map(([source,item])=>{
       const value=item[field],from=value>=0?positive:negative,to=from+value;
@@ -127,10 +159,10 @@ function billingChart(entry, cost=false) {
       return `<rect x="${x-barWidth/2}" y="${Math.min(y(from),y(to))}" width="${barWidth}" height="${Math.max(0,Math.abs(y(from)-y(to)))}" fill="${sourceColors[source]}"/>`;
     }).join('');
     const tooltip=`${slot.label} · ${energyValue(row.kwh)} · ${costWithPrice(row)}\n${Object.entries(row.sources).map(([source,item])=>`${t('billing.'+source)}: ${energyValue(item.kwh)} · ${costWithPrice(item)}`).join('\n')}`;
-    return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>${shapes}<rect x="${x-(width-left-right)/slots.length/2}" y="${top}" width="${(width-left-right)/slots.length}" height="${plot}" fill="transparent"/></g>`;
+    return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>${area?'':shapes}<rect x="${x-(width-left-right)/slots.length/2}" y="${top}" width="${(width-left-right)/slots.length}" height="${plot}" fill="transparent"/></g>`;
   }).join('');
   const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*(width-left-right)/slots.length}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
-  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(cost?'billing.cost_chart':'billing.energy_chart'))}">${axis}${bars}${labels}</svg>`;
+  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(cost?'billing.cost_chart':'billing.energy_chart'))}">${axis}${areas}${bars}${labels}</svg>`;
 }
 
 function gridChart(balance, cost=false) {
@@ -141,11 +173,12 @@ function gridChart(balance, cost=false) {
   const up=row=>Math.max(0,(cost?row.grid_import_eur:row.grid_import_kwh)??0),down=row=>Math.max(0,(cost?row.export_eur:row.export_kwh)??0);
   const maximum=Math.max(.01,...rows.map(up)),minimum=-Math.max(.01,...rows.map(down));
   const span=maximum-minimum,plot=height-top-bottom,y=value=>top+(maximum-value)/span*plot;
-  const slots=billingSlots(),step=(width-left-right)/slots.length,barWidth=Math.max(1,step*.7);
+  const slots=billingSlots(),step=(width-left-right)/slots.length,barWidth=Math.max(1,step*.7),area=billing.period==='day';
   // A small feed-in (or import) squeezes its ticks against zero; drop ticks that would overlap.
   const apart=(a,b)=>Math.abs(y(a)-y(b))>=14;
   const ticks=[0,...[maximum,minimum].flatMap(edge=>[edge,edge/2].filter(value=>apart(value,0)&&(value===edge||apart(value,edge))))];
   const axis=ticks.map(value=>`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"${value===0?' stroke-width="2"':''}/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(Math.abs(value),cost&&span<10?2:1))}</text>`).join('');
+  const areas=area?stackedAreas(slots,rows,[{color:sourceColors.grid,value:up},{color:sourceColors.pv,value:row=>-down(row)}],index=>left+(index+.5)*step,y):'';
   const bars=slots.map((slot,index)=>{
     const row=rows.find(item=>item.time===slot.key);if(!row) return '';
     const x=left+(index+.5)*step;
@@ -153,12 +186,12 @@ function gridChart(balance, cost=false) {
     const credit=valid(row.export_eur) ? ` (+${money(row.export_eur)})` : '';
     const tooltip=`${slot.label} · ${t('usage.import')} ${energyValue(row.grid_import_kwh)}${amounts} · ${t('usage.feed_in')} ${energyValue(row.export_kwh)}${credit}`;
     return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>`
-      +`<rect x="${x-barWidth/2}" y="${y(up(row))}" width="${barWidth}" height="${Math.max(0,y(0)-y(up(row)))}" fill="${sourceColors.grid}"/>`
-      +`<rect x="${x-barWidth/2}" y="${y(0)}" width="${barWidth}" height="${Math.max(0,y(-down(row))-y(0))}" fill="${sourceColors.pv}"/>`
+      +(area?'':`<rect x="${x-barWidth/2}" y="${y(up(row))}" width="${barWidth}" height="${Math.max(0,y(0)-y(up(row)))}" fill="${sourceColors.grid}"/>`
+      +`<rect x="${x-barWidth/2}" y="${y(0)}" width="${barWidth}" height="${Math.max(0,y(-down(row))-y(0))}" fill="${sourceColors.pv}"/>`)
       +`<rect x="${x-step/2}" y="${top}" width="${step}" height="${plot}" fill="transparent"/></g>`;
   }).join('');
   const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*step}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
-  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(cost?'usage.grid_cost_chart':'usage.grid_chart'))}">${axis}${bars}${labels}</svg>`;
+  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(cost?'usage.grid_cost_chart':'usage.grid_chart'))}">${axis}${areas}${bars}${labels}</svg>`;
 }
 
 function billingSlots() {

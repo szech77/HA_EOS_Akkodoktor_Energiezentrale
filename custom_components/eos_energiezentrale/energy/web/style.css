@@ -190,6 +190,8 @@
 #eos-energy-design table.diagnostics code {font-size:12px;overflow-wrap:anywhere;}
 #eos-energy-design #source-diagnostics h3 {margin:16px 0 4px;font-size:15px;}
 #eos-energy-design #usage-charts {display:grid;gap:16px;margin:16px 0;}
+#eos-energy-design .billing-chart .area {fill-opacity:.85;stroke:none;}
+#eos-energy-design .billing-chart [data-billing-bin]:hover > rect:last-child,#eos-energy-design .billing-chart [data-billing-bin]:focus > rect:last-child {fill:color-mix(in srgb,var(--ink) 6%,transparent);}
 #eos-energy-design .billing-links {display:flex;gap:12px;flex-wrap:wrap;}
 #eos-energy-design .billing-links a {color:var(--accent);padding:12px;}
 @media(max-width:600px){

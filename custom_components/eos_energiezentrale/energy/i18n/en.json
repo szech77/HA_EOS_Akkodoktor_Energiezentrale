@@ -523,7 +523,7 @@
     "usage.unit_eur_day": "€ per day",
     "usage.unit_eur_month": "€ per month",
     "usage.chart_unit": "Chart in kWh or €",
-    "usage.bin_hint": "Tap a bar for details.",
+    "usage.bin_hint": "Tap an hour for details.",
     "usage.bin_drill": "Tap a bar to open that period.",
     "usage.grid_chart": "Grid import and feed-in",
     "usage.grid_cost_chart": "Grid import costs and feed-in credit",
