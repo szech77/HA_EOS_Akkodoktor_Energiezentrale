@@ -716,6 +716,18 @@ function selectedVehicle() {
   const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
   return vehicles.find(item=>item.id===selector.value)??snapshot;
 }
+/* Range of a SoC with the factor the backend learned from the vehicle's last report (km per %).
+   Shown next to every SoC field and updated while the value is typed. */
+function rangeText(soc, live=selectedVehicle().live??{}) {
+  const factor=live.car_range_per_soc;
+  return valid(factor)&&valid(soc)&&soc>=0&&soc<=100 ? t('car.range',{range:decimal(soc*factor,0)}) : '';
+}
+function socRanges(root=document) {
+  for(const input of root.querySelectorAll('input[data-soc-range]')) {
+    const output=input.closest('label')?.querySelector('.soc-range');
+    if(output) output.textContent=input.value==='' ? '' : rangeText(Number(input.value));
+  }
+}
 function vehicleSettings() {
   const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
   byId('vehicle-selector-label').hidden=!vehicles.length;
@@ -736,6 +748,7 @@ function vehicleSettings() {
   if(hint) hint.textContent=t('car.pv_hint',{soc:decimal(selected.settings.pv_target_soc,0)});
   if(fastHint) fastHint.textContent=t('car.fast_hint',{soc:decimal(selected.settings.target_soc,0)});
   // Before the first snapshot there are no goals yet; do not lock the editor to that empty state.
+  socRanges();
   if(vehicleFormKey===key || !selected.charge_plan_view) return;
   vehicleFormKey=key;
   vehicleForm.elements.pv_target_soc.value=selected.settings.pv_target_soc;
@@ -743,6 +756,7 @@ function vehicleSettings() {
   byId('charge-plans').innerHTML='';
   for(const row of selected.charge_plan_view??[]) appendChargePlan(row);
   byId('vehicle-saved').textContent='';
+  socRanges();
 }
 const weekdayKeys=['mon','tue','wed','thu','fri','sat','sun'];
 function weekdayText(days) {
@@ -763,7 +777,8 @@ function goalSummary(row) {
   const tags=[row.selected ? `<span class="tag accent">${th('car.goal_next')}</span>` : '',
     row.active===false ? `<span class="tag">${th('car.goal_inactive')}</span>` : '',
     row.schedule==='weekly' && row.holidays ? `<span class="tag">${th('car.goal_holidays')}</span>` : ''].join('');
-  return `<span class="goal-when"><b>${html(decimal(row.target_soc,0))} %</b></span>
+  const range=rangeText(row.target_soc);
+  return `<span class="goal-when"><b>${html(decimal(row.target_soc,0))} %</b>${range ? `<small>${html(range)}</small>` : ''}</span>
     <span class="goal-text"><b>${html(schedule||t('plans.no_next'))}</b><small>${html(next)}</small></span>
     <span class="goal-tags">${tags}<button type="button" class="btn goal-edit" aria-expanded="false">${th('car.goal_edit')}</button></span>`;
 }
@@ -774,7 +789,7 @@ function appendChargePlan(row, open=false) {
     <label class="check"><input name="active" type="checkbox" ${row.active?'checked':''}>${th('plans.active')}</label>
     <button type="button" class="delete-goal">${th('plans.delete')}</button></div>
     <div class="fields"><label>${th('settings.schedule')}<select name="schedule"><option value="once">${th('settings.once')}</option><option value="weekly">${th('settings.weekly')}</option></select></label>
-    <label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required value="${html(row.target_soc)}"></label>
+    <label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required data-soc-range value="${html(row.target_soc)}"><small class="soc-range" aria-live="polite">${html(rangeText(row.target_soc))}</small></label>
     <label data-goal-schedule="once">${th('settings.departure')}<input name="departure_local" type="datetime-local" value="${html(row.departure_local??'')}"></label>
     <label data-goal-schedule="weekly">${th('settings.departure_time')}<input name="departure_time" type="time" value="${html(row.departure_time??'07:30')}"></label></div>
     <div data-goal-schedule="weekly" class="checks">${weekdayKeys.map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}
@@ -858,13 +873,19 @@ function socRing(soc, target) {
     <circle class="v" cx="60" cy="60" r="48" stroke-dasharray="${(value/100*circle).toFixed(1)} ${circle}" transform="rotate(-90 60 60)"/>${goal}
     <text x="60" y="62" text-anchor="middle">${html(valid(soc) ? decimal(soc,0)+' %' : '—')}</text>${valid(target) ? `<text class="sub" x="60" y="80" text-anchor="middle">${html(t('car.ring_target',{soc:decimal(target,0)}))}</text>` : ''}</svg>`;
 }
+// The vehicle's reported range, or the SoC times the learned factor (≈).
+function currentRange(live) {
+  if(!valid(live?.car_range)) return '';
+  return t(live.car_range_source==='estimate' ? 'car.range' : 'car.range_measured',{range:decimal(live.car_range,0)});
+}
 function carGoal(plan) {
   const live=snapshot.live??{}, target=plan.target_soc;
   const title=plan.departure ? t('car.goal_until',{when:when(plan.departure),soc:decimal(target,0)}) : t('car.goal_open',{soc:decimal(target,0)});
   const charging=valid(live.car) && live.car>=100;
   const tags=[charging ? `<span class="tag">${html([power(live.car),phaseText(live.phases)].filter(Boolean).join(' · '))}</span>` : '',
     `<span class="tag">${html(modeLabel(live.car_mode))}</span>`,
-    live.soc_source ? `<span class="tag">${html(t('car.soc_source',{source:stateLabel('source',live.soc_source)}))}</span>` : ''].join('');
+    live.soc_source ? `<span class="tag">${html(t('car.soc_source',{source:stateLabel('source',live.soc_source)}))}</span>` : '',
+    currentRange(live) ? `<span class="tag">${html(t('car.range_now',{range:currentRange(live)}))}</span>` : ''].join('');
   return `<div class="soc-goal-head">${socRing(plan.soc,target)}<div class="goal-copy"><h2>${html(title)}</h2>
     <p class="dim">${html(chargeSummary(plan))}${plan.segments?.length ? ` <a href="#car-plan" class="to-plan">${th('car.to_plan')}</a>` : ''}</p>
     <div class="goal-tags">${tags}</div></div></div>`;
@@ -1166,7 +1187,7 @@ function sourceDiagnostics(view) {
     diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],Object.entries(device.values??{}).map(([key,value])=>
       `<tr><td>${th(`measurement.${key}`)}</td><td class="num">${diagnosticNumber(value,key==='battery_soc'?'%':W)}</td></tr>`))).join('');
   const vehicles=(view.vehicles??[]).length?`<h3>${th('diagnostics.vehicles')}</h3>`+diagnosticTable([th('source.vehicle'),th('measurement.car'),th('measurement.car_soc')],
-    view.vehicles.map(item=>`<tr><td>${html(item.name)} · ${th(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}</td><td class="num">${diagnosticNumber(item.car,W)}</td><td class="num">${diagnosticNumber(item.car_soc,'%')}${item.soc_source==='estimate'?' ('+th('source.estimate')+')':''}</td></tr>`),[1,2]):'';
+    view.vehicles.map(item=>`<tr><td>${html(item.name)} · ${th(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}</td><td class="num">${diagnosticNumber(item.car,W)}</td><td class="num">${diagnosticNumber(item.car_soc,'%')}${item.soc_source==='estimate'?' ('+th('source.estimate')+')':''}${valid(item.car_range)?' · '+diagnosticNumber(item.car_range,'km'):''}</td></tr>`),[1,2]):'';
   return `<p class="footnote">${th('diagnostics.time',{time:view.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,timeStyle:'medium'}).format(new Date(view.time)):'—'})}</p>${sources}
     <h3>${th('diagnostics.derived')}</h3>${diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],derivedRows)}${estimateTable}
     ${devices?`<h3>${th('diagnostics.devices')}</h3>${devices}`:''}${vehicles}`;
@@ -1394,6 +1415,9 @@ vehicleForm.addEventListener('change',event=>{
   if(input?.name && ['pv','fast','phase_auto','pv_target_soc','fast_target_soc'].includes(input.name)) saveVehicleSwitch(input);
 });
 vehicleForm.addEventListener('submit',event=>{event.preventDefault();document.activeElement?.blur?.();});
+for(const root of [vehicleForm,byId('charge-plans')]) root.addEventListener('input',event=>{
+  if(event.target?.matches?.('input[data-soc-range]')) socRanges(root);
+});
 goalForm.addEventListener('submit',async event=>{
   event.preventDefault();
   const values={charge_plans:chargePlanValues()};

@@ -25,7 +25,7 @@ def _value(live, key, entry):
     # estimate (fleets carry the SoC per vehicle, not in the shared live data).
     if key == 'house_total' and 'house_total_measured' in live:
         return number(live['house_total_measured'])
-    value = number(entry['value'] if key == 'car_soc' and 'value' in entry else live.get(key))
+    value = number(entry['value'] if key in {'car_soc', 'car_range'} and 'value' in entry else live.get(key))
     if key == 'heat_load' and value is not None:
         return value * 100
     return value
@@ -63,7 +63,8 @@ def _vehicles(data):
     for vehicle in data.get('vehicles') or ():
         live = vehicle.get('live') or {}
         result.append({'name': vehicle.get('name'), 'car': number(live.get('car')), 'car_soc': number(live.get('car_soc')),
-                       'soc_source': live.get('soc_source'), 'connected': live.get('car_connected')})
+                       'soc_source': live.get('soc_source'), 'connected': live.get('car_connected'),
+                       'car_range': number(live.get('car_range'))})
     return result
 
 

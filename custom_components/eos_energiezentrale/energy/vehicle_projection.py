@@ -74,6 +74,24 @@ def projected_vehicle_soc(rows, evidence, now, soc, daily, *, connected, maximum
     return result, ('fast_estimate' if fast else 'pv_estimate') if increased else 'constant'
 
 
+# Below this SoC the range per percent is too sensitive to rounding of both values.
+RANGE_MIN_SOC = 10
+
+
+def car_range_view(measured, soc, per_soc):
+    """Range for display: the vehicle's report, otherwise the SoC times the learned factor.
+
+    ``car_range_per_soc`` lets the panel show the range of a SoC while it is being set."""
+    soc = number(soc)
+    if measured is not None:
+        value, source = measured, 'vehicle'
+    elif per_soc is not None and soc is not None and 0 <= soc <= 100:
+        value, source = soc * per_soc, 'estimate'
+    else:
+        value, source = None, None
+    return {'car_range': value, 'car_range_source': source, 'car_range_per_soc': per_soc}
+
+
 def average_power(rows, start, end):
     """Time-weighted charging power of ``rows`` over [start, end); None unless fully covered."""
     span = (end - start).total_seconds()

@@ -82,8 +82,8 @@
             </div>
             <details class="acc car-limits"><summary><h3 data-i18n="car.limits"></h3></summary>
               <div class="fields">
-                <label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required></label>
-                <label><span data-i18n="plans.fast_target"></span><input name="fast_target_soc" type="number" min="1" max="100" required></label>
+                <label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required data-soc-range><small class="soc-range" aria-live="polite"></small></label>
+                <label><span data-i18n="plans.fast_target"></span><input name="fast_target_soc" type="number" min="1" max="100" required data-soc-range><small class="soc-range" aria-live="polite"></small></label>
               </div>
             </details>
           </form>

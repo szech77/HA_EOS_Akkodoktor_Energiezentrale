@@ -480,6 +480,8 @@
 #eos-energy-design #vehicle-goals .charge-goal.selected {border-color:var(--car);background:color-mix(in srgb,var(--car) 7%,var(--surface));}
 #eos-energy-design .goal-summary {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;}
 #eos-energy-design .goal-when b {font-size:18px;}
+#eos-energy-design .goal-when small {display:block;color:var(--dim);white-space:nowrap;}
+#eos-energy-design .soc-range {color:var(--dim);min-height:1.2em;}
 #eos-energy-design .goal-text b,#eos-energy-design .goal-text small {display:block;}
 #eos-energy-design .goal-text small {color:var(--dim);}
 #eos-energy-design .goal-editor {padding:0 12px 12px;border-top:1px solid var(--edge);padding-top:12px;}

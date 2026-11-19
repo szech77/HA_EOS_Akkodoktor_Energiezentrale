@@ -28,7 +28,7 @@ def validate_options(options):
     ZoneInfo(options["timezone"])
     EOS(options["eos_url"])
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])
-    for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity", "heat_load_entity"):
+    for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity", "car_range_entity", "heat_load_entity"):
         if key in SENSOR_OPTIONS and options.get(key, "") == "":
             continue
         if not isinstance(options[key], str) or not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):

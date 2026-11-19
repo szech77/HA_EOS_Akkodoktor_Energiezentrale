@@ -821,12 +821,13 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         from test_plugins import generic_wallbox
         params,_=generic_wallbox()
         result=await flow.async_step_vehicle_parameters({'id':'second','name':'Second EV','resource':'ev2','soc_entity':'sensor.ev2_soc',
-            'soc_scale':'factor','capacity_wh':60000,'charging_efficiency':.9,'max_current_a':16,'wallbox_parameters':params})
+            'soc_scale':'factor','range_entity':'sensor.ev2_range','capacity_wh':60000,'charging_efficiency':.9,'max_current_a':16,'wallbox_parameters':params})
         self.assertEqual(result['type'],'create_entry')
         stored=json.loads(result['data']['vehicles'])
         self.assertEqual(len(stored),2)
         self.assertEqual(stored[0]['wallbox_type'],'nrgkick')
         self.assertEqual(stored[1]['wallbox_type'],'generic')
+        self.assertEqual(stored[1]['range_entity'],'sensor.ev2_range')
 
     async def test_generic_helpers_use_only_the_matching_home_assistant_services(self):
         seen=[]

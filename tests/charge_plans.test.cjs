@@ -37,8 +37,8 @@ function fixture(){
  nodes.daily.elements.holiday_state=new Node();
  const messages=JSON.parse(fs.readFileSync(path.join(root,'i18n/de.json'),'utf8')).messages;
  const goal={id:'morning',active:true,schedule:'weekly',target_soc:72,departure_time:'07:45',weekdays:[0,2],holidays:true,next_departure:'2027-01-01T07:45:00+01:00'};
- const vehicle=id=>({id,settings:{pv:true,fast:false,phase_auto:true,pv_target_soc:90,target_soc:85},charge_plan_view:[{...goal,id:id+'_goal'}]});
- const ctx={byId:id=>nodes[id],document:{createElement:()=>new Node()},location:{hash:'#car'},
+ const vehicle=id=>({id,live:{car_range_per_soc:4},settings:{pv:true,fast:false,phase_auto:true,pv_target_soc:90,target_soc:85},charge_plan_view:[{...goal,id:id+'_goal'}]});
+ const ctx={byId:id=>nodes[id],document:{createElement:()=>new Node(),querySelectorAll:()=>[]},location:{hash:'#car'},valid:Number.isFinite,
   snapshot:{vehicles:[vehicle('first'),vehicle('second')]},t:(key,values={})=>(messages[key]??key).replace(/\{(\w+)\}/g,(_,name)=>values[name]??`{${name}}`),th:key=>messages[key]??key,
   html:String,time:String,when:String,decimal:String,confirm:()=>false,api:async(op,values)=>{ctx.sent={op,values};},refresh:async()=>{ctx.refreshed=(ctx.refreshed??0)+1;},Date};
  vm.createContext(ctx);
@@ -110,4 +110,21 @@ test('once and weekly inputs switch validation and submit local date without bro
  card.querySelector('[name=departure_local]').value='2027-04-01T07:30';
  assert.equal(ctx.chargePlanValues()[0].departure_local,'2027-04-01T07:30');
  assert.equal(ctx.chargePlanValues()[0].departure,undefined);
+});
+
+test('SoC fields show the expected range with the backend factor while the value is typed',()=>{
+ const {ctx,nodes}=fixture(),form=nodes['vehicle-daily'];
+ assert.equal(ctx.rangeText(80),'≈ 320 km');
+ assert.match(nodes['charge-plans'].children[0].markup,/≈ 288 km/);
+ const output={textContent:''},input={value:'75',closest:()=>({querySelector:()=>output}),matches:()=>true};
+ form.querySelectorAll=()=>[input];
+ form.events.input({target:input});
+ assert.equal(output.textContent,'≈ 300 km');
+ input.value='';form.events.input({target:input});
+ assert.equal(output.textContent,'');
+ // Without a learned factor no range is invented.
+ ctx.snapshot.vehicles[1].live={};
+ assert.equal(ctx.rangeText(80),'');
+ assert.equal(ctx.currentRange({car_range:212,car_range_source:'vehicle'}),'212 km');
+ assert.equal(ctx.currentRange({car_range:212,car_range_source:'estimate'}),'≈ 212 km');
 });

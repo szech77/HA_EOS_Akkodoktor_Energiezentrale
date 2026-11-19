@@ -41,7 +41,8 @@ def test_lists_configured_and_missing_required_sources_with_values_age_and_statu
     assert [rows[key]['value'] for key in ('battery_soc', 'battery_charge', 'battery_discharge', 'car')] == [87.0, 0, 510, 0]
     assert result['devices'][0]['values'] == {'solar': 0., 'grid': 10., 'house_total': 940., 'battery_soc': 87.,
                                               'battery_charge': 0., 'battery_discharge': 510.}
-    assert result['vehicles'] == [{'name': 'Leapmotor', 'car': 0., 'car_soc': 77., 'soc_source': 'vehicle', 'connected': True}]
+    assert result['vehicles'] == [{'name': 'Leapmotor', 'car': 0., 'car_soc': 77., 'soc_source': 'vehicle', 'connected': True,
+                                   'car_range': None}]
 
 
 def test_balance_reveals_a_site_total_that_exceeds_all_sources():

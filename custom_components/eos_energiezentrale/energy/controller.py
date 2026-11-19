@@ -20,7 +20,7 @@ from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
 from .status import failure_details
 from .pv_support import PVSupport
-from .vehicle_projection import projected_vehicle_soc
+from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
 from .eos_status import EOSRunStatus
 from .pv_availability import PVAvailability
 from .power_supply import configured_supply, requires_pause, supply_view
@@ -75,6 +75,8 @@ class Controller:
         self.battery_limits_confirmed_at = None
         self.last_battery_limits_attempt = -1000
         self.soc = self.soc_report = self.soc_time = None
+        # Range per SoC percent from the last report with both values (display only).
+        self.range_per_soc = None
         self.soc_missing_since = None
         # The first poll starts the grace period if no usable vehicle SoC exists.
         for status in ('missing', 'unavailable'):
@@ -621,6 +623,23 @@ class Controller:
         self.soc_time, self.soc_w = now, watts if box.charging else 0
         return raw is not None and isclose(raw, self.soc if self.soc is not None else -1, abs_tol=0.001)
 
+    def update_range(self, states, now, measured):
+        """Read the optional range sensor and learn the range per SoC percent.
+
+        The factor needs a range and a measured (not estimated) SoC of the same
+        vehicle; a low SoC would amplify rounding, so it keeps the last factor."""
+        if self.config.options.get("wallbox_type") == "none":
+            return None
+        entity = self.input_options.get("car_range_entity", "")
+        raw = reading(states, entity, now, "range", CAR_SOC_MAX_AGE_S) if entity else None
+        raw = raw if raw is not None and 0 <= raw <= 5000 else None
+        source = self.source_configuration['sources'].get('car_range')
+        if source is not None:
+            source['value'] = raw
+        if raw is not None and measured and self.soc is not None and self.soc >= RANGE_MIN_SOC:
+            self.range_per_soc = raw / self.soc
+        return raw
+
     def report_soc_availability(self, raw, now):
         # Vehicles may retain the same valid SoC for hours. Warn about an absent
         # or outdated value (CAR_SOC_MAX_AGE_S), not the short power sensor age.
@@ -774,6 +793,7 @@ class Controller:
         self.input_options = opts
         self.pv_availability.observe(states, opts['pv_entity'], now)
         measured = self.update_soc(states, box, now)
+        car_range = self.update_range(states, now, measured)
         live = {key: reading(states, opts[source + "_entity"], now, kind, age)
                 for key, source, kind, age in (("solar", "pv", "solar", 45), ("grid", "grid", "power", 45),
                                                ("house_total", "house", "power", 120), ("heat", "heat", "power", 120),
@@ -786,6 +806,7 @@ class Controller:
                     effective_charge_power_w=self.vehicle_profile[0] if self.vehicle_profile else None,
                     phases=box.phases, amps=box.amps,
                     battery_charge=battery.charge, battery_discharge=battery.discharge)
+        live.update(car_range_view(car_range, self.soc, self.range_per_soc))
         live["heat_load"] = heat_utilization(states,opts,now)
         live["weather"] = weather_display(states,opts,now)
         car_enabled = opts.get("wallbox_type") != "none"

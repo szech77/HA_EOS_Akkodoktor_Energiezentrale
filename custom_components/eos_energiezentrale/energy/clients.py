@@ -179,7 +179,8 @@ def reading(states, entity, now, kind, max_age=None):
         if stamp is None or not 0 <= (now - stamp).total_seconds() < max_age:
             return None
     scales = {"power": {"W": 1, "kW": 1000}, "solar": {"W": 1, "kW": 1000},
-              "price": {"EUR/kWh": 100, "€/kWh": 100, "ct/kWh": 1, "c/kWh": 1}}
+              "price": {"EUR/kWh": 100, "€/kWh": 100, "ct/kWh": 1, "c/kWh": 1},
+              "range": {"km": 1, "mi": 1.609344}}
     if kind in scales:
         scale = scales[kind].get(unit)
         return value * scale if scale is not None else None

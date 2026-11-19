@@ -205,6 +205,17 @@ abweichenden Namen ersetzt werden:
 | Bezugspreis / `price_entity` | `sensor.blumenstrasse_13_strompreis` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
 | Fahrzeug-SoC / `car_soc_entity` | `sensor.id4_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
 | Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
+| Fahrzeugreichweite / `car_range_entity` | leer | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. |
+
+Mit einem Reichweitensensor bildet das Backend aus Reichweite und gemessenem SoC
+das Verhältnis Kilometer je Prozent. Es wird nur bei einem gemessenen, nicht
+geschätzten SoC ab 10 % neu bestimmt und bleibt bis zur nächsten passenden Meldung
+erhalten. Die Auto-Ansicht zeigt die aktuelle Reichweite; liefert das Fahrzeug
+gerade keine, wird sie aus dem SoC geschätzt (≈). Neben den SoC-Feldern für
+PV-Ladeziel, Schnellladeziel und die Ladeziele erscheint die zu diesem SoC
+erwartete Reichweite, die sich schon beim Eintippen aktualisiert. Ohne Sensor oder
+ohne gelerntes Verhältnis entfällt die Anzeige. Regelung und Ladeplanung nutzen die
+Reichweite nicht. Die Diagnose „Messquellen“ zeigt den Sensorwert.
 
 Der dargestellte Hausverbrauch wird so berechnet:
 
@@ -908,7 +919,7 @@ Einzelkonfiguration wird beim ersten Hinzufügen übernommen. Alternativ steht u
 [examples/vehicles.json](examples/vehicles.json). `[]` verwendet weiterhin die
 bisherige Einzelkonfiguration. Eine nicht leere Liste ersetzt die Einzelzuordnung.
 Bis zu acht Fahrzeug-Wallbox-Paare sind möglich; für jedes Paar Name, stabile `id`,
-eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, Kapazität und die fünf
+eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, optional einen Reichweitensensor (`range_entity`), Kapazität und die fünf
 Wallbox-Entitäten angeben. Die Fahrzeuge müssen auch in EOS angelegt sein.
 Die Konfiguration erstellt oder überschreibt keine EOS-Gerätedefinitionen.
 

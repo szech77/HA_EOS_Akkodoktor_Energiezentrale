@@ -23,6 +23,8 @@ SOURCES = {
     "price": ("price_entity", "price", "ct/kWh", 3600),
     "car_soc": ("car_soc_entity", "soc", "%", CAR_SOC_MAX_AGE_S),
     "heat_load": ("heat_load_entity", "soc", "%", 120),
+    # Vehicle range in km (mi sensors are converted); optional, display only.
+    "car_range": ("car_range_entity", "range", "km", CAR_SOC_MAX_AGE_S),
 }
 MEASUREMENT_KEYS = frozenset(SOURCES) | {"battery_soc", "battery_charge", "battery_discharge", "car", "inverter_ac"}
 SENSOR_OPTIONS = frozenset(item[0] for item in SOURCES.values())
@@ -35,7 +37,7 @@ def checked_measurements(values, declared, now):
     for key, item in values.items():
         if key not in MEASUREMENT_KEYS or not isinstance(item, Measurement):
             raise PluginContractError("Invalid plugin measurement")
-        limit = 100 if key in {"car_soc", "battery_soc", "heat_load"} else 1000000
+        limit = 100 if key in {"car_soc", "battery_soc", "heat_load"} else 5000 if key == "car_range" else 1000000
         low = -1000 if key == "price" else -limit if key in {"grid", "inverter_ac"} else 0
         high = 1000 if key == "price" else limit
         value = bounded(item.value, low, high)

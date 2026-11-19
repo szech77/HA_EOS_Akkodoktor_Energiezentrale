@@ -43,6 +43,12 @@ test('car page answers the goal first with the backend plan summary',()=>{
   assert.match(goal.innerHTML,/Noch 20 kWh\. EOS plant 3,7 kWh aus PV bis 16:00 und 16,7 kWh Netzladen ab 19:00 \(24 ct\/kWh\)\./);
   assert.match(goal.innerHTML,/aria-label="Ladestand 40 %, Ziel 80 %"/);
   assert.match(goal.innerHTML,/3,7 kW · 1-phasig/);assert.match(goal.innerHTML,/class="to-plan"/);
+  assert.doesNotMatch(goal.innerHTML,/Reichweite/);
+});
+test('car goal shows the reported or estimated range',()=>{
+  const live={car:0,soc_source:'vehicle'};
+  assert.match(render({},{live:{...live,car_range:212,car_range_source:'vehicle'}}).goal.innerHTML,/Reichweite 212 km/);
+  assert.match(render({},{live:{...live,car_range:180.4,car_range_source:'estimate'}}).goal.innerHTML,/Reichweite ≈ 180 km/);
 });
 test('charge plan shows track, list and the cheaper plan against charging now',()=>{
   const {panel}=render();

@@ -209,6 +209,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         if not rows and values["wallbox_type"]!="none":
             rows=[{"id":"vehicle1","name":values["vehicle_name"],"resource":values["vehicle_resource"],
                    "soc_entity":values["car_soc_entity"],"soc_scale":values["car_soc_scale"],
+                   "range_entity":values.get("car_range_entity",""),
                    "capacity_wh":values["capacity_wh"],"charging_efficiency":values["charging_efficiency"],
                    "max_current_a":values["max_current_a"],"wallbox_type":values["wallbox_type"],
                    "wallbox_parameters":json.loads(values["wallbox_parameters"])}]
@@ -287,7 +288,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         index=len(rows)+1
         defaults={"id":identity or f"vehicle{index}","name":old.get("name","E-Auto"),
                   "resource":old.get("resource",f"ev{index}"),"soc_entity":old.get("soc_entity",""),
-                  "soc_scale":old.get("soc_scale","factor"),"capacity_wh":old.get("capacity_wh",77000),
+                  "soc_scale":old.get("soc_scale","factor"),"range_entity":old.get("range_entity",""),"capacity_wh":old.get("capacity_wh",77000),
                   "charging_efficiency":old.get("charging_efficiency",.9),"max_current_a":old.get("max_current_a",16)}
         plugin_id = getattr(self,"_vehicle_plugin",old.get("wallbox_type","nrgkick"))
         factory = WALLBOX_DRIVERS[plugin_id]
@@ -295,7 +296,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         defaults["wallbox_parameters"] = old_parameters
         errors={}
         if user_input is not None:
-            row={key:user_input.get(key,"") for key in ("id","name","resource","soc_entity","soc_scale","capacity_wh","charging_efficiency","max_current_a")}
+            row={key:user_input.get(key,"") for key in ("id","name","resource","soc_entity","soc_scale","range_entity","capacity_wh","charging_efficiency","max_current_a")}
             if identity is not None and row["id"]!=identity:
                 configuration_failure(self, 'vehicle_parameters', ValueError('Vehicle identity changed'), plugin_id)
                 errors={"base":"invalid_config"}
@@ -319,7 +320,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         for key,value in defaults.items():
             if key=="wallbox_parameters":
                 field,value=await async_plugin_object(self,factory,value)
-            elif key=="soc_entity":
+            elif key in {"soc_entity","range_entity"}:
                 field=selector.EntitySelector(selector.EntitySelectorConfig(domain="weather" if key == "weather_entity" else "sensor"))
             elif key=="soc_scale":
                 field=selector.SelectSelector(selector.SelectSelectorConfig(options=["factor","percent"]))
@@ -329,6 +330,7 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
                 field=vol.Coerce(float)
             else:
                 field=str
-            marker=vol.Optional if key=="soc_entity" else vol.Required
-            fields[marker(key,**({} if key=="soc_entity" and not value else {"default":value}))]=field
+            optional=key in {"soc_entity","range_entity"}
+            marker=vol.Optional if optional else vol.Required
+            fields[marker(key,**({} if optional and not value else {"default":value}))]=field
         return self.async_show_form(step_id=step_id,data_schema=vol.Schema(fields),errors=errors)

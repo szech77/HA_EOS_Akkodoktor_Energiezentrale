@@ -32,7 +32,7 @@ def vehicle_options(options):
     identities=set()
     controls=set()
     devices=set()
-    allowed={"id","name","resource","soc_entity","soc_scale","capacity_wh",
+    allowed={"id","name","resource","soc_entity","soc_scale","range_entity","capacity_wh",
              "charging_efficiency","max_current_a","wallbox_type","wallbox_parameters"}
     for row in rows:
         if not isinstance(row,dict) or row.keys()-allowed:
@@ -43,7 +43,8 @@ def vehicle_options(options):
         identities.add(identity)
         values={**options,"vehicles":"[]","vehicle_name":row.get("name","E-Auto"),
                 "vehicle_resource":row.get("resource",identity),"car_soc_entity":row.get("soc_entity",""),
-                "car_soc_scale":row.get("soc_scale","factor"),"wallbox_type":row.get("wallbox_type","nrgkick"),
+                "car_soc_scale":row.get("soc_scale","factor"),"car_range_entity":row.get("range_entity",""),
+                "wallbox_type":row.get("wallbox_type","nrgkick"),
                 "wallbox_parameters":json.dumps(row.get("wallbox_parameters",{}))}
         for key in ("capacity_wh","charging_efficiency","max_current_a"):
             if key in row:
@@ -271,6 +272,7 @@ class FleetController(Controller):
         self.live["grid"]=grid
         self.live["car"]=sum(actual.values()) if complete else None
         self.live["car_soc"]=None
+        self.live.update(car_range=None,car_range_source=None,car_range_per_soc=None)
         # The primary tick saw a reserved grid value; balance the fleet on the real meter.
         self.live["house_total"]=self.live.get("house_total_measured")
         commanded=[app.commanded_car_w for _,app,_ in self.controllers]
