@@ -399,20 +399,40 @@ test('the day view draws the power profile in kW; costs and older days stay hour
   consumers:{house:{total:amount(2,.6),bins:hours.map(time=>({time,...amount(1,.3)}))}},
   power_profile:{step_s:120,gap_s:600,points:[point('2026-11-18T08:00:00+00:00',1500,500),point('2026-11-18T08:02:00+00:00',1200,800),point('2026-11-18T09:30:00+00:00',0,2000)]}};
  ctx.cards=()=>'';
- vm.runInContext("billing.data=report;billing.period='day';billing.date=report.date;selectBillingUnit('kwh');usageDetail('house',false)",ctx);
+ vm.runInContext("billing.data=report;billing.period='day';billing.date=report.date;selectBillingUnit('kw');usageDetail('house',false)",ctx);
  const chart=elements['usage-charts'].innerHTML;
  assert.match(chart,/aria-label="usage.power_chart"/);
  assert.equal(elements['usage-unit'].textContent,'usage.unit_power');
  // PV and grid as areas; the gap after 08:02 splits them (no PV at 09:30); hours stay tappable with their energy.
  assert.equal((chart.match(/<polygon class="area"/g)??[]).length,3);
  assert.equal((chart.match(/data-billing-bin=/g)??[]).length,2);
- assert.match(chart,/<title>[^<]*1 kWh/);
+ assert.match(chart,/data-billing-bin="2026-11-18" aria-label="[^"]*1 kWh/);
+ assert.doesNotMatch(chart,/<title>/);
+ // The pointer readout names the time, the total and each non-zero source.
+ const readout=vm.runInContext("powerReadout(report.power_profile.points[0],'house')",ctx);
+ assert.equal(readout.lines.length,2);
+ assert.match(readout.title,/2 kW$/);assert.deepEqual(JSON.parse(JSON.stringify(readout.lines.map(([label,value])=>[label,value]))),[['billing.pv','1.5 kW'],['billing.grid','0.5 kW']]);
+ const gridReadout=vm.runInContext("powerReadout(report.power_profile.points[2],'grid')",ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(gridReadout.lines.map(([label,value])=>[label,value]))),[['usage.import','2 kW'],['usage.feed_in','0 kW']]);
  vm.runInContext("usageDetail('grid',false)",ctx);
  assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.grid_power_chart"/);
  vm.runInContext("selectBillingUnit('eur');usageDetail('house',false)",ctx);
  assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.cost_chart"/);
+ // Costs stay bars on the day view as well.
+ assert.doesNotMatch(elements['usage-charts'].innerHTML,/class="area"/);
+ assert.match(elements['usage-charts'].innerHTML,/<rect x="[^"]+" y="[^"]+" width="[^"]+" height="[^"]+" fill="#5794f2"\/>/);
  assert.doesNotMatch(elements['usage-bin'].textContent,/usage.profile_hourly/);
- vm.runInContext("selectBillingUnit('kwh');billing.data={...report,power_profile:{points:[]}};usageDetail('house',false)",ctx);
+ // kWh is the hourly bar chart with the details of a tapped hour.
+ vm.runInContext("selectBillingUnit('kwh');usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
+ assert.match(elements['usage-charts'].innerHTML,/<title>[^<]*1 kWh/);
+ assert.doesNotMatch(elements['usage-charts'].innerHTML,/class="area"/);
+ assert.doesNotMatch(elements['usage-bin'].textContent,/usage.profile_hourly/);
+ // A day beyond the local history has no profile: kW falls back to the hourly bars with a note.
+ vm.runInContext("selectBillingUnit('kw');billing.data={...report,power_profile:{points:[]}};usageDetail('house',false)",ctx);
  assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
  assert.match(elements['usage-bin'].textContent,/usage.profile_hourly/);
+ // Month and year have no kW view; a kept kW choice shows kWh there.
+ vm.runInContext("billing.period='month';billing.data={period:'month',date:'2026-11-01',end:'2026-12-01',base_days:30,settings:{},consumers:{}};usageDetail('house',false)",ctx);
+ assert.match(elements['usage-unit'].textContent,/usage.unit_day/);
 });

@@ -189,7 +189,14 @@
 #eos-energy-design table.diagnostics tr.warn td {color:var(--heat);}
 #eos-energy-design table.diagnostics code {font-size:12px;overflow-wrap:anywhere;}
 #eos-energy-design #source-diagnostics h3 {margin:16px 0 4px;font-size:15px;}
-#eos-energy-design #usage-charts {display:grid;gap:16px;margin:16px 0;}
+#eos-energy-design #usage-charts {display:grid;gap:16px;margin:16px 0;position:relative;}
+#eos-energy-design .power-chart {touch-action:pan-y;}
+#eos-energy-design .power-cursor {stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3;pointer-events:none;}
+#eos-energy-design .power-tip {position:absolute;top:4px;z-index:2;display:grid;gap:3px;min-width:150px;padding:8px 10px;border:1px solid var(--edge);border-radius:8px;background:var(--surface);box-shadow:0 4px 14px rgb(0 0 0 / .25);font-size:12.5px;pointer-events:none;}
+#eos-energy-design .power-tip[hidden] {display:none;}
+#eos-energy-design .power-tip span {display:grid;grid-template-columns:10px 1fr auto;gap:6px;align-items:center;color:var(--dim);}
+#eos-energy-design .power-tip i {width:10px;height:10px;border-radius:2px;}
+#eos-energy-design .power-tip em {font-style:normal;font-size:inherit;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
 #eos-energy-design .billing-chart .area {fill-opacity:.85;stroke:none;}
 #eos-energy-design .billing-chart [data-billing-bin]:hover > rect:last-child,#eos-energy-design .billing-chart [data-billing-bin]:focus > rect:last-child {fill:color-mix(in srgb,var(--ink) 6%,transparent);}
 #eos-energy-design .billing-links {display:flex;gap:12px;flex-wrap:wrap;}
