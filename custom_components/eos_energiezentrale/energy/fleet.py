@@ -104,6 +104,8 @@ class MeteredAdapter:
 
 
 class MeterOnlyBattery:
+    # Reads the fleet's battery for one vehicle controller; the fleet owns and reports it.
+    meter_only=True
     def __init__(self,driver):
         self.driver,self.ids=driver,driver.ids
     def read(self,*args):

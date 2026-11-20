@@ -38,6 +38,7 @@ async def async_get_config_entry_diagnostics(hass, entry):
             "configuration_issues": configuration_issues.diagnostics() if isinstance(configuration_issues, IssueLog) else {},
             "plugin_read_issues": data.get('plugin_read_issues', {}),
             "eos_cache": data.get("eos_cache", {}),
+            "eos_measurements": data.get("eos_measurements", {}),
             "errors": data.get("errors", {}), "last_failure": data.get("last_failure"), "plan_available": bool(data.get("plan_end")),
             "battery_type": coordinator.app.config.options["battery_type"],
             "wallbox_type": coordinator.app.config.options["wallbox_type"]}

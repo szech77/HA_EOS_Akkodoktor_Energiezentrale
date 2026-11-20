@@ -19,6 +19,7 @@
     "notice.wallbox": "Charger control failed; other controls continue",
     "notice.wallbox_stop": "Charging stop unconfirmed; vehicle may still be charging",
     "notice.vehicle_limits": "Vehicle charging limits are not confirmed by EOS. The transfer is retried.",
+    "notice.eos_measurements": "The measurements (state of charge and power of battery and vehicle) could not be sent to EOS. Without a current state of charge EOS plans with 0 %; sending is retried.",
     "vehicle.disconnected": "No vehicle connected",
     "plugin.feature.optional_connection": "Portable charger",
     "app.title": "EOS Energy Dashboard",

@@ -18,6 +18,7 @@ from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
+from .eos_measurements import MeasurementSync, device_samples
 from .status import failure_details
 from .pv_support import PVSupport
 from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
@@ -108,6 +109,7 @@ class Controller:
         self.vehicle_profile_confirmed = None
         self.vehicle_profile_at = None
         self.external_vehicle_sync = False
+        self.eos_measurements = MeasurementSync()
         self.last_vehicle_sync = -1000
         self.pv_support = PVSupport()
         self.stop_unconfirmed = False
@@ -698,6 +700,33 @@ class Controller:
                 self.record_failure("goal", error)
         return goal is not None and goal == self.goal and self.goal_at is not None
 
+    def eos_measurement_samples(self, battery, box):
+        """Validated SoC and power of the battery and the vehicle this controller owns.
+
+        A fleet's vehicle controllers only read the shared battery; its owner sends it.
+        """
+        opts = self.config.options
+        samples = []
+        if getattr(self.config.battery, 'meter_only', False) is not True:
+            samples += device_samples(opts.get('battery_resource'), soc=battery.soc,
+                                      charge_w=battery.charge, discharge_w=battery.discharge)
+        if opts.get('wallbox_type') != 'none':
+            samples += device_samples(opts.get('vehicle_resource'), soc=self.soc, charge_w=box.watts)
+        return samples
+
+    def sync_eos_measurements(self, now, clock, battery, box):
+        """EOS plans from the measured SoC; without it EOS assumes 0 %. Failures are a notice only."""
+        eos = self.config.eos
+        if not callable(getattr(eos, 'put_measurement', None)):
+            return
+        try:
+            done = self.eos_measurements.sync(eos, self.eos_measurement_samples(battery, box), now, clock)
+        except Exception as error:
+            self.record_failure('eos_measurements', error)
+        else:
+            if done is not None:
+                self.errors.pop('eos_measurements', None)
+
     def update_vehicle(self, box, now, clock):
         connected = box.plugged if box.status not in ('unknown', 'unavailable', '') else (
             False if optional_charger(self.config.wallbox) else None)
@@ -850,6 +879,7 @@ class Controller:
         departure = next_departure(daily, now, self.config.zone)
         live["departure"] = departure.isoformat() if departure else None
         self.live = live
+        self.sync_eos_measurements(now, clock, battery, box)
         minute = int(now.timestamp()) // 60
         if minute != self.last_minute:
             self.history.write(now, live)
@@ -1195,6 +1225,7 @@ class Controller:
                     "control_paused": self.backup_paused,
                     "armed": self.armed, "release_pending": bool(self.holding - self.control_domains()),
                     "control": self.control_view(),
+                    "eos_measurements": self.eos_measurements.diagnostics(),
                     "eos_cache": {resource:{"remaining_s":max(0,300-(now-failed).total_seconds())} for resource,failed in self.eos_failure_since.items() if resource in self.resource_plans and (now-failed).total_seconds()<300 and self.order_for(resource,now) is not None},
                     "errors": self.visible_errors(now), "error_details": dict(self.error_details), "last_failure": self.last_failure, "zone": opts["timezone"],
                     "features": {"car": opts.get("wallbox_type") != "none", "heat": bool(opts.get("heat_entity"))},
