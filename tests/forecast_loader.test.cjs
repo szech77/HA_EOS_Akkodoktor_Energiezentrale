@@ -10,7 +10,7 @@ function fixture(){
    queueMicrotask(()=>{if(options.fail)node.onerror();else{ctx.EosForecast={create(){return {open(){if(options.brokenDialog)throw Error('view unavailable');calls.opened++;}};}};node.onload();}});
   }}}};
  vm.createContext(ctx);
- vm.runInContext(script.slice(script.indexOf('let forecastView=null;'),script.indexOf("byId('flow-weather').addEventListener")),ctx);
+ vm.runInContext(script.slice(script.indexOf('let forecastView=null;'),script.indexOf("form.elements.holiday_state.addEventListener")),ctx);
  return {ctx,calls,options,ids,failed:()=>vm.runInContext('forecastOpenFailure',ctx)};
 }
 
@@ -52,15 +52,15 @@ test('a stalled module request times out and can be retried',async()=>{
  assert.equal(f.failed(),true);assert.equal(vm.runInContext('pvViewLoading',f.ctx),false);
 });
 
-test('the chart helper module is loaded with the app build version when a cached bootstrap omitted it',async()=>{
+test('the accounting module is loaded with the app build version when a cached bootstrap omitted it',async()=>{
  const f=fixture();
- f.ctx.document.head.append=node=>{f.calls.scripts.push(node);queueMicrotask(()=>{f.ctx.EosChartData={powerFraction(){}};node.onload();});};
- const ready=()=>typeof f.ctx.EosChartData?.powerFraction==='function'?f.ctx.EosChartData:null;
- const loaded=await f.ctx.ensureModule('chart-data.js',ready);
- assert.equal(loaded,f.ctx.EosChartData);
- assert.equal(f.calls.scripts[0].src,'https://ha.test/static/chart-data.js?v=new-build');
- await f.ctx.ensureModule('chart-data.js',ready);assert.equal(f.calls.scripts.length,1);
+ f.ctx.document.head.append=node=>{f.calls.scripts.push(node);queueMicrotask(()=>{f.ctx.initializeBilling={powerFraction(){}};node.onload();});};
+ const ready=()=>typeof f.ctx.initializeBilling?.powerFraction==='function'?f.ctx.initializeBilling:null;
+ const loaded=await f.ctx.ensureModule('accounting.js',ready);
+ assert.equal(loaded,f.ctx.initializeBilling);
+ assert.equal(f.calls.scripts[0].src,'https://ha.test/static/accounting.js?v=new-build');
+ await f.ctx.ensureModule('accounting.js',ready);assert.equal(f.calls.scripts.length,1);
  // A file that loads but does not provide the module is reported by name.
  const g=fixture();g.ctx.document.head.append=node=>queueMicrotask(()=>node.onload());
- await assert.rejects(g.ctx.ensureModule('chart-data.js',()=>null),error=>error.code==='asset_mismatch'&&error.asset==='chart-data.js');
+ await assert.rejects(g.ctx.ensureModule('accounting.js',()=>null),error=>error.code==='asset_mismatch'&&error.asset==='accounting.js');
 });

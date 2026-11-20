@@ -467,13 +467,6 @@ test('the PV report shows production by use, the forecast ahead and its power cu
  vm.runInContext("selectBillingUnit('eur');usageDetail('pv',false)",ctx);
  assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.pv_chart"/);
 });
-test('the PV node opens the PV report; the weather symbol stays with PV and weather',()=>{
- const markup=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/index.html'),'utf8');
- assert.match(markup,/class="node solar l"[^>]*href="#usage\/pv"/);
- const app=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/app.js'),'utf8');
- assert.match(app,/byId\('flow-weather'\)\.addEventListener\('click',\(\)=>\{location\.hash='#pv';\}\)/);
-});
-
 test('the PV chart shows where PV went above zero and what it did not cover below, battery by origin',()=>{
  const {ctx,elements}=uiFixture();
  const hours=['2026-11-18T10:00:00+00:00'];

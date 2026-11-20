@@ -94,28 +94,12 @@ const t = (key, values = {}) => {
     .replace(/\{(\w+)\}/g, (token, name) => Object.hasOwn(context, name) ? String(context[name]) : token);
 };
 const th = (key, values) => html(t(key, values));
-const stateLabel = (prefix, value) => value ? language.messages[`${prefix}.${value}`] ?? value : '';
 const valid = Number.isFinite;
 const decimal = (value, digits = 1) => new Intl.NumberFormat(language.locale, {maximumFractionDigits: digits}).format(value);
 const power = value => valid(value) ? `${decimal(Math.abs(value) / 1000, 2)} ${t('unit.kw')}` : '—';
 const percent = value => valid(value) ? `${decimal(value)} %` : '—';
 const price = value => valid(value) ? `${decimal(value)} ${t('unit.price')}` : '—';
 const time = value => value ? new Intl.DateTimeFormat(language.locale, {timeZone: snapshot.zone, dateStyle:'short', timeStyle:'short'}).format(new Date(value)) : '—';
-// Same local day: clock time; within six days: weekday and time; otherwise date and time.
-const when = value => {
-  if (!value) return '—';
-  const stamp=new Date(value).getTime(), today=windowNow(), dayOf=ms=>new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(ms));
-  const options={timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'};
-  if (dayOf(stamp)===dayOf(today)) return new Intl.DateTimeFormat(language.locale,options).format(stamp);
-  return Math.abs(stamp-today)<6*day ? new Intl.DateTimeFormat(language.locale,{...options,weekday:'short'}).format(stamp) : time(value);
-};
-const modes = {
-  IDLE:['mode.idle','grid'], NON_EXPORT:['mode.pv','battery'], SELF_CONSUMPTION:['mode.own','house'],
-  FORCED_CHARGE:['mode.grid','car'], GRID_SUPPORT_IMPORT:['mode.grid','car'],
-  FORCED_DISCHARGE:['mode.discharge','heat'], GRID_SUPPORT_EXPORT:['mode.discharge','heat'],
-  PEAK_SHAVING:['mode.peak','solar'], CHARGING:['mode.charging','car'], DISCONNECTED:['mode.disconnected','edge']
-};
-const modeLabel = mode => Object.hasOwn(modes, mode) ? t(modes[mode][0]) : mode ?? '—';
 const pages = new Set(['solar','grid','battery','house','car','heat','energy']);
 const day = 86_400_000;
 let snapshot = {live:{}, settings:{}, errors:{}, plan:{}, forecast:[], zone:'Europe/Berlin'};
@@ -179,290 +163,15 @@ function windowNow() {
 
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
 
-function solarRemaining() {
-  const energy = snapshot.pv_daily_forecast?.[0]?.kwh;
-  return valid(energy) ? `${decimal(energy)} ${t('unit.kwh')}` : null;
-}
-
-function solarTodayEnergy() {
-  return snapshot.pv_today_kwh ?? null;
-}
-
-function solarToday() {
-  const energy=solarTodayEnergy();
-  return valid(energy) ? `${decimal(energy)} ${t('unit.kwh')}` : '—';
-}
-
 const consumerEnabled = key => !["car","heat"].includes(key) || snapshot.features?.[key] !== false;
 
-function vehicleActive(vehicle) {
-  if (vehicle.vehicles?.length) return vehicle.vehicles.some(vehicleActive);
-  return vehicle.live?.car_connected !== false;
-}
-
-function vehicleStatus(vehicle) {
-  return t(vehicle.live?.car_available === false ? 'vehicle.unavailable' : 'vehicle.disconnected');
-}
-
-function socBarCount(soc) {
-  return valid(soc) && soc>=0 && soc<=100 ? Math.ceil(soc/20) : null;
-}
-
-function carIcon(soc) {
-  const filled=socBarCount(soc);
-  const bars=Array.from({length:5},(_,index)=>`<rect class="car-soc-bar${filled!==null && index<filled ? ' filled' : ''}" x="${(6.4+index*2.2).toFixed(1)}" y="10.8" width="1.5" height="4.4" rx=".35"/>`).join('');
-  return `<svg class="vehicle-soc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18H2v-6l3-2 2.5-5h6.8L18 10l3 1.5a1.5 1.5 0 0 1 1 1.4V18h-2M8 18h8M5 10h13M11.5 5v5"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><g class="car-soc"${filled===null ? ' hidden' : ''}>${bars}</g></svg>`;
-}
-
-const displayed = key => snapshot.flow_display?.[key]?.value ?? (valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value);
-const displayedPower = key => (snapshot.flow_display?.[key] || (snapshot.display?.[key] && !valid(snapshot.live[key])) ? '≈ ' : '')+power(displayed(key));
-const displayAge = key => {
-  const retained=snapshot.flow_display?.[key] ?? snapshot.display?.[key];
-  return retained && (retained.transition_held || retained.aligned || !valid(snapshot.live[key])) ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : 'metric.last_report_age',{minutes:Math.ceil(retained.age_s/60)}) : null;
-};
-
-// Reuse nodes between polls so keyboard focus and animations stay stable.
-function layoutFlow() {
-  const vehicles=consumerEnabled('car') ? snapshot.vehicles ?? [] : [];
-  const container=byId('vehicle-nodes'), paths=byId('vehicle-flows');
-  const signature=JSON.stringify(vehicles.map(vehicle=>vehicle.id));
-  if (container.dataset.vehicles!==signature) {
-    container.replaceChildren();paths.replaceChildren();
-    vehicles.forEach(vehicle=>{
-      const node=document.createElement('a');
-      node.className='node car r';node.href='#car/'+encodeURIComponent(vehicle.id);
-      node.innerHTML=`<span class="orb" aria-hidden="true">${carIcon(null)}</span><span></span><strong></strong>`;
-      container.append(node);
-      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-      path.setAttribute('class','pulse car');path.setAttribute('pathLength','100');paths.append(path);
-    });
-    container.dataset.vehicles=signature;
-  }
-  const keys=['solar','grid','battery','house','car','heat'];
-  const entries=keys.map(key=>({key,node:document.querySelector(`[data-node="${key}"]`),
-    flow:document.querySelector(`[data-flow="${key}"]`),enabled:consumerEnabled(key) && !(key==='car' && vehicles.length)}));
-  entries.forEach(({node,flow,enabled})=>{node.hidden=!enabled;flow.style.display=enabled ? '' : 'none';});
-  const cars=vehicles.map((vehicle,index)=>({key:'car',vehicle,node:container.children[index],flow:paths.children[index],enabled:true}));
-  const left=entries.slice(0,3).filter(entry=>entry.enabled);
-  const right=[entries[3],...(vehicles.length ? cars : [entries[4]]),entries[5]].filter(entry=>entry.enabled);
-  const height=Math.max(360,right.length*144);
-  byId('energy-flow').style.height=height+'px';
-  // Sources and consumers share the same row rule and mirrored wires into the hub, so equal
-  // counts sit on the same heights. The battery wire runs from the hub (charging is positive).
-  const row=(index,count)=>Math.round((index+.5)*1000/count)/10;
-  // Narrow screens spread the columns outwards so the diagram uses the width; the wires end at
-  // the hub edge, which is relatively wider there.
-  const narrow=(globalThis.window?.innerWidth??1000)<600,outer=narrow?17:30,edge=narrow?41:44,bend=value=>Math.round(value*10)/10;
-  const near=bend(outer+(edge-outer)*.57),far=bend(100-outer-(100-outer-(100-edge))*.57);
-  left.forEach((entry,index)=>{
-    const y=row(index,left.length);
-    entry.node.style.setProperty('--x',outer+'%');entry.node.style.setProperty('--y',y+'%');
-    entry.flow.setAttribute('d',entry.key==='battery' ? `M${edge} 50 Q${near} ${y} ${outer} ${y}` : y===50 ? `M${outer} 50 H${edge}` : `M${outer} ${y} Q${near} ${y} ${edge} 50`);
-  });
-  right.forEach((entry,index)=>{
-    const y=row(index,right.length);
-    entry.node.style.setProperty('--x',(100-outer)+'%');entry.node.style.setProperty('--y',y+'%');
-    entry.flow.setAttribute('d',y===50 ? `M${100-edge} 50 H${100-outer}` : `M${100-edge} 50 Q${far} ${y} ${100-outer} ${y}`);
-  });
-  byId('flow-wires').setAttribute('d',[...left,...right].map(entry=>entry.flow.getAttribute('d')).join(' '));
-  return [...entries,...cars].filter(entry=>entry.enabled);
-}
-
-function updatePowerRing(node,key,value,source=snapshot) {
-  const orb=node.querySelector('.orb');
-  const enabled=['solar','battery','car'].includes(key)||(key==='heat'&&snapshot.heat_load_configured);
-  orb.classList.toggle('power-ring-enabled',enabled);
-  let ring=orb.querySelector('.power-ring');
-  if(!enabled){ring?.remove();return;}
-  if(!ring){
-    ring=document.createElementNS('http://www.w3.org/2000/svg','svg');
-    ring.setAttribute('class','power-ring');ring.setAttribute('viewBox','0 0 56 56');ring.setAttribute('aria-hidden','true');
-    ring.innerHTML='<circle class="ring-track" cx="28" cy="28" r="26"/><circle class="ring-value" cx="28" cy="28" r="26" pathLength="100" transform="rotate(-90 28 28)"/>';
-    orb.prepend(ring);
-  }
-  const reference=source.power_reference??{};
-  const fraction=key==='heat'?(valid(snapshot.live.heat_load)?Math.max(0,Math.min(1,snapshot.live.heat_load)):null)
-    :EosChartData.powerFraction(value,reference[key==='battery'?(value<0?'battery_discharge':'battery_charge'):key]);
-  ring.querySelector('.ring-value').setAttribute('stroke-dasharray',`${fraction===null?0:fraction*100} 100`);
-  ring.dataset.fraction=fraction===null?'':String(fraction);
-  const label=fraction===null?t('ring.unknown'):t('ring.load',{percent:decimal(fraction*100)});
-  node.title=[node.title,label].filter(Boolean).join(' · ');
-  node.setAttribute('aria-label',node.getAttribute('aria-label')+' · '+label);
-}
-
-function renderFlow() {
-  const names = {solar:t('node.solar'), grid:t('node.grid'), battery:t('node.battery'), house:t('node.house'), car:t('node.car'), heat:t('device.heat')};
-  layoutFlow().forEach(({key,node,flow,vehicle}) => {
-    const source=vehicle ?? snapshot, live=source.live;
-    const name=vehicle ? vehicle.name : names[key];
-    const inactiveCar = key === 'car' && !vehicleActive(source);
-    const inactiveGrid = key === 'grid' && snapshot.power_supply?.grid_active === false;
-    node.classList.toggle('vehicle-inactive', inactiveCar);
-    node.classList.toggle('grid-disconnected', inactiveGrid);
-    if (key === 'grid') {
-      let indicator = node.querySelector('.backup-indicator');
-      if (!indicator) {
-        indicator = document.createElement('span');
-        indicator.className = 'backup-indicator';
-        indicator.setAttribute('aria-hidden','true');
-        indicator.innerHTML = '<svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M5 10v11h14V10"/><path class="backup-bolt" d="m13 8-5 7h4l-1 5 6-8h-4z"/></svg>';
-        node.append(indicator);
-      }
-      indicator.hidden = !inactiveGrid;
-      indicator.title = t('power_supply.backup');
-    }
-    const retained = source.flow_display?.[key] ?? source.display?.[key];
-    const stale = !inactiveGrid && valid(retained?.value) && (retained.transition_held || retained.aligned || !valid(live[key]));
-    const value = inactiveCar || inactiveGrid ? null : stale ? retained.value : live[key];
-    const soc = source.flow_display?.[key+'_soc']?.value ?? (valid(live[key+'_soc']) ? live[key+'_soc'] : source.display?.[key+'_soc']?.value);
-    if (key === 'car') {
-      const filled=socBarCount(soc);
-      node.querySelector('.car-soc')?.toggleAttribute('hidden',filled===null);
-      node.querySelectorAll('.car-soc-bar').forEach((bar,index)=>bar.classList.toggle('filled',filled!==null && index<filled));
-    }
-    if (key === 'battery') {
-      const knownSoc=valid(soc) && soc>=0 && soc<=100;
-      const low=snapshot.battery_low===true;
-      const filled=knownSoc ? Math.ceil(soc/20) : 0;
-      node.classList.toggle('battery-low',low);
-      node.querySelectorAll('.battery-bar').forEach((bar,index)=>bar.classList.toggle('filled',index<filled));
-    }
-    const direction = key === 'grid' ? value < 0 ? t('metric.export') : t('metric.import')
-      : key === 'battery' ? value < 0 ? t('metric.discharging') : t('mode.charging') : '';
-    node.querySelector('strong').hidden=inactiveCar;
-    node.querySelector('strong').textContent = inactiveCar ? '' : (stale && retained.estimated ? '≈ ' : '') + power(value);
-    let ageNote = node.querySelector('.reading-age');
-    if (!ageNote) {
-      ageNote = document.createElement('small');
-      ageNote.className = 'reading-age';
-      node.append(ageNote);
-    }
-    ageNote.hidden = inactiveCar || (!inactiveGrid && (!stale || (retained.aligned && retained.age_s<10)));
-    ageNote.textContent = inactiveGrid ? t('power_supply.backup') : stale ? t(retained.transition_held ? 'metric.waiting_car_power' : retained.aligned ? 'metric.aligned_age' : retained.estimated ? 'metric.estimated_age' : 'metric.last_report_age',
-      {minutes:Math.ceil(retained.age_s / 60)}) : '';
-    node.title = [vehicle?.name,inactiveCar ? vehicleStatus(source) : '',ageNote.textContent].filter(Boolean).join(' · ');
-    node.querySelector('span:nth-child(2)').textContent = socBarCount(soc)!==null ? `${name} · ${percent(soc)}` : name;
-    node.setAttribute('aria-label', [name,inactiveGrid ? t('power_supply.backup') : inactiveCar ? vehicleStatus(source) : power(value),value ? direction : ''].filter(Boolean).join(' · '));
-    if (['battery','car'].includes(key) && valid(soc)) {
-      const warning=node.classList.contains('battery-low') ? t('battery.minimum_reached') : '';
-      node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
-    }
-    updatePowerRing(node,key,value,source);
-    // The backend maps open notices to flow nodes; the browser only marks them.
-    const problem=snapshot.node_problems?.[vehicle ? 'car/'+vehicle.id : key];
-    node.classList.toggle('problem-error',problem==='error');
-    node.classList.toggle('problem-warning',problem==='warning');
-    const orb=node.querySelector('.orb');
-    let flag=orb.querySelector('.flag');
-    if (problem && !flag) {
-      flag=document.createElement('span');flag.className='flag';flag.setAttribute('aria-hidden','true');flag.textContent='!';orb.append(flag);
-    }
-    if (flag) flag.hidden=!problem;
-    if (problem) node.setAttribute('aria-label',node.getAttribute('aria-label')+' · '+t('flow.problem_'+problem));
-    flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
-    flow.classList.toggle('reverse', value < 0);
-    flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
-    // One shared power scale keeps sources and consumers visually comparable.
-    // Square-root scaling preserves visibility of small residential loads.
-    const magnitude = valid(value) ? Math.abs(value) : 0;
-    const intensity = Math.sqrt(Math.min(1, magnitude / 11000));
-    const length = 2 + 6 * intensity;
-    flow.style.setProperty('--pulse-width', `${(3 + 9 * intensity).toFixed(2)}px`);
-    flow.style.setProperty('--pulse-dash', `${length.toFixed(2)} ${(100 - length).toFixed(2)}`);
-  });
-}
-
-const planWindow = {before:3*3_600_000, after:12*3_600_000};
-const clock = value => new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'}).format(new Date(value));
-function overviewTrack(now) {
-  const start=now-planWindow.before, end=now+planWindow.after, span=end-start;
-  const rows=(snapshot.mode_timeline?.battery??[]).map(row=>({...row,start:Math.max(start,row.start),end:Math.min(end,row.end)}))
-    .filter(row=>row.end>row.start);
-  if (!rows.some(row=>row.kind==='plan'&&row.mode)) return `<p class="footnote">${th('plan.no_valid')}</p>`;
-  const legend=new Map();
-  const segments=rows.map(row=>{
-    const color=Object.hasOwn(modes,row.mode) ? modes[row.mode][1] : 'edge';
-    const label=row.mode ? modeLabel(row.mode) : t('timeline.no_data');
-    legend.set(label,color);
-    const info=t('timeline.interval',{kind:t(`timeline.${row.kind}`),start:when(row.start),end:when(row.end),mode:label});
-    return `<button type="button" class="mode-segment${row.kind==='plan' ? ' future' : ''}" style="--start:${(row.start-start)/span};--duration:${(row.end-row.start)/span};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${row.end-row.start>=5_400_000 ? `<span>${html(label)}</span>` : ''}</button>`;
-  }).join('');
-  const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
-  return `<div class="plan-track-wrap"><div class="plan-track" role="group" aria-label="${th('timeline.aria')}">${segments}</div><span class="plan-now" style="left:${at(now)}" aria-hidden="true"></span></div>
-    <div class="plan-axis" aria-hidden="true"><span style="left:0">${html(clock(start))}</span><span style="left:${at(now)}">${th('chart.now')}</span><span style="left:${at(now+6*3_600_000)}">${html(clock(now+6*3_600_000))}</span><span style="left:100%">${html(clock(end))}</span></div>
-    <div class="mode-legend">${[...legend].map(([label,color])=>`<span><i style="--mode:var(--${color})"></i>${html(label)}</span>`).join('')}</div>`;
-}
-function planEventText(event) {
-  const vehicle=event.vehicle_name ?? snapshot.vehicle_name ?? t('node.car');
-  if (event.kind==='battery_full') return t('plan_event.battery_full',{soc:decimal(event.soc,0)});
-  if (event.kind==='car_target') return t('plan_event.car_target',{vehicle,soc:decimal(event.soc,0)});
-  if (event.device==='battery') {
-    // The backend derives what the battery does from the forecast; the EOS mode name alone can mislead at night.
-    if (event.effect) return t('plan_event.effect_'+event.effect);
-    const key='plan_event.battery_'+event.mode;
-    return Object.hasOwn(language.messages,key) ? t(key) : t('plan_event.battery',{mode:modeLabel(event.mode)});
-  }
-  return t('plan_event.car',{vehicle,mode:modeLabel(event.mode)});
-}
-function nextEvents() {
-  const events=snapshot.plan_events ?? [];
-  if (!events.length) return `<p class="footnote">${th('status.no_next_mode')}</p>`;
-  return events.map(event=>{
-    const details=[event.effect ? t('plan_event.eos_mode',{mode:modeLabel(event.mode)}) : '',valid(event.price_ct) ? t('plan_event.price',{price:price(event.price_ct)}) : ''].filter(Boolean).join(' · ');
-    return `<div class="row"><span><b>${html(planEventText(event))}</b>${details ? `<br><small>${html(details)}</small>` : ''}</span><span class="tag">${html(when(event.time))}</span></div>`;
-  }).join('');
-}
-
-// The expanded state of the event list is a per-viewer convenience only.
-const nextDetailsKey='eos-energiezentrale.next-events-open';
-function restoreNextDetails() {
-  try { const saved=localStorage.getItem(nextDetailsKey); if(saved!==null)byId('next-details').open=saved==='1'; } catch { /* storage unavailable */ }
-  byId('next-details').addEventListener('toggle',()=>{try { localStorage.setItem(nextDetailsKey,byId('next-details').open?'1':'0'); } catch { /* storage unavailable */ }});
-}
-
+// Overview: the day balance stays in accounting.js; figures, flow and EOS plan are a Vue view (EosOverview).
+let overviewView=null;
 function overview() {
   dayBalance();
-  const live = snapshot.live;
-  const backup = snapshot.power_supply?.grid_active === false;
-  const remaining = solarRemaining();
-  const weather = live.weather;
-  const weatherNode = byId('flow-weather');
-  weatherNode.hidden = !weather;
-  if (weather) {
-    const condition = weather.condition;
-    const sun = '<circle cx="16" cy="13" r="6"/><path d="M16 2v2m0 18v2M5 13H3m26 0h-2M7 4l2 2m14 14 2 2M25 4l-2 2M9 20l-2 2"/>';
-    const cloud = '<path d="M8 23h16a6 6 0 0 0 0-12 8 8 0 0 0-15-1 6.5 6.5 0 0 0-1 13Z"/>';
-    let shape = condition === 'sunny' ? sun : condition === 'clear-night' ? '<path d="M24 23A12 12 0 0 1 11 3a12 12 0 1 0 13 20Z"/>' : cloud;
-    if (condition === 'partlycloudy') shape = '<circle cx="9" cy="8" r="5"/>' + cloud;
-    if (['rainy','pouring','lightning-rainy','snowy-rainy'].includes(condition)) shape += '<path d="m9 26-1 3m8-3-1 3m8-3-1 3"/>';
-    if (['lightning','lightning-rainy'].includes(condition)) shape += '<path d="m17 17-4 7h5l-3 6"/>';
-    if (['snowy','snowy-rainy','hail'].includes(condition)) shape += '<path d="M8 27h3m-1.5-1.5v3M22 27h3m-1.5-1.5v3"/>';
-    if (condition === 'fog') shape += '<path d="M4 26h24M7 30h18"/>';
-    if (['windy','windy-variant'].includes(condition)) shape = '<path d="M3 11h20a4 4 0 1 0-4-4M3 17h24M3 23h15a4 4 0 1 1-4 4"/>';
-    if (['unknown','exceptional'].includes(condition)) shape = '<circle cx="16" cy="16" r="12"/><path d="M16 8v10m0 5v1"/>';
-    byId('weather-shape').innerHTML = shape;
-    const temperature = valid(weather.temperature) ? decimal(weather.temperature) + ' ' + weather.unit : '—';
-    byId('weather-temperature').textContent = temperature;
-    const description = stateLabel('weather', condition) + ' · ' + temperature;
-    weatherNode.setAttribute('aria-label', description+' · '+t('forecast.open'));
-    weatherNode.title = description+' · '+t('forecast.open');
-  }
-  const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
-  byId('live-time').textContent = live.time ? t('flow.as_of',{time:when(Date.parse(live.time)-flowAge*1000)}) : t('status.no_readings');
-  byId('overview-kpis').innerHTML = cards([
-    [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
-    [t('metric.price_now'),price(displayed('price')),t('metric.import')],
-    [t('metric.grid_connection'),backup ? t('power_supply.backup') : displayedPower('grid'),
-      backup ? t('power_supply.grid_disconnected') : snapshot.power_supply?.state === 'unknown' ? t('power_supply.unknown')
-      : valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—'],
-    [t('node.battery'),percent(displayed('battery_soc')),valid(displayed('battery')) && Math.abs(displayed('battery'))>=10
-      ? `${displayed('battery') < 0 ? t('metric.discharging') : t('mode.charging')} · ${displayedPower('battery')}` : t('metric.battery_idle')]
-  ]);
-  renderFlow();
-  byId('overview-track').innerHTML=overviewTrack(windowNow());
-  byId('next-events').innerHTML=nextEvents();
-  const count=(snapshot.plan_events??[]).length;
-  byId('next-count').hidden=!count;byId('next-count').textContent=count;
+  overviewView??=globalThis.EosOverview.create({document,request:api,getSnapshot:()=>snapshot,t,decimal,
+    getLocale:()=>language.locale,now:windowNow,lookup:name=>language.messages[name],refresh});
+  overviewView.show();
 }
 
 // Vehicle pages are #car/<encoded id>; the energy flow and the fleet cards link there.
@@ -904,7 +613,6 @@ async function openPvView(){
     if(forecastOpenFailure)render();
   }
 }
-byId('flow-weather').addEventListener('click',()=>{location.hash='#pv';});
 form.elements.holiday_state.addEventListener('change',holidayFields);
 for (const target of [form,costForm]) {
   target.addEventListener('submit',event=>{event.preventDefault();void saveSettings();});
@@ -922,13 +630,6 @@ byId('settings-side').addEventListener('click',event=>{
   event.preventDefault();
   showSettingsSection(link.dataset.section);
 });
-byId('overview-track').addEventListener('click',event => {
-  const button = event.target.closest('[data-mode]');
-  if (!button) return;
-  byId('overview-track').querySelectorAll('[data-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
-  byId('overview-track-detail').textContent = button.dataset.mode;
-});
-restoreNextDetails();
 document.addEventListener('click',event => {
   if (event.target.closest('.plan-link[href="#car"]')) planScrollPending = true;
 });
@@ -976,9 +677,11 @@ async function start() {
   if(!loaded||typeof loaded.locale!=='string'||!loaded.messages||typeof loaded.messages!=='object')throw requestError('language_invalid','language');
   language={locale:loaded.locale,messages:{...startupMessages[startupLanguage],...loaded.messages}};
   startupStage='view';
-  await ensureModule('vue/eos-vue.js',()=>typeof globalThis.EosStatus?.create==='function'?globalThis.EosStatus:null);
-  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof globalThis.EosStatus?.create!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
-    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof globalThis.EosStatus?.create!=='function'?'vue/eos-vue.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
+  // The Vue bundle renders status, overview and device pages; a cached bootstrap may have omitted it.
+  const vueReady=()=>typeof globalThis.EosStatus?.create==='function'&&typeof globalThis.EosOverview?.create==='function'?globalThis.EosStatus:null;
+  await ensureModule('vue/eos-vue.js',vueReady);
+  if(!vueReady()||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
+    const error=requestError('asset_mismatch','interface');error.asset=!vueReady()?'vue/eos-vue.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
   }
   document.documentElement.lang = language.locale;
   document.querySelectorAll('[data-i18n]').forEach(element => {

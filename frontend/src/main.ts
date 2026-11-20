@@ -5,6 +5,7 @@
  * app.js keeps owning routing, authentication and refreshes.
  */
 import { createDeviceController } from '@/bridge/deviceController'
+import { createOverviewController } from '@/bridge/overviewController'
 import { createPvWeatherController } from '@/bridge/pvWeatherController'
 import { createStatusController } from '@/bridge/statusController'
 
@@ -15,8 +16,11 @@ declare global {
   var EosDevice: { create: typeof createDeviceController } | undefined
   // eslint-disable-next-line no-var
   var EosStatus: { create: typeof createStatusController } | undefined
+  // eslint-disable-next-line no-var
+  var EosOverview: { create: typeof createOverviewController } | undefined
 }
 
 globalThis.EosForecast = Object.freeze({ create: createPvWeatherController })
 globalThis.EosDevice = Object.freeze({ create: createDeviceController })
 globalThis.EosStatus = Object.freeze({ create: createStatusController })
+globalThis.EosOverview = Object.freeze({ create: createOverviewController })

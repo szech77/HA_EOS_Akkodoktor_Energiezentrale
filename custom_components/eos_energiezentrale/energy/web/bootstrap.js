@@ -29,7 +29,7 @@
     }
   }
   // vue/eos-vue.js is built from frontend/ (npm run build); it is not part of the source tree.
-  const known=['chart-data.js','accounting.js','vue/eos-vue.js','app.js'];
+  const known=['accounting.js','vue/eos-vue.js','app.js'];
   // Parse/runtime errors before app startup must also produce a visible message.
   window.addEventListener('error',event=>{
     const file=String(event.filename||'').split('/').pop().split('?')[0];
