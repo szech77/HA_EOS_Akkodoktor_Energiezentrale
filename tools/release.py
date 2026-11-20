@@ -20,6 +20,11 @@ VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z
 BUILD_VERSION = re.compile(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:b[1-9][0-9]*)?\Z')
 MANIFEST = 'custom_components/eos_energiezentrale/manifest.json'
 ORIGIN = '.release-source.json'
+# Pinned dependencies whose patch and minor updates get an automatic changelog entry.
+REQUIREMENTS = ('requirements-dev.txt', 'requirements-test.txt')
+WORKFLOWS = '.github/workflows'
+PIN = re.compile(r'^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*==\s*([^\s;#]+)', re.MULTILINE)
+ACTION = re.compile(r'uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)@[0-9a-f]{40}\s*#\s*v?([0-9][^\s]*)')
 
 
 def draft_sections(text):
@@ -60,6 +65,66 @@ def added_notes(current, previous):
             else:
                 result[key].append(entry)
     return result
+
+
+def _pins(text):
+    return {name.lower().replace('_', '-'): version for name, version in PIN.findall(text or '')}
+
+
+def _actions(text):
+    result = {}
+    for name, version in ACTION.findall(text or ''):
+        result.setdefault(name, set()).add(version)
+    return {name: ', '.join(sorted(versions)) for name, versions in result.items()}
+
+
+def _major(version):
+    """Release line of a version: the major number, or year and month for calendar versions."""
+    parts = re.findall(r'\d+', version)
+    if not parts:
+        return None
+    return tuple(parts[:2]) if int(parts[0]) >= 1000 else (parts[0],)
+
+
+def dependency_changes(current, previous):
+    """Changed pinned dependencies between two snapshots {path: text}: (kind, name, old, new, path)."""
+    changes = []
+    for path in sorted(set(current) & set(previous)):
+        parse = _actions if path.startswith(WORKFLOWS) else _pins
+        kind = 'action' if path.startswith(WORKFLOWS) else 'package'
+        old, new = parse(previous[path]), parse(current[path])
+        for name in sorted(set(old) & set(new)):
+            if old[name] != new[name]:
+                changes.append((kind, name, old[name], new[name], path))
+    # One action used in several workflows is one update.
+    unique = {}
+    for change in changes:
+        unique.setdefault(change[:4], change)
+    return list(unique.values())
+
+
+def dependency_notes(changes, sections):
+    """Changelog entries for patch and minor dependency updates without an own entry.
+
+    A major update (or an unreadable version) without an entry that names the dependency
+    stops the release: it needs a reviewed description, not a generated one."""
+    written = '\n'.join(entry for entries in sections.values() for entry in entries).lower()
+    notes = []
+    for kind, name, old, new, path in changes:
+        if name.lower() in written:
+            continue
+        if _major(old) is None or _major(old) != _major(new):
+            raise ValueError(f'Major dependency update {name} {old} -> {new} needs its own changelog entry')
+        place = 'CI' if kind == 'action' else f'`{path}`'
+        label = 'GitHub Action' if kind == 'action' else 'Abhängigkeit'
+        notes.append(f'- {label} `{name}` von {old} auf {new} aktualisiert ({place}); automatisch erfasst.')
+    return notes
+
+
+def dependency_files(read):
+    """Dependency snapshot {path: text}; ``read(path)`` returns a file's text or None."""
+    files = {path: read(path) for path in (*REQUIREMENTS, *read(WORKFLOWS + '/'))}
+    return {path: content for path, content in files.items() if content is not None}
 
 
 def next_version(base, sections):
@@ -244,6 +309,21 @@ def build_plan(root, github, source, channel, beta_number=None, branch='main', t
         if channel == 'beta':
             raise ValueError('This beta run number already belongs to a different source')
     sections = added_notes(current, previous)
+    if baseline is not None:
+        # Dependency updates since the last stable source, e.g. from Dependabot.
+        def local(path):
+            if path.endswith('/'):
+                folder = root/path
+                return [f'{path}{item.name}' for item in sorted(folder.glob('*.yml'))] if folder.is_dir() else []
+            target = root/path
+            return target.read_text(encoding='utf-8') if target.is_file() else None
+        def stable(path):
+            return [] if path.endswith('/') else file_at(github, baseline['source'], path)
+        current_files = dependency_files(local)
+        # No assignment expression here: it would rebind this function's ``text`` (the changelog).
+        previous_files = {path: stable(path) for path in current_files}
+        previous_files = {path: content for path, content in previous_files.items() if content is not None}
+        sections['Bugfixes'] += dependency_notes(dependency_changes(current_files, previous_files), sections)
     if not any(sections.values()):
         raise ValueError('New Version contains no changes beyond the last stable release')
     archived = re.findall(r'^## (\d+\.\d+\.\d+) - \d{4}-\d{2}-\d{2}\s*$', history, re.MULTILINE)
