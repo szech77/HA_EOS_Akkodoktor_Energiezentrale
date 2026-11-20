@@ -177,13 +177,6 @@ function windowNow() {
   return Date.parse(snapshot.live.time) || Date.now();
 }
 
-function actualPoints(key) {
-  const influx = history.influx.filter(row => valid(row[key]));
-  const local = history.local.filter(row => valid(row[key]));
-  const first = Date.parse(local[0]?.time ?? '');
-  return [...influx.filter(row => !first || Date.parse(row.time) < first), ...local];
-}
-
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
 
 function solarRemaining() {
@@ -198,17 +191,6 @@ function solarTodayEnergy() {
 function solarToday() {
   const energy=solarTodayEnergy();
   return valid(energy) ? `${decimal(energy)} ${t('unit.kwh')}` : '—';
-}
-
-function solarForecastCards(now) {
-  const days=snapshot.pv_forecast_totals ?? [];
-  return days.map((row,i)=>{
-    const totalToday=row.includes_measured;
-    const value=valid(row.total_kwh) ? `${totalToday ? '≈ ' : ''}${decimal(row.total_kwh)} ${t('unit.kwh')}` : '—';
-    return [t(['metric.pv_forecast_today','metric.pv_forecast_tomorrow','metric.pv_forecast_day_after'][i]),value,
-      !valid(row.kwh) ? t('metric.forecast_missing') : totalToday ? t('metric.forecast_today_total')+(row.complete ? '' : ' · '+t('metric.forecast_partial'))
-      : i===0 ? t('metric.forecast_remaining_only') : row.complete ? t('metric.forecast_complete') : t('metric.forecast_partial')];
-  });
 }
 
 const consumerEnabled = key => !["car","heat"].includes(key) || snapshot.features?.[key] !== false;
@@ -483,148 +465,6 @@ function overview() {
   byId('next-count').hidden=!count;byId('next-count').textContent=count;
 }
 
-const chartModels = new Map();
-let activeProbe = null;
-
-function chart(title, key, divisor, unit, color, now, additional = [], chartId = key) {
-  const descriptors = [{key,label:key === 'solar' && additional.length ? t('chart.solar') : title,divisor,color},...additional];
-  const series = descriptors.map(item => ({...item,
-    actual:item.actual === false ? [] : EosChartData.points(actualPoints(item.key),item.key,now-day,now),
-    future:item.future === false ? [] : EosChartData.points(snapshot.forecast,item.key,now-day,now+day).filter(row=>row.end>now)
-  }));
-  const numbers = series.flatMap(item => [...item.actual,...item.future].map(row=>row.value/item.divisor));
-  if (!numbers.length) return `<section><h2>${html(title)} · ${html(unit)}</h2><p class="footnote">${th('chart.no_data')}</p></section>`;
-  const min = key === 'price' ? Math.floor(Math.min(...numbers)-1) : Math.min(0,...numbers);
-  const max = key.endsWith('_soc') ? 100 : Math.max(min+1,Math.ceil(Math.max(...numbers)+(key === 'price' ? 1 : 0)));
-  chartModels.set(chartId,{series,now,unit});
-  const curve = (rows,item,gap,forecast) => {
-    let previous;
-    const path = rows.map(row => {
-      const x = Math.max(0,Math.min(100,50+(row.stamp-now)*50/day));
-      const y = (max-row.value/item.divisor)*100/(max-min);
-      const command = previous !== undefined && row.stamp-previous <= gap ? 'L' : 'M';
-      previous = row.stamp;
-      return `${command}${x.toFixed(3)},${y.toFixed(3)}`;
-    }).join(' ');
-    return `<path class="curve${forecast ? ' forecast' : ''}" style="--series:var(--${item.color})" d="${path}"/>`;
-  };
-  const axis = ['−24','−12',null,'+12','+24'].map(value =>
-    `<span>${value ? `${value} ${th('chart.hour')}` : th('chart.now')}</span>`).join('');
-  return `<section><h2>${html(title)} · ${html(unit)}</h2>
-    <div class="series-legend">${series.map(item=>`<span><i style="--series:var(--${item.color})"></i>${html(item.label)}</span>`).join('')}</div>
-    <div class="chart" data-chart="${html(chartId)}">
-      <div class="axis-y" aria-hidden="true"><span>${decimal(max)}</span><span>${decimal((max+min)/2)}</span><span>${decimal(min)}</span></div>
-      <div class="interactive-plot">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" tabindex="0" role="img" aria-label="${th('chart.interactive_aria',{title})}">
-          <path class="guide" d="M0 1 H100 M0 50 H100 M0 99 H100"/><line class="now" x1="50" x2="50" y1="0" y2="100"/>
-          ${series.map(item=>curve(item.actual,item,360000,false)+curve(item.future,item,3600000,true)).join('')}
-        </svg>
-        <div class="chart-crosshair" hidden></div><div class="chart-tooltip" role="status" hidden></div>
-      </div><div class="axis-x">${axis}</div>
-    </div></section>`;
-}
-
-function hideProbe() {
-  activeProbe = null;
-  document.querySelectorAll('.chart-crosshair,.chart-tooltip').forEach(element=>{element.hidden=true;});
-}
-
-function showProbe(id, ratio) {
-  const model = chartModels.get(id);
-  const plot = [...byId('charts').querySelectorAll('[data-chart]')].find(element=>element.dataset.chart===id)?.querySelector('.interactive-plot');
-  if (!model || !plot) return;
-  activeProbe = {id,ratio:Math.max(0,Math.min(1,ratio))};
-  const stamp = model.now+(activeProbe.ratio-.5)*2*day;
-  const tooltip = plot.querySelector('.chart-tooltip');
-  tooltip.innerHTML = `<b>${html(time(stamp))}</b><small>${th(stamp > model.now ? 'chart.forecast_values' : 'chart.measured_values')}</small>`
-    + model.series.map(item=>{
-      const sample = EosChartData.at(item,stamp,model.now);
-      const value = sample ? `${decimal(sample.point.value/item.divisor,2)} ${model.unit}` : '—';
-      return `<div class="tooltip-series"><i style="--series:var(--${item.color})"></i><span>${html(item.label)}${sample ? `<small>${html(time(sample.point.stamp))}</small>` : ''}</span><strong>${html(value)}</strong></div>`;
-    }).join('');
-  tooltip.hidden=false;
-  const crosshair = plot.querySelector('.chart-crosshair');
-  crosshair.hidden=false;
-  crosshair.style.left=`${activeProbe.ratio*100}%`;
-  tooltip.style.left=`${Math.max(4,Math.min(plot.clientWidth-tooltip.offsetWidth-4,activeProbe.ratio*plot.clientWidth+12))}px`;
-}
-
-function energyDetail(now) {
-  byId('detail-title').textContent=t('device.energy');
-  const names = {solar:t('node.solar'),grid:t('node.grid'),battery:t('node.battery'),house:t('node.house'),car:t('node.car'),heat:t('device.heat')};
-  byId('detail-kpis').innerHTML=cards(Object.entries(names).filter(([key])=>consumerEnabled(key)).map(([key,label])=>{
-    return [label,displayedPower(key),displayAge(key) ?? t("metric.measured")];
-  }));
-  byId('timeline').innerHTML='';
-  const additional = ['grid','battery','house','car','heat'].filter(consumerEnabled).map(key=>({key,label:names[key],divisor:1000,color:key,future:key!=='house'}));
-  additional.push({key:'house_total',label:t('chart.house_forecast'),divisor:1000,color:'house',actual:false});
-  byId('charts').innerHTML=chart(t('chart.energy'),'solar',1000,t('unit.kw'),'solar',now,additional)
-    + `<p class="footnote">${th('chart.energy_signs')}</p>`
-    + chart(t('chart.price'),'price',1,t('unit.price'),'heat',now);
-  byId('plan').hidden=false;
-  byId('plan').innerHTML=`<h2>${th('plan.forecast')}</h2><p>${th('chart.energy_forecast_note')}</p>`;
-}
-
-const chartsRoot = byId('charts');
-function pointerProbe(event) {
-  const svg=event.target.closest('.interactive-plot svg');
-  if (!svg) {hideProbe();return;}
-  const box=svg.getBoundingClientRect();
-  showProbe(svg.closest('[data-chart]').dataset.chart,(event.clientX-box.left)/box.width);
-}
-chartsRoot.addEventListener('pointermove',pointerProbe);
-chartsRoot.addEventListener('pointerdown',pointerProbe);
-chartsRoot.addEventListener('pointerleave',hideProbe);
-chartsRoot.addEventListener('pointercancel',hideProbe);
-chartsRoot.addEventListener('focusin',event=>{
-  const chart=event.target.closest('[data-chart]');
-  if (chart) showProbe(chart.dataset.chart,.5);
-});
-chartsRoot.addEventListener('focusout',hideProbe);
-chartsRoot.addEventListener('keydown',event=>{
-  const chart=event.target.closest('[data-chart]');
-  if (!chart) return;
-  if (event.key==='Escape') {hideProbe();return;}
-  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
-  event.preventDefault();
-  const current=activeProbe?.id===chart.dataset.chart ? activeProbe.ratio : .5;
-  showProbe(chart.dataset.chart,event.key==='Home' ? 0 : event.key==='End' ? 1 : current+(event.key==='ArrowRight' ? 1 : -1)/576);
-});
-function timeline(key, now) {
-  const all = snapshot.mode_timeline?.[key] ?? [];
-  const legend = new Map();
-  const bands = all.map(({start,end,mode,kind}) => {
-    const color = Object.hasOwn(modes, mode) ? modes[mode][1] : 'edge';
-    const label = mode ? modeLabel(mode) : t('timeline.no_data');
-    legend.set(label,color);
-    const info = t('timeline.interval', {kind:t(`timeline.${kind}`),
-      start:time(start), end:time(end), mode:label});
-    // Segments are placed by time, so the centre line is "now" however many segments EOS sends.
-    const first=Math.max(start,now-day), last=Math.min(end,now+day);
-    if (last<=first) return '';
-    return `<button type="button" class="mode-segment${kind==='plan' ? ' future' : ''}" style="--start:${(first-now+day)/(2*day)};--duration:${(last-first)/(2*day)};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
-  }).join('');
-  return `<h2>${key === 'car' ? th('timeline.car_title') : th('timeline.battery_title')}</h2>
-    <div class="mode-halves"><span>${th('timeline.history_range')}</span><span>${th('timeline.plan_range')}</span></div>
-    <div class="mode-track" role="group" aria-label="${th('timeline.aria')}">${bands}</div>
-    <div class="mode-legend">${[...legend].map(([label,color]) => `<span><i style="--mode:var(--${color})"></i>${html(label)}</span>`).join('')}</div>
-    <p class="mode-detail" id="mode-detail" aria-live="polite">${html(modeLabel(snapshot.live[key + '_mode']))}</p>`;
-}
-
-function vehicleSocChart(vehicle, now) {
-  const original=snapshot, originalHistory=history;
-  try {
-    snapshot=vehicle;
-    history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
-    return chart(vehicle.name+' · '+t('chart.soc'),'car_soc',1,'%','car',now,[],'vehicle_soc_'+vehicle.id)
-      + vehicleForecastNote(vehicle);
-  } finally {snapshot=original;history=originalHistory;}
-}
-function vehicleForecastNote(vehicle) {
-  const source=vehicle.vehicle_forecast_source;
-  return ['eos','pv_estimate','fast_estimate','constant','unavailable'].includes(source)
-    ? `<p class="footnote">${th(`forecast.vehicle_${source}`)}</p>` : '';
-}
 // Vehicle pages are #car/<encoded id>; the energy flow and the fleet cards link there.
 function routeVehicleId(key) {
   if (!key.startsWith('car/')) return null;
@@ -634,100 +474,30 @@ function routeVehicleId(key) {
 function singleVehicleRoute(requested, vehicles) {
   return requested==='car' && vehicles.length===1 ? 'car/'+encodeURIComponent(vehicles[0].id) : null;
 }
-// The car pages (fleet and vehicle) are a Vue view (EosCar); it loads with the Vue bundle.
-let carView=null, carOpenFailure=false, carLoading=false;
-function carModule() {
-  return typeof globalThis.EosCar?.create==='function' ? globalThis.EosCar : null;
+// The device pages (PV, grid, battery, house, heat pump, energy and car) are a Vue view (EosDevice).
+let deviceView=null, deviceOpenFailure=false, deviceLoading=false;
+function deviceModule() {
+  return typeof globalThis.EosDevice?.create==='function' ? globalThis.EosDevice : null;
 }
-function showCarView(key) {
-  const module=carModule();
+function showDeviceView(key) {
+  const module=deviceModule();
   if (!module) {
     // A cached bootstrap may have omitted the bundle; load it once and render again.
-    if (!carLoading && !carOpenFailure) {
-      carLoading=true;
-      ensureModule('vue/eos-vue.js',carModule).catch(()=>{carOpenFailure=true;}).finally(()=>{carLoading=false;render();});
+    if (!deviceLoading && !deviceOpenFailure) {
+      deviceLoading=true;
+      ensureModule('vue/eos-vue.js',deviceModule).catch(()=>{deviceOpenFailure=true;}).finally(()=>{deviceLoading=false;render();});
     }
     return;
   }
   try {
-    carView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,decimal,getLocale:()=>language.locale,
-      now:windowNow,lookup:name=>language.messages[name],refresh});
-    carView.show(key,{scrollToPlan:planScrollPending});
+    deviceView??=module.create({document,request:api,getSnapshot:()=>snapshot,getHistory:()=>history,t,decimal,
+      getLocale:()=>language.locale,now:windowNow,lookup:name=>language.messages[name],refresh});
+    deviceView.show(key,{scrollToPlan:planScrollPending});
     planScrollPending=false;
   } catch {
-    // Failures stay a browser notice; the rest of the page keeps working.
-    carOpenFailure=true;
+    // Failures stay a browser notice; the rest of the panel keeps working.
+    deviceOpenFailure=true;
   }
-}
-function detail(key, nested=false) {
-  const vehicleId=routeVehicleId(key), carRoute=key==='car' || vehicleId!==null;
-  const fleet=key==='car' && Boolean(snapshot.vehicles?.length);
-  byId('car-app').hidden=!carRoute;
-  byId('detail-kpis').hidden=false;
-  byId('detail-kpis').classList.toggle('vehicle-inactive', carRoute && !fleet && !vehicleActive(snapshot));
-  const usageLink=byId('usage-link');
-  // The car pages show their own link to the usage report.
-  usageLink.hidden=carRoute || !['house','heat'].includes(key);
-  usageLink.href='#usage/'+key;
-  if (carRoute && !nested) showCarView(key);
-  if (vehicleId!==null) {
-    const vehicle=snapshot.vehicles?.find(item=>item.id===vehicleId);
-    if (!vehicle) return;
-    const original=snapshot, originalHistory=history;
-    try {
-      snapshot={...original,...vehicle,vehicles:[],vehicle_name:vehicle.name,display:vehicle.display ?? {},flow_display:vehicle.flow_display ?? {}};
-      history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
-      detail('car',true);
-      byId('detail-title').textContent=vehicle.name;
-    } finally {snapshot=original;history=originalHistory;}
-    return;
-  }
-  if (fleet) {
-    // All vehicles: the vehicle cards come from the car view; charging power and SoC per vehicle.
-    chartModels.clear();
-    byId('detail-title').textContent=t('fleet.title');
-    byId('detail-kpis').hidden=true;
-    byId('timeline').innerHTML='';
-    byId('charts').innerHTML=chart(t('fleet.total'),'car',1000,t('unit.kw'),'car',windowNow())
-      + snapshot.vehicles.map(vehicle=>vehicleSocChart(vehicle,windowNow())).join('');
-    byId('plan').hidden=false;
-    byId('plan').innerHTML=`<p>${th('fleet.forecast_note')}</p>`;
-    return;
-  }
-  const now = windowNow();
-  chartModels.clear();
-  if (key === 'energy') {
-    energyDetail(now);
-    if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
-    return;
-  }
-  const live = snapshot.live;
-  const [name,title] = [t(`device.${key}`),t(`chart.${key}`)];
-  byId('detail-title').textContent = name;
-  const metadata = {
-    solar:[[t('metric.pv_today'),solarToday(),t('metric.available_intervals')],...solarForecastCards(now)],
-    grid:[[t('metric.direction'),valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : t('metric.import') : '—',t('metric.grid_connection')]],
-    battery:[[t('chart.soc'),percent(displayed("battery_soc")),t('metric.measured')],[t('metric.eos_mode'),modeLabel(live.battery_mode),stateLabel('mode',live.battery_control)]],
-    house:[[t('metric.house_total'),displayedPower("house_total"),t('metric.house_includes')]],
-    car:[[t('chart.soc'),percent(displayed("car_soc")),stateLabel('source',live.soc_source)],[t('metric.target'),percent(snapshot.charge_target_soc ?? snapshot.settings.target_soc),live.departure ? time(live.departure) : t('metric.no_departure')]],
-    heat:[]
-  };
-  const inactiveCar = key === 'car' && !vehicleActive(snapshot);
-  byId('detail-kpis').innerHTML = cards([[t('metric.current_power'),inactiveCar ? vehicleStatus(snapshot) : displayedPower(key),inactiveCar ? '' : displayAge(key) ?? (key === 'car' ? stateLabel('mode',live.car_control ?? live.car_status) : t('metric.measured'))],...metadata[key]]);
-  const withPlan = key === 'battery' || key === 'car';
-  byId('timeline').innerHTML = withPlan ? timeline(key,now) : '';
-  byId('charts').innerHTML = chart(title,key,1000,t('unit.kw'),key,now,withPlan ? [{key:'solar',label:t('chart.solar'),divisor:1000,color:'solar'}] : [])
-    + (key === 'house' ? chart(t('chart.house_total'),'house_total',1000,t('unit.kw'),'house',now) : '')
-    + (withPlan ? chart(t('chart.soc'),key+'_soc',1,'%',key,now)+(key==='car'?vehicleForecastNote(snapshot):'') : '')
-    + (['battery','car','grid','heat'].includes(key) ? chart(t('chart.price'),'price',1,t('unit.price'),'heat',now) : '');
-  if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
-  const upcoming = snapshot.upcoming_plan?.[key] ?? [];
-  // The car page answers goal and plan above; its raw KPIs and mode list would repeat them.
-  if (key === 'car' && snapshot.charge_plan) {byId('detail-kpis').hidden=true;byId('plan').hidden=true;return;}
-  byId('plan').hidden = !withPlan && key !== 'heat' && key !== 'house';
-  byId('plan').innerHTML = withPlan
-    ? `<h2>${th('plan.next')}</h2>${upcoming.length ? '<dl>'+upcoming.map(item => `<dt>${html(time(item.time))}</dt><dd>${html(modeLabel(item.mode))}</dd>`).join('')+'</dl>' : `<p>${th('plan.no_valid')}</p>`}`
-    : `<h2>${th('plan.forecast')}</h2><p>${key === 'heat' ? th('plan.no_heat') : th('plan.house_total')}</p>`;
 }
 
 const form = byId('daily');
@@ -1040,7 +810,7 @@ function browserNotices() {
   // Browser-side failures stay in the browser; they are shown, never reported to the backend.
   return [...(connectionFailure?[{severity:'warning',message:'notice.connection',browser:true}]:[]),
     ...(forecastOpenFailure?[{severity:'warning',message:'forecast.open_failed',browser:true}]:[]),
-    ...(carOpenFailure?[{severity:'warning',message:'car.open_failed',browser:true}]:[])];
+    ...(deviceOpenFailure?[{severity:'warning',message:'device.open_failed',browser:true}]:[])];
 }
 function resolvedText(item) {
   const key=item.code?.startsWith('sources_')?'notice_card.sources_resolved':'notice.'+item.code;
@@ -1079,7 +849,6 @@ function renderStatus(route) {
 }
 function renderView() {
   const requested = location.hash.slice(1);
-  if (requested !== route) hideProbe();
   const vehicles=consumerEnabled('car') ? snapshot.vehicles ?? [] : [];
   const single=singleVehicleRoute(requested,vehicles);
   // replace keeps the back button on the previous page; the hash change renders again.
@@ -1100,15 +869,15 @@ function renderView() {
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
   renderStatus(route);
   const entered = route !== shownRoute;
-  // A new visit may retry a car view that failed to open.
-  if (entered) carOpenFailure=false;
+  // A new visit may retry a device view that failed to open.
+  if (entered) deviceOpenFailure=false;
   // Routes share their names with section ids; keep the status band in view after navigation.
   if (route !== shownRoute) { if (shownRoute !== null) window.scrollTo(0,0); else requestAnimationFrame(()=>window.scrollTo(0,0)); shownRoute = route; }
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();
   else if (route === 'pv') {if (entered || (!forecastView && !forecastOpenFailure)) openPvView(); else forecastView?.update();}
-  else if (route !== 'notices') detail(route);
+  else if (route !== 'notices') showDeviceView(route);
 }
 let connectionFailure=false;
 async function refresh() {
@@ -1238,10 +1007,6 @@ byId('control-areas').addEventListener('click', async event => {
 });
 byId('diagnostics-copy').addEventListener('click',copyDiagnostics);
 byId('diagnostics-export').addEventListener('click',exportDiagnostics);
-byId('timeline').addEventListener('click',event => {
-  const button = event.target.closest('[data-mode]');
-  if (button) byId('mode-detail').textContent = button.dataset.mode;
-});
 async function start() {
   let haLanguage;
   try {

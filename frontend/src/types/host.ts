@@ -71,6 +71,8 @@ export interface LegacyContext {
   readonly document: Document
   readonly request: BackendRequest
   readonly getSnapshot: () => PanelSnapshot
+  /** Local and Influx history of the charts (device pages). */
+  readonly getHistory?: () => unknown
   readonly t: Translate
   readonly decimal: FormatDecimal
   readonly getLocale: () => string

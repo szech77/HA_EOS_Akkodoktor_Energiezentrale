@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendRequest, PanelSnapshot } from '@/types/host'
 import { flush, testContext, type TestContext } from '@/test/host'
-import { createCarController, MOUNT_ID } from '@/bridge/carController'
+import { createDeviceController, MOUNT_ID } from '@/bridge/deviceController'
 import type { VehicleData } from '@/types/car'
 import { chargePlan, fleet, NOW, vehicle } from '@/test/fixtures/car'
 
@@ -21,7 +21,7 @@ function open(route: string, snapshot: object = fleet(), options: { request?: Ba
   const request = options.request ?? (vi.fn(async () => ({})) as unknown as BackendRequest)
   const refresh = vi.fn(async () => undefined)
   const context: TestContext = testContext({ code: options.code ?? 'de', snapshot: snapshot as PanelSnapshot, request, now: NOW, refresh })
-  const view = createCarController(context)
+  const view = createDeviceController(context)
   view.show(route)
   const $ = <T extends Element = HTMLElement>(selector: string) => root.querySelector<T>(selector)
   const text = (selector: string) => $(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
@@ -344,7 +344,7 @@ describe('routes and installations', () => {
     const { view, $ } = open('car/unknown')
     await flush()
     expect($('#car-view')).toBeNull()
-    expect(view.show('battery')).toBe(false)
+    expect(view.show('settings')).toBe(false)
     expect(view.show('car/%E0%A4%A')).toBe(false)
   })
 
@@ -358,6 +358,6 @@ describe('routes and installations', () => {
   it('refuses to start without its mount point', () => {
     root.remove()
     const context = testContext({ snapshot: fleet() as unknown as PanelSnapshot, request: (async () => ({})) as BackendRequest, now: NOW })
-    expect(() => createCarController(context)).toThrow(/mount point/)
+    expect(() => createDeviceController(context)).toThrow(/mount point/)
   })
 })

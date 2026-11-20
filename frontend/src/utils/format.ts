@@ -38,6 +38,11 @@ export function createFormat(host: Host, zone: () => string | undefined) {
     percentText: (value: number | null | undefined) => (valid(value) ? `${decimal(value)} %` : '—'),
     /** Power in watts as kW with two decimals; the sign is shown by the context, not the number. */
     power: (value: number | null | undefined) => (valid(value) ? `${decimal(Math.abs(value) / 1000, 2)} ${t('unit.kw')}` : '—'),
+    /** Short date and time, e.g. "18.11.26, 14:30". */
+    dateTime(stamp: string | number | null | undefined): string {
+      const value = typeof stamp === 'number' ? stamp : Date.parse(stamp ?? '')
+      return valid(value) ? date(value, { dateStyle: 'short', timeStyle: 'short' }) : '—'
+    },
     euro: (value: number) => new Intl.NumberFormat(host.locale(), { style: 'currency', currency: 'EUR' }).format(value),
     /** Same day: time; within six days: weekday and time; otherwise date and time. */
     whenDated(stamp: string | number | null | undefined): string {

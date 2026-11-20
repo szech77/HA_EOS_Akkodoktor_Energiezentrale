@@ -457,8 +457,7 @@
 }
 /* Auto & Ladeplan (redesign stage 6) */
 #eos-energy-design .sr-only {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
-#eos-energy-design #car-app {display:contents;}
-#eos-energy-design #car-app[hidden] {display:none;}
+#eos-energy-design #device-view {display:contents;}
 #eos-energy-design #car-view {display:grid;gap:16px;margin-bottom:16px;}
 #eos-energy-design #car-view[hidden] {display:none;}
 #eos-energy-design .car-top {display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start;}

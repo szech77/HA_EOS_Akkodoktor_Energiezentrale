@@ -66,18 +66,8 @@
       <section class="plan-panel" id="day-balance"></section>
     </section>
     <section id="detail" hidden>
-      <a class="back" href="#overview" data-i18n="nav.back"></a>
-      <div class="page-top"><div><p class="eyebrow" data-i18n="section.device"></p><h1 id="detail-title"></h1></div><a class="back" href="#settings" data-i18n="nav.settings"></a></div>
-      <a class="back" id="usage-link" hidden data-i18n="billing.open"></a>
-      <!-- Car pages: rendered by the Vue bundle (frontend/src/views/CarView.vue). -->
-      <div id="car-app" hidden></div>
-      <div class="kpis" id="detail-kpis"></div>
-      <section class="chart-panel">
-        <div class="chart-legend"><span data-i18n="chart.measured"></span><span data-i18n="chart.forecast"></span><span data-i18n="chart.now_marker"></span></div>
-        <div id="timeline"></div>
-        <div id="charts"></div>
-      </section>
-      <section class="plan-panel" id="plan"></section>
+      <!-- Device and car pages: rendered by the Vue bundle (frontend/src/views/DeviceView.vue, CarView.vue). -->
+      <div id="device-view"></div>
     </section>
     <section id="pv" hidden>
       <div class="d-head"><a class="back" href="#overview" data-i18n="nav.back"></a></div>

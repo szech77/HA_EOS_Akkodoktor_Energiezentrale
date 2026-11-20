@@ -4,15 +4,15 @@
  * During the step-by-step migration each Vue page registers a controller for app.js (src/bridge);
  * app.js keeps owning routing, authentication and refreshes.
  */
-import { createCarController } from '@/bridge/carController'
+import { createDeviceController } from '@/bridge/deviceController'
 import { createPvWeatherController } from '@/bridge/pvWeatherController'
 
 declare global {
   // eslint-disable-next-line no-var
   var EosForecast: { create: typeof createPvWeatherController } | undefined
   // eslint-disable-next-line no-var
-  var EosCar: { create: typeof createCarController } | undefined
+  var EosDevice: { create: typeof createDeviceController } | undefined
 }
 
 globalThis.EosForecast = Object.freeze({ create: createPvWeatherController })
-globalThis.EosCar = Object.freeze({ create: createCarController })
+globalThis.EosDevice = Object.freeze({ create: createDeviceController })

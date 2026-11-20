@@ -364,7 +364,7 @@
     "forecast.empty": "No hourly weather data available for the next 24 hours.",
     "action.weather_forecast": "Weather forecast",
     "forecast.open_failed": "The weather/PV forecast could not be opened. Click the weather icon again or reload the interface.",
-    "car.open_failed": "The car view could not be opened. Open the page again or reload the interface.",
+    "device.open_failed": "The device view could not be opened. Open the page again or reload the interface.",
     "plugin.firmware": "Venus OS",
     "plugin.firmware_unknown": "unknown",
     "plugin.firmware_source_detected": "automatically detected",
