@@ -302,3 +302,70 @@ def test_published_notes_and_source_parent_cannot_be_replaced(project):
 def test_malformed_draft_is_rejected(text):
     with pytest.raises(ValueError,match='New Version'):
         release.draft_sections(text)
+
+
+WORKFLOW = 'steps:\n  - uses: actions/checkout@{sha} # v{version}\n'
+
+
+def dependencies(root, github, old, new, path='requirements-test.txt'):
+    github.files[(BASE, path)] = old
+    target = root/path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(new, encoding='utf-8')
+
+
+def only_released_draft(root):
+    (root/'CHANGELOG.md').write_text('# Changelog\n\n## New Version\n\n'+release.render_notes(EMPTY)
+                                     +'\n## 0.19.0 - 2026-11-16\n\n'+release.render_notes(EMPTY), encoding='utf-8')
+
+
+def test_dependency_patch_update_without_entry_gets_an_automatic_bugfix_note(project):
+    github = Repository()
+    only_released_draft(project)
+    with pytest.raises(ValueError, match='no changes'):
+        plan(project, github)
+    # The Dependabot case: only the pin changes, nobody wrote a changelog entry.
+    dependencies(project, github, 'homeassistant==2026.11.1\npytest==9.2.0\n', 'homeassistant==2026.11.2\npytest==9.2.0\n')
+    result = plan(project, github, 'stable')
+    assert result['version'] == '0.19.1'
+    assert ('- Abhängigkeit `homeassistant` von 2026.11.1 auf 2026.11.2 aktualisiert '
+            '(`requirements-test.txt`); automatisch erfasst.') in result['notes']
+
+
+def test_own_entry_wins_and_minor_updates_and_actions_are_covered_once(project):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, 'bandit==1.9.4\npip-audit==2.10.1\n', 'bandit==1.10.0\npip-audit==2.10.1\n', 'requirements-dev.txt')
+    old, new = WORKFLOW.format(sha='1'*40, version='7.0.1'), WORKFLOW.format(sha='2'*40, version='7.0.2')
+    for name in ('ci.yml', 'other.yml'):
+        dependencies(project, github, old, new, '.github/workflows/'+name)
+    notes = plan(project, github)['notes']
+    assert '`bandit` von 1.9.4 auf 1.10.0' in notes
+    assert notes.count('GitHub Action `actions/checkout` von 7.0.1 auf 7.0.2 aktualisiert (CI)') == 1
+    # A written entry naming the dependency replaces the generated one.
+    text = (project/'CHANGELOG.md').read_text(encoding='utf-8').replace(
+        '### Bugfixes\n\n- Keine.', '### Bugfixes\n\n- Bandit 1.10.0 meldet zusätzlich unsichere Temporärdateien.', 1)
+    (project/'CHANGELOG.md').write_text(text, encoding='utf-8')
+    notes = plan(project, github, build='124')['notes']
+    assert 'Bandit 1.10.0 meldet' in notes and '`bandit` von' not in notes
+
+
+@pytest.mark.parametrize('old,new', [('homeassistant==2026.11.2', 'homeassistant==2026.12.0'),
+                                     ('pytest==9.2.0', 'pytest==10.0.0'), ('pytest==9.2.0', 'pytest==main')])
+def test_major_or_unreadable_dependency_updates_need_an_own_entry(project, old, new):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, old+'\n', new+'\n')
+    with pytest.raises(ValueError, match='needs its own changelog entry'):
+        plan(project, github)
+    name = old.split('==')[0]
+    text = (project/'CHANGELOG.md').read_text(encoding='utf-8').replace(
+        '### Bugfixes\n\n- Keine.', f'### Bugfixes\n\n- {name} auf die neue Hauptversion umgestellt.', 1)
+    (project/'CHANGELOG.md').write_text(text, encoding='utf-8')
+    assert 'neue Hauptversion' in plan(project, github)['notes']
+
+
+def test_added_removed_or_unchanged_dependencies_create_no_entry():
+    previous = {'requirements-test.txt': 'pytest==9.2.0\nold==1.0\n', '.github/workflows/ci.yml': WORKFLOW.format(sha='1'*40, version='7.0.1')}
+    current = {'requirements-test.txt': 'pytest==9.2.0\nnew==2.0\n', '.github/workflows/ci.yml': WORKFLOW.format(sha='1'*40, version='7.0.1')}
+    assert release.dependency_changes(current, previous) == []

@@ -54,6 +54,32 @@ Verhalten beschreiben. Ohne neue Einträge schlägt die Versionsplanung fehl.
 Veröffentlichte nummerierte Einträge bleiben erhalten; Betas verbrauchen keine
 Einträge für das nächste stabile Release.
 
+### Automatische Einträge für Abhängigkeitsupdates
+
+Die Versionsplanung vergleicht außerdem die gepinnten Abhängigkeiten mit dem
+zuletzt stabil veröffentlichten Quellcommit: exakte Pins (`name==version`) in
+`requirements-dev.txt` und `requirements-test.txt` sowie Actions mit vollständigem
+Commit-SHA und Versionskommentar (`uses: owner/action@<sha> # vX.Y.Z`) in
+`.github/workflows/*.yml`. Für jedes geänderte Patch- oder Minor-Update, das in
+keinem neuen Stichpunkt namentlich genannt ist, ergänzt sie in den Release-Notes
+einen `Bugfixes`-Eintrag, zum Beispiel:
+
+```markdown
+- Abhängigkeit `homeassistant` von 2026.11.1 auf 2026.11.2 aktualisiert (`requirements-test.txt`); automatisch erfasst.
+```
+
+Ein reiner Dependabot-PR für ein solches Update braucht damit keinen eigenen
+Changelog-Eintrag und ergibt ein Patch-Release. Der Eintrag entsteht nur in den
+Release-Notes; `CHANGELOG.md` im Quellbranch bleibt unverändert, und kein Workflow
+schreibt in den Pull Request. Ein eigener Stichpunkt, der die Abhängigkeit nennt,
+ersetzt den automatischen Eintrag.
+
+Major-Updates (geänderte erste Versionsstelle, bei Kalenderversionen wie
+`2026.11.x` geändertes Jahr oder geänderter Monat) und nicht lesbare Versionen
+stoppen die Versionsplanung, bis ein eigener Stichpunkt die Abhängigkeit nennt
+und die geprüfte Auswirkung beschreibt. Neu hinzugefügte oder entfernte
+Abhängigkeiten werden nicht automatisch erfasst.
+
 Bei einem Push auf `feature/**`, `bug/**` oder `bugfix/**` entfernt die CI im
 Originalrepository bereits stabil veröffentlichte Stichpunkte aus `New Version`.
 Dafür müssen Tests, Sicherheits- und Integrationsprüfungen erfolgreich sein.
