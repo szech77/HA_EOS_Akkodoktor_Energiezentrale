@@ -596,6 +596,34 @@ Passwort im Dialog verwenden; die YAML-Schreibverbindung behält ihren Schreibbe
 
 Offizielle Referenz: [Home Assistant InfluxDB](https://www.home-assistant.io/integrations/influxdb/).
 
+### Messwerte an EOS übertragen
+
+EOS liest den Start-Ladestand jedes Speichers und Fahrzeugs für die Optimierung
+aus seinem Messwertspeicher (`<Ressource>-soc-factor`). Fehlt ein aktueller Wert,
+rechnet EOS mit 0 % und plant zum Beispiel eine volle Ladung aus dem Netz.
+
+Die Energiezentrale überträgt deshalb automatisch, was sie selbst geprüft gemessen hat:
+
+| EOS-Messschlüssel | Quelle in der Energiezentrale |
+|---|---|
+| `<Speicherressource>-soc-factor` | Speicher-SoC (Faktor 0–1) |
+| `<Speicherressource>-charge-power-w`, `-discharge-power-w` | Lade- und Entladeleistung des Speichers in W |
+| `<Fahrzeugressource>-soc-factor` | Fahrzeug-SoC, wie ihn Panel und Regelung verwenden |
+| `<Fahrzeugressource>-charge-power-w` | Ladeleistung der Wallbox in W |
+
+Gesendet wird über `PUT /v1/measurement/value` mindestens einmal pro Minute,
+eine SoC-Änderung ab einem Prozentpunkt sofort. Nur Schlüssel, die EOS unter
+`GET /v1/measurement/keys` anbietet, werden geschrieben; die Liste wird alle
+15 Minuten neu gelesen. Fehlt ein Messwert oder ist er ungültig, wird nichts
+gesendet, nie eine Null. Bei mehreren Fahrzeugen sendet jedes Fahrzeug seine eigenen
+Werte; der gemeinsame Speicher wird einmal gesendet. Ältere EOS-Versionen ohne
+Mess-API bleiben unberührt (Hinweis im Log). Ein eigener EOS-Messeingang für
+dieselben Schlüssel ist damit nicht mehr nötig; die Werte stimmen überein.
+
+Zählerstände (`load_emr_keys`, `pv_production_emr_keys`, Netzbezug/-einspeisung)
+werden nicht gesendet: EOS erwartet dort echte, fortlaufende Zählerstände in kWh,
+die Energiezentrale misst aber Leistungen.
+
 ### Optionaler Speicher-SoC-Faktor für einen EOS-Eingang
 
 Wenn ein von dir eingerichteter EOS-Messeingang den Speicher-SoC als Faktor 0–1

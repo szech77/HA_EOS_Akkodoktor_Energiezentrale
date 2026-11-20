@@ -111,6 +111,7 @@ class VictronModbus(BatteryDriver):
         try: return self.client.read(address,count)
         except OSError as error:
             self._operation_context['exception_code']=getattr(error,'exception_code',None)
+            if getattr(error,'reason',None): self._operation_context['reason']=error.reason
             raise
 
     def _firmware_diagnostics(self):
@@ -226,7 +227,8 @@ class VictronModbus(BatteryDriver):
             _,sample=self._telemetry(now)
         except (OSError,ValueError) as error:
             self.read_diagnostics['failure']={**self._read_context,'type':type(error).__name__,
-                'exception_code':getattr(error,'exception_code',None)}
+                'exception_code':getattr(error,'exception_code',None),
+                **({'reason':error.reason} if getattr(error,'reason',None) else {})}
             raise
         from ..contracts import PowerSupplyReading
         from dataclasses import replace
@@ -273,6 +275,7 @@ class VictronModbus(BatteryDriver):
             try: self.client.write(address,words)
             except OSError as error:
                 self._operation_context['exception_code']=getattr(error,'exception_code',None)
+                if getattr(error,'reason',None): self._operation_context['reason']=error.reason
                 raise
 
     def _setpoint_command(self,watts,*,parameter=None):

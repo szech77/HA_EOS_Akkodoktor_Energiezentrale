@@ -110,7 +110,9 @@ Das Plugin liest vor jedem Regelbefehl erneut Messwerte. Ein Abfrageblock darf
 höchstens zehn Sekunden dauern. Ungültige Messwerte, unerwartete Firmware,
 fehlender Netzbetrieb oder unpassende ESS-Zustände verhindern neue Befehle.
 Jeder geänderte Stellwert wird durch Modbus-Rücklesen bestätigt; ein Fehler stoppt
-die weiteren Befehle. Eine gescheiterte Rückgabe bleibt als Fehler sichtbar.
+die weiteren Befehle. Venus OS kann einen Schreibzugriff quittieren, bevor der neue Wert
+lesbar ist. Das Plugin liest deshalb bis zu einer Sekunde lang alle 100 ms zurück und
+akzeptiert nur den angeforderten Wert. Eine gescheiterte Rückgabe bleibt als Fehler sichtbar.
 Die Rückgabe benötigt keine Akku-Leistungsmessung, prüft aber weiterhin GX und
 ESS/Dynamic ESS, damit fremde Regelmodi nicht überschrieben werden.
 
@@ -200,7 +202,11 @@ Port, Seriennummer, Kapazität, Messwerte und rohe Fehlermeldungen fehlen bewuss
 - `snapshot_timeout`: Der gesamte Lesevorgang dauerte länger als zehn Sekunden.
 
 Code 2 bedeutet eine ungültige Registeradresse, Code 10 einen nicht verfügbaren
-Gateway-Pfad und Code 11 ein nicht gefundenes Zielgerät. Den letzten Fehler am
+Gateway-Pfad und Code 11 ein nicht gefundenes Zielgerät. `reason` nennt die Ursache
+ohne Messwerte: `rejected` (Ausnahmeantwort mit Code), `not_acknowledged` (falsche
+Schreibquittung), `readback_mismatch` (GX meldet auch nach einer Sekunde einen anderen
+Wert, z. B. weil es den Wert selbst begrenzt), `invalid_response` oder
+`connection_closed`. Den letzten Fehler am
 GX unter **Einstellungen → Dienste → Modbus TCP** ergänzend prüfen.
 Ein fehlgeschlagener ausgewählter Messkanal verwirft weiterhin den gesamten
 Gerätesnapshot; fehlende Werte werden nicht als null oder als alte Messung genutzt.
@@ -308,7 +314,11 @@ revision in the low word. Invalid firmware encoding is reported as
 `firmware_invalid`, separately from transport errors and unsupported control.
 
 Check the GX's last Modbus TCP error as well: code 2 means an illegal register
-address, 10 an unavailable gateway path and 11 an unknown target device. Any failed
+address, 10 an unavailable gateway path and 11 an unknown target device. `reason`
+states the cause without values: `rejected`, `not_acknowledged`, `readback_mismatch`
+(the GX still reports another value after one second, e.g. because it limits the value),
+`invalid_response` or `connection_closed`. Writes are read back every 100 ms for up to
+one second, because Venus OS may acknowledge a write before the value is readable. Any failed
 selected channel still invalidates the device snapshot; missing data is never
 replaced with zero or a cached reading. `AC —` can appear even on successful
 reads because this plugin does not provide separate `inverter_ac` power.

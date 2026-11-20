@@ -11,11 +11,11 @@ from urllib.error import HTTPError, URLError
 
 from .domain import instant, number
 from .measurement_sources import MEASUREMENT_KEYS
-from .failures import BackendError, PluginParameterError, HardwareAPIError, REASONS, FIELDS
+from .failures import BackendError, PluginParameterError, HardwareAPIError, REASONS, FIELDS, TRANSPORT_REASONS
 
 ERROR_MESSAGES = {key: 'notice.' + key for key in (
     'eos', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
-    'battery_limits', 'vehicle_limits', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection')}
+    'battery_limits', 'vehicle_limits', 'eos_measurements', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection')}
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
 CONTROL_STATUSES = ('waiting', 'read_only', 'backup', 'power_supply_waiting', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
 BATTERY_LIMIT_STATUSES = ('failed', 'confirmed', 'pending', 'unmanaged')
@@ -160,6 +160,8 @@ class IssueLog:
             if details.get('reason') in REASONS:
                 safe['details']['reason'] = details['reason']
                 safe['details']['fields'] = sorted(key for key in details.get('fields', []) if key in FIELDS)
+            elif details.get('reason') in TRANSPORT_REASONS:
+                safe['details']['reason'] = details['reason']
             if details.get('trace'):
                 safe['details']['trace'] = [{'module':safe_kind(frame.get('module')),
                     'function':safe_kind(frame.get('function')), 'line':frame['line']}

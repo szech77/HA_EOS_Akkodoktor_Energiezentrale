@@ -4,6 +4,8 @@ REASONS = frozenset({'unknown_fields', 'invalid_type', 'out_of_range', 'battery_
     'profile_invalid', 'profile_nonpositive_power', 'settings_unconfirmed',
     'effective_limits_unavailable', 'effective_limits_differ', 'goal_unconfirmed', 'resource_missing',
     'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region'})
+# Fixed causes of a failed Modbus request (_modbus_tcp.ModbusError.reason).
+TRANSPORT_REASONS = frozenset({'rejected', 'not_acknowledged', 'readback_mismatch', 'invalid_response', 'connection_closed'})
 FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_interval_s',
     'battery_min_soc', 'battery_max_soc', 'battery_pv_min_soc', 'battery_pv_wait_s', 'battery_pv_surplus_w',
     'pv', 'fast', 'battery_pv_support', 'battery_pv_start', 'phase_auto', 'schedule', 'departure',

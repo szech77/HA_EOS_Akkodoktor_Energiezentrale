@@ -51,7 +51,7 @@ def report_plugin_read(plugin, missing=(), *, error=None, controls=(), problems=
         diagnostics = getattr(plugin, 'read_diagnostics', None)
         context = diagnostics.get('failure') if isinstance(diagnostics, dict) else None
     if isinstance(context, dict):
-        details.update({key:context[key] for key in ('stage','parameter','unit','address','count','exception_code')
+        details.update({key:context[key] for key in ('stage','parameter','unit','address','count','exception_code','reason')
                         if key in context})
     code = (failure_code if error is not None or partial else
             'plugin_device_error' if status == 'error' else
