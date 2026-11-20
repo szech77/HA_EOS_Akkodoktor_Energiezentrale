@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from unittest.mock import Mock
 
-from custom_components.eos_energiezentrale.const import DEFAULTS
+from sample_options import DEFAULTS
 from custom_components.eos_energiezentrale.energy.fleet import create_controller, vehicle_options, reserved_grid
 from custom_components.eos_energiezentrale.energy.drivers import Fronius
 from custom_components.eos_energiezentrale.validation import validate_options

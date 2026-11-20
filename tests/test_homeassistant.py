@@ -16,7 +16,8 @@ from homeassistant.exceptions import Unauthorized
 from custom_components.eos_energiezentrale import async_setup_entry, async_unload_entry
 from custom_components.eos_energiezentrale.adapter import HomeAssistantAdapter
 from custom_components.eos_energiezentrale.config_flow import ConfigFlow, OptionsFlow, check
-from custom_components.eos_energiezentrale.const import DEFAULTS, DOMAIN, GROUPS
+from custom_components.eos_energiezentrale.const import DOMAIN, GROUPS
+from sample_options import DEFAULTS
 from custom_components.eos_energiezentrale.coordinator import EnergyCoordinator
 from custom_components.eos_energiezentrale.diagnostics import async_get_config_entry_diagnostics
 from custom_components.eos_energiezentrale.frontend import websocket_request

@@ -192,20 +192,21 @@ Home-Assistant-Spracheinstellungen; `language` steuert das eigene Panel.
 
 ### Quellsensoren
 
-Wähle im Sensor-Dialog die tatsächlichen Entitäts-IDs deiner Installation.
-Die folgenden Zuordnungen sind die mitgelieferten Standards und müssen bei
-abweichenden Namen ersetzt werden:
+Wähle im Sensor-Dialog die tatsächlichen Entitäts-IDs deiner Installation. Bei
+einer Neuinstallation sind keine Sensoren vorbelegt; leere Felder werden, soweit
+möglich, von den eingerichteten Plugins versorgt. Die Entitäten in der Tabelle sind
+nur Beispiele:
 
-| Feld / Schlüssel | Standard-Entität | Erwarteter Wert |
+| Feld / Schlüssel | Beispiel-Entität | Erwarteter Wert |
 |---|---|---|
-| PV-Leistung / `pv_entity` | `sensor.fronius_symo_gen24_pv_power` | Positive Leistung in W oder kW. |
-| Gesamter Hausverbrauch / `house_entity` | `sensor.solarnet_leistung_verbrauch` | Positive Leistung in W oder kW, einschließlich Auto und Wärmepumpe. |
-| Netzleistung / `grid_entity` | `sensor.fronius_smartmeter_ip_meter_1_power` | W oder kW; positiv = Bezug, negativ = Einspeisung. |
-| Wärmepumpenleistung / `heat_entity` | `sensor.wp_strommesser_leistung_w_rmepumpe` | Positive Leistung in W oder kW, einschließlich Standby-Verbrauch. |
-| Bezugspreis / `price_entity` | `sensor.blumenstrasse_13_strompreis` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
-| Fahrzeug-SoC / `car_soc_entity` | `sensor.id4_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
-| Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
-| Fahrzeugreichweite / `car_range_entity` | leer | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. Mit Fahrzeugliste gilt der Sensor am Fahrzeug (`range_entity`); ist dort keiner eingetragen, wird dieser bei genau einem Fahrzeug verwendet. |
+| PV-Leistung / `pv_entity` | `sensor.pv_power` | Positive Leistung in W oder kW. |
+| Gesamter Hausverbrauch / `house_entity` | `sensor.house_power` | Positive Leistung in W oder kW, einschließlich Auto und Wärmepumpe. |
+| Netzleistung / `grid_entity` | `sensor.grid_power` | W oder kW; positiv = Bezug, negativ = Einspeisung. |
+| Wärmepumpenleistung / `heat_entity` | `sensor.heat_pump_power` | Positive Leistung in W oder kW, einschließlich Standby-Verbrauch. |
+| Bezugspreis / `price_entity` | `sensor.electricity_price` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
+| Fahrzeug-SoC / `car_soc_entity` | `sensor.ev_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
+| Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` (Vorgabe) | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
+| Fahrzeugreichweite / `car_range_entity` | `sensor.ev_range` | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. Mit Fahrzeugliste gilt der Sensor am Fahrzeug (`range_entity`); ist dort keiner eingetragen, wird dieser bei genau einem Fahrzeug verwendet. |
 
 Mit einem Reichweitensensor bildet das Backend aus Reichweite und gemessenem SoC
 das Verhältnis Kilometer je Prozent. Es wird nur bei einem gemessenen, nicht

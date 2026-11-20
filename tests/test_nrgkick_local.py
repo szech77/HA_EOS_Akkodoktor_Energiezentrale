@@ -270,7 +270,7 @@ def test_invalid_configuration_fails_before_network_access(params):
 
 @pytest.mark.parametrize('already_enabled',[False,True])
 def test_two_native_devices_share_grid_headroom_without_ha_wallbox_entities(already_enabled):
-    from custom_components.eos_energiezentrale.const import DEFAULTS
+    from sample_options import DEFAULTS
     from custom_components.eos_energiezentrale.energy.fleet import create_controller
     from test_fleet import definitions, LocalHA
     with api() as (_,first),api() as (_,second),temporary_project_directory() as directory:
@@ -319,7 +319,7 @@ def test_two_native_devices_share_grid_headroom_without_ha_wallbox_entities(alre
 
 
 def test_duplicate_direct_device_is_rejected_without_network_access():
-    from custom_components.eos_energiezentrale.const import DEFAULTS
+    from sample_options import DEFAULTS
     from custom_components.eos_energiezentrale.energy.fleet import vehicle_options
     from test_fleet import definitions
     vehicles=definitions()
