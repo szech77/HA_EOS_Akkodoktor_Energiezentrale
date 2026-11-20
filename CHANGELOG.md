@@ -7,7 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- Die Energiezentrale überträgt ihre gemessenen Werte automatisch an den Messwertspeicher von EOS: Ladestand (als Faktor 0–1) sowie Lade- und Entladeleistung des Speichers, Ladestand und Ladeleistung jedes Fahrzeugs. EOS nimmt den Start-Ladestand für die Optimierung aus diesen Messwerten und rechnete ohne eigenen Messeingang mit 0 % – etwa mit einer vollen Netzladung für ein fast volles Auto (Issue #33). Gesendet wird mindestens einmal pro Minute und bei einer SoC-Änderung ab einem Prozentpunkt sofort, nur für Schlüssel, die EOS anbietet, und nie ein Ersatzwert für einen fehlenden Messwert. Fehler erscheinen als Hinweis `eos_measurements`; die Diagnosedaten zeigen gesendete und in EOS fehlende Schlüssel. EOS-Versionen ohne Mess-API bleiben unverändert.
 
 ### Bugfixes
 

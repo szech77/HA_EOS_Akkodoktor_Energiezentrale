@@ -48,6 +48,14 @@ Meldungen erzeugen die HA-Problemanzeige und Einträge unter
 - **DEBUG:** Beginn, Ende, Fehlerklasse und Dauer von HTTP-Abrufen, mit festen
   Vorgangsbezeichnungen wie `eos_plan` oder `eos_vehicle_config`.
 
+Die Übertragung der Messwerte an EOS (Ladestand und Leistung von Speicher und
+Fahrzeugen) meldet Fehler als Warnung `eos_measurements` und wiederholt sie nach
+einer Minute. Bietet EOS keine Mess-API, steht einmalig
+`eos_measurements_unsupported` im Log (INFO); fehlen Schlüssel in EOS, nennt
+`eos_measurement_keys_missing` einmalig die betroffenen Schlüssel. Die Diagnosedatei
+enthält unter `eos_measurements`, ob die API unterstützt wird, welche Schlüssel
+gesendet werden, welche fehlen und wann zuletzt gesendet wurde, ohne Messwerte.
+
 Die Meldungskennung bleibt zwischen Anzeige, Log und Diagnosedaten gleich.
 `sources_unavailable` enthält beispielsweise den Messwerttyp `solar`, die Ursache
 `stale` und die erlaubte Höchstaltergrenze. EOS-Fehler enthalten nach Möglichkeit
