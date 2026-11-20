@@ -56,6 +56,9 @@ class Inverter(socketserver.TCPServer):
         self.writes = []
         self.reject = False
         self.ignore_writes = False
+        # A device that applies a written value only after this many further reads.
+        self.apply_after_reads = 0
+        self.pending = []
         self.meters = {200: {40000:0x5375,40001:0x6E53,40002:1,40003:65,
                             40069:203,40070:105,40087:1000,40091:0}}
         self.read_units = []
@@ -75,14 +78,22 @@ class Request(socketserver.BaseRequestHandler):
         if self.server.reject:
             pdu = bytes([function | 128, 3])
         elif function == 3:
+            for item in list(self.server.pending):
+                item[0] -= 1
+                if item[0] < 0:
+                    self.server.registers.update(item[1])
+                    self.server.pending.remove(item)
             words = [registers.get(address + offset, 0) for offset in range(count)]
             pdu = bytes([3, count * 2]) + struct.pack(">" + "H" * count, *words)
         else:
             assert function == 16 and request[5] == count * 2
             values = list(struct.unpack(">" + "H" * count, request[6:]))
             self.server.writes.append((address, values))
-            if not self.server.ignore_writes:
-                self.server.registers.update({address + index: value for index, value in enumerate(values)})
+            update = {address + index: value for index, value in enumerate(values)}
+            if self.server.apply_after_reads:
+                self.server.pending.append([self.server.apply_after_reads, update])
+            elif not self.server.ignore_writes:
+                self.server.registers.update(update)
             pdu = bytes([16]) + request[1:5]
         response = struct.pack(">HHHB", transaction, protocol, len(pdu) + 1, unit) + pdu
         # Fragment responses to exercise TCP stream framing, not packet assumptions.

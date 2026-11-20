@@ -366,7 +366,7 @@ def test_modbus_rejection_and_transport_errors_are_diagnostic_without_raw_messag
         server.reject=True
         with pytest.raises(ModbusError):driver.read({},NOW)
         assert driver.read_diagnostics['failure']=={'type':'ModbusError','stage':'identity',
-            'unit':100,'address':800,'count':6,'exception_code':3}
+            'unit':100,'address':800,'count':6,'exception_code':3,'reason':'rejected'}
         with patch.object(driver.client,'read',side_effect=TimeoutError('private-host / private data')):
             with pytest.raises(TimeoutError):driver.read({},NOW)
         assert driver.read_diagnostics['failure']['type']=='TimeoutError'
@@ -444,3 +444,23 @@ def test_ac_balance_is_not_used_for_control_or_with_an_unread_source():
         site(server,dc_pv=0,grid=7000,consumption=1000,battery=5000)
         assert driver.read({},NOW).charge==5000
         assert driver.read_diagnostics['battery_power']=='dc_efficiency'
+
+
+def test_a_gx_that_reports_a_written_value_with_delay_is_confirmed():
+    # Venus OS may acknowledge a write before the new value can be read back (issue #33).
+    with gx() as (driver,server,_):
+        server.apply_after_reads=2
+        driver.apply(command('grid_charge',2000,0),{})
+        assert target(server)==3000 and server.registers[2705]==40
+        assert not driver.telemetry_status
+
+
+def test_a_value_the_gx_never_reports_stops_control_with_the_reason():
+    with gx() as (driver,server,_):
+        server.ignore_writes=True
+        with pytest.raises(ModbusError) as failure:driver.apply(command('grid_charge',2000,0),{})
+        assert failure.value.reason=='readback_mismatch'
+        assert server.writes==[(2705,[40])]
+        details=driver.telemetry_status[0]['details']
+        assert (details['stage'],details['address'],details['reason'])==('write_confirmation',2705,'readback_mismatch')
+        assert 'exception_code' not in details or details['exception_code'] is None

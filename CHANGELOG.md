@@ -7,11 +7,11 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Die Energiezentrale überträgt ihre gemessenen Werte automatisch an den Messwertspeicher von EOS: Ladestand (als Faktor 0–1) sowie Lade- und Entladeleistung des Speichers, Ladestand und Ladeleistung jedes Fahrzeugs. EOS nimmt den Start-Ladestand für die Optimierung aus diesen Messwerten und rechnete ohne eigenen Messeingang mit 0 % – etwa mit einer vollen Netzladung für ein fast volles Auto (Issue #33). Gesendet wird mindestens einmal pro Minute und bei einer SoC-Änderung ab einem Prozentpunkt sofort, nur für Schlüssel, die EOS anbietet, und nie ein Ersatzwert für einen fehlenden Messwert. Fehler erscheinen als Hinweis `eos_measurements`; die Diagnosedaten zeigen gesendete und in EOS fehlende Schlüssel. EOS-Versionen ohne Mess-API bleiben unverändert.
+- Keine.
 
 ### Bugfixes
 
-- Keine.
+- Victron GX direkt (Modbus TCP): Die Speichersteuerung brach ab, weil Venus OS einen geschriebenen Netzsollwert bzw. eine Entladegrenze quittiert, beim sofortigen Zurücklesen aber noch den alten Wert meldet (Issue #33). Das Plugin liest jetzt bis zu einer Sekunde lang alle 100 ms zurück und akzeptiert weiterhin nur den angeforderten Wert. Schlägt die Bestätigung fehl, nennen Hinweis, Log und Diagnosedaten die Ursache als feste Kennung (`reason`: z. B. `readback_mismatch` oder `not_acknowledged`); das gilt für alle Modbus-Plugins.
 
 ### Breaking Changes
 

@@ -3,15 +3,24 @@ import socket
 import struct
 import ipaddress
 import re
-from time import monotonic
+from time import monotonic, sleep
+
+# Some devices (e.g. Victron GX) acknowledge a write before the new value can be read back.
+CONFIRM_TIMEOUT = 1.0
+CONFIRM_INTERVAL = 0.1
 
 
 class ModbusError(OSError):
-    """Transport, protocol or device confirmation failed."""
+    """Transport, protocol or device confirmation failed.
 
-    def __init__(self, message, *, exception_code=None):
+    ``reason`` is a fixed code for diagnostics: ``rejected`` (Modbus exception response),
+    ``not_acknowledged``, ``readback_mismatch``, ``invalid_response`` or ``connection_closed``.
+    """
+
+    def __init__(self, message, *, exception_code=None, reason=None):
         super().__init__(message)
         self.exception_code = exception_code
+        self.reason = reason
 
 
 def checked_host(host):
@@ -39,7 +48,7 @@ class ModbusTCP:
             connection.settimeout(remaining)
             chunk = connection.recv(size - len(result))
             if not chunk:
-                raise ModbusError("Modbus connection closed before response completed")
+                raise ModbusError("Modbus connection closed before response completed", reason="connection_closed")
             result.extend(chunk)
         return bytes(result)
 
@@ -53,13 +62,13 @@ class ModbusTCP:
             transaction, protocol, size, unit = struct.unpack(">HHHB", self._receive(connection, 7, deadline))
             if (transaction != self.transaction or protocol != 0 or unit != self.unit
                     or not 2 <= size <= 254):
-                raise ModbusError("Invalid Modbus response header")
+                raise ModbusError("Invalid Modbus response header", reason="invalid_response")
             response = self._receive(connection, size - 1, deadline)
         if response[0] == function | 0x80:
             raise ModbusError("Modbus device rejected request",
-                              exception_code=response[1] if len(response) == 2 else None)
+                              exception_code=response[1] if len(response) == 2 else None, reason="rejected")
         if response[0] != function:
-            raise ModbusError("Unexpected Modbus response function")
+            raise ModbusError("Unexpected Modbus response function", reason="invalid_response")
         return response[1:]
 
     def read(self, address, count):
@@ -67,7 +76,7 @@ class ModbusTCP:
             raise ValueError("Invalid Modbus read range")
         response = self._request(3, struct.pack(">HH", address, count))
         if len(response) != 1 + count * 2 or response[0] != count * 2:
-            raise ModbusError("Invalid Modbus register response")
+            raise ModbusError("Invalid Modbus register response", reason="invalid_response")
         return list(struct.unpack(">" + "H" * count, response[1:]))
 
     def write(self, address, values):
@@ -77,6 +86,10 @@ class ModbusTCP:
         expected = struct.pack(">HH", address, len(values))
         response = self._request(16, expected + bytes([len(data)]) + data)
         if response != expected:
-            raise ModbusError("Modbus write was not acknowledged")
-        if self.read(address, len(values)) != list(values):
-            raise ModbusError("Modbus register did not confirm requested value")
+            raise ModbusError("Modbus write was not acknowledged", reason="not_acknowledged")
+        # Read back until the device reports the value, bounded in time; never accept a different value.
+        deadline = monotonic() + CONFIRM_TIMEOUT
+        while self.read(address, len(values)) != list(values):
+            if monotonic() >= deadline:
+                raise ModbusError("Modbus register did not confirm requested value", reason="readback_mismatch")
+            sleep(CONFIRM_INTERVAL)
