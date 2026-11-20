@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/victron-write-confirmation",
+  "channel": "beta",
+  "date": "2026-11-20",
+  "notes_sha256": "feec6da0fc0e51061dc426febd396dbb56cb5ed195be23f9abdd5a34f9af0a9f",
+  "source_changelog_sha256": "143879950ff1f1cf193042c8f3dac949fae0ad1e9aa079d06d7f18ee3a92186d",
+  "source_commit": "f4d1332c983b85390c6788dc60d229bd7f57ece8",
+  "version": "0.23.1b44794827892"
+}
