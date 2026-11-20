@@ -1151,7 +1151,7 @@ function ensureModule(file,ready){
   return moduleLoading.get(file);
 }
 function ensureForecastModule(){
-  // The PV & weather view is the first Vue feature (frontend/src/features/pv-weather).
+  // The PV & weather view is a Vue page (frontend/src/views/PvWeatherView.vue).
   return ensureModule('vue/eos-vue.js',()=>typeof globalThis.EosForecast?.create==='function'?globalThis.EosForecast:null);
 }
 let pvViewLoading=false;

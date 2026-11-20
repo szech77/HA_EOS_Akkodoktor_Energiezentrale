@@ -67,15 +67,30 @@ den Ordner `custom_components/eos_energiezentrale` kopieren und HA neu starten.
 Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
 (`C:\...`, z. B. in PowerShell); mit `c:\...` findet Vitest seinen Runner nicht.
 
-Struktur und Regeln:
+Struktur (`frontend/src`):
 
-- `src/host`: Schnittstelle zum bisherigen Panel (`app.js`), das weiter Routing,
-  Anmeldung und Aktualisierung übernimmt. Jede Vue-Funktion registriert die globale
-  Schnittstelle, die `app.js` für sie schon nutzt (z. B. `EosForecast.create`).
-- `src/features/<bereich>`: Komponenten, Composables, Zustand und Tests eines Bereichs
-  (`pv-weather`, `car`); Testdaten mit Backendbezug erzeugt `src/test/backend.ts` über
-  das Python-Backend (`tests/backend.cjs`), damit Tests den echten Vertrag nutzen;
-  `src/shared` für bereichsübergreifende Formatierung und Bausteine.
+```text
+views/          Seiten, je eine pro Panel-Route (CarView.vue, PvWeatherView.vue)
+  __tests__/    Komponententests der Seiten (Vitest)
+components/     UI-Bausteine, nach Bereich gruppiert (car/, weather/)
+composables/    Wiederverwendbare Composition-API-Logik (useGoalDraft, usePvForecast, …)
+stores/         Zustand einer Seite, per provide/inject geteilt (car.ts, pvWeather.ts)
+utils/          Framework-unabhängige Hilfen: Formatierung, Texte, Modus-Labels
+types/          TypeScript-Typen des Backend-Vertrags und der Host-Schnittstelle
+bridge/         Anbindung an app.js: Controller je Seite und Host-Dienste
+test/           Test-Host, Backend-Brücke und Testdaten (fixtures/)
+main.ts         Einstieg des Bundles; registriert die Controller für app.js
+```
+
+- `app.js` übernimmt bis zum Abschluss der Umstellung Routing, Anmeldung und
+  Aktualisierung. Es erzeugt die Seiten über die Controller in `bridge/`, die `main.ts`
+  als globale Schnittstelle registriert (`EosForecast.create`, `EosCar.create`).
+  Mit der Übernahme des Routings kommen `router/`, `App.vue` und `layouts/` hinzu;
+  `bridge/` entfällt dann.
+- Stores sind schlanke Fabriken mit `provide`/`inject`; Pinia wird erst eingeführt,
+  wenn mehrere Seiten gemeinsamen Zustand brauchen.
+- Testdaten mit Backendbezug erzeugt `src/test/backend.ts` über das Python-Backend
+  (`tests/backend.cjs`), damit Tests den echten Vertrag nutzen.
 - Composition API mit `<script setup lang="ts">`, `provide`/`inject` mit typisierten
   Schlüsseln; keine Options API, kein `v-html`, kein Laufzeit-Templatecompiler
   (CSP ohne `eval`). Backendtexte bleiben Text.

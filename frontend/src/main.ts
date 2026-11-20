@@ -1,11 +1,11 @@
 /**
  * Entry of the Vue bundle (vue/eos-vue.js), loaded by bootstrap.js as a classic script.
  *
- * During the step-by-step migration each Vue feature registers a global interface for app.js;
+ * During the step-by-step migration each Vue page registers a controller for app.js (src/bridge);
  * app.js keeps owning routing, authentication and refreshes.
  */
-import { createCarController } from '@/features/car/controller'
-import { createPvWeatherController } from '@/features/pv-weather/controller'
+import { createCarController } from '@/bridge/carController'
+import { createPvWeatherController } from '@/bridge/pvWeatherController'
 
 declare global {
   // eslint-disable-next-line no-var

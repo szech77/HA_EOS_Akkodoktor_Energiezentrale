@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { BackendRequest, LegacyContext, PanelSnapshot } from '@/host/types'
+import type { BackendRequest, LegacyContext, PanelSnapshot } from '@/types/host'
 
 type Pack = { locale: string; messages: Record<string, string> }
 
