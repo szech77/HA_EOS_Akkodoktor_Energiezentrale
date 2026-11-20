@@ -7,6 +7,7 @@ import re
 from datetime import timedelta
 from threading import Lock, RLock, Thread
 from time import monotonic
+from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from weakref import WeakValueDictionary
@@ -137,6 +138,7 @@ def request(url, *, method="GET", payload=None, headers=None):
     operation = {'/v1/config':'eos_config', '/v1/config/devices/batteries':'eos_battery_config',
         '/v1/config/devices/electric_vehicles':'eos_vehicle_config', '/v1/energy-management/plan':'eos_plan',
         '/v1/energy-management/optimization/solution/GENETIC':'eos_solution', '/v1/health':'eos_health',
+        '/v1/measurement/keys':'eos_measurement_keys', '/v1/measurement/value':'eos_measurement',
         '/query':'influx_history'}.get(urlsplit(url).path, 'http')
     verb = method if method in {'GET','PUT','POST','PATCH','DELETE'} else 'HTTP'
     started = monotonic()
@@ -248,6 +250,25 @@ class EOS:
         if not isinstance(battery, dict):
             raise ValueError("Stationary battery configuration missing")
         return accounting_values(battery)
+
+    def measurement_keys(self):
+        """Keys the EOS measurement store accepts; None for an EOS without measurement API."""
+        try:
+            keys = request(self.url + '/v1/measurement/keys')
+        except HTTPError as error:
+            if error.code == 404:
+                return None
+            raise
+        if not isinstance(keys, list) or not all(isinstance(key, str) for key in keys):
+            raise ValueError('Invalid EOS measurement keys')
+        return frozenset(keys)
+
+    def put_measurement(self, key, value, when):
+        """Store one measured value at its time (EOS: PUT /v1/measurement/value)."""
+        if not isinstance(key, str) or number(value) is None or when.utcoffset() is None:
+            raise ValueError('Invalid EOS measurement')
+        query = urlencode({'datetime': when.isoformat(), 'key': key, 'value': repr(float(value))})
+        request(self.url + '/v1/measurement/value?' + query, method='PUT')
 
     def set_battery_limits(self, resource, minimum, maximum, capacity_wh=None, charge_w=None, discharge_w=None):
         if (type(minimum) is not int or type(maximum) is not int
