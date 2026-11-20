@@ -7,6 +7,9 @@ Verpflichtender Sammelstatus: **Required checks**. Er hängt ab von:
 
 - Fachlichen Tests und HA-Schnittstellentests mit Python 3.14 / HA 2026.11.0.
 - JavaScript-Syntax und Tests der authentifizierten Panel-Kommunikation.
+- Frontend unter `frontend/`: `npm ci --ignore-scripts`, Typprüfung (`vue-tsc`),
+  Komponententests (Vitest) und Build des Vue-Bundles; `npm audit --audit-level=moderate`
+  im Sicherheitsjob.
 - Bandit, Semgrep CE für Python/JavaScript (Regeltests und Scan), pip-audit für
   Entwicklungs-/HA-Testabhängigkeiten und Trivy-Geheimnisscan.
 - Home-Assistant-hassfest und HACS-Validierung. Der Brands-Katalog ist für dieses
@@ -58,7 +61,8 @@ Einträge für das nächste stabile Release.
 
 Die Versionsplanung vergleicht außerdem die gepinnten Abhängigkeiten mit dem
 zuletzt stabil veröffentlichten Quellcommit: exakte Pins (`name==version`) in
-`requirements-dev.txt` und `requirements-test.txt` sowie Actions mit vollständigem
+`requirements-dev.txt` und `requirements-test.txt`, exakte Versionen in
+`dependencies`/`devDependencies` von `frontend/package.json` sowie Actions mit vollständigem
 Commit-SHA und Versionskommentar (`uses: owner/action@<sha> # vX.Y.Z`) in
 `.github/workflows/*.yml`. Für jedes geänderte Patch- oder Minor-Update, das in
 keinem neuen Stichpunkt namentlich genannt ist, ergänzt sie in den Release-Notes
@@ -175,6 +179,16 @@ Die eingesetzten Scanner sind frei verfügbar. GitHub-Actions-Kosten richten sic
 nach Repository-Sichtbarkeit, Tarif und genutztem Kontingent. HACS benötigt ein
 erreichbares öffentliches Repository; das ist vor Veröffentlichung zu prüfen.
 
+
+## Gebautes Frontend im Release
+
+Das Vue-Bundle `custom_components/eos_energiezentrale/energy/web/vue/` ist nicht im
+Quellbaum versioniert. Der Publish-Job baut es aus dem geprüften Quellcommit
+(`npm ci --ignore-scripts`, `npm run build`, ohne npm-Cache im schreibberechtigten Job)
+und `tools/release.py publish` legt die gebauten `.js`/`.css`-Dateien zusammen mit
+Manifest, Changelog und `.release-source.json` in den Release-Commit. Ohne Bundle
+bricht die Veröffentlichung ab. `.release-source.json` enthält `bundle_sha256` über
+Pfade und Inhalte der ausgelieferten Bundle-Dateien. HACS installiert diesen Tag-Stand.
 
 ## HACS-Prüfungen für Repository-Metadaten
 

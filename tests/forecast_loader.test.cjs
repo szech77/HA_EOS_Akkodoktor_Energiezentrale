@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const script=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/app.js'),'utf8');
 function fixture(){
- const ids={'pv-strip':{},'pv-days':{},'pv-effects':{}};
+ const ids={'pv-view':{}};
  const calls={scripts:[],opened:0,renders:0},options={fail:false,brokenDialog:false,stall:false};
  const ctx={URL,Date,Promise,setTimeout,clearTimeout,location:{href:'https://ha.test/static/index.html?v=old'},
   appScriptUrl:'https://ha.test/static/app.js?v=new-build',snapshot:{},language:{locale:'de'},t:key=>key,html:String,decimal:String,
@@ -18,7 +18,7 @@ test('opening the PV page loads the missing module when a cached bootstrap omitt
  const f=fixture();assert.equal(f.ctx.EosForecast,undefined);
  await f.ctx.openPvView();
  assert.equal(f.calls.scripts.length,1);
- assert.equal(f.calls.scripts[0].src,'https://ha.test/static/forecast.js?v=new-build');
+ assert.equal(f.calls.scripts[0].src,'https://ha.test/static/vue/eos-vue.js?v=new-build');
  assert.equal(f.calls.opened,1);assert.equal(f.failed(),false);assert.equal(vm.runInContext('pvViewLoading',f.ctx),false);
  await f.ctx.openPvView();assert.equal(f.calls.scripts.length,1);assert.equal(f.calls.opened,2);
 });
@@ -39,7 +39,7 @@ test('a failed module load leaves the panel alive, reports once and the next vis
 
 test('view errors and mismatched markup are caught instead of escaping the render loop',async()=>{
  for(const missingMarkup of [false,true]){
-  const f=fixture();f.options.brokenDialog=true;if(missingMarkup)f.ids['pv-strip']=null;
+  const f=fixture();f.options.brokenDialog=true;if(missingMarkup)f.ids['pv-view']=null;
   await assert.doesNotReject(f.ctx.openPvView());
   assert.equal(f.failed(),true);assert.equal(vm.runInContext('pvViewLoading',f.ctx),false);assert.equal(f.calls.renders,1);
  }

@@ -13,7 +13,7 @@ async function bootstrap(failingFile){
 }
 test('all UI dependencies share the build version instead of mixing cached releases',async()=>{
   const f=await bootstrap();
-  assert.deepEqual(f.resources,['./chart-data.js?v=build123','./accounting.js?v=build123','./forecast.js?v=build123','./status.js?v=build123','./app.js?v=build123']);
+  assert.deepEqual(f.resources,['./chart-data.js?v=build123','./accounting.js?v=build123','./vue/eos-vue.js?v=build123','./status.js?v=build123','./app.js?v=build123']);
   assert.equal(f.stylesheet.href,'./style.css?v=build123');
   assert.equal(f.nodes['startup-retry'].hidden,true);
 });
@@ -35,4 +35,16 @@ test('a runtime error is not called a missing file and does not hide an already 
  assert.equal(f.nodes.overview.hidden,false);assert.equal(f.nodes['startup-retry'].hidden,false);
  assert.equal(f.nodes['startup-detail'].textContent,'app.js:759:ReferenceError');
  assert.doesNotMatch(f.nodes['startup-detail'].textContent,/private raw error/);
+});
+
+test('an error in the built Vue bundle is reported with its path inside the panel assets',async()=>{
+ const f=await bootstrap();
+ f.emitError({filename:'https://ha.test/vue/eos-vue.js?v=build123',lineno:1,error:{name:'TypeError',message:'private raw error'}});
+ assert.equal(f.nodes['startup-detail'].textContent,'vue/eos-vue.js:1:TypeError');
+ assert.doesNotMatch(f.nodes['startup-detail'].textContent,/private raw error/);
+});
+test('a missing Vue bundle names the build output',async()=>{
+ const f=await bootstrap('eos-vue.js');
+ assert.ok(f.nodes.notice.textContent.includes('vue/eos-vue.js'));
+ assert.equal(f.nodes['startup-retry'].hidden,false);
 });

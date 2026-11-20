@@ -22,6 +22,11 @@ MANIFEST = 'custom_components/eos_energiezentrale/manifest.json'
 ORIGIN = '.release-source.json'
 # Pinned dependencies whose patch and minor updates get an automatic changelog entry.
 REQUIREMENTS = ('requirements-dev.txt', 'requirements-test.txt')
+FRONTEND_PACKAGE = 'frontend/package.json'
+# Built panel assets (npm run build in frontend/); not in the source tree, added to the release commit.
+BUNDLE_DIR = 'custom_components/eos_energiezentrale/energy/web/vue'
+BUNDLE_ENTRY = BUNDLE_DIR + '/eos-vue.js'
+BUNDLE_SUFFIXES = ('.js', '.css')
 WORKFLOWS = '.github/workflows'
 PIN = re.compile(r'^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*==\s*([^\s;#]+)', re.MULTILINE)
 ACTION = re.compile(r'uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)@[0-9a-f]{40}\s*#\s*v?([0-9][^\s]*)')
@@ -71,6 +76,20 @@ def _pins(text):
     return {name.lower().replace('_', '-'): version for name, version in PIN.findall(text or '')}
 
 
+def _npm(text):
+    """Exact npm versions of direct dependencies; ranges are not pins and are ignored."""
+    try:
+        package = json.loads(text or '{}')
+    except ValueError:
+        return {}
+    result = {}
+    for group in ('dependencies', 'devDependencies'):
+        for name, version in (package.get(group) or {}).items():
+            if isinstance(version, str) and re.fullmatch(r'[0-9][0-9A-Za-z.+-]*', version):
+                result[name] = version
+    return result
+
+
 def _actions(text):
     result = {}
     for name, version in ACTION.findall(text or ''):
@@ -90,7 +109,7 @@ def dependency_changes(current, previous):
     """Changed pinned dependencies between two snapshots {path: text}: (kind, name, old, new, path)."""
     changes = []
     for path in sorted(set(current) & set(previous)):
-        parse = _actions if path.startswith(WORKFLOWS) else _pins
+        parse = _actions if path.startswith(WORKFLOWS) else _npm if path == FRONTEND_PACKAGE else _pins
         kind = 'action' if path.startswith(WORKFLOWS) else 'package'
         old, new = parse(previous[path]), parse(current[path])
         for name in sorted(set(old) & set(new)):
@@ -123,7 +142,7 @@ def dependency_notes(changes, sections):
 
 def dependency_files(read):
     """Dependency snapshot {path: text}; ``read(path)`` returns a file's text or None."""
-    files = {path: read(path) for path in (*REQUIREMENTS, *read(WORKFLOWS + '/'))}
+    files = {path: read(path) for path in (*REQUIREMENTS, FRONTEND_PACKAGE, *read(WORKFLOWS + '/'))}
     return {path: content for path, content in files.items() if content is not None}
 
 
@@ -341,7 +360,25 @@ def build_plan(root, github, source, channel, beta_number=None, branch='main', t
     return {'version':version, 'notes':notes, 'origin':origin, 'changelog':changelog, 'target':None}
 
 
-def publish_build(github, plan):
+def bundle_files(root):
+    """Built frontend files {path: text} for the release commit; publishing needs the build."""
+    folder = root / BUNDLE_DIR
+    files = {f'{BUNDLE_DIR}/{path.relative_to(folder).as_posix()}': path.read_text(encoding='utf-8')
+             for path in sorted(folder.rglob('*')) if path.is_file() and path.suffix in BUNDLE_SUFFIXES} if folder.is_dir() else {}
+    if BUNDLE_ENTRY not in files:
+        raise ValueError('Build the frontend (npm run build in frontend/) before publishing')
+    return files
+
+
+def _bundle_digest(files):
+    digest = hashlib.sha256()
+    for path, content in sorted(files.items()):
+        digest.update(path.encode() + b'\0' + content.encode() + b'\0')
+    return digest.hexdigest()
+
+
+def publish_build(github, plan, bundle=None):
+    """Create the release commit: generated metadata plus the built frontend bundle."""
     version, origin = plan['version'], plan['origin']
     tag = 'v'+version
     target = github.tag_commit(tag)
@@ -353,11 +390,17 @@ def publish_build(github, plan):
         source_changelog = file_at(github,source,'CHANGELOG.md')
         if source_changelog is None or hashlib.sha256(source_changelog.encode()).hexdigest() != origin['source_changelog_sha256']:
             raise ValueError('Release notes must belong to the checked source commit')
+        if bundle:
+            if any(not path.startswith(BUNDLE_DIR + '/') for path in bundle):
+                raise ValueError('Release bundle files must stay inside the built frontend folder')
+            # Provenance of the shipped build; a resumed run compares the stored origin.
+            origin = {**origin, 'bundle_sha256':_bundle_digest(bundle)}
         original = github.request('/git/commits/'+source)
         manifest = json.loads(file_at(github, source, MANIFEST))
         manifest['version'] = version
         files = {MANIFEST:json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',
-                 'CHANGELOG.md':plan['changelog'], ORIGIN:json.dumps(origin,sort_keys=True,indent=2)+'\n'}
+                 'CHANGELOG.md':plan['changelog'], ORIGIN:json.dumps(origin,sort_keys=True,indent=2)+'\n',
+                 **(bundle or {})}
         tree = github.request('/git/trees','POST',{'base_tree':original['tree']['sha'], 'tree':[
             {'path':path,'mode':'100644','type':'blob','content':content} for path,content in files.items()]})
         commit = github.request('/git/commits','POST',{'message':'Release '+version,
@@ -516,7 +559,7 @@ def main():
             plan = build_plan(args.root,github,args.commit,args.channel or 'stable',args.beta_number,args.branch)
             version, notes = plan['version'], plan['notes']
             if args.command == 'publish':
-                publish_build(github,plan)
+                publish_build(github,plan,bundle_files(args.root))
         elif args.command in {"prepare", "publish"}:
             if version is None:
                 raise ValueError('Use --channel for automatic New Version publishing')

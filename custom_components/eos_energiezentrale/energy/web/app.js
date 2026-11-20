@@ -1416,7 +1416,8 @@ function ensureModule(file,ready){
   return moduleLoading.get(file);
 }
 function ensureForecastModule(){
-  return ensureModule('forecast.js',()=>typeof globalThis.EosForecast?.create==='function'?globalThis.EosForecast:null);
+  // The PV & weather view is the first Vue feature (frontend/src/features/pv-weather).
+  return ensureModule('vue/eos-vue.js',()=>typeof globalThis.EosForecast?.create==='function'?globalThis.EosForecast:null);
 }
 let pvViewLoading=false;
 // The PV & weather page replaces the former weather dialog; failures stay a browser notice.
@@ -1425,7 +1426,7 @@ async function openPvView(){
   pvViewLoading=true;forecastOpenFailure=false;
   try{
     const module=await ensureForecastModule();
-    if(!byId('pv-strip')||!byId('pv-days')||!byId('pv-effects'))throw requestError('asset_mismatch','interface');
+    if(!byId('pv-view'))throw requestError('asset_mismatch','interface');
     forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale,now:windowNow});
     forecastView.open();
   }catch{

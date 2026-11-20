@@ -523,6 +523,8 @@
 #eos-energy-design #pv {display:grid;grid-template-columns:minmax(0,1fr);gap:16px;}
 #eos-energy-design #pv[hidden] {display:none;}
 #eos-energy-design #pv .plan-panel {margin:0;}
+/* The Vue view renders into this element; its children take part in the #pv grid. */
+#eos-energy-design #pv-view {display:contents;}
 #eos-energy-design .wx-ico {width:28px;height:28px;flex:none;fill:none;stroke:var(--solar);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 #eos-energy-design .wx-now {display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--edge);}
 #eos-energy-design .wx-now .wx-ico {width:46px;height:46px;}

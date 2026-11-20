@@ -384,3 +384,63 @@ def test_dependency_notes_keep_the_checked_changelog_for_publication(project):
     assert result['origin']['source_changelog_sha256'] == release.hashlib.sha256(text.encode()).hexdigest()
     release.publish_build(github, result)
     assert github.tags['v'+result['version']]
+
+
+def package(**versions):
+    return json.dumps({'dependencies':{'vue':versions.get('vue', '3.5.45')},
+                       'devDependencies':{'vite':versions.get('vite', '8.3.6'), 'local':'file:../tool'}})
+
+
+def test_frontend_package_updates_get_automatic_notes_and_majors_need_an_entry(project):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, package(), package(vue='3.5.46'), release.FRONTEND_PACKAGE)
+    assert '`vue` von 3.5.45 auf 3.5.46 aktualisiert (`frontend/package.json`)' in plan(project, github)['notes']
+    dependencies(project, github, package(), package(vite='9.0.0'), release.FRONTEND_PACKAGE)
+    with pytest.raises(ValueError, match='vite 8.3.6 -> 9.0.0 needs its own changelog entry'):
+        plan(project, github, build='124')
+
+
+def test_npm_ranges_and_invalid_package_files_are_not_treated_as_pins():
+    assert release._npm('{"dependencies":{"a":"^1.0.0","b":"1.2.3","c":"file:../c"}}') == {'b':'1.2.3'}
+    assert release._npm('not json') == {}
+
+
+def built(root, files={'eos-vue.js':'globalThis.EosForecast={};'}):
+    folder = root/release.BUNDLE_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    for name, content in files.items():
+        (folder/name).write_text(content, encoding='utf-8')
+
+
+def test_publishing_requires_the_built_frontend_bundle(project):
+    with pytest.raises(ValueError, match='npm run build'):
+        release.bundle_files(project)
+    built(project, {'notes.txt':'ignored'})
+    with pytest.raises(ValueError, match='npm run build'):
+        release.bundle_files(project)
+    built(project)
+    assert release.bundle_files(project) == {release.BUNDLE_ENTRY:'globalThis.EosForecast={};'}
+
+
+def test_the_release_commit_ships_the_built_bundle_with_its_provenance(project):
+    github = Repository()
+    built(project)
+    bundle = release.bundle_files(project)
+    result = plan(project, github)
+    release.publish_build(github, result, bundle)
+    target = github.tags['v'+result['version']]
+    assert github.files[target, release.BUNDLE_ENTRY] == 'globalThis.EosForecast={};'
+    origin = json.loads(github.files[target, release.ORIGIN])
+    assert origin['bundle_sha256'] == release._bundle_digest(bundle)
+    # A retry of the same run resumes the published release instead of building a second one.
+    writes = len(github.writes)
+    release.publish_build(github, plan(project, github), bundle)
+    assert not any(path in ('/git/trees', '/git/commits') for path, _ in github.writes[writes:])
+
+
+def test_bundle_files_cannot_overwrite_other_release_paths(project):
+    github = Repository()
+    with pytest.raises(ValueError, match='inside the built frontend folder'):
+        release.publish_build(github, plan(project, github), {release.MANIFEST:'{}'})
+    assert not github.writes

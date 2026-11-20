@@ -11,3 +11,7 @@ release-notes.md
 .venv-before-repair-*/
 
 .security-results/
+
+# Frontend: dependencies and the built Vue bundle (npm run build in frontend/)
+frontend/node_modules/
+custom_components/eos_energiezentrale/energy/web/vue/

@@ -147,8 +147,19 @@ erreichbar sein; die Änderungen müssen zuvor nach GitHub übertragen worden se
    steuerbaren Bereiche oder unter **Einstellungen → System → Gerätesteuerung** nur die
    Speichersteuerung bzw. die E-Auto-Ladesteuerung einschalten.
 
-Alternativ `custom_components/eos_energiezentrale` nach
-`/config/custom_components/eos_energiezentrale` kopieren und HA neu starten.
+Alternativ `custom_components/eos_energiezentrale` aus einem Release-Tag nach
+`/config/custom_components/eos_energiezentrale` kopieren und HA neu starten. Releases
+enthalten das gebaute Panel-Bundle `energy/web/vue/eos-vue.js`. Aus einem Quellbranch
+vorher das Frontend bauen (Node.js 24):
+
+```sh
+cd frontend
+npm ci
+npm run build
+```
+
+Der Build schreibt das Bundle nach `custom_components/eos_energiezentrale/energy/web/vue/`;
+danach den gesamten Ordner `custom_components/eos_energiezentrale` kopieren.
 Eine Aufnahme in den HACS-Standardkatalog ist dafür nicht erforderlich.
 
 ## Konfiguration
@@ -885,6 +896,7 @@ python -m venv .venv
 python -m pip install -r requirements-dev.txt -r requirements-test.txt
 python -m pytest --cov=custom_components.eos_energiezentrale --cov-branch
 node --test tests/*.test.cjs
+cd frontend && npm ci && npm run typecheck && npm test && npm run build
 ```
 
 Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).

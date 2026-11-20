@@ -44,6 +44,41 @@ python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
 python tools/release.py validate
 ```
 
+### Frontend (Vue.js)
+
+Die Panel-Oberfläche wird schrittweise nach `frontend/` (Vue 3, TypeScript, Vite)
+überführt. Bereits umgestellt: PV & Wetter. Lokal bauen und prüfen:
+
+```sh
+cd frontend
+npm ci            # installiert exakt den Lockfile-Stand, ohne Lifecycle-Skripte (.npmrc)
+npm run typecheck # vue-tsc
+npm test          # Vitest mit jsdom und den echten Sprachpaketen aus energy/i18n
+npm run build     # schreibt energy/web/vue/eos-vue.js
+npm audit --audit-level=moderate
+```
+
+Das Bundle ist nicht versioniert (`.gitignore`); die CI baut es für jedes Release und
+legt es in den Release-Commit. Für einen lokalen Test in Home Assistant nach dem Build
+den Ordner `custom_components/eos_energiezentrale` kopieren und HA neu starten.
+
+Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
+(`C:\...`, z. B. in PowerShell); mit `c:\...` findet Vitest seinen Runner nicht.
+
+Struktur und Regeln:
+
+- `src/host`: Schnittstelle zum bisherigen Panel (`app.js`), das weiter Routing,
+  Anmeldung und Aktualisierung übernimmt. Jede Vue-Funktion registriert die globale
+  Schnittstelle, die `app.js` für sie schon nutzt (z. B. `EosForecast.create`).
+- `src/features/<bereich>`: Komponenten, Composables, Zustand und Tests eines Bereichs;
+  `src/shared` für bereichsübergreifende Formatierung und Bausteine.
+- Composition API mit `<script setup lang="ts">`, `provide`/`inject` mit typisierten
+  Schlüsseln; keine Options API, kein `v-html`, kein Laufzeit-Templatecompiler
+  (CSP ohne `eval`). Backendtexte bleiben Text.
+- Fachliche Werte kommen weiter aus dem Backend; Vue übersetzt, formatiert und zeichnet.
+- Neue npm-Abhängigkeiten nur mit konkretem Bedarf, mit exakter Version und
+  mindestens 14 Tage alt; `npm audit` muss ohne Befund bleiben.
+
 VS Code nutzt weiterhin die Projekt-`.venv` und die zentrale `pytest.ini`.
 Nach dem Architekturwechsel die vorhandene Umgebung mit Python 3.14 neu anlegen
 oder die beiden Requirements-Dateien in eine kompatible Umgebung installieren.

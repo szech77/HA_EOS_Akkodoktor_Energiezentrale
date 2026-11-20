@@ -28,11 +28,13 @@
       }
     }
   }
-  const known=['chart-data.js','accounting.js','forecast.js','status.js','app.js'];
+  // vue/eos-vue.js is built from frontend/ (npm run build); it is not part of the source tree.
+  const known=['chart-data.js','accounting.js','vue/eos-vue.js','status.js','app.js'];
   // Parse/runtime errors before app startup must also produce a visible message.
   window.addEventListener('error',event=>{
     const file=String(event.filename||'').split('/').pop().split('?')[0];
-    if(known.includes(file))failed(file,event);
+    const asset=known.find(item=>item.split('/').pop()===file);
+    if(asset)failed(asset,event);
   });
   for(const use of document.querySelectorAll('use[data-logo]'))use.setAttribute('href','./logo.svg?v='+encodeURIComponent(version)+'#mark');
   const icon=document.querySelector('link[rel=icon]');if(icon)icon.href='./logo.svg?v='+encodeURIComponent(version);

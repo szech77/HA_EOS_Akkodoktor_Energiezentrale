@@ -63,6 +63,8 @@ Die folgenden Aufgaben übernimmt der Agent, der einen Dependabot-PR fertigstell
   müssen zur referenzierten Version passen; keine beweglichen Tags als Ersatz
   einführen. Weitere Verwendungen derselben Abhängigkeit im Repo prüfen und
   notwendige zusammenhängende Anpassungen einschließen.
+- Bei npm-Updates `frontend/package.json` und `package-lock.json` gemeinsam prüfen und
+  Typprüfung, Vitest, Build und `npm audit` ausführen.
 - Bei Python-Updates beide Requirements-Dateien, die Home-Assistant-Testversion
   und die verwendete Python-Version berücksichtigen. Keine zusätzlichen
   Laufzeitabhängigkeiten oder Lockdatei-Formate ohne konkreten Bedarf einführen.
@@ -100,6 +102,11 @@ Referenzen: [Dependabot-Konfiguration](https://docs.github.com/en/code-security/
   einen grünen Status zu erreichen. Begrenzte Workflow-Berechtigungen und
   `persist-credentials: false` erhalten. Fremden PR-Code nicht mit privilegierten
   Tokens über `pull_request_target` ausführen.
+- Das Frontend wird schrittweise nach `frontend/` (Vue 3, TypeScript, Vite) überführt;
+  `app.js` bleibt bis zum Abschluss für Routing, Anmeldung und Aktualisierung zuständig.
+  Composition API mit `<script setup lang="ts">`, kein `v-html`, kein Laufzeit-
+  Templatecompiler. Das gebaute Bundle `energy/web/vue/` nicht committen; die CI baut es
+  für Releases. npm-Abhängigkeiten exakt pinnen, Lifecycle-Skripte bleiben deaktiviert.
 - Native HA-Übersetzungen liegen in `translations`, Panel-Texte in `energy/i18n`.
   Deutsch und Englisch pflegen; Englisch bleibt der Rückfall.
 - Fachliche Berechnungen, Statusbewertungen und Warnungen im Backend halten.
@@ -142,7 +149,16 @@ node --check custom_components/eos_energiezentrale/energy/web/status.js
 node --test tests/*.test.cjs
 python -m bandit -r custom_components tools -ll
 python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
+cd frontend
+npm ci
+npm run typecheck
+npm test
+npm run build
+npm audit --audit-level=moderate
 ```
+
+Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
+(`C:\...`); mit `c:\...` findet Vitest seinen Runner nicht.
 
 Neue Verhaltenstests bei fachlichen Änderungen und Regressionen ergänzen.
 Für reine Dokumentations- oder Versionsänderungen keine künstlichen Tests bauen.

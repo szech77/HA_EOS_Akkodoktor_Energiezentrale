@@ -1,6 +1,7 @@
 """Authenticated HA WebSocket API and same-origin panel resources."""
 from functools import partial
 from hashlib import sha256
+import logging
 from pathlib import Path
 import sqlite3
 
@@ -15,16 +16,26 @@ from .energy.localization import load_language
 
 STATIC_URL = "/eos-energiezentrale-static"
 PANEL_URL = "eos-energiezentrale"
+# Built from frontend/ (npm run build); HACS releases ship it prebuilt.
+VUE_BUNDLE = Path("vue") / "eos-vue.js"
+_ASSET_SUFFIXES = {".js", ".html", ".css", ".svg"}
+_LOGGER = logging.getLogger(__name__)
 
 
 def asset_version(directory=None):
+    """Fingerprint all panel assets, including the built Vue bundle in subfolders."""
     directory = directory or Path(__file__).parent / "energy" / "web"
     digest = sha256()
-    for path in sorted(directory.iterdir()):
-        if path.is_file() and path.suffix in {".js",".html",".css",".svg"}:
-            digest.update(path.name.encode())
+    for path in sorted(directory.rglob("*")):
+        if path.is_file() and path.suffix in _ASSET_SUFFIXES:
+            digest.update(path.relative_to(directory).as_posix().encode())
             digest.update(path.read_bytes())
     return digest.hexdigest()[:16]
+
+
+def vue_bundle_present(directory=None):
+    directory = directory or Path(__file__).parent / "energy" / "web"
+    return (directory / VUE_BUNDLE).is_file()
 
 
 async def async_register_frontend(hass):
@@ -35,6 +46,13 @@ async def async_register_frontend(hass):
         websocket_api.async_register_command(hass, websocket_request)
         data["registered"] = True
     version = await hass.async_add_executor_job(asset_version)
+    if not await hass.async_add_executor_job(vue_bundle_present):
+        if not data.get("vue_bundle_missing"):
+            # A source checkout without `npm run build`; the panel reports the missing asset.
+            _LOGGER.warning("Panel asset %s is missing; build the frontend with npm run build", VUE_BUNDLE.as_posix())
+            data["vue_bundle_missing"] = True
+    elif data.pop("vue_bundle_missing", None):
+        _LOGGER.info("Panel asset %s is available again", VUE_BUNDLE.as_posix())
     icons_url = STATIC_URL + "/icons.js?v=" + version
     if data.get("icons_url") != icons_url:
         if previous := data.get("icons_url"):
