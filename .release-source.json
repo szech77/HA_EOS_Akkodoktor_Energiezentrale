@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/release-changelog-hash",
+  "channel": "beta",
+  "date": "2026-11-20",
+  "notes_sha256": "2122cc239802d88702cb73d32963bf608bdfe1e4a39e8ba3b48daf4511f7d4ae",
+  "source_changelog_sha256": "1c5364274001d2b7c05c5bbb72a4e7ba4bdca1ffb447bfcfad899bb1ec3a2d88",
+  "source_commit": "d84edcb6eacb3d3e8f78de96722b4c83b6f5486b",
+  "version": "0.22.4b44727566271"
+}

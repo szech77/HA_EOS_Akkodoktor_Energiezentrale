@@ -1,9 +1,6 @@
 # Changelog
 
-Die CI erzeugt Version und Releasedatum. Neue Einträge stehen unter New Version;
-veröffentlichte Abschnitte werden in den Release-Tags archiviert.
-
-## New Version
+## 0.22.4b44727566271 - 2026-11-20
 
 ### Features
 
@@ -12,6 +9,129 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Bugfixes
 
 - Release-Prozess: Patch- und Minor-Updates gepinnter Abhängigkeiten (`requirements-dev.txt`, `requirements-test.txt`, GitHub Actions) erhalten in den Release-Notes automatisch einen Eintrag, wenn kein eigener Stichpunkt sie nennt. Reine Dependabot-PRs scheitern damit nicht mehr an der Versionsplanung. Major-Updates und unlesbare Versionen verlangen weiterhin einen eigenen Eintrag.
+- Abhängigkeit `homeassistant` von 2026.11.1 auf 2026.11.2 aktualisiert (`requirements-test.txt`); automatisch erfasst.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.22.3 - 2026-11-18
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Einen nicht bestätigten Stopp einer nicht erreichbaren HA-Wallbox (Status unbekannt) als sichtbaren Fehler `wallbox_stop` melden und in jedem Zyklus wiederholen, statt die Steuerung dauerhaft auszuschalten. Bei unverfügbarer Ladefreigabe nur kurz auf die Bestätigung warten; eine bereits gemeldete Pause benötigt keine zusätzliche Abfrage. Erreichbare Wallboxen ohne Stoppbestätigung bleiben Steuerfehler.
+- Den ausdrücklich gemeldeten Netzbetrieb einer konfigurierten HA-Statusentität nicht mehr wegen eines alten Meldezeitpunkts als unbekannt pausieren. Nicht verfügbare oder unerwartete Zustände pausieren weiterhin; die Netzwiederkehr nach einer Pause verlangt weiterhin einen frischen Netzbetriebsstatus. Bei unbekanntem Status schalten gleichzeitige Lesefehler von Speicher oder Wallbox die Steuerung nicht mehr dauerhaft aus, auch im Mehrfahrzeugbetrieb.
+- Während der Wiederanlauf auf EOS oder Messwerte wartet, einen lesbaren Speicher auch bei noch nicht lesbarer Wallbox freigeben; die Wallbox wird freigegeben, sobald sie lesbar ist. Im Mehrfahrzeugbetrieb gibt ein noch wartendes Fahrzeug nur seine eigene Wallbox frei und pausiert keine bereits regelnde Wallbox mehr.
+- Nach dem Ausschalten fehlgeschlagene Gerätefreigaben in jedem Zyklus wiederholen, bis sie bestätigt sind.
+- Die Quelldiagnose bewertet den Fahrzeug-SoC mit derselben 36-Stunden-Grenze wie die Regelung, auch für Plugin-Werte.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Stoppbefehle der Plugins `nrgkick_local` und `goe_http_v2` auch dann senden, wenn eine abgebrochene Abfrage noch offen ist; dafür ist genau eine zusätzliche Anfrage reserviert. Ohne Bestätigung bleibt der Stopp ein Fehler.
+- EOS-, InfluxDB- und Fronius-Solar-API-Anfragen zusätzlich zur Inaktivitätsfrist von 5 s mit einer Gesamtfrist von 30 s je Anfrage begrenzen. Solange eine abgebrochene Anfrage an denselben Dienst offen ist, scheitern weitere Anfragen dorthin sofort; so können auch verspätet abgeschlossene Konfigurationsschreibvorgänge keine neueren überholen.
+
+## 0.22.2 - 2026-11-17
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Generische und HA-basierte NRGkick-Wallboxen melden einen Stopp nur noch als erfolgreich, wenn die Ladefreigabe `off` bestätigt. Bei nicht verfügbarer oder fehlender Freigabe-Entität den Stopp trotzdem anfordern; eine fehlende Bestätigung bleibt ein sichtbarer Steuerfehler, auch bei Sicherheitsstopps und beim Ausschalten.
+- Einen konfigurierten oder vom Gerät gemeldeten, aber nicht verfügbaren, veralteten oder fehlenden Netzbetriebsstatus wie Notstrom behandeln: Speicher und Wallboxen freigeben, keine neuen Regelbefehle senden und erst nach frischem Netzbetriebsstatus fortsetzen, auch beim Start und im Mehrfahrzeugbetrieb. Der gespeicherte Steuerungswunsch bleibt erhalten.
+- Nach einem Neustart mit gespeicherter Steuerfreigabe die Geräte als möglicherweise noch angesteuert behandeln. Ausschalten vor dem Wiederanlauf gibt Speicher und alle Wallboxen frei. Sind die Geräte lesbar, fehlen aber EOS-Plan oder Messwerte, werden sie während des Wartens freigegeben; fehlgeschlagene Freigaben bleiben sichtbar und werden wiederholt.
+- Fahrzeug-SoC-Werte, deren letzte Meldung mehr als 36 Stunden zurückliegt, nicht mehr als Regelgrundlage oder Startwert der SoC-Schätzung verwenden und nach fünf Minuten ohne gültigen Wert als nicht verfügbar melden.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Lokale HTTP-Anfragen der Plugins `nrgkick_local` und `goe_http_v2` zusätzlich zur Socket-Inaktivitätsfrist mit einer Gesamtfrist begrenzen (NRGkick 5 s, go-e Inaktivitätsfrist plus 2 s). Tröpfelnd gesendete Header oder Antworten können Abfragen, Ausschalten und das Entladen der Integration nicht mehr über die Regelungssperre blockieren; solange eine abgebrochene Anfrage offen ist, scheitern weitere Anfragen an dasselbe Gerät sofort als Gerätefehler.
+
+## 0.22.1 - 2026-11-17
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Semgrep CE 1.185.0 als zusätzlichen verpflichtenden Python-/JavaScript-Scanner im CI-Job `security` mit sieben versionierten, vor jedem Scan getesteten Projektregeln integrieren. Nur die native Engine aus dem exakt gepinnten offiziellen PyPI-Wheel nach Größen- und SHA-256-Prüfung verwenden; bestehende Scanner erhalten. Befunde mit stabilen Regel-IDs, CWE-Zuordnung, Priorität, Behebungshinweisen und Fundstellen über geschwärzte SARIF-Berichte in GitHub Code Scanning bewertbar machen. Rohcode, expandierte Variablen und private Inhalte nicht hochladen; `nosemgrep`-Unterdrückungen nicht akzeptieren. Unvollständige Scans, fehlgeschlagene Regeltests, kaputte Berichte, Scanner-, Installations- oder Uploadfehler blockieren. PyYAML 6.0.3 explizit als Entwicklungsabhängigkeit für den Regelkatalog aufnehmen.
+
+## 0.22.0 - 2026-11-17
+
+### Features
+
+- Security Policy für das melden von Verwundbarkeiten wurde hinzugefügt
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.21.0 - 2026-11-17
+
+### Features
+
+- Im bestätigten Notstrombetrieb die frische, summierte AC-Ausgangsleistung der konfigurierten Wechselrichter als Gesamtverbrauch verwenden. Gemessene Wallbox- und Wärmepumpenleistungen weiter separat abziehen; ungültige oder veraltete AC-Werte nicht ersetzen und nach Netzwiederkehr die normale Verbrauchsquelle verwenden. Notstrom als nativen Home-Assistant-Binärsensor mit nicht verfügbarem Zustand bei unbestätigtem Status bereitstellen. E-Auto-Laden während der aktiven Notstrompause standardmäßig auch nach erneutem Start stoppen; manuelles Laden optional über die technischen Grenzen erlauben, während EOS pausiert bleibt.
+- Bestätigten Notstrom im Energieflussdiagramm zusätzlich mit einem roten Haus-/Blitz-Piktogramm am ausgegrauten Netzsymbol kennzeichnen. Bei Netzwiederkehr oder unbestätigtem Status das Piktogramm ausblenden.
+- Notstrombetrieb anhand bestätigter, aktueller Gerätestatus im Backend erkennen und im Panel anzeigen. Im Energiestrom-Diagramm das öffentliche Netz ausgrauen und dessen Flussanimation unterdrücken, ohne Messwerte umzuschreiben. Fronius automatisch über den zugehörigen HA-Notstromsensor oder beim direkten Modbus-Plugin ergänzend über die lokale Solar API erkennen; Victron GX über den Inselstatus und weitere Systeme über eine optionale HA-Statusquelle unterstützen. Unbekannte/veraltete Zustände, Speichergruppen, Rückkehr zum Netz und deduplizierte Backend-Meldungen berücksichtigen; Deutsch und Englisch ergänzen.
+- Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
+
+### Bugfixes
+
+- Stabile Releases nach einem Merge nach `main` trotz absichtlich übersprungener Branch-Changelog-Bereinigung veröffentlichen. Den Publish-Job mit einer expliziten Statusfunktion und erfolgreichem `required`-Ergebnis freigeben; bei fehlgeschlagenen/übersprungenen Pflichtprüfungen, Abbruch oder nicht vorgesehenem Auslöser weiterhin keine Veröffentlichung starten. Regression für stabile Releases und Beta-Branches ergänzen.
+- Bestätigten Notstrom als normalen Pausenzustand statt als Messwertfehler darstellen. Netz-/Hausmesswertwarnungen nur für erwartbare Ausfälle im bestätigten Notstrom unterdrücken; andere Fehler sichtbar lassen. Speicher und Wallboxen freigeben/pausieren, den Steuerungswunsch auch bei mehrtägigen Ausfällen erhalten und erst nach bestätigter Netzwiederkehr, gültigen Messwerten und gültigem Plan automatisch weiterregeln. Unbestätigte Freigaben und unbekannter Netzstatus verhindern den Wiederanlauf; manuelles Ausschalten bleibt bestehen. Auch mehrere Wallboxen berücksichtigen.
+- Bei aktivierter Fronius-Modbus-Notstromerkennung ein fehlendes Solar-API-Feld `BackupMode` als unbestätigten Status anzeigen und im Backend protokollieren. Die Statusquelle nicht mehr still als nicht unterstützt behandeln; Erkennung bei ausgefallenem Smart Meter durch Regressionstests absichern.
+- Die CI-Versionsplanung nach Squash-Merges oder Rebases auch für weitergeführte Branches mit identischem vollständigem stabilem Quellstand ermöglichen. Wirklich veraltete Branches weiterhin zurückweisen. Den Unterschied zwischen `New Version` im Quellbranch und nummeriertem Changelog im veröffentlichten Release-Tag dokumentieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.20.0 - 2026-11-17
+
+### Features
+
+- Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
+
+### Bugfixes
+
+- Keine.
 
 ### Breaking Changes
 
@@ -879,4 +999,3 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Keine.
-
