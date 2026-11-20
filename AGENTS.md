@@ -68,7 +68,11 @@ Die folgenden Aufgaben übernimmt der Agent, der einen Dependabot-PR fertigstell
   Laufzeitabhängigkeiten oder Lockdatei-Formate ohne konkreten Bedarf einführen.
 - Erforderliche Code-, Konfigurations-, Dokumentations- und Testanpassungen sowie
   den Abschnitt `New Version` im selben PR ergänzen. Unterschiedliche Updates nicht
-  beiläufig bündeln.
+  beiläufig bündeln. Für ein reines Patch- oder Minor-Update gepinnter
+  Requirements oder Actions ergänzt die Versionsplanung automatisch einen
+  `Bugfixes`-Eintrag (siehe `CI.md`); einen eigenen Stichpunkt nur schreiben, wenn
+  sich Verhalten, Konfiguration oder Kompatibilität ändern. Major-Updates brauchen
+  immer einen eigenen Stichpunkt, der die Abhängigkeit nennt.
 - Ein Major-Update gezielt auf Migrationen prüfen. Bei Inkompatibilität Ursache
   und erforderliche Anpassungen dokumentieren; einen fehlschlagenden PR nicht
   als mergebereit bezeichnen.
