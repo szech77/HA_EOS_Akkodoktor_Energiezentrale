@@ -44,7 +44,7 @@ function fixture(vehicles,language='de'){
   power:value=>Number.isFinite(value)?value/1000+' kW':'—',percent:value=>value+' %',decimal:String,
   EosChartData:require('../custom_components/eos_energiezentrale/energy/web/chart-data.js')};
  vm.createContext(ctx);
- vm.runInContext(script.slice(script.indexOf('const consumerEnabled ='),script.indexOf('function vehicleCards(')),ctx);
+ vm.runInContext(script.slice(script.indexOf('const consumerEnabled ='),script.indexOf('const displayed = key =>')),ctx);
  vm.runInContext(script.slice(script.indexOf('function layoutFlow('),script.indexOf('function overview(')),ctx);
  const rings=[],updateRing=ctx.updatePowerRing;
  ctx.updatePowerRing=(node,key,value,source)=>{rings.push({node,key,value,source});updateRing(node,key,value,source);};

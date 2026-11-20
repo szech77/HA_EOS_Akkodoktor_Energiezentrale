@@ -364,6 +364,7 @@
     "forecast.empty": "Für die nächsten 24 Stunden sind keine stündlichen Wetterdaten vorhanden.",
     "action.weather_forecast": "Wettervorhersage",
     "forecast.open_failed": "Die Wetter-/PV-Vorhersage konnte nicht geöffnet werden. Bitte erneut auf das Wettersymbol klicken oder die Oberfläche neu laden.",
+    "car.open_failed": "Die Auto-Ansicht konnte nicht geöffnet werden. Bitte die Seite erneut öffnen oder die Oberfläche neu laden.",
     "plugin.firmware": "Venus OS",
     "plugin.firmware_unknown": "unbekannt",
     "plugin.firmware_source_detected": "automatisch erkannt",

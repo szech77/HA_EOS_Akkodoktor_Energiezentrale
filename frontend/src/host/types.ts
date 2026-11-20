@@ -60,6 +60,10 @@ export interface Host {
   readonly decimal: FormatDecimal
   readonly locale: () => string
   readonly now: () => number
+  /** Text of a key, or undefined when the language pack has none (labels for backend states). */
+  readonly lookup: (key: string) => string | undefined
+  /** Reload the panel snapshot after a change, e.g. a saved setting. */
+  readonly refresh: () => Promise<void>
 }
 
 /** Context passed by app.js to the legacy-compatible feature factories (see main.ts). */
@@ -71,6 +75,21 @@ export interface LegacyContext {
   readonly decimal: FormatDecimal
   readonly getLocale: () => string
   readonly now?: () => number
+  readonly lookup?: (key: string) => string | undefined
+  readonly refresh?: () => Promise<void>
+}
+
+/** Host services of a legacy context; optional services fall back to safe defaults. */
+export function hostOf(context: LegacyContext): Host {
+  return {
+    request: context.request,
+    t: context.t,
+    decimal: context.decimal,
+    locale: context.getLocale,
+    now: context.now ?? Date.now,
+    lookup: context.lookup ?? (() => undefined),
+    refresh: context.refresh ?? (async () => undefined),
+  }
 }
 
 /** Lifecycle the panel host drives for a view. */

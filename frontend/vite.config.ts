@@ -35,5 +35,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.spec.ts'],
     restoreMocks: true,
+    // Some tests build their data with the Python backend (src/test/backend.ts); starting it takes seconds.
+    testTimeout: 30_000,
   },
 })

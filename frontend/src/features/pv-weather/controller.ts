@@ -1,6 +1,6 @@
 import { createApp, shallowRef, type App } from 'vue'
 import { HOST, SNAPSHOT } from '@/host/context'
-import type { Host, LegacyContext, ViewController } from '@/host/types'
+import { hostOf, type Host, type LegacyContext, type ViewController } from '@/host/types'
 import PvWeatherView from './PvWeatherView.vue'
 import { createPvWeatherState, PV_WEATHER } from './state'
 
@@ -15,13 +15,7 @@ export const MOUNT_ID = 'pv-view'
 export function createPvWeatherController(context: LegacyContext): ViewController {
   const target = context.document.getElementById(MOUNT_ID)
   if (!target) throw new Error('PV view mount point is missing')
-  const host: Host = {
-    request: context.request,
-    t: context.t,
-    decimal: context.decimal,
-    locale: context.getLocale,
-    now: context.now ?? Date.now,
-  }
+  const host: Host = hostOf(context)
   const snapshot = shallowRef(context.getSnapshot())
   const state = createPvWeatherState(host, snapshot)
   let app: App | null = null

@@ -18,7 +18,7 @@ export interface TestContext extends LegacyContext {
   clock: { now: number }
 }
 
-export function testContext(options: { code?: 'de' | 'en'; snapshot: PanelSnapshot; request: BackendRequest; now: number }): TestContext {
+export function testContext(options: { code?: 'de' | 'en'; snapshot: PanelSnapshot; request: BackendRequest; now: number; refresh?: () => Promise<void> }): TestContext {
   const pack = languagePack(options.code ?? 'de')
   const clock = { now: options.now }
   const context: TestContext = {
@@ -36,6 +36,8 @@ export function testContext(options: { code?: 'de' | 'en'; snapshot: PanelSnapsh
     decimal: (value, digits = 1) => new Intl.NumberFormat(pack.locale, { maximumFractionDigits: digits }).format(value),
     getLocale: () => pack.locale,
     now: () => clock.now,
+    lookup: key => pack.messages[key],
+    refresh: options.refresh ?? (async () => undefined),
   }
   return context
 }

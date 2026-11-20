@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const root=path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web');
 const script=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const context={valid:Number.isFinite};
-vm.runInNewContext(script.slice(script.indexOf('function socBarCount('),script.indexOf('function vehicleCards(')),context);
+vm.runInNewContext(script.slice(script.indexOf('function socBarCount('),script.indexOf('const displayed = key =>')),context);
 
 test('car SoC fills five vertical bars in the same 20 percent steps as the battery',()=>{
  for(const [soc,expected] of [[0,0],[1,1],[20,1],[21,2],[40,2],[41,3],[60,3],[61,4],[80,4],[81,5],[100,5]]){

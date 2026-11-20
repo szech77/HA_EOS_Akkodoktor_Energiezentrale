@@ -47,7 +47,9 @@ python tools/release.py validate
 ### Frontend (Vue.js)
 
 Die Panel-Oberfläche wird schrittweise nach `frontend/` (Vue 3, TypeScript, Vite)
-überführt. Bereits umgestellt: PV & Wetter. Lokal bauen und prüfen:
+überführt. Bereits umgestellt: PV & Wetter sowie die Auto-Seiten (Fahrzeugauswahl,
+Ladeziel, Lade-Schalter, EOS-Ladeplan und Ladeziele; Diagramme noch in `app.js`).
+Lokal bauen und prüfen:
 
 ```sh
 cd frontend
@@ -70,7 +72,9 @@ Struktur und Regeln:
 - `src/host`: Schnittstelle zum bisherigen Panel (`app.js`), das weiter Routing,
   Anmeldung und Aktualisierung übernimmt. Jede Vue-Funktion registriert die globale
   Schnittstelle, die `app.js` für sie schon nutzt (z. B. `EosForecast.create`).
-- `src/features/<bereich>`: Komponenten, Composables, Zustand und Tests eines Bereichs;
+- `src/features/<bereich>`: Komponenten, Composables, Zustand und Tests eines Bereichs
+  (`pv-weather`, `car`); Testdaten mit Backendbezug erzeugt `src/test/backend.ts` über
+  das Python-Backend (`tests/backend.cjs`), damit Tests den echten Vertrag nutzen;
   `src/shared` für bereichsübergreifende Formatierung und Bausteine.
 - Composition API mit `<script setup lang="ts">`, `provide`/`inject` mit typisierten
   Schlüsseln; keine Options API, kein `v-html`, kein Laufzeit-Templatecompiler

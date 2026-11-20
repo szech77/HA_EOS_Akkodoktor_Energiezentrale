@@ -34,6 +34,20 @@ export function createFormat(host: Host, zone: () => string | undefined) {
     // Rounding must not show a negative zero.
     temperature: (value: number | null | undefined) => (valid(value) ? `${decimal(Math.round(value) || 0, 0)}°` : '—'),
     percent: (value: number | null | undefined) => (valid(value) ? decimal(value, 0) : '—'),
+    /** Percentage with unit, as the panel shows SoC values: "48 %". */
+    percentText: (value: number | null | undefined) => (valid(value) ? `${decimal(value)} %` : '—'),
+    /** Power in watts as kW with two decimals; the sign is shown by the context, not the number. */
+    power: (value: number | null | undefined) => (valid(value) ? `${decimal(Math.abs(value) / 1000, 2)} ${t('unit.kw')}` : '—'),
+    euro: (value: number) => new Intl.NumberFormat(host.locale(), { style: 'currency', currency: 'EUR' }).format(value),
+    /** Same day: time; within six days: weekday and time; otherwise date and time. */
+    whenDated(stamp: string | number | null | undefined): string {
+      const value = typeof stamp === 'number' ? stamp : Date.parse(stamp ?? '')
+      if (!valid(value)) return '—'
+      if (dayKey(value) === dayKey(host.now())) return date(value, { hour: '2-digit', minute: '2-digit' })
+      return Math.abs(value - host.now()) < 6 * 86_400_000
+        ? date(value, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+        : date(value, { dateStyle: 'short', timeStyle: 'short' })
+    },
   }
 }
 

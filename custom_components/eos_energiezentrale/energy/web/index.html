@@ -68,34 +68,9 @@
     <section id="detail" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.device"></p><h1 id="detail-title"></h1></div><a class="back" href="#settings" data-i18n="nav.settings"></a></div>
-      <nav class="subnav car-nav" id="car-nav" hidden data-i18n-aria="fleet.choose"></nav>
       <a class="back" id="usage-link" hidden data-i18n="billing.open"></a>
-      <div id="car-view" hidden>
-        <div class="car-top">
-          <section class="plan-panel car-goal" id="car-goal"></section>
-          <form class="plan-panel" id="vehicle-daily" novalidate>
-            <div class="panel-heading"><h2 data-i18n="car.charging"></h2><output id="vehicle-switch-saved" class="tag" role="status"></output></div>
-            <div class="switches">
-              <label class="switch"><span><b data-i18n="settings.pv"></b><small id="car-pv-hint"></small></span><input name="pv" type="checkbox" class="toggle"></label>
-              <label class="switch"><span><b data-i18n="settings.fast"></b><small id="car-fast-hint"></small></span><input name="fast" type="checkbox" class="toggle"></label>
-              <label class="switch"><span><b data-i18n="settings.phase_auto"></b><small data-i18n="car.phase_hint"></small></span><input name="phase_auto" type="checkbox" class="toggle"></label>
-            </div>
-            <details class="acc car-limits"><summary><h3 data-i18n="car.limits"></h3></summary>
-              <div class="fields">
-                <div class="soc-field"><label><span data-i18n="settings.pv_target_soc"></span><input name="pv_target_soc" type="number" min="1" max="100" required data-soc-range></label><div class="soc-slide"><span data-i18n="car.slider_soc_label"></span><input type="range" class="soc-slider" data-soc-slider="soc" min="1" max="100" step="1" data-i18n-aria="car.slider_soc"><output data-soc-value aria-live="polite"></output></div></div>
-                <div class="soc-field"><label><span data-i18n="plans.fast_target"></span><input name="fast_target_soc" type="number" min="1" max="100" required data-soc-range></label><div class="soc-slide"><span data-i18n="car.slider_soc_label"></span><input type="range" class="soc-slider" data-soc-slider="soc" min="1" max="100" step="1" data-i18n-aria="car.slider_soc"><output data-soc-value aria-live="polite"></output></div></div>
-              </div>
-            </details>
-          </form>
-        </div>
-        <section class="plan-panel" id="car-plan"></section>
-      </div>
-      <form id="vehicle-goals" class="plan-panel" hidden>
-        <div class="panel-heading"><h2 data-i18n="plans.goals"></h2><button type="button" class="btn" id="add-charge-plan" data-i18n="plans.add"></button></div>
-        <p class="footnote" data-i18n="plans.selection_note"></p>
-        <div id="charge-plans" class="charge-plans"></div>
-        <div class="form-footer" id="vehicle-goals-footer"><button type="submit" class="save" data-i18n="settings.save"></button><output id="vehicle-saved" role="status"></output></div>
-      </form>
+      <!-- Car pages: rendered by the Vue bundle (frontend/src/features/car). -->
+      <div id="car-app" hidden></div>
       <div class="kpis" id="detail-kpis"></div>
       <section class="chart-panel">
         <div class="chart-legend"><span data-i18n="chart.measured"></span><span data-i18n="chart.forecast"></span><span data-i18n="chart.now_marker"></span></div>
