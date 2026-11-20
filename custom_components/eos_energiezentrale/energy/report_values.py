@@ -115,7 +115,8 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
         for row in entries.get(key, {}).get('bins', []):
             target = bins.setdefault(row['time'], {'time':row['time'], 'consumption_kwh':0., 'export_kwh':0.,
                                                    'storage_kwh':0., 'grid_import_kwh':0., 'grid_import_eur':0.,
-                                                   'export_eur':0., 'cost_partial':False})
+                                                   'export_eur':0., 'cost_partial':False, 'pv_kwh':0.,
+                                                   'pv_direct_kwh':0., 'pv_storage_kwh':0., 'pv_export_kwh':0.})
             target[field] += row.get('kwh', 0)
             # Money per bin for the euro chart: grid import cost (consumers and storage) and feed-in credit.
             grid = row if key == EXPORT else (row.get('sources', {}).get('grid') or {})
@@ -125,6 +126,11 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
                 target['grid_import_kwh'] += grid.get('kwh', 0)
                 target['grid_import_eur'] += grid.get('cost_eur', 0)
             target['cost_partial'] = target['cost_partial'] or grid.get('cost_unknown_kwh', 0) > .0001
+            # PV production of the bin by its use: consumed directly, stored or fed in.
+            pv = (row.get('sources', {}).get('pv') or {}).get('kwh', 0)
+            use = 'pv_export_kwh' if key == EXPORT else 'pv_storage_kwh' if key == STORAGE else 'pv_direct_kwh'
+            target[use] += pv
+            target['pv_kwh'] += pv
     unknown = used['cost_unknown_kwh'] + export['cost_unknown_kwh']
     storage_grid = storage['sources']['grid']
     import_cost = source['grid']['cost_eur'] + storage_grid['cost_eur']
@@ -244,6 +250,19 @@ def consumer_facts(bins, view, period, car=False):
     return facts
 
 
+def pv_facts(balance, period):
+    """Notable bins of the PV production: the strongest bin and the daily average."""
+    unit = UNITS.get(period, 'hour')
+    best = max(balance['bins'], key=lambda item: item.get('pv_kwh', 0), default=None)
+    facts = []
+    if best is not None and best.get('pv_kwh', 0) > NOTABLE_KWH:
+        facts.append({'id': 'max_pv', 'time': best['time'], 'unit': unit, 'kwh': best['pv_kwh']})
+    days = balance['base_days']
+    if facts and period != 'day' and days > 1:
+        facts.append({'id': 'pv_per_day', 'kwh': balance['pv_kwh'] / days})
+    return facts or [{'id': 'no_pv'}]
+
+
 def grid_facts(balance, period):
     """Notable bins of the grid exchange: most feed-in, highest import and daily averages."""
     unit = UNITS.get(period, 'hour')
@@ -279,4 +298,5 @@ def view_values(result, consumers):
     total['facts'].append({'id': 'export', 'kwh': balance['export_kwh'], 'eur': balance['export_eur']})
     views['total'] = total
     views['grid'] = {'facts': grid_facts(balance, period)}
+    views['pv'] = {'facts': pv_facts(balance, period)}
     return views

@@ -52,13 +52,13 @@ const averageCostLabel = amount => {
   return t('billing.average_unit_price',{price:value==='—' ? `— ${t('unit.price')}` : value});
 };
 const costWithPrice = amount => `${costValue(amount)} · ${averageCostLabel(amount)}`;
-const billingName = key => key==='total' ? t('billing.total_consumption') : key==='grid' ? t('usage.grid_title') : key.startsWith('car/') ? snapshot.vehicles?.find(item=>item.id===key.slice(4))?.name ?? t('device.car') : t(`device.${key}`);
+const billingName = key => key==='total' ? t('billing.total_consumption') : key==='grid' ? t('usage.grid_title') : key==='pv' ? t('usage.pv_title') : key.startsWith('car/') ? snapshot.vehicles?.find(item=>item.id===key.slice(4))?.name ?? t('device.car') : t(`device.${key}`);
 const isCarKey = key => key==='car' || key.startsWith('car/');
 const usageEnabled = key => key==='house' || (typeof consumerEnabled==='function' && consumerEnabled(key));
 // Report pages in the order of the sub navigation; single vehicles stay on the car page.
 function usageKeys() {
   const cars=usageEnabled('car') ? ['car',...(snapshot.vehicles?.length>1 ? snapshot.vehicles.map(item=>'car/'+item.id) : [])] : [];
-  return ['house',...cars,...(usageEnabled('heat') ? ['heat'] : []),'grid','total'];
+  return ['pv','house',...cars,...(usageEnabled('heat') ? ['heat'] : []),'grid','total'];
 }
 const energyOr = value => valid(value) ? energyValue(value) : '—';
 const moneyOr = (value, approximate=false) => valid(value) ? (approximate ? '≈ ' : '')+money(value) : '—';
@@ -92,7 +92,7 @@ function sourceBar(value) {
 function billingRoute(requested) {
   if (!requested.startsWith('usage/')) return false;
   const key=requested.slice(6);
-  return key==='total' || key==='grid' || (['house','heat','car'].includes(key) ? usageEnabled(key) : key.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===key.slice(4)));
+  return key==='total' || key==='grid' || key==='pv' || (['house','heat','car'].includes(key) ? usageEnabled(key) : key.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===key.slice(4)));
 }
 
 async function fetchBilling(force=false) {
@@ -141,7 +141,9 @@ function stackedAreas(slots, rows, layers, x, y) {
 // over time, as stacked areas. Hours stay tappable for their energy and cost.
 function profilePoints(key) {
   const profile=billing.period==='day' ? billing.data?.power_profile : null;
-  const points=(profile?.points??[]).filter(point=>key==='grid' ? point.grid : point[key]);
+  const points=(profile?.points??[]).filter(point=>key==='grid' ? point.grid : key==='pv' ? valid(point.solar) : point[key]);
+  // The PV view also draws when only the forecast exists, e.g. early in the morning.
+  if(key==='pv' && billing.period==='day' && (points.length || billing.data?.pv_forecast?.points?.length))return {...(profile??{}),points};
   return points.length ? {...profile,points} : null;
 }
 // Pointer readout of the power chart: the values of the profile point under the cursor.
@@ -150,6 +152,8 @@ function powerReadout(point, key) {
   const kw=value=>`${decimal((value??0)/1000,2)} kW`;
   const stamp=new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'}).format(new Date(point.time));
   if(key==='grid')return {title:stamp,lines:[[t('usage.import'),kw(point.grid.import),sourceColors.grid],[t('usage.feed_in'),kw(point.grid.export),sourceColors.pv]]};
+  if(key==='pv')return {title:stamp,lines:[...(valid(point.solar)?[[t('usage.pv_measured'),kw(point.solar),sourceColors.pv]]:[]),
+    ...(valid(point.forecast)?[[t('usage.pv_forecast'),kw(point.forecast),'transparent']]:[])]};
   const parts=point[key],total=Object.values(parts).reduce((sum,value)=>sum+(value??0),0);
   return {title:`${stamp} · ${kw(total)}`,lines:Object.entries(sourceColors).filter(([source])=>parts[source]>0).map(([source,color])=>[t('billing.'+source),kw(parts[source]),color])};
 }
@@ -179,7 +183,7 @@ function hidePowerReadout(event) {
   const tip=charts.querySelector?.('.power-tip');if(tip)tip.hidden=true;
 }
 
-function powerChart(key, profile, entry, balance) {
+function powerChart(key, profile, entry, balance, forecast=null) {
   const width=Math.max(280,Math.min(1000,window.innerWidth-100)),height=240,left=44,right=12,top=18,bottom=38;
   const slots=billingSlots(),step=(width-left-right)/Math.max(1,slots.length),starts=slots.map(slot=>Date.parse(slot.key));
   const half=(profile.step_s??120)*500,gap=(profile.gap_s??600)*1000;
@@ -188,9 +192,13 @@ function powerChart(key, profile, entry, balance) {
     const index=Math.max(0,starts.findLastIndex(start=>start<=stamp));
     return left+(index+Math.min(1,Math.max(0,(stamp-starts[index])/3600000)))*step;
   };
-  const grid=key==='grid',kw=value=>(value??0)/1000;
+  const grid=key==='grid',pv=key==='pv',kw=value=>(value??0)/1000;
   const layers=grid ? [{color:sourceColors.grid,value:point=>kw(point.grid.import)},{color:sourceColors.pv,value:point=>-kw(point.grid.export)}]
+    : pv ? [{color:sourceColors.pv,value:point=>kw(point.solar)}]
     : Object.entries(sourceColors).map(([source,color])=>({color,value:point=>kw(point[key][source])}));
+  // PV forecast power (backend, from now on) as a dashed step line over the measured area.
+  const ahead=pv ? (forecast?.points??[]) : [];
+  const forecastAt=stamp=>ahead.find(item=>Date.parse(item.time)<=stamp&&stamp<Date.parse(item.end))?.w;
   const entries=[],rows=[],xs=[];
   let previous=null;
   for(const point of profile.points){
@@ -200,24 +208,58 @@ function powerChart(key, profile, entry, balance) {
   }
   const sums=rows.map(row=>layers.reduce((sum,layer)=>sum+Math.max(0,layer.value(row)),0));
   const lows=rows.map(row=>layers.reduce((sum,layer)=>sum+Math.min(0,layer.value(row)),0));
-  const maximum=Math.max(.1,...sums),minimum=Math.min(0,...lows),span=maximum-minimum,plot=height-top-bottom;
+  const maximum=Math.max(.1,...sums,...ahead.map(item=>kw(item.w))),minimum=Math.min(0,...lows),span=maximum-minimum,plot=height-top-bottom;
   const y=value=>top+(maximum-value)/span*plot;
   const x=index=>{const base=Math.round(index);return (xs[base]??left)+(index-base)*step/30;};
   const ticks=minimum<0?[0,maximum,maximum/2,minimum,minimum/2].filter((value,index)=>index===0||Math.abs(y(value)-y(0))>=14):Array.from({length:5},(_,i)=>minimum+span*i/4);
   const axis=ticks.map(value=>`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"${value===0&&minimum<0?' stroke-width="2"':''}/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(Math.abs(value),span<3?2:1))}</text>`).join('');
   const areas=stackedAreas(entries,rows,layers,x,y);
-  const hours=key==='grid' ? (balance?.bins??[]) : (entry?.bins??[]);
+  const line=ahead.length ? `<polyline class="forecast-line" points="${ahead.flatMap(item=>[Date.parse(item.time),Date.parse(item.end)].map(stamp=>`${position(stamp).toFixed(1)},${y(kw(item.w)).toFixed(1)}`)).join(' ')}" stroke="${sourceColors.pv}"/>` : '';
+  const hours=grid||pv ? (balance?.bins??[]) : (entry?.bins??[]);
   const hits=slots.map((slot,index)=>{
-    const row=hours.find(item=>item.time===slot.key);if(!row)return '';
-    const tooltip=grid ? gridTooltip(row,slot) : binTooltip(row,slot);
+    const row=hours.find(item=>item.time===slot.key);if(!row && !pv)return '';
+    const tooltip=grid ? gridTooltip(row,slot) : pv ? pvTooltip(row,slot,forecast) : binTooltip(row,slot);
     // No native title here: the pointer readout shows the values at the cursor.
     return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><rect x="${left+index*step}" y="${top}" width="${step}" height="${plot}" fill="transparent"/></g>`;
   }).join('');
   const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*step}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
+  const measured=rows.map(row=>({row:pv?{...row,forecast:forecastAt(Date.parse(row.time)+half)}:row,x:xs[entries.findIndex(item=>item.key===row.time)]}));
+  // Ahead of the measurements the PV readout follows the forecast in 15-minute steps.
+  const last=rows.length ? Date.parse(rows.at(-1).time)+half : -Infinity;
+  const future=ahead.flatMap(item=>{const out=[];for(let stamp=Date.parse(item.time);stamp<Date.parse(item.end);stamp+=900000)if(stamp>last)out.push({row:{time:new Date(stamp).toISOString(),forecast:item.w},x:position(stamp)});return out;});
   powerHover={key,width,reach:Math.max(6,step*(profile.gap_s??600)/7200),
-    points:rows.map((row,index)=>({row,x:xs[entries.findIndex(item=>item.key===row.time)]})).filter(item=>item.x!==null&&item.x!==undefined)};
-  return `<svg class="billing-chart power-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(grid?'usage.grid_power_chart':'usage.power_chart'))}">${axis}${areas}${hits}${labels}`
+    points:[...measured,...future].filter(item=>item.x!==null&&item.x!==undefined)};
+  return `<svg class="billing-chart power-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t(grid?'usage.grid_power_chart':pv?'usage.pv_power_chart':'usage.power_chart'))}">${axis}${areas}${line}${hits}${labels}`
     +`<line class="power-cursor" x1="0" x2="0" y1="${top}" y2="${top+plot}" visibility="hidden"/></svg><div class="power-tip" role="status" hidden></div>`;
+}
+const pvTooltip=(row,slot,forecast)=>{
+  const ahead=forecast?.bins?.find(item=>item.time===slot.key)?.kwh;
+  const parts=row ? `${t('usage.pv_produced')} ${energyValue(row.pv_kwh)} (${t('usage.pv_direct')} ${energyValue(row.pv_direct_kwh)} · ${t('usage.pv_storage')} ${energyValue(row.pv_storage_kwh)} · ${t('usage.pv_export')} ${energyValue(row.pv_export_kwh)})` : '';
+  return [slot.label,parts,valid(ahead)&&ahead>0 ? `${t('usage.pv_forecast')} ${energyValue(ahead)}` : ''].filter(Boolean).join(' · ');
+};
+// PV production per bin by its use, plus the forecast for bins still ahead (outlined).
+function pvChart(balance, forecast) {
+  const rows=balance?.bins ?? [],ahead=forecast?.bins ?? [];
+  if (!rows.length && !ahead.length) return `<p class="empty-state">${th('billing.no_data')}</p>`;
+  const width=Math.max(280,Math.min(1000,window.innerWidth-100)),height=240,left=44,right=12,top=18,bottom=38;
+  const parts=[['pv_direct_kwh','#5ab0e8'],['pv_storage_kwh',sourceColors.battery],['pv_export_kwh',sourceColors.pv]];
+  const slots=billingSlots(),step=(width-left-right)/Math.max(1,slots.length),barWidth=Math.max(1,step*.7);
+  const produced=key=>rows.find(item=>item.time===key)?.pv_kwh??0,expected=key=>ahead.find(item=>item.time===key)?.kwh??0;
+  const maximum=Math.max(.1,...slots.map(slot=>produced(slot.key)+expected(slot.key))),plot=height-top-bottom;
+  const y=value=>top+(maximum-value)/maximum*plot;
+  const axis=Array.from({length:5},(_,i)=>{const value=maximum*i/4;return `<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--edge)"/><text x="${left-8}" y="${y(value)+4}" text-anchor="end">${html(decimal(value,1))}</text>`;}).join('');
+  const bars=slots.map((slot,index)=>{
+    const row=rows.find(item=>item.time===slot.key),coming=expected(slot.key);
+    if(!row && !(coming>0))return '';
+    const x=left+(index+.5)*step;let stack=0;
+    const shapes=(row?parts:[]).map(([field,color])=>{const from=stack;stack+=Math.max(0,row[field]??0);
+      return `<rect x="${x-barWidth/2}" y="${y(stack)}" width="${barWidth}" height="${Math.max(0,y(from)-y(stack))}" fill="${color}"/>`;}).join('')
+      +(coming>0?`<rect class="forecast-bar" x="${x-barWidth/2}" y="${y(stack+coming)}" width="${barWidth}" height="${Math.max(0,y(stack)-y(stack+coming))}" stroke="${sourceColors.pv}"/>`:'');
+    const tooltip=pvTooltip(row,slot,forecast);
+    return `<g tabindex="0" role="button" data-billing-bin="${html(slot.date)}" aria-label="${html(tooltip)}"><title>${html(tooltip)}</title>${shapes}<rect x="${x-step/2}" y="${top}" width="${step}" height="${plot}" fill="transparent"/></g>`;
+  }).join('');
+  const labels=slots.map((slot,index)=>index%Math.max(1,Math.ceil(slots.length/(window.innerWidth<600?5:10)))===0?`<text x="${left+(index+.5)*step}" y="${height-12}" text-anchor="middle">${html(slot.label)}</text>`:'').join('');
+  return `<svg class="billing-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="${html(t('usage.pv_chart'))}">${axis}${bars}${labels}</svg>`;
 }
 const binTooltip=(row,slot)=>`${slot.label} · ${energyValue(row.kwh)} · ${costWithPrice(row)}\n${Object.entries(row.sources).map(([source,item])=>`${t('billing.'+source)}: ${energyValue(item.kwh)} · ${costWithPrice(item)}`).join('\n')}`;
 const gridTooltip=(row,slot)=>{
@@ -306,6 +348,8 @@ function factText(fact) {
   const time=fact.time ? binLabel(fact.time,fact.unit) : '';
   switch (fact.id) {
     case 'best': return [t('usage.fact_best_'+fact.unit),t('usage.fact_best_text',{time,share:percent(fact.percent)}),percent(fact.percent)];
+    case 'max_pv': return [t('usage.fact_max_pv'),t('usage.fact_max_pv_text',{time,energy:energyValue(fact.kwh)}),energyValue(fact.kwh)];
+    case 'pv_per_day': return [t('usage.fact_per_day'),t('usage.fact_pv_per_day_text',{energy:energyValue(fact.kwh)}),'Ø'];
     case 'max_grid': return [t('usage.fact_max_grid'),t('usage.fact_max_grid_text',{time,energy:energyValue(fact.kwh)}),energyValue(fact.kwh)];
     case 'charge_days': return [t('usage.fact_charge_days'),t('usage.fact_charge_days_text',{count:fact.count,days:fact.days}),t('usage.days',{count:fact.count})];
     case 'per_day': return [t('usage.fact_per_day'),`${energyValue(fact.kwh)} · ${fact.cost_available ? money(fact.eur) : '—'}`,'Ø'];
@@ -325,6 +369,16 @@ const factRow = ([title,text,tag,href]) => href
 function usageFigures(key, view, amount, balance) {
   const days=view?.per_day_kwh!==undefined && valid(view?.per_day_kwh);
   const perDay=value=>days ? t('usage.per_day',{energy:energyValue(value)}) : t('billing.observed');
+  if (key==='pv') {
+    // Forecast only for the rest of the period; EOS plans about two days ahead.
+    const forecast=billing.data?.pv_forecast,more=forecast&&!forecast.complete&&forecast.kwh>0 ? t('usage.pv_forecast_partial') : '';
+    return {
+      lead:balance ? t('usage.lead_pv',{energy:energyValue(balance.pv_kwh),share:percent(balance.self_consumption_percent)}) : '',
+      kpis:[[t('usage.pv_produced'),energyOr(balance?.pv_kwh),perDay(balance && balance.base_days>1 && billing.period!=='day' ? balance.pv_kwh/balance.base_days : null)],
+        [t('usage.self_consumption'),percent(balance?.self_consumption_percent),t('usage.self_consumption_note')],
+        [t('usage.feed_in'),energyOr(balance?.export_kwh),`${feedInMoney(balance)} · ${price(balance?.feed_in_price_ct)}`],
+        [t('usage.pv_forecast'),forecast ? energyValue(forecast.kwh) : '—',[t('usage.pv_forecast_note'),more].filter(Boolean).join(' ')]]};
+  }
   if (key==='grid') return {
     lead:balance ? t('usage.lead_grid',{feed:energyValue(balance.export_kwh),import:energyValue(balance.grid_import_kwh),share:percent(balance.self_consumption_percent)}) : '',
     kpis:[[t('usage.feed_in'),energyOr(balance?.export_kwh),`${feedInMoney(balance)} · ${price(balance?.feed_in_price_ct)}`],
@@ -352,6 +406,7 @@ function priceRows(key, view, balance) {
   const approx=balance?.cost_partial;
   const base=()=>row(t('usage.base_price',{days:balance.base_days}),t('usage.per_month',{value:money(balance.base_price_eur_month)}),money(balance.base_eur));
   const feed=()=>row(t('usage.feed_in_credit',{energy:energyValue(balance.export_kwh)}),price(balance.feed_in_price_ct),valid(balance.feed_in_price_ct)||balance.export_kwh<=.0001 ? '−'+money(balance.export_eur) : '—');
+  if (key==='pv') return balance ? feed() : '';
   if (key==='grid') {
     if (!balance) return '';
     return `<p class="ph">${th('usage.grid_price',{price:price(balance.grid_import_price_ct)})}</p>`
@@ -380,7 +435,7 @@ function priceRows(key, view, balance) {
 
 function mixRows(key, amount, balance) {
   const item=(label,color,kwh,share,detail='')=>`<div class="row"><span><i class="source-dot" style="background:${color}"></i>${html(label)}${detail ? `<br><small>${html(detail)}</small>` : ''}</span><span class="num">${html(energyValue(kwh))} · ${valid(share) ? decimal(share) : '—'} %</span></div>`;
-  if (key==='grid') {
+  if (key==='grid'||key==='pv') {
     const use=balance?.pv_use;
     if (!use) return {title:t('usage.mix_pv_title'),total:'—',html:''};
     const parts=[['direct','#5ab0e8'],['storage',sourceColors.battery],['export',sourceColors.pv]];
@@ -396,7 +451,7 @@ function mixRows(key, amount, balance) {
 
 function usageDetail(key, fetch=true) {
   if(fetch)void fetchBilling();
-  const data=billing.data,entry=key==='total'?data?.total:key==='grid'?null:data?.consumers[key],amount=entry?.total;
+  const data=billing.data,entry=key==='total'?data?.total:key==='grid'||key==='pv'?null:data?.consumers[key],amount=entry?.total;
   const view=data?.views?.[key],balance=data?.balance,period=billing.period,today=localDay(windowNow());
   const range=data?new Intl.DateTimeFormat(language.locale,{timeZone:'UTC',...(period==='day'?{dateStyle:'long'}:period==='month'?{year:'numeric',month:'long'}:{year:'numeric'})}).format(new Date(data.date+'T12:00:00Z')):'';
   byId('usage-nav').innerHTML=usageKeys().map(item=>`<a href="#usage/${html(item)}"${item===key?' aria-current="page"':''}>${html(item==='total'?t('billing.total'):item==='grid'?t('usage.grid_nav'):billingName(item))}</a>`).join('');
@@ -408,7 +463,7 @@ function usageDetail(key, fetch=true) {
   byId('usage-device').hidden=!device;
   if (device) byId('usage-device').href='#'+device;
   byId('usage-title').textContent=key==='total'?t('usage.total_title'):billingName(key);
-  byId('usage-eyebrow').textContent=t(key==='grid'?'usage.eyebrow_grid':key==='total'?'usage.eyebrow_total':'usage.eyebrow_consumer')+(range?' · '+range:'');
+  byId('usage-eyebrow').textContent=t(key==='grid'?'usage.eyebrow_grid':key==='pv'?'usage.eyebrow_pv':key==='total'?'usage.eyebrow_total':'usage.eyebrow_consumer')+(range?' · '+range:'');
   byId('usage-period').querySelectorAll('[data-billing-period]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.billingPeriod===period)));
   byId('billing-range').textContent=range;
   const current=!data || data.end>today;
@@ -419,16 +474,20 @@ function usageDetail(key, fetch=true) {
   byId('usage-lead').textContent=figures.lead;
   byId('usage-kpis').innerHTML=cards(figures.kpis);
   // Day view: power profile (kW), hourly energy (kWh) or hourly costs (€); month and year: kWh or €.
-  const unit=billing.unit==='kw'&&period!=='day' ? 'kwh' : billing.unit;
+  // PV production has no euro view; its value appears as feed-in credit and in the consumers' costs.
+  const unit=billing.unit==='kw'&&period!=='day' || billing.unit==='eur'&&key==='pv' ? 'kwh' : billing.unit;
   const cost=unit==='eur',profile=unit==='kw' ? profilePoints(key) : null;
   byId('usage-chart-unit').querySelectorAll('[data-chart-unit]').forEach(button=>{
     button.setAttribute('aria-pressed',String(button.dataset.chartUnit===unit));
     if(button.dataset.chartUnit==='kw')button.hidden=period!=='day';
+    if(button.dataset.chartUnit==='eur')button.hidden=key==='pv';
   });
   byId('usage-unit').textContent=profile ? t('usage.unit_power') : t((cost?'usage.unit_eur_':'usage.unit_')+usageUnits[period]);
-  byId('usage-legend').innerHTML=(key==='grid' ? [['↑','import',sourceColors.grid],['↓','feed_in',sourceColors.pv]].map(([arrow,name,color])=>`<span><i style="background:${color}"></i>${arrow} ${th('usage.'+name)}</span>`)
+  const pvLegend=[...(profile ? [['pv_measured',sourceColors.pv]] : [['pv_direct','#5ab0e8'],['pv_storage',sourceColors.battery],['pv_export',sourceColors.pv]]),['pv_forecast',null]]
+    .map(([name,color])=>`<span><i style="${color?'background:'+color:'border:1px dashed '+sourceColors.pv}"></i>${th('usage.'+name)}</span>`).join('');
+  byId('usage-legend').innerHTML=key==='pv' ? pvLegend : (key==='grid' ? [['↑','import',sourceColors.grid],['↓','feed_in',sourceColors.pv]].map(([arrow,name,color])=>`<span><i style="background:${color}"></i>${arrow} ${th('usage.'+name)}</span>`)
     : Object.entries(sourceColors).filter(([source])=>source!=='unknown'||amount?.sources?.unknown?.kwh>.0001).map(([source,color])=>`<span><i style="background:${color}"></i>${th('billing.'+source)}</span>`)).join('');
-  byId('usage-charts').innerHTML=profile ? powerChart(key,profile,entry,balance) : key==='grid' ? gridChart(balance,cost) : billingChart(entry,cost);
+  byId('usage-charts').innerHTML=profile ? powerChart(key,profile,entry,balance,data?.pv_forecast) : key==='pv' ? pvChart(balance,data?.pv_forecast) : key==='grid' ? gridChart(balance,cost) : billingChart(entry,cost);
   const svg=byId('usage-charts').querySelector?.('svg.power-chart');
   if(svg&&powerPointer!==null)showPowerReadout({target:svg,clientX:powerPointer});
   // Older days have no minute values left; their kW view shows hourly energy instead.

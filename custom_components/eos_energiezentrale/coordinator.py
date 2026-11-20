@@ -23,6 +23,7 @@ from .energy.report_values import current_day_values, report_values
 from .energy.charge_view import charge_plan
 from .energy.pv_view import pv_effects, pv_hours, pv_now, weather_days
 from .energy.power_profile import day_bounds, power_profile
+from .energy.pv_report import pv_forecast
 from .energy.presentation import measured_pv_energy, mode_timeline, node_problems, plan_events
 from .weather_forecast import WeatherForecast
 
@@ -513,6 +514,10 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     zone = self.app.config.options['timezone']
                     start, end = day_bounds(report['date'], zone)
                     report['power_profile'] = power_profile(self.app.history.read_range(start, end), report['date'], zone)
+                if report.get('period') in {'day', 'month', 'year'}:
+                    # The PV report's forecast for the rest of the period, from the current EOS forecast.
+                    report['pv_forecast'] = pv_forecast((self.data or {}).get('forecast'), report,
+                                                        datetime.now(timezone.utc), self.app.config.options['timezone'])
                 return report
             result = await self.hass.async_add_executor_job(read)
         if "settings" in values:

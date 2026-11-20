@@ -436,3 +436,40 @@ test('the day view draws the power profile in kW; costs and older days stay hour
  vm.runInContext("billing.period='month';billing.data={period:'month',date:'2026-11-01',end:'2026-12-01',base_days:30,settings:{},consumers:{}};usageDetail('house',false)",ctx);
  assert.match(elements['usage-unit'].textContent,/usage.unit_day/);
 });
+
+test('the PV report shows production by use, the forecast ahead and its power curve',()=>{
+ const {ctx,elements}=uiFixture();
+ const hours=['2026-11-18T10:00:00+00:00','2026-11-18T11:00:00+00:00','2026-11-18T12:00:00+00:00'];
+ const pvAmount=kwh=>{const value=amount(kwh,0);value.sources.grid={kwh:0,cost_eur:0,cost_unknown_kwh:0};value.sources.pv={kwh,cost_eur:0,cost_unknown_kwh:0};return value;};
+ ctx.report={period:'day',date:'2026-11-18',end:'2026-11-19',hours,base_days:1,settings:{},
+  consumers:{house:{total:pvAmount(3),bins:hours.slice(0,2).map(time=>({time,...pvAmount(1.5)}))},
+   export:{total:pvAmount(1),bins:[{time:hours[1],...pvAmount(1)}]}},
+  power_profile:{step_s:120,gap_s:600,points:[{time:hours[0],solar:2500,house:{pv:2500,battery:0,grid:0,unknown:0},total:{pv:2500,battery:0,grid:0,unknown:0},grid:{import:0,export:0}}]},
+  pv_forecast:{bins:[{time:hours[2],kwh:2.2}],points:[{time:hours[2],end:'2026-11-18T13:00:00+00:00',w:2200}],kwh:2.2,complete:true}};
+ ctx.cards=values=>{ctx.kpis=values;return '';};
+ assert.equal(vm.runInContext("billingRoute('usage/pv')",ctx),true);
+ vm.runInContext("billing.data=report;billing.period='day';billing.date=report.date;selectBillingUnit('kwh');usageDetail('pv',false)",ctx);
+ assert.equal(elements['usage-title'].textContent,'usage.pv_title');
+ const chart=elements['usage-charts'].innerHTML;
+ assert.match(chart,/aria-label="usage.pv_chart"/);
+ // Measured hours stack direct use and feed-in; the hour ahead shows the outlined forecast.
+ assert.equal((chart.match(/class="forecast-bar"/g)??[]).length,1);
+ assert.match(chart,/usage.pv_produced 2\.5 kWh \(usage.pv_direct 1\.5 kWh · usage.pv_storage 0 kWh · usage.pv_export 1 kWh\)/);
+ assert.match(chart,/usage.pv_forecast 2\.2 kWh/);
+ assert.equal(ctx.kpis[0][1],'4 kWh');assert.equal(ctx.kpis[3][1],'2.2 kWh');
+ vm.runInContext("selectBillingUnit('kw');usageDetail('pv',false)",ctx);
+ const power=elements['usage-charts'].innerHTML;
+ assert.match(power,/aria-label="usage.pv_power_chart"/);
+ assert.match(power,/class="forecast-line"/);assert.match(power,/<polygon class="area"/);
+ const readout=vm.runInContext("powerHover.points.map(item=>powerReadout(item.row,'pv').lines.map(line=>line[0]).join('+'))",ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(readout)).slice(0,2),['usage.pv_measured','usage.pv_forecast']);
+ // There is no euro view of the production; a kept € choice shows kWh here.
+ vm.runInContext("selectBillingUnit('eur');usageDetail('pv',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.pv_chart"/);
+});
+test('the PV node opens the PV report; the weather symbol stays with PV and weather',()=>{
+ const markup=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/index.html'),'utf8');
+ assert.match(markup,/class="node solar l"[^>]*href="#usage\/pv"/);
+ const app=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/app.js'),'utf8');
+ assert.match(app,/byId\('flow-weather'\)\.addEventListener\('click',\(\)=>\{location\.hash='#pv';\}\)/);
+});

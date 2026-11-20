@@ -25,8 +25,8 @@ Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screens
 Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
 Energiefluss. Name und Wert stehen unter dem jeweiligen Symbol. Hat ein Gerät einen
 offenen Hinweis, trägt sein Symbol ein Warnzeichen; welcher Hinweis zu welchem
-Gerät gehört, legt das Backend fest. Ein Klick auf PV oder das Wettersymbol öffnet
-**PV & Wetter**, auf den Speicher die Detailansicht, auf Netz die Auswertung Netz & Einspeisung, auf Haus und Wärmepumpe
+Gerät gehört, legt das Backend fest. Ein Klick auf PV öffnet die Auswertung
+**PV-Erzeugung**, auf das Wettersymbol **PV & Wetter**, auf den Speicher die Detailansicht, auf Netz die Auswertung Netz & Einspeisung, auf Haus und Wärmepumpe
 die Verbrauchsauswertung, auf das Auto die Fahrzeugseite und auf das EOS-Symbol
 in der Mitte die Gesamtbilanz. Der
 Link **Leistungsverlauf** unter dem Diagramm öffnet alle Leistungskurven.
@@ -1100,9 +1100,17 @@ Ohne ausreichende bewertete Energiemenge oder ohne Verbrauch bleibt der Preis
 Die Kacheln **Heute** in der Übersicht zeigen je Verbraucher Energie, Eigenanteil und
 Kosten, dazu **Einspeisung** (Vergütung und Netzbezug) und **Gesamtverbrauch**
 (Kosten und Netto). Jede Kachel öffnet ihre Auswertung; der Netz-Knoten im
-Energiefluss öffnet **Netz & Einspeisung**, Haus und Wärmepumpe ihre Verbrauchsauswertung.
+Energiefluss öffnet **Netz & Einspeisung**, der PV-Knoten **PV-Erzeugung**, Haus und Wärmepumpe ihre Verbrauchsauswertung.
 
-Alle Auswertungen sind gleich aufgebaut. Oben wechseln Chips zwischen Haus, Auto
+**PV-Erzeugung** zeigt die erzeugte Energie je Stunde, Tag oder Monat, aufgeteilt in
+direkt verbraucht, in den Speicher und eingespeist, sowie Eigenverbrauchsquote und
+Einspeisung. Für den Rest des gewählten Zeitraums steht die EOS-Prognose als umrandeter
+Balken darüber; die EOS-Prognose reicht etwa zwei Tage voraus. In der Tagesansicht zeigt
+**kW** die gemessene PV-Leistung als Fläche und die Prognose als gestrichelte Linie; die
+Anzeige am Mauszeiger nennt beide Werte. Prognose je Abschnitt und Leistungskurve
+berechnet das Backend aus der aktuellen EOS-Prognose.
+
+Alle Auswertungen sind gleich aufgebaut. Oben wechseln Chips zwischen PV-Erzeugung, Haus, Auto
 (bei mehreren Fahrzeugen auch je Fahrzeug), Wärmepumpe, Netz & Einspeisung und Gesamt:
 
 - **Tag / Monat / Jahr:** stündliche Werte, Tageswerte oder Monatswerte. Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert; ohne Browserspeicher gilt die Auswahl für die laufende Sitzung.

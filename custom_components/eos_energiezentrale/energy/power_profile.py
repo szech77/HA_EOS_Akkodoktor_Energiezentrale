@@ -50,9 +50,11 @@ def power_profile(samples, day, zone, consumers=CONSUMERS):
         if stamp is None or not start <= stamp < end:
             continue
         shares, values, total, grid = _split(sample)
-        slot = buckets.setdefault(int((stamp - start).total_seconds()) // STEP_S, {'count': 0, 'rows': []})
+        slot = buckets.setdefault(int((stamp - start).total_seconds()) // STEP_S, {'count': 0, 'rows': [], 'solar': []})
         slot['count'] += 1
         slot['rows'].append((shares, values, total, grid))
+        balance = sample.get('balance') if isinstance(sample.get('balance'), dict) else {}
+        slot['solar'].append(number(balance.get('solar', sample.get('solar'))))
     points = []
     for index in sorted(buckets):
         rows = buckets[index]['rows']
@@ -68,6 +70,8 @@ def power_profile(samples, day, zone, consumers=CONSUMERS):
                 for source, share in shares.items():
                     parts[source] += max(0., watts) * share
             point[key] = {source: round(parts[source] / known) for source in SOURCES} if known else None
+        solar = [value for value in buckets[index]['solar'] if value is not None]
+        point['solar'] = round(sum(max(0., value) for value in solar) / len(solar)) if solar else None
         grids = [grid for *_, grid in rows if grid is not None]
         point['grid'] = ({'import': round(sum(max(0., value) for value in grids) / len(grids)),
                           'export': round(sum(max(0., -value) for value in grids) / len(grids))} if grids else None)
