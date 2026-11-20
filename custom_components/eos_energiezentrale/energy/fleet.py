@@ -6,6 +6,7 @@ import re
 
 from .clients import reading
 from .controller import Controller
+from .eos_measurements import device_samples
 from .consumption import ConsumptionBalance, apply_balance, split_vehicles
 from .domain import BatteryCommand, battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
@@ -424,6 +425,14 @@ class FleetController(Controller):
         return {identity:[{key:value for key,value in row.items() if key in keys}
                           for row in (self.primary_history if app is self else app.history).read(now)]
                 for identity,app,_ in self.controllers}
+
+    def eos_measurement_samples(self,battery,box):
+        """The fleet owns the shared battery: it reports its SoC and power once, with the first vehicle.
+
+        Every vehicle controller, including the first, only reads the battery (MeterOnlyBattery).
+        """
+        return device_samples(self.config.options.get('battery_resource'),soc=battery.soc,
+                              charge_w=battery.charge,discharge_w=battery.discharge)+super().eos_measurement_samples(battery,box)
 
     def snapshot(self,now):
         from .charge_plans import plan_view
