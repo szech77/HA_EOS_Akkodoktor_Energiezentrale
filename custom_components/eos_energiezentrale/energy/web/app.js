@@ -797,55 +797,19 @@ function render() {
   }catch(error){showStartupError('view',error);return false;}
 }
 
-function noticeText(notice, translate=t) {
-  const values=(notice.measurements??[]).map(key=>translate('measurement.'+key)).join(', ');
-  const message=translate(notice.message,{values});
-  return (notice.vehicle_name?notice.vehicle_name+': ':'')+message;
-}
-
 let shownRoute=null;
-const control={confirming:null,busy:false,result:''};
-const statusContext=()=>({t,html,time:when,modeLabel,text:notice=>noticeText(notice)});
 function browserNotices() {
   // Browser-side failures stay in the browser; they are shown, never reported to the backend.
   return [...(connectionFailure?[{severity:'warning',message:'notice.connection',browser:true}]:[]),
     ...(forecastOpenFailure?[{severity:'warning',message:'forecast.open_failed',browser:true}]:[]),
     ...(deviceOpenFailure?[{severity:'warning',message:'device.open_failed',browser:true}]:[])];
 }
-function resolvedText(item) {
-  const key=item.code?.startsWith('sources_')?'notice_card.sources_resolved':'notice.'+item.code;
-  return Object.hasOwn(language.messages,key)?t(key,{values:''}):t('notice.unknown');
-}
-const toneOf=severity=>({error:'crit',info:'info'}[severity]??'warn');
+// Status band, notices and the notices page (EosStatus); loaded with the Vue bundle before start.
+let statusView=null;
 function renderStatus(route) {
-  const ctx=statusContext(), ready='control_status' in snapshot;
-  const notices=EosStatus.sortNotices([...(snapshot.notices??[]),...browserNotices()]);
-  const bandNode=byId('status-band');
-  bandNode.hidden=!ready;
-  if(ready){
-    const view=EosStatus.band(snapshot,ctx,{...control,ready:'schedule' in (snapshot.settings??{}),car:consumerEnabled('car')});
-    bandNode.className='status-band tone-'+view.tone;
-    bandNode.innerHTML=view.html;
-  }
-  const top=byId('top-notices'), pill=byId('notice-pill');
-  top.hidden=route==='notices';
-  top.innerHTML=route==='notices'?'':notices.slice(0,2).map(notice=>EosStatus.noticeCard(notice,ctx,{compact:true})).join('');
-  pill.hidden=route==='notices'||!notices.length;
-  if(notices.length){
-    pill.className='notice-pill tone-'+toneOf(notices[0].severity);
-    pill.innerHTML='<span class="sev">'+th('notice_card.'+(notices[0].severity??'warning'))+'</span><span class="txt">'+html(noticeText(notices[0]))
-      +(notices.length>1?' · '+th('notice_card.more',{count:notices.length-1}):'')+'</span><span aria-hidden="true">→</span>';
-  }
-  const badge=byId('nav-badge');
-  badge.hidden=!notices.length;badge.textContent=String(notices.length);
-  badge.className='badge tone-'+toneOf(notices[0]?.severity);
-  if(route!=='notices')return;
-  byId('notice-count').textContent=notices.length?t('notice_card.open_count',{count:notices.length}):t('notice_card.none_open');
-  byId('all-notices').innerHTML=notices.length?notices.map(notice=>EosStatus.noticeCard(notice,ctx)).join('')
-    :'<div class="plan-panel"><b>'+th('notice_card.all_clear')+'</b><p class="footnote">'+th('notice_card.all_clear_text')+'</p></div>';
-  const resolved=snapshot.resolved_notices??[];
-  byId('resolved-panel').hidden=!resolved.length;
-  byId('resolved-notices').innerHTML=resolved.map(item=>EosStatus.resolvedRow(item,{...ctx,text:resolvedText})).join('');
+  statusView??=globalThis.EosStatus.create({document,request:api,getSnapshot:()=>snapshot,getBrowserNotices:browserNotices,
+    t,decimal,getLocale:()=>language.locale,now:windowNow,lookup:name=>language.messages[name],refresh});
+  statusView.show(route);
 }
 function renderView() {
   const requested = location.hash.slice(1);
@@ -942,24 +906,6 @@ async function openPvView(){
 }
 byId('flow-weather').addEventListener('click',()=>{location.hash='#pv';});
 form.elements.holiday_state.addEventListener('change',holidayFields);
-byId('status-band').addEventListener('click', async event => {
-  const action=event.target.closest('[data-control]')?.dataset.control;
-  if(!action||control.busy)return;
-  if(action==='take'||action==='release'){control.confirming=action;control.result='';}
-  else if(action==='cancel')control.confirming=null;
-  else if(action==='confirm'&&control.confirming){
-    // The confirmation sends an explicit boolean; the backend confirms the device release.
-    const enabled=control.confirming==='take';
-    control.busy=true;render();
-    try{await api('control',{enabled});control.result=t(enabled?'control.taken':'control.released');}
-    catch(error){control.result=error.message;}
-    control.busy=false;control.confirming=null;
-    await refresh();
-    return;
-  }
-  render();
-  if(action==='take'||action==='release')byId('status-band').querySelector('[data-control="confirm"]')?.focus();
-});
 for (const target of [form,costForm]) {
   target.addEventListener('submit',event=>{event.preventDefault();void saveSettings();});
   for (const type of ['input','change']) target.addEventListener(type,event=>{
@@ -1030,9 +976,9 @@ async function start() {
   if(!loaded||typeof loaded.locale!=='string'||!loaded.messages||typeof loaded.messages!=='object')throw requestError('language_invalid','language');
   language={locale:loaded.locale,messages:{...startupMessages[startupLanguage],...loaded.messages}};
   startupStage='view';
-  await ensureModule('status.js',()=>typeof globalThis.EosStatus?.band==='function'?globalThis.EosStatus:null);
-  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof globalThis.EosStatus?.band!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
-    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof globalThis.EosStatus?.band!=='function'?'status.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
+  await ensureModule('vue/eos-vue.js',()=>typeof globalThis.EosStatus?.create==='function'?globalThis.EosStatus:null);
+  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof globalThis.EosStatus?.create!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
+    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof globalThis.EosStatus?.create!=='function'?'vue/eos-vue.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
   }
   document.documentElement.lang = language.locale;
   document.querySelectorAll('[data-i18n]').forEach(element => {

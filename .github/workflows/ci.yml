@@ -41,7 +41,6 @@ jobs:
           node --check custom_components/eos_energiezentrale/energy/web/accounting.js
           node --check custom_components/eos_energiezentrale/energy/web/app.js
           node --check custom_components/eos_energiezentrale/energy/web/panel.js
-          node --check custom_components/eos_energiezentrale/energy/web/status.js
           node --test tests/*.test.cjs
       # Lifecycle scripts stay disabled; the lockfile pins the whole dependency tree.
       - name: Install frontend dependencies

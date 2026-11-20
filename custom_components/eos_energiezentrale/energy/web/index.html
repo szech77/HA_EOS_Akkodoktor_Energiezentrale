@@ -15,7 +15,7 @@
     <nav data-i18n-aria="nav.main">
       <a href="#overview" data-route="overview"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11 12 4l9 7M5 10v10h14V10"/></svg><span data-i18n="nav.overview"></span></a>
       <a href="#car" data-route="car" data-optional="car"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17H2v-5l3-2 2.5-5h7L18 10l3 1.5V17h-2M8 17h8"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg><span data-i18n="nav.car"></span></a>
-      <a href="#notices" data-route="notices"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4l2-2M10 21h4"/></svg><span data-i18n="nav.notices"></span><span class="badge" id="nav-badge" hidden></span></a>
+      <a href="#notices" data-route="notices"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4l2-2M10 21h4"/></svg><span data-i18n="nav.notices"></span><span id="nav-badge"></span></a>
       <a href="#settings" data-route="settings"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg><span data-i18n="nav.settings"></span></a>
     </nav>
   </header>
@@ -23,9 +23,8 @@
     <p id="notice" role="status"></p>
     <button id="startup-retry" type="button" hidden>Retry</button>
     <details id="startup-details" hidden><summary id="startup-details-title">Technical details</summary><code id="startup-detail"></code></details>
-    <section id="status-band" class="status-band" aria-live="polite" hidden></section>
-    <div id="top-notices" class="notices"></div>
-    <a id="notice-pill" class="notice-pill" href="#notices" hidden></a>
+    <!-- Status band and notices: rendered by the Vue bundle (frontend/src/bridge/StatusRoot.vue). -->
+    <div id="status-view"></div>
     <section id="overview">
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.overview"></p><h1 data-i18n="nav.overview"></h1></div></div>
       <div class="kpis" id="overview-kpis"></div>
@@ -105,11 +104,8 @@
     </section>
     </section>
     <section id="notices" hidden>
-      <a class="back" href="#overview" data-i18n="nav.back"></a>
-      <div class="page-top"><div><p class="eyebrow" data-i18n="section.notices"></p><h1 data-i18n="nav.notices"></h1></div><span class="tag" id="notice-count"></span></div>
-      <div class="notices" id="all-notices"></div>
-      <section class="plan-panel" id="resolved-panel"><h2 data-i18n="notice_card.resolved_title"></h2><div class="list" id="resolved-notices"></div></section>
-      <p class="footnote" data-i18n="control.restart_info"></p>
+      <!-- Rendered by the Vue bundle (frontend/src/views/NoticesView.vue). -->
+      <div id="notices-view"></div>
     </section>
     <section id="settings" hidden>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div></div>

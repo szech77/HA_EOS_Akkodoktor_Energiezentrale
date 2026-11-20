@@ -52,15 +52,15 @@ test('a stalled module request times out and can be retried',async()=>{
  assert.equal(f.failed(),true);assert.equal(vm.runInContext('pvViewLoading',f.ctx),false);
 });
 
-test('the status module is loaded with the app build version when a cached bootstrap omitted it',async()=>{
+test('the chart helper module is loaded with the app build version when a cached bootstrap omitted it',async()=>{
  const f=fixture();
- f.ctx.document.head.append=node=>{f.calls.scripts.push(node);queueMicrotask(()=>{f.ctx.EosStatus={band(){}};node.onload();});};
- const ready=()=>typeof f.ctx.EosStatus?.band==='function'?f.ctx.EosStatus:null;
- const loaded=await f.ctx.ensureModule('status.js',ready);
- assert.equal(loaded,f.ctx.EosStatus);
- assert.equal(f.calls.scripts[0].src,'https://ha.test/static/status.js?v=new-build');
- await f.ctx.ensureModule('status.js',ready);assert.equal(f.calls.scripts.length,1);
+ f.ctx.document.head.append=node=>{f.calls.scripts.push(node);queueMicrotask(()=>{f.ctx.EosChartData={powerFraction(){}};node.onload();});};
+ const ready=()=>typeof f.ctx.EosChartData?.powerFraction==='function'?f.ctx.EosChartData:null;
+ const loaded=await f.ctx.ensureModule('chart-data.js',ready);
+ assert.equal(loaded,f.ctx.EosChartData);
+ assert.equal(f.calls.scripts[0].src,'https://ha.test/static/chart-data.js?v=new-build');
+ await f.ctx.ensureModule('chart-data.js',ready);assert.equal(f.calls.scripts.length,1);
  // A file that loads but does not provide the module is reported by name.
  const g=fixture();g.ctx.document.head.append=node=>queueMicrotask(()=>node.onload());
- await assert.rejects(g.ctx.ensureModule('status.js',()=>null),error=>error.code==='asset_mismatch'&&error.asset==='status.js');
+ await assert.rejects(g.ctx.ensureModule('chart-data.js',()=>null),error=>error.code==='asset_mismatch'&&error.asset==='chart-data.js');
 });

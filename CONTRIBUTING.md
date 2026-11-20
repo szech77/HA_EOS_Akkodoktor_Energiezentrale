@@ -47,8 +47,9 @@ python tools/release.py validate
 ### Frontend (Vue.js)
 
 Die Panel-Oberfläche wird schrittweise nach `frontend/` (Vue 3, TypeScript, Vite)
-überführt. Bereits umgestellt: PV & Wetter sowie alle Geräteseiten (PV, Netz, Speicher,
-Haus, Wärmepumpe, Energieflüsse und die Auto-Seiten) mit ihren Diagrammen.
+überführt. Bereits umgestellt: PV & Wetter, alle Geräteseiten (PV, Netz, Speicher, Haus,
+Wärmepumpe, Energieflüsse und die Auto-Seiten) mit ihren Diagrammen sowie Statusband,
+Hinweiskarten und die Seite „Hinweise“.
 Lokal bauen und prüfen:
 
 ```sh
@@ -70,12 +71,12 @@ Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
 Struktur (`frontend/src`):
 
 ```text
-views/          Seiten, je eine pro Panel-Route (DeviceView, CarView, PvWeatherView)
+views/          Seiten, je eine pro Panel-Route (DeviceView, CarView, PvWeatherView, NoticesView)
   __tests__/    Komponententests der Seiten (Vitest)
-components/     UI-Bausteine, nach Bereich gruppiert (car/, device/, weather/)
+components/     UI-Bausteine, nach Bereich gruppiert (car/, device/, status/, weather/)
 composables/    Wiederverwendbare Composition-API-Logik (useGoalDraft, usePvForecast, …)
 layouts/        Seitenrahmen (DeviceLayout: Zurück, Titel, Einstellungen)
-stores/         Zustand einer Seite, per provide/inject geteilt (device.ts, car.ts, pvWeather.ts)
+stores/         Zustand einer Seite, per provide/inject geteilt (device, car, status, pvWeather)
 utils/          Framework-unabhängige Hilfen: Formatierung, Texte, Modus-Labels
 types/          TypeScript-Typen des Backend-Vertrags und der Host-Schnittstelle
 bridge/         Anbindung an app.js: Controller je Seite und Host-Dienste
@@ -85,7 +86,8 @@ main.ts         Einstieg des Bundles; registriert die Controller für app.js
 
 - `app.js` übernimmt bis zum Abschluss der Umstellung Routing, Anmeldung und
   Aktualisierung. Es erzeugt die Seiten über die Controller in `bridge/`, die `main.ts`
-  als globale Schnittstelle registriert (`EosForecast.create`, `EosDevice.create`).
+  als globale Schnittstelle registriert (`EosForecast.create`, `EosDevice.create`,
+  `EosStatus.create`).
   Mit der Übernahme des Routings kommen `router/` und `App.vue` hinzu;
   `bridge/` entfällt dann.
 - Stores sind schlanke Fabriken mit `provide`/`inject`; Pinia wird erst eingeführt,
