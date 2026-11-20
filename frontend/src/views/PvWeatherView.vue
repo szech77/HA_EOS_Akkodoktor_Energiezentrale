@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useHost, useSnapshot } from '@/composables/useHost'
 import CurrentWeather from '@/components/weather/CurrentWeather.vue'
 import DayCards from '@/components/weather/DayCards.vue'
@@ -11,6 +11,15 @@ import type { ForecastHour } from '@/types/pvWeather'
 const host = useHost()
 const snapshot = useSnapshot()
 const { forecast, selected, format, labels } = usePvWeatherStore()
+
+// Each visit starts without a selected hour and loads the forecast; panel refreshes reload it
+// once it is stale, and leaving the page discards answers of running requests.
+onMounted(() => {
+  selected.value = null
+  void forecast.load()
+})
+watch(snapshot, () => forecast.refreshIfStale())
+onBeforeUnmount(() => forecast.cancel())
 
 const status = forecast.status
 const loaded = computed(() => status.value !== 'loading')

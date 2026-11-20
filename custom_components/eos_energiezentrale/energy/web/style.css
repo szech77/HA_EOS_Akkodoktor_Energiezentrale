@@ -122,7 +122,7 @@
   #eos-energy-design .pulse { filter:drop-shadow(0 0 3px var(--energy-color)); }
   #eos-energy-design #timeline:not(:empty) { margin:14px 0; }
   #eos-energy-design #charts section + section { margin-top:14px; }
-  #eos-energy-design #notice:not(:empty) { color:var(--heat); margin-bottom:12px; }
+  #eos-energy-design #notice:not(:empty),#eos-energy-design .startup-notice:not(:empty) { color:var(--heat); margin-bottom:12px; }
   #eos-energy-design #control { background:var(--surface2); border:1px solid var(--edge); border-radius:8px; padding:8px 12px; margin:8px 8px 0 0; }
   #eos-energy-design #daily { margin-top:12px; }
 
@@ -221,9 +221,9 @@
 #eos-energy-design .power-ring .ring-value {stroke:var(--energy-color);transition:stroke-dasharray .35s ease;}
 @media(prefers-reduced-motion:reduce){#eos-energy-design .power-ring .ring-value {transition:none;}}
 
-#eos-energy-design #startup-retry {padding:10px 16px;min-height:44px;border:1px solid var(--edge);border-radius:8px;background:var(--surface2);color:var(--ink);margin:0 0 16px;}
-#eos-energy-design #startup-details {margin-bottom:16px;overflow-wrap:anywhere;}
-#eos-energy-design #startup-details code {display:block;white-space:pre-wrap;padding:10px;}
+#eos-energy-design #startup-retry,#eos-energy-design .startup-retry {padding:10px 16px;min-height:44px;border:1px solid var(--edge);border-radius:8px;background:var(--surface2);color:var(--ink);margin:0 0 16px;}
+#eos-energy-design #startup-details,#eos-energy-design .startup-details {margin-bottom:16px;overflow-wrap:anywhere;}
+#eos-energy-design #startup-details code,#eos-energy-design .startup-details code {display:block;white-space:pre-wrap;padding:10px;}
 
 /* Approved EOS identity: energy orbit, central E and solar accent. */
 #eos-energy-design .brand .energy-logo {width:38px;height:38px;flex-shrink:0;color:var(--ink);}

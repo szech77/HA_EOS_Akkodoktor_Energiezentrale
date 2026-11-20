@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createOverviewController, MOUNT_ID } from '@/bridge/overviewController'
+import { mountOverview } from '@/test/mount'
 import { backend } from '@/test/backend'
 import { flush, languagePack, testContext } from '@/test/host'
 import type { BackendRequest, PanelSnapshot } from '@/types/host'
@@ -7,6 +7,7 @@ import type { BackendRequest, PanelSnapshot } from '@/types/host'
 const NOW = Date.parse('2026-11-11T12:00:00Z')
 const HOUR = 3_600_000
 const at = (hours: number) => new Date(NOW + hours * HOUR).toISOString()
+const MOUNT_ID = 'overview-root'
 let root: HTMLElement
 
 function reset() {
@@ -20,7 +21,7 @@ afterEach(() => root.remove())
 
 function open(data: Record<string, unknown>, code: 'de' | 'en' = 'de') {
   const context = testContext({ code, snapshot: data as PanelSnapshot, request: (async () => ({})) as BackendRequest, now: NOW })
-  const view = createOverviewController(context)
+  const view = mountOverview(context, MOUNT_ID)
   view.show()
   const node = (id: string) => root.querySelector<HTMLAnchorElement>(`.node[data-node="${id}"]`)
   const pulse = (index: number) => root.querySelectorAll<SVGPathElement>('.pulse')[index]

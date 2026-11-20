@@ -1,4 +1,4 @@
-import { inject, shallowRef, type InjectionKey, type ShallowRef } from 'vue'
+import { inject, type InjectionKey, type ShallowRef } from 'vue'
 import type { Host } from '@/types/host'
 import type { OverviewSnapshot } from '@/types/overview'
 import { createFlowNodes, type FlowNodes } from '@/utils/energyFlow'
@@ -22,14 +22,13 @@ export interface OverviewStore {
 
 export const OVERVIEW_STORE: InjectionKey<OverviewStore> = Symbol('eos-overview')
 
-export function createOverviewStore(host: Host, initial: OverviewSnapshot, logo: string): OverviewStore {
-  const snapshot = shallowRef(initial)
+export function createOverviewStore(host: Host, snapshot: ShallowRef<OverviewSnapshot>, now: ShallowRef<number>, logo: string): OverviewStore {
   const format = createFormat(host, () => snapshot.value.zone)
   const states = createStateLabels(host)
   return {
     host,
     snapshot,
-    now: shallowRef(host.now()),
+    now,
     logo,
     format,
     states,

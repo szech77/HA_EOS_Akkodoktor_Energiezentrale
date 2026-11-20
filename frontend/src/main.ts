@@ -1,26 +1,26 @@
 /**
- * Entry of the Vue bundle (vue/eos-vue.js), loaded by bootstrap.js as a classic script.
- *
- * During the step-by-step migration each Vue page registers a controller for app.js (src/bridge);
- * app.js keeps owning routing, authentication and refreshes.
+ * Entry of the panel bundle (vue/eos-vue.js), loaded by loader.js inside the Home Assistant panel
+ * iframe. Requests go through the panel (panel.js), which owns the HA authentication.
  */
-import { createDeviceController } from '@/bridge/deviceController'
-import { createOverviewController } from '@/bridge/overviewController'
-import { createPvWeatherController } from '@/bridge/pvWeatherController'
-import { createStatusController } from '@/bridge/statusController'
+import { createApp } from 'vue'
+import App from '@/App.vue'
+import { createAppStore } from '@/stores/app'
+import type { Preferences } from '@/stores/usage'
 
-declare global {
-  // eslint-disable-next-line no-var
-  var EosForecast: { create: typeof createPvWeatherController } | undefined
-  // eslint-disable-next-line no-var
-  var EosDevice: { create: typeof createDeviceController } | undefined
-  // eslint-disable-next-line no-var
-  var EosStatus: { create: typeof createStatusController } | undefined
-  // eslint-disable-next-line no-var
-  var EosOverview: { create: typeof createOverviewController } | undefined
+/** Browser storage for per-viewer conveniences; the accessor itself may throw when site data is blocked. */
+function preferences(): Preferences | undefined {
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
 }
 
-globalThis.EosForecast = Object.freeze({ create: createPvWeatherController })
-globalThis.EosDevice = Object.freeze({ create: createDeviceController })
-globalThis.EosStatus = Object.freeze({ create: createStatusController })
-globalThis.EosOverview = Object.freeze({ create: createOverviewController })
+const target = document.getElementById('app')
+if (target) {
+  const store = createAppStore({ view: window, document, navigatorLanguage: navigator.language })
+  const app = createApp(App, { app: store, storage: preferences() })
+  // Errors outside a page (header, status band) keep the panel from working: show them as such.
+  app.config.errorHandler = error => store.fail(store.stage.value === 'language' ? 'language' : 'view', error)
+  app.mount(target)
+}

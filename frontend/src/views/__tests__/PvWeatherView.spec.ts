@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendRequest } from '@/types/host'
 import { flush, testContext, type TestContext } from '@/test/host'
-import { createPvWeatherController, MOUNT_ID } from '@/bridge/pvWeatherController'
+import { mountPvWeather } from '@/test/mount'
 import { RELOAD_MS } from '@/composables/usePvForecast'
 import { forecastAnswer, NOW, snapshot, solarRows } from '@/test/fixtures/pvWeather'
 
+const MOUNT_ID = 'pv-root'
 let root: HTMLElement
 
 beforeEach(() => {
@@ -17,7 +18,7 @@ afterEach(() => root.remove())
 function open(options: { request?: BackendRequest; code?: 'de' | 'en'; values?: Parameters<typeof snapshot>[0] } = {}) {
   const request = options.request ?? vi.fn(async () => forecastAnswer()) as unknown as BackendRequest
   const context: TestContext = testContext({ code: options.code ?? 'de', snapshot: snapshot(options.values), request, now: NOW })
-  const view = createPvWeatherController(context)
+  const view = mountPvWeather(context, MOUNT_ID)
   view.open()
   return { context, view, request, text: (selector: string) => root.querySelector(selector)?.textContent?.trim() ?? '' }
 }
@@ -171,9 +172,4 @@ describe('PV & weather view', () => {
     expect(text('.wx-gap')).toContain('Night')
   })
 
-  it('refuses to start without its mount point', () => {
-    root.remove()
-    const context = testContext({ snapshot: snapshot(), request: (async () => forecastAnswer()) as BackendRequest, now: NOW })
-    expect(() => createPvWeatherController(context)).toThrow(/mount point/)
-  })
 })

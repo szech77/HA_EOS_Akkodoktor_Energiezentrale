@@ -4,13 +4,15 @@ import { useDeviceStore } from '@/stores/device'
 import CarView from '@/views/CarView.vue'
 import DeviceView from '@/views/DeviceView.vue'
 
-/** Chooses the device page for the route app.js passes; replaced by the Vue router later. */
+/** Device and car pages: the car pages have their own view, all others share the device view. */
 const { route, title } = useDeviceStore()
 </script>
 
 <template>
-  <DeviceLayout :title="title">
-    <CarView v-if="route.device === 'car'" />
-    <DeviceView v-else :key="route.key" />
-  </DeviceLayout>
+  <div id="device-view">
+    <DeviceLayout :title="title">
+      <CarView v-if="route.device === 'car'" />
+      <DeviceView v-else :key="route.key" />
+    </DeviceLayout>
+  </div>
 </template>

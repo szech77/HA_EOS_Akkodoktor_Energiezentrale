@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStatusController } from '@/bridge/statusController'
+import { mountStatus } from '@/test/mount'
 import { backend } from '@/test/backend'
 import { flush, languagePack, testContext } from '@/test/host'
 import type { BackendRequest, PanelSnapshot } from '@/types/host'
@@ -8,10 +8,10 @@ import type { Notice } from '@/types/status'
 const NOW = Date.parse('2026-11-08T12:00:00Z')
 let nodes: HTMLElement[] = []
 
-/** New mount points: each controller mounts its own app. */
+/** A new mount point: each test mounts its own app. */
 function reset() {
   nodes.forEach(node => node.remove())
-  nodes = ['status-view', 'nav-badge', 'notices-view'].map(id => {
+  nodes = ['status-root'].map(id => {
     const node = document.createElement('div')
     node.id = id
     document.body.append(node)
@@ -25,7 +25,7 @@ function open(snapshot: object, options: { route?: string; code?: 'de' | 'en'; r
   const request = options.request ?? (vi.fn(async () => ({})) as unknown as BackendRequest)
   const refresh = vi.fn(async () => undefined)
   const context = { ...testContext({ code: options.code ?? 'de', snapshot: snapshot as PanelSnapshot, request, now: NOW, refresh }), getBrowserNotices: () => options.browser ?? [] }
-  const view = createStatusController(context)
+  const view = mountStatus(context, 'status-root')
   view.show(options.route ?? 'overview')
   const $ = <T extends Element = HTMLElement>(selector: string) => document.querySelector<T>(selector)
   const text = (selector: string) => $(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
@@ -220,9 +220,4 @@ describe('notices', () => {
     expect(all).toMatch(/Second:.*Vehicle SoC/)
   })
 
-  it('refuse to start without their mount points', () => {
-    nodes[1]?.remove()
-    const context = testContext({ snapshot: {} as PanelSnapshot, request: (async () => ({})) as BackendRequest, now: NOW })
-    expect(() => createStatusController(context)).toThrow(/mount point/)
-  })
 })

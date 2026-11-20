@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDeviceController, MOUNT_ID } from '@/bridge/deviceController'
+import { mountDevice } from '@/test/mount'
 import { history, NOW, snapshot } from '@/test/fixtures/device'
 import { flush, testContext, type TestContext } from '@/test/host'
 import type { BackendRequest, PanelSnapshot } from '@/types/host'
 
+const MOUNT_ID = 'device-root'
 let root: HTMLElement
 
 beforeEach(() => {
@@ -19,7 +20,7 @@ function open(route: string, data: object = snapshot(), panelHistory: object = h
     ...testContext({ snapshot: data as PanelSnapshot, request, now: NOW }),
     getHistory: () => panelHistory,
   }
-  const view = createDeviceController(context)
+  const view = mountDevice(context, MOUNT_ID)
   view.show(route)
   const text = (selector: string) => root.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
   const cards = () => [...root.querySelectorAll('.kpis > div')].map(card => [...card.children].map(item => item.textContent))

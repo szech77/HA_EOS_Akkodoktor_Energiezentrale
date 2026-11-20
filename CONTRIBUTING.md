@@ -46,12 +46,11 @@ python tools/release.py validate
 
 ### Frontend (Vue.js)
 
-Die Panel-Oberfläche wird schrittweise nach `frontend/` (Vue 3, TypeScript, Vite)
-überführt. Bereits umgestellt: Übersicht (Kennzahlen, Energiefluss, EOS-Plan), PV & Wetter,
-alle Geräteseiten (PV, Netz, Speicher, Haus, Wärmepumpe, Energieflüsse und die Auto-Seiten)
-mit ihren Diagrammen sowie Statusband, Hinweiskarten und die Seite „Hinweise“. Noch in
-`app.js`/`accounting.js`: Einstellungen und Auswertungen.
-Lokal bauen und prüfen:
+Die Panel-Oberfläche ist eine Vue-App in `frontend/` (Vue 3, TypeScript, Vite). Im
+Integrationsordner `energy/web` liegen daneben nur `index.html` (Einhängepunkt und
+Startmeldung), `loader.js` (lädt Stylesheet und Bundle mit der Build-Version),
+`panel.js` (HA-Panel mit der authentifizierten WebSocket-Brücke), `icons.js` und
+`style.css`. Lokal bauen und prüfen:
 
 ```sh
 cd frontend
@@ -72,27 +71,33 @@ Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
 Struktur (`frontend/src`):
 
 ```text
-views/          Seiten, je eine pro Panel-Route (OverviewView, DeviceView, CarView, PvWeatherView, NoticesView)
+App.vue         Titelleiste, Statusband und die Seite der Adresse; stellt alle Stores bereit
+main.ts         Einstieg des Bundles; hängt die App in #app ein
+router/         Hash-Routen (#overview, #battery, #car/<id>, #usage/<bericht>, #settings, …)
+views/          Seiten, je eine pro Route (Overview, Device/Car, PvWeather, Usage, Notices, Settings)
   __tests__/    Komponententests der Seiten (Vitest)
-components/     UI-Bausteine, nach Bereich gruppiert (car/, device/, overview/, status/, weather/)
-composables/    Wiederverwendbare Composition-API-Logik (useGoalDraft, usePvForecast, …)
+components/     UI-Bausteine, nach Bereich gruppiert (app/, car/, device/, overview/, settings/, status/, usage/, weather/)
+composables/    Wiederverwendbare Composition-API-Logik (useGoalDraft, usePvForecast, useViewport, …)
 layouts/        Seitenrahmen (DeviceLayout: Zurück, Titel, Einstellungen)
-stores/         Zustand einer Seite, per provide/inject geteilt (overview, device, car, status, pvWeather)
-utils/          Framework-unabhängige Hilfen: Formatierung, Texte, Modus-Labels
+stores/         Zustand per provide/inject: app (Verbindung, Sprache, Aktualisierung) und je Bereich
+utils/          Framework-unabhängige Hilfen: Brücke, Formatierung, Texte, Diagrammmodelle
 types/          TypeScript-Typen des Backend-Vertrags und der Host-Schnittstelle
-bridge/         Anbindung an app.js: Controller je Seite und Host-Dienste
-test/           Test-Host, Backend-Brücke und Testdaten (fixtures/)
-main.ts         Einstieg des Bundles; registriert die Controller für app.js
+test/           Test-Host, Einhänge-Hilfen, Backend-Brücke und Testdaten (fixtures/)
+__tests__/      Tests der App: Start, Brücke und Routen
 ```
 
-- `app.js` übernimmt bis zum Abschluss der Umstellung Routing, Anmeldung und
-  Aktualisierung. Es erzeugt die Seiten über die Controller in `bridge/`, die `main.ts`
-  als globale Schnittstelle registriert (`EosOverview.create`, `EosForecast.create`,
-  `EosDevice.create`, `EosStatus.create`).
-  Mit der Übernahme des Routings kommen `router/` und `App.vue` hinzu;
-  `bridge/` entfällt dann.
+- Der App-Store (`stores/app.ts`) lädt das Sprachpaket (mit Wiederholung, solange die
+  Integration startet), fragt den Snapshot alle 5 s und den Verlauf jede Minute ab und
+  hält die Browser-Hinweise (Verbindung, Seitenfehler). Alle Bereichs-Stores lesen
+  dieselben Refs; keine Seite fragt die Momentwerte selbst ab.
+- Anfragen gehen per `postMessage` an `panel.js`, das die HA-WebSocket-API aufruft
+  (nur Administratoren). Antworten werden nur vom übergeordneten Panel desselben
+  Ursprungs und für diesen Client angenommen; Fehler enthalten nur freigegebene Codes,
+  Gründe und Feldnamen. Kein Token gelangt in den iframe.
 - Stores sind schlanke Fabriken mit `provide`/`inject`; Pinia wird erst eingeführt,
-  wenn mehrere Seiten gemeinsamen Zustand brauchen.
+  wenn ein konkreter Bedarf über diese Fabriken hinausgeht.
+- Zeitraum und Einheit der Auswertungen merkt sich der Browser (`localStorage`); bei
+  gesperrtem Speicher gilt die Auswahl nur bis zum Neuladen.
 - Testdaten mit Backendbezug erzeugt `src/test/backend.ts` über das Python-Backend
   (`tests/backend.cjs`), damit Tests den echten Vertrag nutzen.
 - Composition API mit `<script setup lang="ts">`, `provide`/`inject` mit typisierten

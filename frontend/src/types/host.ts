@@ -1,8 +1,8 @@
 /**
- * Contract between the Vue pages and the panel host (app.js).
+ * Services of the panel application (stores/app.ts) for the pages.
  *
- * The host owns authentication, the backend connection and the language pack; Vue pages
- * only present backend data. All backend calculations stay in the integration.
+ * The app owns the backend connection and the language pack; pages only present backend data.
+ * All backend calculations stay in the integration; Home Assistant authenticates every request.
  */
 
 export type Translate = (key: string, values?: Readonly<Record<string, string | number>>) => string
@@ -53,7 +53,7 @@ export interface PanelSnapshot {
   readonly forecast?: readonly ForecastRow[]
 }
 
-/** What the host hands to a Vue feature. */
+/** What the app hands to a page. */
 export interface Host {
   readonly request: BackendRequest
   readonly t: Translate
@@ -64,26 +64,4 @@ export interface Host {
   readonly lookup: (key: string) => string | undefined
   /** Reload the panel snapshot after a change, e.g. a saved setting. */
   readonly refresh: () => Promise<void>
-}
-
-/** Context passed by app.js to the legacy-compatible feature factories (see main.ts). */
-export interface LegacyContext {
-  readonly document: Document
-  readonly request: BackendRequest
-  readonly getSnapshot: () => PanelSnapshot
-  /** Local and Influx history of the charts (device pages). */
-  readonly getHistory?: () => unknown
-  readonly t: Translate
-  readonly decimal: FormatDecimal
-  readonly getLocale: () => string
-  readonly now?: () => number
-  readonly lookup?: (key: string) => string | undefined
-  readonly refresh?: () => Promise<void>
-}
-
-/** Lifecycle the panel host drives for a view. */
-export interface ViewController {
-  open(): void
-  update(): void
-  close(): void
 }

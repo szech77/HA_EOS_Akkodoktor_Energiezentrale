@@ -1,4 +1,4 @@
-import { computed, inject, ref, shallowRef, type ComputedRef, type InjectionKey, type Ref, type ShallowRef } from 'vue'
+import { computed, inject, ref, type ComputedRef, type InjectionKey, type Ref, type ShallowRef } from 'vue'
 import type { Host } from '@/types/host'
 import type { Notice, StatusSnapshot } from '@/types/status'
 import { createFormat } from '@/utils/format'
@@ -10,9 +10,9 @@ export interface StatusStore {
   readonly host: Host
   readonly snapshot: ShallowRef<StatusSnapshot>
   /** Current panel route; the notices page hides the compact cards. */
-  readonly route: ShallowRef<string>
-  /** Browser-side problems (connection, view loading) from app.js. */
-  readonly browserNotices: ShallowRef<readonly Notice[]>
+  readonly route: Readonly<Ref<string>>
+  /** Browser-side problems (connection, view loading) of the app. */
+  readonly browserNotices: Readonly<Ref<readonly Notice[]>>
   /** Backend and browser notices, most severe first. */
   readonly notices: ComputedRef<Notice[]>
   /** The band is shown once the backend reported a control status. */
@@ -32,9 +32,12 @@ export interface StatusStore {
 
 export const STATUS_STORE: InjectionKey<StatusStore> = Symbol('eos-status')
 
-export function createStatusStore(host: Host, initial: StatusSnapshot): StatusStore {
-  const snapshot = shallowRef(initial)
-  const browserNotices = shallowRef<readonly Notice[]>([])
+export function createStatusStore(
+  host: Host,
+  snapshot: ShallowRef<StatusSnapshot>,
+  route: Readonly<Ref<string>>,
+  browserNotices: Readonly<Ref<readonly Notice[]>>,
+): StatusStore {
   const confirming = ref<ControlAction | null>(null)
   const busy = ref(false)
   const result = ref('')
@@ -42,7 +45,7 @@ export function createStatusStore(host: Host, initial: StatusSnapshot): StatusSt
   return {
     host,
     snapshot,
-    route: shallowRef('overview'),
+    route,
     browserNotices,
     notices: computed(() => sortNotices([...(snapshot.value.notices ?? []), ...browserNotices.value])),
     ready: computed(() => 'control_status' in snapshot.value),

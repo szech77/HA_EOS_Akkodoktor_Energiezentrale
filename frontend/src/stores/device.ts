@@ -56,12 +56,12 @@ export interface DeviceStore {
 
 export const DEVICE_STORE: InjectionKey<DeviceStore> = Symbol('eos-device')
 
-export function createDeviceStore(host: Host, snapshot: DeviceSnapshot, history: PanelHistory): DeviceStore {
+export function createDeviceStore(host: Host, snapshot: ShallowRef<DeviceSnapshot>, history: ShallowRef<PanelHistory>, now: ShallowRef<number>): DeviceStore {
   const state = {
-    snapshot: shallowRef(snapshot),
-    history: shallowRef(history),
+    snapshot,
+    history,
     route: shallowRef<DeviceRoute>({ key: 'energy', device: 'energy', vehicleId: null }),
-    now: shallowRef(host.now()),
+    now,
   }
   const format = createFormat(host, () => state.snapshot.value.zone)
   const states = createStateLabels(host)

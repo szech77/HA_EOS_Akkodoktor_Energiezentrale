@@ -3,181 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title data-i18n="app.title">EOS Energiezentrale</title>
+  <title>EOS Energiezentrale</title>
   <link rel="icon" type="image/svg+xml" href="./logo.svg">
   <link rel="stylesheet" href="./style.css">
-  <script src="./bootstrap.js" defer></script>
+  <script src="./loader.js" defer></script>
 </head>
 <body id="eos-energy-design">
-<div class="energy-app">
-  <header>
-    <a class="brand" href="#overview"><svg class="energy-logo" viewBox="0 0 128 128" aria-hidden="true" focusable="false"><use data-logo href="./logo.svg#mark"/></svg><span class="brand-wordmark"><strong>EOS</strong><span data-i18n="app.name"></span></span></a>
-    <nav data-i18n-aria="nav.main">
-      <a href="#overview" data-route="overview"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11 12 4l9 7M5 10v10h14V10"/></svg><span data-i18n="nav.overview"></span></a>
-      <a href="#car" data-route="car" data-optional="car"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17H2v-5l3-2 2.5-5h7L18 10l3 1.5V17h-2M8 17h8"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg><span data-i18n="nav.car"></span></a>
-      <a href="#notices" data-route="notices"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4l2-2M10 21h4"/></svg><span data-i18n="nav.notices"></span><span id="nav-badge"></span></a>
-      <a href="#settings" data-route="settings"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg><span data-i18n="nav.settings"></span></a>
-    </nav>
-  </header>
+<!-- The panel is the Vue app built from frontend/ (vue/eos-vue.js); loader.js loads it with the build version. -->
+<div id="app"></div>
+<!-- Shown by loader.js when the UI files cannot be loaded or fail before the app starts. -->
+<div class="energy-app" id="startup" hidden>
   <main>
     <p id="notice" role="status"></p>
     <button id="startup-retry" type="button" hidden>Retry</button>
     <details id="startup-details" hidden><summary id="startup-details-title">Technical details</summary><code id="startup-detail"></code></details>
-    <!-- Status band and notices: rendered by the Vue bundle (frontend/src/bridge/StatusRoot.vue). -->
-    <div id="status-view"></div>
-    <section id="overview">
-      <!-- Key figures, energy flow and EOS plan: rendered by the Vue bundle (frontend/src/views/OverviewView.vue). -->
-      <div id="overview-view"></div>
-      <section class="plan-panel" id="day-balance"></section>
-    </section>
-    <section id="detail" hidden>
-      <!-- Device and car pages: rendered by the Vue bundle (frontend/src/views/DeviceView.vue, CarView.vue). -->
-      <div id="device-view"></div>
-    </section>
-    <section id="pv" hidden>
-      <div class="d-head"><a class="back" href="#overview" data-i18n="nav.back"></a></div>
-      <!-- Rendered by the Vue bundle (frontend/src/views/PvWeatherView.vue). -->
-      <div id="pv-view"></div>
-    </section>
-    <section id="usage" hidden>
-      <div class="d-head"><a class="back" id="usage-back" data-i18n="nav.back"></a><nav class="subnav" id="usage-nav" data-i18n-aria="usage.choose"></nav></div>
-      <div class="period">
-        <div class="segctl" id="usage-period" role="group" data-i18n-aria="billing.period">
-          <button type="button" data-billing-period="day" data-i18n="billing.day"></button><button type="button" data-billing-period="month" data-i18n="billing.month"></button><button type="button" data-billing-period="year" data-i18n="billing.year"></button>
-        </div>
-        <div class="pnav">
-          <button type="button" class="pbtn" data-billing-move="-1" data-i18n-aria="billing.previous">‹</button>
-          <b id="billing-range" aria-live="polite"></b>
-          <button type="button" class="pbtn" data-billing-move="1" data-i18n-aria="billing.next">›</button>
-          <button type="button" class="btn ghost" data-billing-move="now" data-i18n="billing.current"></button>
-        </div>
-      </div>
-      <div class="usage-head"><div><p class="eyebrow" id="usage-eyebrow"></p><h1 id="usage-title"></h1><p class="lead" id="usage-lead"></p></div><a class="plan-link" id="usage-device" hidden data-i18n="usage.device_link"></a></div>
-      <p id="billing-message" role="status"></p>
-      <div class="kpis" id="usage-kpis"></div>
-      <section class="chart-panel">
-        <div class="panel-heading"><h2 data-i18n="usage.history"></h2><div class="chart-tools"><div class="segctl small" id="usage-chart-unit" role="group" data-i18n-aria="usage.chart_unit"><button type="button" data-chart-unit="kw" hidden>kW</button><button type="button" data-chart-unit="kwh">kWh</button><button type="button" data-chart-unit="eur">€</button></div><span class="tag" id="usage-unit"></span></div></div>
-        <div class="series-legend" id="usage-legend"></div>
-        <div id="usage-charts"></div>
-        <p class="footnote" id="usage-bin" aria-live="polite"></p>
-      </section>
-      <div class="usage-two">
-        <details class="plan-panel acc" open><summary><h2 data-i18n="usage.prices"></h2><span class="tag" id="usage-price-tag"></span></summary><div id="usage-prices"></div></details>
-        <details class="plan-panel acc" open><summary><h2 id="usage-mix-title"></h2><span class="tag" id="usage-mix-total"></span></summary><div id="usage-table"></div></details>
-      </div>
-      <details class="plan-panel acc" open><summary><h2 data-i18n="usage.facts"></h2></summary><div class="list" id="usage-facts"></div></details>
-      <details class="plan-panel"><summary data-i18n="billing.quality"></summary><p id="billing-quality"></p><p data-i18n="billing.inventory_note"></p></details>
-    </section>
-    </section>
-    <section id="notices" hidden>
-      <!-- Rendered by the Vue bundle (frontend/src/views/NoticesView.vue). -->
-      <div id="notices-view"></div>
-    </section>
-    <section id="settings" hidden>
-      <div class="page-top"><div><p class="eyebrow" data-i18n="section.daily"></p><h1 data-i18n="nav.settings"></h1></div></div>
-      <div class="settings-layout">
-        <nav class="settings-side" id="settings-side" data-i18n-aria="settings.sections">
-          <a href="#settings" data-section="battery" aria-current="true" data-i18n="settings.section_battery"></a>
-          <a href="#settings" data-section="car" data-optional="car" data-i18n="settings.section_car"></a>
-          <a href="#settings" data-section="calendar" data-optional="car" data-i18n="settings.section_calendar"></a>
-          <a href="#settings" data-section="costs" data-i18n="settings.section_costs"></a>
-          <a href="#settings" data-section="system" data-i18n="settings.section_system"></a>
-        </nav>
-        <div class="settings-body plan-panel">
-          <form id="daily" novalidate>
-            <section data-settings-section="battery">
-              <h2 data-i18n="device.battery"></h2>
-              <p class="footnote" data-i18n="settings.battery_limits_info"></p>
-              <div class="fields">
-                <label><span data-i18n="settings.battery_min_soc"></span><input name="battery_min_soc" type="number" min="0" max="99" step="1" required></label>
-                <label><span data-i18n="settings.battery_max_soc"></span><input name="battery_max_soc" type="number" min="1" max="100" step="1" required></label>
-              </div>
-              <p id="battery-limits-status" class="tag" role="status"></p>
-              <label class="switch" data-optional="car"><span><b data-i18n="settings.pv_support"></b></span><input name="battery_pv_support" type="checkbox" class="toggle"></label>
-              <details class="expert" data-optional="car"><summary data-i18n="settings.expert"></summary>
-                <div class="fields">
-                  <label><span data-i18n="settings.reserve"></span><input name="reserve_w" type="number" min="0" max="500" step="1" required></label>
-                  <label><span data-i18n="settings.interval"></span><input name="regulation_interval_s" type="number" min="5" max="120" step="1" required></label>
-                  <label><span data-i18n="settings.battery_pv_min_soc"></span><input name="battery_pv_min_soc" type="number" min="0" max="98" step="1" required></label>
-                  <label><span data-i18n="settings.battery_pv_wait_s"></span><input name="battery_pv_wait_s" type="number" min="10" max="600" step="1" required></label>
-                </div>
-              </details>
-            </section>
-            <section data-settings-section="car" hidden>
-              <h2 data-i18n="settings.general_car"></h2>
-              <p class="footnote" data-i18n="settings.car_help"></p>
-              <label class="switch"><span><b data-i18n="settings.battery_pv_start"></b></span><input name="battery_pv_start" type="checkbox" class="toggle"></label>
-              <div class="fields">
-                <label><span data-i18n="settings.battery_pv_surplus_w"></span><input name="battery_pv_surplus_w" type="number" min="1" max="5000" step="1" required></label>
-              </div>
-              <p class="footnote" data-i18n="settings.battery_pv_info"></p>
-            </section>
-            <section data-settings-section="calendar" hidden>
-              <h2 data-i18n="plans.holiday_settings"></h2>
-              <p class="footnote" data-i18n="plans.region_note"></p>
-              <div class="fields">
-                <label><span data-i18n="plans.state"></span><select name="holiday_state"><option value="" data-i18n="plans.national"></option><option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option></select></label>
-                <label><span data-i18n="plans.locality"></span><select name="holiday_locality"><option value="" data-i18n="plans.no_locality"></option><option value="augsburg">Augsburg</option></select></label>
-              </div>
-              <label class="switch"><span><b data-i18n="plans.catholic"></b></span><input name="holiday_catholic" type="checkbox" class="toggle"></label>
-            </section>
-          </form>
-          <section data-settings-section="costs" hidden>
-            <h2 data-i18n="billing.settings"></h2>
-            <p class="footnote" data-i18n="billing.settings_note"></p>
-            <form id="cost-settings" novalidate>
-              <div class="fields">
-                <label><span data-i18n="billing.pv_price_source"></span><select name="pv_price_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
-                <label><span data-i18n="billing.pv_price"></span><input name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required></label>
-                <label><span data-i18n="billing.capacity"></span><input name="capacity_wh" type="number" min="100" max="1000000" step="1" required></label>
-                <label><span data-i18n="billing.base_price"></span><input name="base_price_eur_month" type="number" min="0" max="1000" step="0.01" required></label>
-              </div>
-              <p class="footnote" data-i18n="billing.base_price_note"></p>
-              <p class="footnote" id="pv-cost-effective"></p>
-              <details class="expert"><summary data-i18n="settings.cost_expert"></summary>
-                <div class="fields">
-                  <label><span data-i18n="billing.efficiency_source"></span><select name="efficiency_source"><option value="eos" data-i18n="billing.from_eos"></option><option value="manual" data-i18n="billing.manual"></option></select></label>
-                  <label><span data-i18n="billing.charge_efficiency"></span><input name="charge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
-                  <label><span data-i18n="billing.discharge_efficiency"></span><input name="discharge_efficiency" type="number" min="0.1" max="1" step="0.001" required></label>
-                  <label><span data-i18n="billing.initial_price"></span><input name="initial_price_ct" type="number" min="-1000" max="1000" step="0.01"></label>
-                </div>
-                <p class="footnote" id="cost-effective"></p>
-              </details>
-              <p class="footnote" id="cost-saved" role="status"></p>
-            </form>
-          </section>
-          <section data-settings-section="system" hidden>
-            <h2 data-i18n="control.title"></h2>
-            <p class="footnote" data-i18n="control.restart_info"></p>
-            <div class="control-areas" id="control-areas">
-              <div class="control-area" data-control-area="battery">
-                <div><strong data-i18n="control.area.battery"></strong><small class="control-area-state"></small></div>
-                <button type="button" class="btn" data-area-action="toggle"></button>
-                <div class="control-area-confirm" hidden><p></p><div class="status-actions"><button type="button" class="btn" data-area-action="confirm"></button><button type="button" class="btn ghost" data-area-action="cancel" data-i18n="control.cancel"></button></div></div>
-              </div>
-              <div class="control-area" data-control-area="vehicle">
-                <div><strong data-i18n="control.area.vehicle"></strong><small class="control-area-state"></small></div>
-                <button type="button" class="btn" data-area-action="toggle"></button>
-                <div class="control-area-confirm" hidden><p></p><div class="status-actions"><button type="button" class="btn" data-area-action="confirm"></button><button type="button" class="btn ghost" data-area-action="cancel" data-i18n="control.cancel"></button></div></div>
-              </div>
-            </div>
-            <p class="footnote" id="control-result" role="status"></p>
-            <h2 data-i18n="settings.setup"></h2>
-            <p class="footnote" data-i18n="settings.setup_info"></p>
-            <dl id="connections"></dl>
-            <details id="source-diagnostics-panel"><summary data-i18n="diagnostics.title"></summary>
-              <p class="footnote" data-i18n="diagnostics.info"></p>
-              <div class="form-footer"><button type="button" class="diagnostics-action" id="diagnostics-copy" data-i18n="diagnostics.copy"></button><button type="button" class="diagnostics-action" id="diagnostics-export" data-i18n="diagnostics.export"></button><output id="diagnostics-result" role="status"></output></div>
-              <div id="source-diagnostics"></div>
-            </details>
-          </section>
-        </div>
-      </div>
-    </section>
-    </section>
   </main>
 </div>
-<div class="savebar" id="savebar" hidden><div><span><b id="dirty-count"></b> <span class="footnote" data-i18n="settings.unsaved"></span></span><span class="savebar-actions"><button type="button" class="btn ghost" id="discard-settings" data-i18n="settings.discard"></button><button type="button" class="btn primary" id="save-settings" data-i18n="settings.save"></button></span></div></div>
-<div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

@@ -282,11 +282,14 @@ class ClientTests(unittest.TestCase):
 class LanguageTests(unittest.TestCase):
     def test_default_covers_static_and_dynamic_ui_keys(self):
         pack = load_language()
-        web = PACKS.parent / "web"
-        markup = (web / "index.html").read_text(encoding="utf-8")
-        script = (web / "app.js").read_text(encoding="utf-8")
-        keys = set(re.findall(r'data-i18n(?:-aria)?="([^"]+)"', markup))
-        keys.update(re.findall(r"\b(?:t|th)\('([a-z.]+)'", script))
+        # Panel texts are used by the Vue app (frontend/src); tests and test helpers are not part of it.
+        source = Path(__file__).resolve().parents[1] / "frontend" / "src"
+        keys = set()
+        for path in source.rglob("*"):
+            if path.suffix in (".ts", ".vue") and not {"__tests__", "test"} & set(path.parts):
+                # Complete keys only; a prefix joined with a backend value ends with "_" or ".".
+                keys.update(re.findall(r"\bt\('([a-z0-9_]+(?:\.[a-z0-9_]+)*\.[a-z0-9_]*[a-z0-9])'", path.read_text(encoding="utf-8")))
+        self.assertGreater(len(keys), 300)
         for page in ("solar", "grid", "battery", "house", "car", "heat"):
             keys.update((f"device.{page}", f"chart.{page}"))
         from dataclasses import fields

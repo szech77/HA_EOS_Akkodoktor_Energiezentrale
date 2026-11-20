@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackendRequest, PanelSnapshot } from '@/types/host'
 import { flush, testContext, type TestContext } from '@/test/host'
-import { createDeviceController, MOUNT_ID } from '@/bridge/deviceController'
+import { mountDevice } from '@/test/mount'
 import type { VehicleData } from '@/types/car'
 import { chargePlan, fleet, NOW, vehicle } from '@/test/fixtures/car'
 
 let root: HTMLElement
 
-/** A new mount point: each controller mounts its own app. */
+const MOUNT_ID = 'device-root'
+
+/** A new mount point: each test mounts its own app. */
 function freshRoot() {
   root?.remove()
   root = document.createElement('div')
@@ -21,7 +23,7 @@ function open(route: string, snapshot: object = fleet(), options: { request?: Ba
   const request = options.request ?? (vi.fn(async () => ({})) as unknown as BackendRequest)
   const refresh = vi.fn(async () => undefined)
   const context: TestContext = testContext({ code: options.code ?? 'de', snapshot: snapshot as PanelSnapshot, request, now: NOW, refresh })
-  const view = createDeviceController(context)
+  const view = mountDevice(context, MOUNT_ID)
   view.show(route)
   const $ = <T extends Element = HTMLElement>(selector: string) => root.querySelector<T>(selector)
   const text = (selector: string) => $(selector)?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
@@ -355,9 +357,4 @@ describe('routes and installations', () => {
     expect(text('#vehicle-goals h2')).toBe('Charging goals')
   })
 
-  it('refuses to start without its mount point', () => {
-    root.remove()
-    const context = testContext({ snapshot: fleet() as unknown as PanelSnapshot, request: (async () => ({})) as BackendRequest, now: NOW })
-    expect(() => createDeviceController(context)).toThrow(/mount point/)
-  })
 })

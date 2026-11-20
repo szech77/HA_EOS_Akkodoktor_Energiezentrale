@@ -102,8 +102,8 @@ Referenzen: [Dependabot-Konfiguration](https://docs.github.com/en/code-security/
   einen grünen Status zu erreichen. Begrenzte Workflow-Berechtigungen und
   `persist-credentials: false` erhalten. Fremden PR-Code nicht mit privilegierten
   Tokens über `pull_request_target` ausführen.
-- Das Frontend wird schrittweise nach `frontend/` (Vue 3, TypeScript, Vite) überführt;
-  `app.js` bleibt bis zum Abschluss für Routing, Anmeldung und Aktualisierung zuständig.
+- Das Panel ist die Vue-App in `frontend/` (Vue 3, TypeScript, Vite). `loader.js` lädt
+  nur das gebaute Bundle; `panel.js` bleibt die einzige Stelle mit HA-Authentifizierung.
   Composition API mit `<script setup lang="ts">`, kein `v-html`, kein Laufzeit-
   Templatecompiler. Das gebaute Bundle `energy/web/vue/` nicht committen; die CI baut es
   für Releases. npm-Abhängigkeiten exakt pinnen, Lifecycle-Skripte bleiben deaktiviert.
@@ -142,8 +142,7 @@ Bei Code-, Dependency- und Workflow-Änderungen die relevanten Prüfungen aus
 ```sh
 python -m pip install -r requirements-dev.txt -r requirements-test.txt
 python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --cov-report=term-missing
-node --check custom_components/eos_energiezentrale/energy/web/accounting.js
-node --check custom_components/eos_energiezentrale/energy/web/app.js
+node --check custom_components/eos_energiezentrale/energy/web/loader.js
 node --check custom_components/eos_energiezentrale/energy/web/panel.js
 node --test tests/*.test.cjs
 python -m bandit -r custom_components tools -ll

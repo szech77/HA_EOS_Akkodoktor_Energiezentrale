@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { BackendRequest, LegacyContext, PanelSnapshot } from '@/types/host'
+import type { BackendRequest, FormatDecimal, PanelSnapshot, Translate } from '@/types/host'
 
 type Pack = { locale: string; messages: Record<string, string> }
 
@@ -13,9 +13,20 @@ export function languagePack(code: 'de' | 'en'): Pack {
   return JSON.parse(readFileSync(join(PACKS, `${code}.json`), 'utf8')) as Pack
 }
 
-export interface TestContext extends LegacyContext {
+/** Backend data and services of a test; the mount helpers (test/mount.ts) build the stores from it. */
+export interface TestContext {
+  readonly document: Document
   snapshot: PanelSnapshot
   clock: { now: number }
+  readonly request: BackendRequest
+  readonly getSnapshot: () => PanelSnapshot
+  readonly getHistory?: () => unknown
+  readonly t: Translate
+  readonly decimal: FormatDecimal
+  readonly getLocale: () => string
+  readonly now: () => number
+  readonly lookup: (key: string) => string | undefined
+  readonly refresh: () => Promise<void>
 }
 
 export function testContext(options: { code?: 'de' | 'en'; snapshot: PanelSnapshot; request: BackendRequest; now: number; refresh?: () => Promise<void> }): TestContext {
