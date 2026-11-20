@@ -1,0 +1,9 @@
+{
+  "branch": "feature/eos-measurements",
+  "channel": "beta",
+  "date": "2026-11-20",
+  "notes_sha256": "ac01b5884661b37f6b01683d2c8ff703c3f915b3b3bcfe481f871c759bc036ca",
+  "source_changelog_sha256": "6731759d841d432e412aaa3249188d6cd569eba848c173848aacc032f4801a84",
+  "source_commit": "315dccdbaac15e339a092623c9553f9647c6ffe1",
+  "version": "0.24.0b44813204318"
+}
