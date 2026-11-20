@@ -11,8 +11,8 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Victron GX direkt (Modbus TCP): Die Speichersteuerung brach ab, weil Venus OS einen geschriebenen Netzsollwert bzw. eine Entladegrenze quittiert, beim sofortigen Zurücklesen aber noch den alten Wert meldet (Issue #33). Das Plugin liest jetzt bis zu einer Sekunde lang alle 100 ms zurück und akzeptiert weiterhin nur den angeforderten Wert. Schlägt die Bestätigung fehl, nennen Hinweis, Log und Diagnosedaten die Ursache als feste Kennung (`reason`: z. B. `readback_mismatch` oder `not_acknowledged`); das gilt für alle Modbus-Plugins.
 - Die Auto-Seite ist über das Menü und den Energiefluss dieselbe. Bisher öffnete „Auto“ im Menü bei einer Fahrzeugliste eine Mischung aus Fahrzeugübersicht und den Lade-Einstellungen eines über eine Auswahlliste gewählten Fahrzeugs, der Energiefluss dagegen die Seite des Fahrzeugs. Mit einem Fahrzeug öffnet „Auto“ jetzt direkt dessen Seite. Mit mehreren Fahrzeugen wählt eine Leiste oben zwischen „Alle Fahrzeuge“ und jedem einzelnen Fahrzeug: „Alle Fahrzeuge“ zeigt je Fahrzeug Leistung, Ladestand, Modus, Ladeziel und Abfahrt sowie die gesamte Ladeleistung und die SoC-Verläufe; Ladeziel, Ladeplan, Lade-Einstellungen und Ladeziele stehen nur auf der Seite des jeweiligen Fahrzeugs. Die Auswahlliste im Bereich „Laden“ entfällt. Fahrzeugkennungen mit Sonderzeichen öffnen über Fahrzeugkarten und Energiefluss dieselbe Seite.
+- Mit einer Fahrzeugliste überträgt die Energiezentrale jetzt auch den Ladestand sowie die Lade- und Entladeleistung des gemeinsamen Speichers an den Messwertspeicher von EOS; bisher gingen nur die Fahrzeugwerte dorthin (Issue #33). Ohne Speicher-SoC rechnete EOS mit einem leeren Speicher und gab ihn nicht zur Entladung frei, sodass etwa ein Victron GX nachts dauerhaft mit Entladegrenze 0 (ESS #7) lief. Der Speicher wird einmal für die ganze Flotte gesendet.
 
 ### Breaking Changes
 

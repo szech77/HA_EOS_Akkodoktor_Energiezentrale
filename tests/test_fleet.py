@@ -64,6 +64,21 @@ class FleetRequirements(unittest.TestCase):
         app.battery_driver.release=Mock()
         return app,ha,opts,directory
 
+    def test_the_shared_battery_and_every_vehicle_reach_the_eos_measurement_store_once(self):
+        app,_,_,_=self.setup_fleet()
+        keys=["battery1-soc-factor","battery1-charge-power-w","battery1-discharge-power-w",
+              "ev1-soc-factor","ev1-charge-power-w","ev2-soc-factor","ev2-charge-power-w"]
+        writes=[]
+        for _,controller,_ in app.controllers:
+            controller.config.eos.measurement_keys=Mock(return_value=frozenset(keys))
+            controller.config.eos.put_measurement=Mock(side_effect=lambda key,value,when:writes.append((key,value)))
+        app.tick(NOW,0)
+        sent=dict(writes)
+        # Without the battery SoC EOS plans from 0 % and holds the battery (Issue #33).
+        self.assertEqual(sent["battery1-soc-factor"],.6)
+        self.assertEqual(sorted(sent),sorted(keys))
+        self.assertEqual(len(writes),len(keys))
+
     def test_duplicate_wallbox_or_eos_resource_is_rejected(self):
         for key in ("resource","wallbox_parameters"):
             rows=definitions()
