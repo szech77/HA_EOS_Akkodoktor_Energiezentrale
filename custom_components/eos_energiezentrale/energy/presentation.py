@@ -118,26 +118,6 @@ def measured_pv_energy(local, influx, now, zone):
     return watt_seconds / 3600000 if covered else None
 
 
-def next24_pv_forecast(rows, now):
-    from datetime import timedelta
-    end, cursor = now + timedelta(days=1), now
-    slots = []
-    for row in rows:
-        start, stop, watts = instant(row.get('time')), instant(row.get('end')), number(row.get('solar'))
-        if start is not None and stop is not None and type(row.get('solar')) in (int, float) and watts is not None and watts >= 0 and stop > start:
-            slots.append((start, stop, watts))
-    covered, energy, peak = 0, 0, None
-    for start, stop, watts in sorted(slots, key=lambda item:item[0]):
-        first, last = max(now, cursor, start), min(end, stop)
-        seconds = (last-first).total_seconds()
-        if seconds > 0:
-            covered += seconds
-            energy += watts * seconds / 3600000
-            peak = max(peak or 0, watts / 1000)
-            cursor = last
-    return {'kwh':energy if covered else None, 'peak':peak, 'complete':covered >= 86400, 'covered':covered*1000}
-
-
 def mode_timeline(data, rows, now):
     """Classify history gaps and plan validity before drawing the mode track."""
     from datetime import timedelta
@@ -174,3 +154,150 @@ def mode_timeline(data, rows, now):
         if end < now+timedelta(days=1):
             result[key] += intervals([], max(now,end), now+timedelta(days=1), None, 'plan')
     return result
+
+
+# Notice codes and measurements that belong to one energy-flow node.
+NODE_CODES = {'battery_read':'battery', 'battery_limits':'battery', 'wallbox':'car', 'wallbox_stop':'car',
+              'wallbox_read':'car', 'goal':'car', 'vehicle_limits':'car', 'backup_power_unknown':'grid'}
+MEASUREMENT_NODES = {'solar':'solar', 'inverter_ac':'solar', 'grid':'grid', 'house_total':'house', 'heat':'heat',
+                     'heat_load':'heat', 'car':'car', 'car_soc':'car', 'battery_soc':'battery',
+                     'battery_charge':'battery', 'battery_discharge':'battery'}
+
+
+def node_problems(notices, vehicles=()):
+    """Worst open warning or error per flow node; vehicle nodes are keyed car/<id>."""
+    rank = {'warning':1, 'error':2}
+    identities = [vehicle.get('id') for vehicle in vehicles or () if isinstance(vehicle.get('id'), str)]
+    result = {}
+    for notice in notices:
+        severity = notice.get('severity')
+        if severity not in rank:
+            continue
+        nodes = {NODE_CODES[notice.get('code')]} if notice.get('code') in NODE_CODES else set()
+        nodes |= {MEASUREMENT_NODES[key] for key in notice.get('measurements', []) if key in MEASUREMENT_NODES}
+        scope = notice.get('scope') or 'system'
+        for node in nodes:
+            key = node
+            if node == 'car' and identities:
+                index = int(scope.split('/')[1]) - 1 if scope.startswith('vehicle/') and scope.split('/')[1].isdigit() else 0
+                if not 0 <= index < len(identities):
+                    continue
+                key = 'car/' + identities[index]
+            if rank[severity] > rank.get(result.get(key), 0):
+                result[key] = severity
+    return result
+
+
+# Plan segments shorter than this are EOS interval noise and do not make an upcoming event.
+MIN_PLAN_SEGMENT_S = 1800
+# Forecast battery power below this counts as holding the charge level.
+BATTERY_IDLE_W = 150
+
+
+def battery_effect(rows, start, stop):
+    """What the battery does according to the forecast between start and stop: charge_pv, charge_grid, discharge or hold."""
+    weights = power = solar = 0.
+    for row in rows or []:
+        begin, end = instant(row.get('time')), instant(row.get('end'))
+        battery = number(row.get('battery'))
+        if begin is None or end is None or battery is None:
+            continue
+        overlap = (min(end, stop) - max(begin, start)).total_seconds()
+        if overlap <= 0:
+            continue
+        weights += overlap
+        power += battery * overlap
+        solar += (number(row.get('solar')) or 0.) * overlap
+    if not weights:
+        return None
+    power, solar = power / weights, solar / weights
+    if power > BATTERY_IDLE_W:
+        return 'charge_pv' if solar >= power * .8 else 'charge_grid'
+    return 'discharge' if power < -BATTERY_IDLE_W else 'hold'
+
+
+def plan_events(data, now, hours=24, limit=6):
+    """Upcoming mode changes and forecast milestones in time order, with the import price at that time.
+
+    Mode changes lasting less than MIN_PLAN_SEGMENT_S are skipped. Battery changes carry the
+    forecast effect; consecutive changes with the same effect are listed once.
+    """
+    from datetime import timedelta
+    end = now + timedelta(hours=hours)
+    prices = [(instant(row.get('time')), instant(row.get('end')), number(row.get('price')))
+              for row in data.get('forecast') or []]
+    prices = [row for row in prices if None not in row]
+
+    def price_at(stamp):
+        return next((price for start, stop, price in prices if start <= stamp < stop), None)
+
+    events = []
+    plan_end = instant(data.get('plan_end')) or end
+
+    def changes(rows, current, device, extra, forecast=None):
+        ordered = sorted(((instant(row.get('time')), row.get('mode')) for row in rows or []
+                          if instant(row.get('time')) is not None and isinstance(row.get('mode'), str)), key=lambda item: item[0])
+        # Only the segment in progress is kept from the past; it never merges with future rows.
+        past = [item for item in ordered if item[0] <= now][-1:]
+        segments = []
+        for stamp, mode in past + [item for item in ordered if item[0] > now]:
+            if segments and segments[-1][1] == mode and stamp > now and segments[-1][0] > now:
+                continue
+            segments.append([stamp, mode])
+        bounded = [(stamp, mode, segments[index+1][0] if index+1 < len(segments) else max(plan_end, stamp))
+                   for index, (stamp, mode) in enumerate(segments)]
+        previous, previous_effect = current, None
+        for stamp, mode, stop in bounded:
+            if stamp > end:
+                break
+            if stop <= now:
+                continue
+            begin = max(now, stamp)
+            # The first hour tells what starts with the change; later hours belong to later events.
+            effect = battery_effect(forecast, begin, min(stop, begin + timedelta(hours=1))) if device == 'battery' else None
+            if stamp <= now:
+                previous_effect = effect
+                continue
+            last = stop == bounded[-1][2]
+            if (stop - stamp).total_seconds() < MIN_PLAN_SEGMENT_S and not last:
+                continue
+            if mode == previous or (effect is not None and effect == previous_effect):
+                previous = mode
+                continue
+            previous, previous_effect = mode, effect
+            event = {'time':stamp.isoformat(), 'kind':'mode', 'device':device, 'mode':mode,
+                     'price_ct':price_at(stamp), **extra}
+            if effect is not None:
+                event['effect'] = effect
+            events.append(event)
+
+    def reached(rows, current, target, kind, extra):
+        if target is None or (current is not None and current >= target - .5):
+            return
+        lower = current is not None
+        for row in rows or []:
+            stamp, soc = instant(row.get('time')), number(row.get(kind_key[kind]))
+            if stamp is None or soc is None or not now <= stamp <= end:
+                continue
+            if soc < target - .5:
+                lower = True
+            elif lower:
+                events.append({'time':stamp.isoformat(), 'kind':kind, 'soc':target, 'price_ct':price_at(stamp), **extra})
+                return
+
+    kind_key = {'battery_full':'battery_soc', 'car_target':'car_soc'}
+    live = data.get('live') or {}
+    changes((data.get('plan') or {}).get('battery'), live.get('battery_mode'), 'battery', {}, data.get('forecast'))
+    reached(data.get('forecast'), number(live.get('battery_soc')),
+            number((data.get('settings') or {}).get('battery_max_soc')), 'battery_full', {})
+    vehicles = data.get('vehicles') or []
+    if vehicles:
+        for vehicle in vehicles:
+            extra = {'vehicle_id':vehicle.get('id'), 'vehicle_name':vehicle.get('name')}
+            changes((vehicle.get('plan') or {}).get('car'), (vehicle.get('live') or {}).get('car_mode'), 'car', extra)
+            reached(vehicle.get('forecast'), number((vehicle.get('live') or {}).get('car_soc')),
+                    number(vehicle.get('charge_target_soc')), 'car_target', dict(extra))
+    elif (data.get('features') or {}).get('car', True):
+        changes((data.get('plan') or {}).get('car'), live.get('car_mode'), 'car', {})
+        reached(data.get('forecast'), number(live.get('car_soc')), number(data.get('charge_target_soc')), 'car_target', {})
+    return sorted(events, key=lambda item: item['time'])[:limit]

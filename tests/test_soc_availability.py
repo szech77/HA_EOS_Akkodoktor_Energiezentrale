@@ -42,6 +42,7 @@ def test_existing_unchanged_soc_does_not_warn_regardless_of_its_timestamp(contro
         report = poll(control,second,value,scale=scale)
         assert not warns(report)
         assert report['sources']['car_soc']['available'] is True
+        assert report['sources']['car_soc']['value'] == (value*100 if scale=='factor' else value)
     assert control.app.soc == (value*100 if scale=='factor' else value)
 
 
@@ -53,6 +54,7 @@ def test_only_more_than_five_minutes_without_a_valid_value_warns(control,value):
     report = poll(control,301,value)
     assert 'car_soc' in report['unavailable']
     assert report['sources']['car_soc']['available'] is False
+    assert report['sources']['car_soc']['value'] is None
 
 
 def test_recovery_clears_warning_and_a_new_outage_gets_a_full_grace_period(control):

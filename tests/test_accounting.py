@@ -51,6 +51,45 @@ class EnergyAccountingRequirements(TestCase):
         self.assertEqual(amount["cost_unknown_kwh"],0)
         self.assertAlmostEqual(self.ledger.stock["kwh"],0.)
 
+    def test_discharged_energy_keeps_the_pv_and_grid_origin_of_its_charge(self):
+        from custom_components.eos_energiezentrale.energy.report_values import battery_origin
+        self.ledger.configure({"pv_price_ct":10})
+        self.ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}
+        row=sample(solar=7500,grid=2500,battery_charge=10000,house_total=0,house=0,heat=0,car=0)
+        row["consumers"]={"house":0}
+        self.ledger.allocate(row,.001,self.ledger.effective())
+        self.assertAlmostEqual(self.ledger.stock["pv_kwh"],6.75)
+        self.assertAlmostEqual(self.ledger.stock["grid_kwh"],2.25)
+        # Half of the stock goes to the car; the other half stays with its origin.
+        row=sample(solar=1000,grid=0,battery_discharge=4500,house_total=5500)
+        row["consumers"]={"car":5500}
+        battery=self.ledger.allocate(row,.001,self.ledger.effective())["car"]["sources"]["battery"]
+        self.assertAlmostEqual(battery["kwh"],4.5)
+        self.assertAlmostEqual(battery["pv_kwh"],3.375)
+        self.assertAlmostEqual(battery["grid_kwh"],1.125)
+        # 7.5 kWh PV at 10 ct and 2.5 kWh grid at 30 ct, half of it, before charging losses.
+        self.assertAlmostEqual(battery["pv_cost_eur"],.375)
+        self.assertAlmostEqual(battery["grid_cost_eur"],.375)
+        self.assertAlmostEqual(battery["cost_eur"],.75)
+        self.assertAlmostEqual(self.ledger.stock["grid_kwh"],1.125)
+        origin=battery_origin({"kwh":1.,"cost_eur":.1,"cost_unknown_kwh":0.},battery)
+        self.assertAlmostEqual(origin["battery_grid"]["price_ct"],100/3)
+        self.assertAlmostEqual(origin["battery_pv"]["price_ct"],100/9)
+        self.assertEqual(origin["battery_unknown"]["kwh"],0)
+        self.assertAlmostEqual(origin["pv_direct"]["price_ct"],10)
+
+    def test_stock_without_recorded_origin_is_reported_as_unknown_origin(self):
+        from custom_components.eos_energiezentrale.energy.report_values import report_values
+        self.ledger.stock={"kwh":9.,"cost":2.7,"unknown":0.}
+        self.ledger.initial_pv_valued=True
+        result=self.report_minute(solar=0,grid=0,battery_discharge=3600,battery_soc=90)
+        view=report_values({**self.ledger.report({"period":"day"},NOW),"consumers":result})["views"]["house"]
+        origin=view["self_origin"]
+        self.assertGreater(origin["battery_unknown"]["kwh"],0)
+        self.assertEqual(origin["battery_grid"]["kwh"],0)
+        self.assertEqual(origin["battery_pv"]["kwh"],0)
+        self.assertAlmostEqual(origin["battery_unknown"]["price_ct"],30)
+
     def test_charge_and_discharge_losses_are_applied_once(self):
         self.ledger.configure({"discharge_efficiency":.9})
         self.ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}
@@ -62,6 +101,50 @@ class EnergyAccountingRequirements(TestCase):
         result=self.ledger.allocate(row,.001,self.ledger.effective())["heat"]
         self.assertAlmostEqual(result["kwh"],8.1)
         self.assertAlmostEqual(result["cost_eur"],3.)
+
+    def test_export_earns_the_feed_in_tariff_and_battery_charging_keeps_its_origin(self):
+        self.ledger.configure({"pv_price_ct":8.})
+        self.ledger.stock={"kwh":0.,"cost":0.,"unknown":0.}
+        row=sample(solar=6000,grid=-2000,battery_charge=1000,house_total=3000)
+        row["consumers"]={"house":3000}
+        result=self.ledger.allocate(row,.001,self.ledger.effective())
+        self.assertAlmostEqual(result["export"]["kwh"],2.)
+        self.assertAlmostEqual(result["export"]["cost_eur"],.16)
+        self.assertAlmostEqual(result["export"]["sources"]["pv"]["kwh"],2.)
+        self.assertAlmostEqual(result["storage"]["kwh"],1.)
+        self.assertAlmostEqual(result["storage"]["sources"]["pv"]["kwh"],1.)
+        self.assertAlmostEqual(result["house"]["kwh"],3.)
+        # Grid import charging the battery is attributed to the grid; no export row without export.
+        row=sample(solar=0,grid=4000,battery_charge=4000,house_total=0)
+        row["consumers"]={}
+        result=self.ledger.allocate(row,.001,self.ledger.effective())
+        self.assertNotIn("export",result)
+        self.assertAlmostEqual(result["storage"]["sources"]["grid"]["kwh"],4.)
+        self.assertAlmostEqual(result["storage"]["cost_eur"],1.2)
+        # An unknown feed-in tariff stays visible as unpriced export.
+        self.ledger.configure({"pv_price_source":"eos"})
+        self.ledger.pv_tariff=None
+        row=sample(solar=3000,grid=-1000,house_total=2000)
+        row["consumers"]={"house":2000}
+        export=self.ledger.allocate(row,.001,self.ledger.effective())["export"]
+        self.assertAlmostEqual(export["cost_unknown_kwh"],1.)
+        self.assertEqual(export["cost_eur"],0)
+
+    def test_report_counts_base_price_days_from_recording_start_until_today(self):
+        self.ledger.observe(sample())
+        self.ledger.observe(sample(NOW+timedelta(minutes=1)))
+        day=self.ledger.report({"period":"day"},NOW)
+        self.assertEqual(day["base_days"],1)
+        month=self.ledger.report({"period":"month"},NOW)
+        local=NOW.astimezone(ZoneInfo("Europe/Berlin")).date()
+        self.assertEqual(month["base_days"],1)
+        later=self.ledger.report({"period":"month","date":local.isoformat()},NOW+timedelta(days=5))
+        import calendar
+        days_left=calendar.monthrange(local.year,local.month)[1]-local.day+1
+        self.assertEqual(later["base_days"],min(6,days_left))
+        future=self.ledger.report({"period":"day","date":(local+timedelta(days=3)).isoformat()},NOW)
+        self.assertEqual(future["base_days"],0)
+        self.assertGreaterEqual(self.ledger.report({"period":"year"},NOW)["settings"]["base_price_eur_month"],0)
 
     def test_missing_price_and_initial_storage_do_not_become_free_energy(self):
         self.ledger.configure({"pv_price_source":"eos"})
@@ -194,6 +277,17 @@ class EnergyAccountingRequirements(TestCase):
         for values in ({"period":"week"},{"date":"bad"},{"date":"1900-01-01"},{"sql":"DROP TABLE energy"}):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 self.ledger.report(values,NOW)
+
+    def test_invalid_settings_name_the_rejected_field_without_the_submitted_value(self):
+        from custom_components.eos_energiezentrale.energy.failures import BackendError
+        for values, reason, fields in (({"charge_efficiency":0}, 'out_of_range', ['charge_efficiency']),
+                                       ({"pv_price_source":"private"}, 'invalid_type', ['pv_price_source']),
+                                       ({"initial_price_ct":5000}, 'out_of_range', ['initial_price_ct']),
+                                       ({"extra":1}, 'unknown_fields', [])):
+            with self.subTest(values=values), self.assertRaises(BackendError) as rejected:
+                checked_settings(values)
+            self.assertEqual((rejected.exception.reason, rejected.exception.fields), (reason, fields))
+            self.assertNotIn('private', str(rejected.exception))
 
     def test_eos_capacity_and_efficiency_are_read_without_writing_configuration(self):
         from unittest.mock import patch
@@ -365,3 +459,26 @@ class TariffCostBasisRequirements(TestCase):
                     self.assertAlmostEqual(result["kwh"],.9025)
                     self.assertAlmostEqual(result["cost_eur"]/result["kwh"],input_price/(.95*.95))
                     self.assertAlmostEqual(result["cost_unknown_kwh"],0)
+
+
+def test_settings_of_a_newer_version_do_not_break_the_ledger_and_survive_a_save():
+    """A downgrade from a beta with additional accounting settings (e.g. a future setting)."""
+    import json, sqlite3
+    from contextlib import closing
+    with temporary_project_directory() as directory:
+        with closing(sqlite3.connect(directory / "accounting.sqlite3")) as db, db:
+            db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.execute("INSERT INTO meta VALUES ('settings',?)",
+                       (json.dumps({"pv_price_source": "manual", "pv_price_ct": 8.2, "future_setting_x": 14.9}),))
+        ledger = Accounting(directory, ZoneInfo("Europe/Berlin"))
+        assert ledger.settings["pv_price_ct"] == 8.2 and "future_setting_x" not in ledger.settings
+        ledger.configure({"capacity_wh": 12000})
+        with closing(sqlite3.connect(directory / "accounting.sqlite3")) as db:
+            saved = json.loads(db.execute("SELECT value FROM meta WHERE key='settings'").fetchone()[0])
+        assert saved["future_setting_x"] == 14.9 and saved["capacity_wh"] == 12000
+        try:
+            ledger.configure({"future_setting_x": 1})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("unknown settings from the panel stay rejected")

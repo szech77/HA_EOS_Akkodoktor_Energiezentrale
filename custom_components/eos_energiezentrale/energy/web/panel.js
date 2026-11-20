@@ -40,8 +40,12 @@ class EnergyPanel extends HTMLElement {
         event.source.postMessage({channel:'eos-energy-response', id, client, result}, location.origin);
       } catch (error) {
         if(generation!==this.frameGeneration)return;
+        // Only allow-listed reason and field names from the backend; never the raw message.
+        const details=error?.translation_placeholders;
+        const reason=typeof details?.reason==='string'&&/^[a-z_]{1,40}$/.test(details.reason)?details.reason:undefined;
+        const fields=typeof details?.fields==='string'?details.fields.split(',').filter(field=>/^[a-z_]{1,40}$/.test(field)).slice(0,20):[];
         event.source.postMessage({channel:'eos-energy-response', id, client,
-          error:error.code ?? 'request_failed'}, location.origin);
+          error:error.code ?? 'request_failed', reason, fields}, location.origin);
       }
     };
     window.addEventListener('message', this.listener);

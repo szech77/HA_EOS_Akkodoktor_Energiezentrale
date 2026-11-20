@@ -1,106 +1,114 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const forecast=require('../custom_components/eos_energiezentrale/energy/web/forecast.js');
 const backend=require('./backend.cjs');
-const start=Date.parse('2026-11-12T07:00:00Z'),hour=3600000;
-const slot=(from,to,solar)=>({time:new Date(start+from*hour).toISOString(),end:new Date(start+to*hour).toISOString(),solar});
-
-test('PV energy clips the exact next 24 hours and never counts overlapping intervals twice',()=>{
- const slots=forecast.solarSlots([slot(0,2,4000),slot(-1,1,2000),slot(2,30,1000)],start);
- assert.deepEqual(backend('pvSummary',[slot(0,2,4000),slot(-1,1,2000),slot(2,30,1000)],{now:start}),{kwh:28,peak:4,complete:true,covered:24*hour});
- assert.equal(slots[0].start,start);assert.equal(slots.at(-1).end,start+24*hour);
+// 14:30 local time in Berlin.
+const now=Date.parse('2026-11-18T13:30:00Z'),hour=3600000,iso=ms=>new Date(ms).toISOString();
+const top=Date.parse('2026-11-18T13:00:00Z');
+const solar=Array.from({length:40},(_,index)=>{
+  const local=(14+index)%24;
+  return {time:iso(top+index*hour),end:iso(top+(index+1)*hour),solar:local>=8&&local<16?2000:0,grid:300,battery:0,price:30};
 });
-test('missing and invalid PV remains unknown while measured forecast zero is a covered interval',()=>{
- const slots=forecast.solarSlots([slot(0,1,0),slot(1,2,null),slot(2,3,NaN),slot(3,4,-1),slot(4,5,'1000')],start);
- assert.deepEqual(backend('pvSummary',[slot(0,1,0),slot(1,2,null),slot(2,3,NaN),slot(3,4,-1),slot(4,5,'1000')],{now:start}),{kwh:0,peak:0,complete:false,covered:hour});
- assert.equal(forecast.valueAt(slots,start+2*hour),undefined);
- assert.equal(backend('pvSummary',[],{now:start}).kwh,null);
-});
-test('24 elapsed hours stay 24 hours across daylight-saving transitions',()=>{
- for(const date of ['2026-03-29T00:00:00Z','2026-10-25T00:00:00Z']){
-  const stamp=Date.parse(date),rows=[{time:date,end:new Date(stamp+25*hour).toISOString(),solar:1000}];
-  assert.equal(backend('pvSummary',rows,{now:stamp}).kwh,24);
- }
-});
+const weatherRows=Array.from({length:30},(_,index)=>({time:iso(top+index*hour),end:iso(top+(index+1)*hour),
+  condition:index<2?'sunny':'cloudy',temperature:7-index*.2,cloud_coverage:index<2?10:90,precipitation:index===20?1.2:0,precipitation_probability:20}));
+const totals=[{date:'2026-11-18',kwh:3,total_kwh:12,complete:true},{date:'2026-11-19',kwh:16,complete:true},{date:'2026-11-20',kwh:null,complete:false}];
 
 class Element {
- constructor(){this.handlers={};this.open=false;this.hidden=true;this.attributes={};this.style={};this.dataset={};}
- addEventListener(name,handler){this.handlers[name]=handler;}
- setAttribute(key,value){this.attributes[key]=value;}
- removeAttribute(key){delete this.attributes[key];}
- focus(){this.focused=true;}
- showModal(){this.open=true;}
- close(){this.open=false;this.handlers.close?.();}
- getBoundingClientRect(){return {left:0,top:0,width:100,right:100,bottom:100};}
- querySelector(key){return this.parts[key];}
+  constructor(){this.handlers={};this.hidden=false;this.textContent='';this.markup='';this.attributes={};}
+  set innerHTML(value){this.markup=value;}
+  get innerHTML(){return this.markup;}
+  addEventListener(name,handler){this.handlers[name]=handler;}
+  setAttribute(key,value){this.attributes[key]=value;}
+  querySelectorAll(){return [];}
 }
-function fixture(request,code='de'){
- const language=JSON.parse(fs.readFileSync(path.join(__dirname,`../custom_components/eos_energiezentrale/energy/i18n/${code}.json`),'utf8'));
- const ids=Object.fromEntries(['weather-dialog','forecast-body','forecast-title','forecast-close','flow-weather'].map(id=>[id,new Element()]));
- const snapshot={zone:'Europe/Berlin',live:{weather:{condition:'sunny',temperature:8,unit:'°C'}},forecast:[slot(0,24,1000)]};
- Object.defineProperty(snapshot,'pv_next24',{get:()=>backend('pvSummary',snapshot.forecast,{now:Date.parse(snapshot.pv_next24_start??'')||start})});
- let plots=[];
- Object.defineProperty(ids['forecast-body'],'innerHTML',{set(value){
-  this.markup=value;
-  for(const id of ['forecast-hour','forecast-retry','forecast-selected'])ids[id]=new Element();
-  plots=[...value.matchAll(/data-forecast-plot="(\w+)"/g)].map(match=>{
-   const node=new Element();node.dataset.forecastPlot=match[1];node.parts={'.forecast-probe':new Element(),'.forecast-tooltip':new Element()};return node;
-  });
- }});
- ids['forecast-body'].querySelectorAll=()=>plots;
- const html=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
- const t=key=>{assert.equal(typeof language.messages[key],'string',key);return language.messages[key];};
- const view=forecast.create({document:{getElementById:id=>ids[id]},getSnapshot:()=>snapshot,request,t,html,
-  decimal:(value,digits=1)=>new Intl.NumberFormat(language.locale,{maximumFractionDigits:digits}).format(value),getLocale:()=>language.locale,now:()=>start});
- return {view,ids,snapshot,plots:()=>plots,t,markup:()=>ids['forecast-body'].markup};
+function fixture({request,code='de',snapshotValues={},clock=()=>now}={}){
+  const language=JSON.parse(fs.readFileSync(path.join(__dirname,`../custom_components/eos_energiezentrale/energy/i18n/${code}.json`),'utf8'));
+  const ids=Object.fromEntries(['pv-lead','pv-now','pv-source','pv-status','pv-strip','pv-detail','pv-days','pv-effects'].map(id=>[id,new Element()]));
+  const snapshot={zone:'Europe/Berlin',live:{solar:1800,weather:{condition:'sunny',temperature:7,unit:'°C'}},forecast:solar,
+    pv_today_kwh:9,pv_forecast_totals:totals,pv_now:backend('pvNow',{live:{solar:1800},forecast:solar},{now}),pv_effects:[],...snapshotValues};
+  const html=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const t=(key,values={})=>{assert.equal(typeof language.messages[key],'string',key);return language.messages[key].replace(/\{(\w+)\}/g,(_,name)=>values[name]??`{${name}}`);};
+  const response={status:'available',source:'<provider>',fetched_at:iso(now-60000),rows:weatherRows,
+    hours:backend('pvHours',solar,{now,weather:weatherRows,zone:'Europe/Berlin'}),
+    days:backend('pvDays',totals,{now,weather:weatherRows,measured:9,zone:'Europe/Berlin'})};
+  const calls=[];
+  const view=forecast.create({document:{getElementById:id=>ids[id]},getSnapshot:()=>snapshot,
+    request:request??(async action=>{calls.push(action);return response;}),t,html,
+    decimal:(value,digits=1)=>new Intl.NumberFormat(language.locale,{maximumFractionDigits:digits}).format(value),getLocale:()=>language.locale,now:clock});
+  return {view,ids,snapshot,calls,response};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-const weather={status:'available',temperature_unit:'°C',source:'<provider>',rows:[{
- time:new Date(start).toISOString(),end:new Date(start+hour).toISOString(),temperature:0,precipitation:0,condition:'sunny',precipitation_probability:0}]};
 
-test('the PV window and summary follow backend time instead of browser time',async()=>{
- const f=fixture(async()=>weather);
- f.snapshot.pv_next24_start=new Date(start+hour).toISOString();
- f.view.open();await flush();
- assert.match(f.markup(),/23 kWh/);
- f.ids['forecast-hour'].handlers.input({target:{value:'0'}});
- assert.equal(f.plots()[0].parts['.forecast-probe'].attributes.x1,0);
- f.snapshot.pv_next24_start=new Date(start+2*hour).toISOString();f.view.update();
- assert.match(f.markup(),/22 kWh/);
- assert.equal(f.plots()[0].parts['.forecast-probe'].attributes.x1,0);
+test('PV page leads with live power, today and tomorrow, and compares PV now with the forecast',async()=>{
+  const f=fixture();f.view.open();await flush();
+  assert.equal(f.ids['pv-lead'].textContent,'1,8 kW jetzt · heute 9 kWh erzeugt · Rest ≈ 3 kWh · morgen ≈ 16 kWh');
+  assert.match(f.ids['pv-now'].markup,/Sonnig/);assert.match(f.ids['pv-now'].markup,/Bewölkung 10 %/);
+  assert.match(f.ids['pv-now'].markup,/PV jetzt 1,8 kW · ≈ 90 % der Prognose/);
+  assert.equal(f.ids['pv-source'].textContent,'<provider> · Stand 14:29');assert.equal(f.ids['pv-status'].hidden,true);
 });
-
-test('dialog opens weather above PV, shares a probe, and renders German and English without injecting provider names',async()=>{
- for(const code of ['de','en']){
-  const f=fixture(async()=>weather,code);f.view.open();await flush();
-  assert.equal(f.ids['weather-dialog'].open,true);
-  assert.ok(f.markup().indexOf(f.t('forecast.weather'))<f.markup().indexOf(f.t('forecast.pv')));
-  assert.match(f.markup(),/24 kWh/);assert.match(f.markup(),/&lt;provider&gt;/);assert.doesNotMatch(f.markup(),/<provider>/);
-  assert.equal(f.plots().length,2);
-  f.ids['forecast-hour'].handlers.input({target:{value:'0'}});
-  assert.match(f.ids['forecast-selected'].textContent,/0 °C/);assert.match(f.ids['forecast-selected'].textContent,/0 mm/);
-  for(const plot of f.plots())assert.equal(plot.parts['.forecast-probe'].attributes.x1,0);
-  f.ids['forecast-hour'].handlers.input({target:{value:'2'}});
-  assert.ok(f.ids['forecast-selected'].textContent.includes(f.t('forecast.no_hour')));
-  assert.match(f.ids['forecast-selected'].textContent,/1 kW/);
-  f.ids['forecast-close'].handlers.click();assert.equal(f.ids['weather-dialog'].open,false);assert.equal(f.ids['flow-weather'].focused,true);
- }
+test('hourly strip shows weather above PV, folds the night and explains a tapped hour',async()=>{
+  const f=fixture();f.view.open();await flush();
+  const strip=f.ids['pv-strip'].markup;
+  assert.match(strip,/class="wx-h now"[^>]*data-hour="0"/);assert.match(strip,/<span class="t">Jetzt<\/span>/);
+  assert.equal((strip.match(/class="wx-gap"/g)??[]).length,2);assert.match(strip,/Nacht<br>Bewölkt · bis 4°<br><small>16:00–08:00<\/small>/);
+  assert.match(strip,/<span class="t">Do 08:00<\/span>/);assert.match(strip,/<span class="t">15:00<\/span>/);assert.match(strip,/☁ 90 %/);
+  assert.doesNotMatch(strip,/&lt;provider|<provider/);
+  const button={dataset:{hour:'1'}};
+  f.ids['pv-strip'].handlers.click({target:{closest:()=>button}});
+  assert.match(f.ids['pv-detail'].textContent,/^15:00 · Sonnig, 7° · Bewölkung 10 % · Regenwahrscheinlichkeit 20 % · PV ≈ 2 kWh$/);
 });
-
-test('slow or failed weather leaves PV visible and late responses cannot reopen a closed dialog',async()=>{
- let release;const f=fixture(()=>new Promise(resolve=>release=resolve));f.view.open();
- assert.match(f.markup(),/24 kWh/);assert.ok(f.markup().includes(f.t('forecast.loading')));
- f.ids['weather-dialog'].close();release(weather);await flush();assert.equal(f.ids['weather-dialog'].open,false);
- const g=fixture(async()=>{throw Error('private-provider-response');});g.view.open();await flush();
- assert.ok(g.markup().includes(g.t('forecast.unavailable')));assert.match(g.markup(),/24 kWh/);
- assert.doesNotMatch(g.markup(),/private-provider-response/);
+test('day cards show weather and expected PV without a range',async()=>{
+  const f=fixture();f.view.open();await flush();
+  const days=f.ids['pv-days'].markup;
+  assert.match(days,/<b>Heute<\/b>/);assert.match(days,/≈ 12 kWh/);assert.match(days,/9 kWh bereits erzeugt/);
+  assert.match(days,/≈ 16 kWh/);assert.match(days,/Bewölkt · /);assert.match(days,/1,2 mm Regen/);
+  assert.match(days,/Prognose unvollständig/);assert.doesNotMatch(days,/Spanne|range/);
 });
-
-test('unsupported weather and incomplete PV are explicit and updates preserve the selected timestamp',async()=>{
- const f=fixture(async()=>({status:'unsupported',rows:[]}));f.snapshot.forecast=[slot(0,1,1000)];
- f.view.open();await flush();assert.ok(f.markup().includes(f.t('forecast.unsupported')));
- assert.ok(f.markup().includes(f.t('forecast.partial')));
- f.ids['forecast-hour'].handlers.input({target:{value:'2'}});
- assert.match(f.ids['forecast-selected'].textContent,/—/);
- f.snapshot.forecast=[slot(0,24,2000)];f.view.update();
- assert.match(f.ids['forecast-selected'].textContent,/2 kW/);assert.match(f.markup(),/48 kWh/);
+test('plan effects come from the backend and link to the matching view',async()=>{
+  const rows=solar.map((row,index)=>index===12||index===13?{...row,battery:3000,solar:0,price:24}:index===14?{...row,battery_soc:90}:row);
+  const effects=backend('pvEffects',{forecast:rows,pv_forecast_totals:[{total_kwh:20,complete:true},{date:'2026-11-19',kwh:6,complete:true}],
+    vehicle_name:'ID.4',charge_plan:{state:'active',grid_kwh:25.4,grid_from:iso(top+12*hour),grid_price_ct:24.1,pv_kwh:0}},{now});
+  const f=fixture({snapshotValues:{pv_effects:effects}});f.view.open();await flush();
+  const list=f.ids['pv-effects'].markup;
+  assert.match(list,/Morgen deutlich weniger Sonne<\/b><br><small>Morgen ≈ 6 kWh PV erwartet, heute 20 kWh\./);
+  assert.match(list,/href="#battery"><span><b>Speicher lädt aus dem Netz<\/b><br><small>Fr\.? ?|href="#battery"><span><b>Speicher lädt aus dem Netz/);
+  assert.match(list,/6 kWh zu Ø 24 ct\/kWh\. Danach 90 %\./);
+  assert.match(list,/href="#car"><span><b>ID\.4 lädt aus dem Netz/);
+  const empty=fixture();empty.view.open();await flush();
+  assert.match(empty.ids['pv-effects'].markup,/nichts Besonderes/);
+});
+test('missing weather keeps PV visible and a new PV forecast reloads the strip',async()=>{
+  let answer={status:'missing_source',rows:[],days:[],hours:backend('pvHours',solar,{now,weather:[],zone:'Europe/Berlin'})};
+  const calls=[];const f=fixture({request:async action=>{calls.push(action);return answer;}});
+  f.view.open();await flush();
+  assert.equal(f.ids['pv-status'].hidden,false);assert.match(f.ids['pv-status'].textContent,/Wetterquelle|Wetter/);
+  assert.match(f.ids['pv-strip'].markup,/data-hour="0"/);assert.match(f.ids['pv-strip'].markup,/Kein Wetter/);
+  f.view.update();await flush();assert.equal(calls.length,1);
+  f.snapshot.forecast=[...solar];f.snapshot.forecast[0]={...solar[0],solar:500};f.view.update();await flush();
+  assert.equal(calls.length,2);
+});
+test('a failed request reports unavailable weather and late answers cannot overwrite a newer load',async()=>{
+  let resolveFirst;const answers=[new Promise(resolve=>{resolveFirst=resolve;}),Promise.reject(new Error('offline'))];
+  const f=fixture({request:()=>answers.shift()});
+  f.view.open();f.view.open();await flush();
+  assert.match(f.ids['pv-status'].textContent,/nicht verfügbar|unavailable/i);
+  resolveFirst({status:'available',rows:[],hours:[],days:[]});await flush();
+  assert.match(f.ids['pv-status'].textContent,/nicht verfügbar|unavailable/i);
+});
+test('English renders the same structure',async()=>{
+  const f=fixture({code:'en'});f.view.open();await flush();
+  assert.match(f.ids['pv-lead'].textContent,/1\.8 kW now · 9 kWh generated today/);
+  assert.match(f.ids['pv-days'].markup,/<b>Today<\/b>/);assert.match(f.ids['pv-strip'].markup,/Night/);
+});
+test('poll-driven totals and vehicle rows do not reload; a reload keeps the strip visible',async()=>{
+  let time=now,release;const calls=[];
+  const f=fixture({clock:()=>time,request:async action=>{calls.push(action);if(calls.length>1)await new Promise(resolve=>{release=resolve;});return f.response;}});
+  f.view.open();await flush();const strip=f.ids['pv-strip'].markup;assert.equal(calls.length,1);
+  // Every poll changes the rest of today and adds vehicle estimate rows without PV.
+  f.snapshot.pv_forecast_totals=[{...totals[0],kwh:2.9},...totals.slice(1)];
+  f.snapshot.forecast=[...solar,{time:iso(now),end:iso(now+60000),car_soc:41}];
+  f.view.update();await flush();assert.equal(calls.length,1);
+  // At the latest after 15 minutes the strip reloads, without blanking it meanwhile.
+  time=now+15*60000;f.view.update();await flush();assert.equal(calls.length,2);
+  assert.equal(f.ids['pv-strip'].markup,strip);assert.equal(f.ids['pv-status'].hidden,true);
+  release();await flush();assert.match(f.ids['pv-strip'].markup,/data-hour="0"/);
 });

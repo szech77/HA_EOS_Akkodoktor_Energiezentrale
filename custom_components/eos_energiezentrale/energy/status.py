@@ -140,6 +140,7 @@ class IssueLog:
         self.logger = logger or logging.getLogger('custom_components.eos_energiezentrale')
         self.groups = {}
         self.events = deque(maxlen=50)
+        self.since = {}
         self.lock = RLock()
 
     def update(self, group, notices):
@@ -194,15 +195,43 @@ class IssueLog:
                     return None
                 details = value['details']
                 return {**value, 'details':{**details, 'trace':details.get('trace', [])[-1:]}}
+            if key not in previous:
+                self.since[(group, key)] = datetime.now(timezone.utc).isoformat()
             if signature(previous.get(key)) != signature(item):
-                self._event('active' if key not in previous else 'changed', item)
+                self._event('active' if key not in previous else 'changed', item, key, self.since.get((group, key)), group)
         for key, item in previous.items():
             if key not in current:
-                self._event('resolved', item)
+                self._event('resolved', item, key, self.since.pop((group, key), None), group)
         self.groups[group] = current
 
-    def _event(self, state, item):
+    def active_since(self, group):
+        """First activation per notice id; cause changes keep the original time."""
+        with self.lock:
+            return {key: since for (name, key), since in self.since.items() if name == group}
+
+    def recently_resolved(self, group, now, *, hours=24, limit=5):
+        """Resolved notices of one group for display, newest first, without details."""
+        with self.lock:
+            result = []
+            for event in reversed(self.events):
+                at = instant(event.get('at'))
+                if (event.get('state') != 'resolved' or event.get('group') != group or at is None
+                        or not 0 <= (now - at).total_seconds() <= hours * 3600):
+                    continue
+                result.append({key: event[key] for key in ('id', 'code', 'scope', 'severity', 'at', 'since')
+                               if event.get(key) is not None})
+                if len(result) >= limit:
+                    break
+            return result
+
+    def _event(self, state, item, key=None, since=None, group=None):
         event = {'state': state, **item, 'at': datetime.now(timezone.utc).isoformat()}
+        if isinstance(group, str):
+            event['group'] = group
+        if isinstance(key, str) and re.fullmatch(r'[A-Za-z0-9_/]{1,80}', key):
+            event['id'] = key
+        if since is not None:
+            event['since'] = since
         self.events.append(event)
         level = logging.INFO if state == 'resolved' or item['severity'] == 'info' else logging.ERROR if item['severity'] == 'error' else logging.WARNING
         self.logger.log(level, 'EOS issue %s: %s', state, json.dumps(item, sort_keys=True))

@@ -154,8 +154,19 @@ def test_without_eos_ev_plan_pv_estimate_uses_current_soc_without_mutating_contr
     data['result']={}
     app.config.eos.solution.return_value=data
     app.tick(NOW,0)
+    # Without vehicle charging control nothing predicts how the charger behaves.
     vehicle=app.snapshot(NOW)['vehicles'][0]
+    assert vehicle['vehicle_forecast_source']=='constant'
+    assert all('car' not in row for row in vehicle['forecast'])
+    app.set_armed(True)
+    app.tick(NOW,0)
+    snapshot=app.snapshot(NOW)
+    vehicle=snapshot['vehicles'][0]
     assert vehicle['vehicle_forecast_source']=='pv_estimate'
+    # The estimated charging power is shown for the vehicle and in the fleet total.
+    power=[row['car'] for row in vehicle['forecast'] if 'car' in row]
+    assert power and max(power)>0 and min(power)>=0
+    assert any(row.get('car',0)>0 for row in snapshot['forecast'])
     values=[row['car_soc'] for row in vehicle['forecast'] if 'car_soc' in row]
     assert values[0]==40
     assert values[1]>40

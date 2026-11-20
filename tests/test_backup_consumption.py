@@ -73,7 +73,9 @@ def test_controller_subtracts_measured_ev_and_heat_from_island_ac_and_restores_n
         case.battery.read.return_value = replace(case.battery.read.return_value,
                                                 power_supply=PowerSupplyReading('grid', NOW))
         case.app.tick(NOW, 5)
-        assert case.app.snapshot(NOW)['live']['house_total'] == 4000
+        # Back on grid: the measured house sensor is the fallback/check, the AC balance the total.
+        live = case.app.snapshot(NOW)['live']
+        assert live['house_total_measured'] == 4000 and live['house_total'] == 7000
     finally:
         case.doCleanups()
 

@@ -6,7 +6,7 @@ const backend=require('./backend.cjs');
 function fixture(){
   const context=vm.createContext({Intl,Date,structuredClone,Number,window:{innerWidth:390},
     language:{locale:'de-DE'},snapshot:{zone:'Europe/Berlin'},
-    valid:Number.isFinite,decimal:(value)=>String(value),
+    valid:Number.isFinite,decimal:(value)=>String(value),percent:value=>Number.isFinite(value)?value+' %':'—',
     t:(key,values={})=>({'billing.average_unit_price':'Ø {price}','unit.price':'ct/kWh'}[key]??key)
       .replace(/\{(\w+)\}/g,(_match,name)=>values[name]??''),price:value=>value+' ct/kWh'});
   vm.runInContext(script,context);
@@ -28,8 +28,11 @@ function amount(kwh,cost,unknown=0){
 }
 function uiFixture(){
  const ctx=fixture(),elements={};
- ctx.byId=id=>elements[id]??(elements[id]={innerHTML:'',textContent:'',value:''});
- ctx.html=value=>String(value??'');ctx.th=ctx.t;ctx.percent=value=>value+' %';
+ const controls={};
+ ctx.byId=id=>elements[id]??(elements[id]={innerHTML:'',textContent:'',value:'',hidden:false,
+  querySelector:selector=>controls[selector]??(controls[selector]={hidden:false,disabled:false}),querySelectorAll:()=>[]});
+ ctx.html=value=>String(value??'');ctx.th=ctx.t;
+ ctx.localDay=()=> '2026-11-18';ctx.windowNow=()=>Date.parse('2026-11-18T12:00:00Z');ctx.time=value=>value;
  return {ctx,elements};
 }
 
@@ -118,8 +121,7 @@ test('overview, detail, source table and chart tooltip mark estimated unit price
  ctx.report={date:'2026-02-01',end:'2026-03-01',consumers:{house:entry}};
  ctx.cards=values=>{ctx.kpis=values;return '';};
  vm.runInContext("billing.data=report;billing.period='month';billing.date=report.date;usageDetail('house',false)",ctx);
- assert.match(ctx.kpis[1][2],/Ø ≈ 30 ct\/kWh/);
- assert.equal(ctx.kpis[3][1],'≈ 30 ct/kWh');
+ assert.match(ctx.kpis[2][2],/Ø ≈ 30 ct\/kWh/);
  assert.match(elements['usage-table'].innerHTML,/≈ 30 ct\/kWh/);
  assert.match(elements['usage-charts'].innerHTML,/<title>[^<]*Ø ≈ 30 ct\/kWh/);
  assert.match(elements['billing-quality'].textContent,/billing.estimated_average_note/);
@@ -157,9 +159,11 @@ test('every consumer and reporting period places the unit price directly under t
   ctx.period=period;ctx.key=key;
   ctx.cards=values=>{ctx.kpis=values;return '';};
   vm.runInContext("billing.data=report;billing.period=period;billing.date=report.date;usageDetail(key,false)",ctx);
-  assert.match(ctx.kpis[1][1],/1,00/);
-  assert.match(ctx.kpis[1][2],/Ø 25 ct\/kWh/);
+  assert.match(ctx.kpis[2][1],/1,00/);
+  assert.match(ctx.kpis[2][2],/Ø 25 ct\/kWh/);
   assert.match(elements['usage-table'].innerHTML,/25 ct\/kWh/);
+  assert.match(elements['usage-prices'].innerHTML,/usage.grid_import[\s\S]*25 ct\/kWh[\s\S]*1,00/);
+  assert.equal(elements['usage-back'].href,key.startsWith('car')?'#car':'#overview');
  }
 });
 
@@ -271,22 +275,80 @@ test('total consumption renders backend totals, costs and charts for every perio
  for(const period of ['day','month','year']){
   const {ctx,elements}=uiFixture();
   const stamp=period==='day'?'2026-02-01T00:00:00+00:00':period==='month'?'2026-02-01':'2026-02';
-  // Deliberately different raw consumers: the UI must render only backend totals.
-  ctx.report={date:'2026-02-01',end:'2026-03-01',hours:[stamp],
-   consumers:{house:{total:amount(999,999),bins:[]}},
-   total:{total:ctx.backendAmount(amount(4,1)),bins:[{time:stamp,...ctx.backendAmount(amount(4,1))}]}};
-  ctx.backendReport=value=>value;
+  // Storage and export rows are ledger entries, not consumers: they must not inflate the total.
+  ctx.report={period,date:'2026-02-01',end:'2026-03-01',hours:[stamp],consumers:{
+   house:{total:amount(4,1),bins:[{time:stamp,...amount(4,1)}]},
+   export:{total:amount(999,999),bins:[]},storage:{total:amount(999,999),bins:[]}}};
   ctx.cards=values=>{ctx.kpis=values;return '';};ctx.period=period;
   vm.runInContext("billing.data=report;billing.period=period;billing.date=report.date;usageDetail('total',false)",ctx);
-  assert.equal(elements['usage-title'].textContent,'billing.total_consumption · billing.title');
+  assert.equal(elements['usage-title'].textContent,'usage.total_title');
   assert.equal(elements['usage-back'].href,'#overview');
   assert.equal(ctx.kpis[0][1],'4 kWh');
-  assert.match(ctx.kpis[1][1],/1,00/);
-  assert.match(ctx.kpis[1][2],/Ø 25 ct\/kWh/);
+  assert.match(ctx.kpis[2][1],/1,00/);
   assert.match(elements['usage-charts'].innerHTML,/<title>[^<]*4 kWh[^<]*Ø 25 ct\/kWh/);
-  assert.match(elements['usage-table'].innerHTML,/25 ct\/kWh/);
-  assert.doesNotMatch(elements['usage-charts'].innerHTML,/999 kWh|999,00/);
+  assert.match(elements['usage-prices'].innerHTML,/usage.net/);
+  assert.match(elements['usage-facts'].innerHTML,/href="#usage\/house"/);
+  assert.doesNotMatch(elements['usage-charts'].innerHTML+elements['usage-table'].innerHTML,/999 kWh|999,00/);
  }
+});
+
+test('the grid report shows import above and feed-in below, prices and where the PV energy went',()=>{
+ const {ctx,elements}=uiFixture();
+ const stamp='2026-02-01';
+ const pv=(kwh,cost)=>{const value=amount(kwh,cost);value.sources.grid={kwh:0,cost_eur:0,cost_unknown_kwh:0};value.sources.pv={kwh,cost_eur:cost,cost_unknown_kwh:0};return value;};
+ ctx.report={period:'month',date:stamp,end:'2026-03-01',base_days:28,settings:{base_price_eur_month:10},consumers:{
+  house:{total:amount(4,1.2),bins:[{time:stamp,...amount(4,1.2)}]},
+  export:{total:pv(3,.24),bins:[{time:stamp,...pv(3,.24)}]},storage:{total:amount(1,.3),bins:[{time:stamp,...amount(1,.3)}]}}};
+ ctx.cards=values=>{ctx.kpis=values;return '';};
+ vm.runInContext("billing.data=report;billing.period='month';billing.date=report.date;usageDetail('grid',false)",ctx);
+ assert.equal(elements['usage-title'].textContent,'usage.grid_title');
+ assert.equal(ctx.kpis[0][1],'3 kWh');
+ assert.equal(ctx.kpis[1][1],'5 kWh');
+ assert.match(elements['usage-charts'].innerHTML,/usage.import 5 kWh \([^)]*1,50[^)]*\) · usage.feed_in 3 kWh \(\+[^)]*0,24[^)]*\)/);
+ assert.equal(elements['usage-unit'].textContent,'usage.unit_day');
+ // The euro chart draws import cost up and feed-in credit down; only the drawing changes.
+ vm.runInContext("selectBillingUnit('eur');usageDetail('grid',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.grid_cost_chart"/);
+ assert.equal(elements['usage-unit'].textContent,'usage.unit_eur_day');
+ vm.runInContext("usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.cost_chart"/);
+ assert.equal(vm.runInContext("selectBillingUnit('W')",ctx),false);
+ vm.runInContext("selectBillingUnit('kwh');usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
+ vm.runInContext("usageDetail('grid',false)",ctx);
+ assert.match(elements['usage-legend'].innerHTML,/↓ usage.feed_in/);
+ assert.match(elements['usage-prices'].innerHTML,/usage.grid_balance/);
+ assert.match(elements['usage-prices'].innerHTML,/−0,24/);
+ assert.equal(elements['usage-mix-title'].textContent,'usage.mix_pv_title');
+ assert.match(elements['usage-table'].innerHTML,/usage.pv_export[\s\S]*3 kWh · 100 %/);
+ assert.match(elements['usage-facts'].innerHTML,/usage.fact_max_export/);
+ assert.equal(elements['usage-device'].href,'#grid');
+ assert.equal(vm.runInContext("billingRoute('usage/grid')",ctx),true);
+});
+
+test('the today tiles add feed-in and the overall balance with links to their reports',()=>{
+ const {ctx,elements}=uiFixture();
+ ctx.consumerEnabled=()=>false;
+ const pv=amount(2,.16);pv.sources.grid={kwh:0,cost_eur:0,cost_unknown_kwh:0};pv.sources.pv={kwh:2,cost_eur:.16,cost_unknown_kwh:0};
+ ctx.snapshot.accounting={date:'2026-02-01',consumers:{house:{total:amount(4,1)},export:{total:pv}}};
+ vm.runInContext('dayBalance()',ctx);
+ const html=elements['day-balance'].innerHTML;
+ assert.match(html,/class="balance-card feed" href="#usage\/grid"><span>usage.feed_in<\/span><strong>2 kWh<\/strong><span>\+0,16/);
+ assert.match(html,/href="#usage\/total"[\s\S]*usage.net_short/);
+ assert.match(html,/usage.feed_short/);
+});
+
+test('report facts from the backend are worded without browser-side selection',()=>{
+ const {ctx}=uiFixture();
+ const rows=vm.runInContext(`[
+  factText({id:'best',time:'2026-02-03',unit:'day',percent:80}),
+  factText({id:'charge_days',count:2,days:3}),
+  factText({id:'savings',eur:-.5,self_price_ct:40,grid_price_ct:30}),
+  factText({id:'no_exchange'})]`,ctx);
+ assert.equal(rows[0][0],'usage.fact_best_day');assert.equal(rows[0][2],'80 %');
+ assert.equal(rows[1][2],'usage.days');
+ assert.equal(rows[2][0],'usage.fact_extra_cost');assert.match(rows[2][2],/^-0,50/);
+ assert.deepEqual([...rows[3]],['usage.fact_no_exchange','usage.fact_no_exchange_text','—']);
 });
 
 test('total consumption is labelled in German and English',()=>{
@@ -296,4 +358,132 @@ test('total consumption is labelled in German and English',()=>{
   ctx.t=key=>messages[key];
   assert.equal(vm.runInContext("billingName('total')",ctx),label);
  }
+});
+
+test('own power is split by origin so grid-charged storage is not listed as own power',()=>{
+ const {ctx}=uiFixture();
+ const part=(kwh,cost,price)=>({kwh,cost_eur:cost,price_ct:price});
+ ctx.view={grid_kwh:1,grid_price_ct:30,grid_cost_eur:.3,self_kwh:4,self_price_ct:10,self_cost_eur:.4,cost_available:true,cost_eur:.7,
+  self_origin:{pv_direct:part(2,.2,10),battery_pv:part(1,.11,11),battery_grid:part(1,.33,33),battery_unknown:part(0,0,null)}};
+ const result=vm.runInContext("priceRows('house',view,null)",ctx);
+ assert.match(result,/usage.self_pv_direct[\s\S]*usage.self_battery_pv[\s\S]*usage.self_battery_grid/);
+ assert.match(result,/33 ct\/kWh/);
+ assert.doesNotMatch(result,/usage.self_battery_unknown|usage.self_power/);
+ ctx.view.self_origin.battery_unknown=part(.5,.15,30);
+ assert.match(vm.runInContext("priceRows('house',view,null)",ctx),/usage.self_battery_unknown/);
+ // Cached reports without the split keep the combined row.
+ delete ctx.view.self_origin;
+ assert.match(vm.runInContext("priceRows('house',view,null)",ctx),/usage.self_power/);
+});
+
+test('the day view draws stacked areas over time; hours without data split them',()=>{
+ const ctx=fixture();
+ const row=(time,pv,grid)=>({time,sources:{pv:{kwh:pv},battery:{kwh:0},grid:{kwh:grid}}});
+ const slots=['h0','h1','h2','h3'].map(key=>({key}));
+ const markup=ctx.stackedAreas(slots,[row('h0',1,2),row('h1',3,1),row('h3',2,0)],
+  [{color:'P',value:item=>item.sources.pv.kwh},{color:'B',value:item=>item.sources.battery.kwh},{color:'G',value:item=>item.sources.grid.kwh}],
+  index=>index*10,value=>100-value*10);
+ const polygons=[...markup.matchAll(/<polygon class="area" points="([^"]+)" style="fill:(\w)"\/>/g)].map(match=>[match[2],match[1]]);
+ // PV: two segments around the missing hour; grid stacks on PV; an all-zero layer is not drawn.
+ assert.deepEqual(polygons.map(([color])=>color),['P','P','G']);
+ assert.equal(polygons[0][1],'0.0,90.0 10.0,70.0 10.0,100.0 0.0,100.0');
+ assert.equal(polygons[1][1],'26.5,80.0 33.5,80.0 33.5,100.0 26.5,100.0');
+ assert.equal(polygons[2][1],'0.0,70.0 10.0,60.0 10.0,70.0 0.0,90.0');
+});
+
+test('the day view draws the power profile in kW; costs and older days stay hourly',()=>{
+ const {ctx,elements}=uiFixture();
+ const hours=['2026-11-18T08:00:00+00:00','2026-11-18T09:00:00+00:00'];
+ const point=(time,pv,grid)=>({time,house:{pv,battery:0,grid,unknown:0},total:{pv,battery:0,grid,unknown:0},grid:{import:grid,export:0}});
+ ctx.report={period:'day',date:'2026-11-18',end:'2026-11-19',hours,base_days:1,settings:{},
+  consumers:{house:{total:amount(2,.6),bins:hours.map(time=>({time,...amount(1,.3)}))}},
+  power_profile:{step_s:120,gap_s:600,points:[point('2026-11-18T08:00:00+00:00',1500,500),point('2026-11-18T08:02:00+00:00',1200,800),point('2026-11-18T09:30:00+00:00',0,2000)]}};
+ ctx.cards=()=>'';
+ vm.runInContext("billing.data=report;billing.period='day';billing.date=report.date;selectBillingUnit('kw');usageDetail('house',false)",ctx);
+ const chart=elements['usage-charts'].innerHTML;
+ assert.match(chart,/aria-label="usage.power_chart"/);
+ assert.equal(elements['usage-unit'].textContent,'usage.unit_power');
+ // PV and grid as areas; the gap after 08:02 splits them (no PV at 09:30); hours stay tappable with their energy.
+ assert.equal((chart.match(/<polygon class="area"/g)??[]).length,3);
+ assert.equal((chart.match(/data-billing-bin=/g)??[]).length,2);
+ assert.match(chart,/data-billing-bin="2026-11-18" aria-label="[^"]*1 kWh/);
+ assert.doesNotMatch(chart,/<title>/);
+ // The pointer readout names the time, the total and each non-zero source.
+ const readout=vm.runInContext("powerReadout(report.power_profile.points[0],'house')",ctx);
+ assert.equal(readout.lines.length,2);
+ assert.match(readout.title,/2 kW$/);assert.deepEqual(JSON.parse(JSON.stringify(readout.lines.map(([label,value])=>[label,value]))),[['billing.pv','1.5 kW'],['billing.grid','0.5 kW']]);
+ const gridReadout=vm.runInContext("powerReadout(report.power_profile.points[2],'grid')",ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(gridReadout.lines.map(([label,value])=>[label,value]))),[['usage.import','2 kW'],['usage.feed_in','0 kW']]);
+ vm.runInContext("usageDetail('grid',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.grid_power_chart"/);
+ vm.runInContext("selectBillingUnit('eur');usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.cost_chart"/);
+ // Costs stay bars on the day view as well.
+ assert.doesNotMatch(elements['usage-charts'].innerHTML,/class="area"/);
+ assert.match(elements['usage-charts'].innerHTML,/<rect x="[^"]+" y="[^"]+" width="[^"]+" height="[^"]+" fill="#5794f2"\/>/);
+ assert.doesNotMatch(elements['usage-bin'].textContent,/usage.profile_hourly/);
+ // kWh is the hourly bar chart with the details of a tapped hour.
+ vm.runInContext("selectBillingUnit('kwh');usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
+ assert.match(elements['usage-charts'].innerHTML,/<title>[^<]*1 kWh/);
+ assert.doesNotMatch(elements['usage-charts'].innerHTML,/class="area"/);
+ assert.doesNotMatch(elements['usage-bin'].textContent,/usage.profile_hourly/);
+ // A day beyond the local history has no profile: kW falls back to the hourly bars with a note.
+ vm.runInContext("selectBillingUnit('kw');billing.data={...report,power_profile:{points:[]}};usageDetail('house',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="billing.energy_chart"/);
+ assert.match(elements['usage-bin'].textContent,/usage.profile_hourly/);
+ // Month and year have no kW view; a kept kW choice shows kWh there.
+ vm.runInContext("billing.period='month';billing.data={period:'month',date:'2026-11-01',end:'2026-12-01',base_days:30,settings:{},consumers:{}};usageDetail('house',false)",ctx);
+ assert.match(elements['usage-unit'].textContent,/usage.unit_day/);
+});
+
+test('the PV report shows production by use, the forecast ahead and its power curve',()=>{
+ const {ctx,elements}=uiFixture();
+ const hours=['2026-11-18T10:00:00+00:00','2026-11-18T11:00:00+00:00','2026-11-18T12:00:00+00:00'];
+ const pvAmount=kwh=>{const value=amount(kwh,0);value.sources.grid={kwh:0,cost_eur:0,cost_unknown_kwh:0};value.sources.pv={kwh,cost_eur:0,cost_unknown_kwh:0};return value;};
+ ctx.report={period:'day',date:'2026-11-18',end:'2026-11-19',hours,base_days:1,settings:{},
+  consumers:{house:{total:pvAmount(3),bins:hours.slice(0,2).map(time=>({time,...pvAmount(1.5)}))},
+   export:{total:pvAmount(1),bins:[{time:hours[1],...pvAmount(1)}]}},
+  power_profile:{step_s:120,gap_s:600,points:[{time:hours[0],solar:2500,pv_flow:{house:2500,car:0,heat:0,storage:0,export:0},pv_gap:{battery_pv:0,battery_grid:0,battery_unknown:0,grid:0,unknown:0},house:{pv:2500,battery:0,grid:0,unknown:0},total:{pv:2500,battery:0,grid:0,unknown:0},grid:{import:0,export:0}}]},
+  pv_forecast:{bins:[{time:hours[2],kwh:2.2}],points:[{time:hours[2],end:'2026-11-18T13:00:00+00:00',w:2200}],kwh:2.2,complete:true}};
+ ctx.cards=values=>{ctx.kpis=values;return '';};
+ assert.equal(vm.runInContext("billingRoute('usage/pv')",ctx),true);
+ vm.runInContext("billing.data=report;billing.period='day';billing.date=report.date;selectBillingUnit('kwh');usageDetail('pv',false)",ctx);
+ assert.equal(elements['usage-title'].textContent,'usage.pv_title');
+ const chart=elements['usage-charts'].innerHTML;
+ assert.match(chart,/aria-label="usage.pv_chart"/);
+ // Measured hours stack direct use and feed-in; the hour ahead shows the outlined forecast.
+ assert.equal((chart.match(/class="forecast-bar"/g)??[]).length,1);
+ assert.match(chart,/usage.pv_produced 2\.5 kWh: usage.pv_to_house 1\.5 kWh · usage.pv_to_export 1 kWh/);
+ assert.match(chart,/usage.pv_forecast 2\.2 kWh/);
+ assert.equal(ctx.kpis[0][1],'4 kWh');assert.equal(ctx.kpis[3][1],'2.2 kWh');
+ vm.runInContext("selectBillingUnit('kw');usageDetail('pv',false)",ctx);
+ const power=elements['usage-charts'].innerHTML;
+ assert.match(power,/aria-label="usage.pv_power_chart"/);
+ assert.match(power,/class="forecast-line"/);assert.match(power,/<polygon class="area"/);
+ const readout=vm.runInContext("powerHover.points.map(item=>powerReadout(item.row,'pv').lines.map(line=>line[0]).join('+'))",ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(readout)).slice(0,2),['usage.pv_to_house','usage.pv_forecast']);
+ // There is no euro view of the production; a kept € choice shows kWh here.
+ vm.runInContext("selectBillingUnit('eur');usageDetail('pv',false)",ctx);
+ assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.pv_chart"/);
+});
+test('the PV node opens the PV report; the weather symbol stays with PV and weather',()=>{
+ const markup=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/index.html'),'utf8');
+ assert.match(markup,/class="node solar l"[^>]*href="#usage\/pv"/);
+ const app=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/app.js'),'utf8');
+ assert.match(app,/byId\('flow-weather'\)\.addEventListener\('click',\(\)=>\{location\.hash='#pv';\}\)/);
+});
+
+test('the PV chart shows where PV went above zero and what it did not cover below, battery by origin',()=>{
+ const {ctx,elements}=uiFixture();
+ const hours=['2026-11-18T10:00:00+00:00'];
+ const flow={house:1,car:2,heat:0,storage:.5,export:0},gap={battery_pv:.6,battery_grid:.2,battery_unknown:0,grid:.4,unknown:0};
+ vm.runInContext(`billing.period='day';billing.data={period:'day',date:'2026-11-18',end:'2026-11-19',hours:['${hours[0]}'],consumers:{}}`,ctx);
+ const markup=vm.runInContext(`pvChart({bins:[{time:'${hours[0]}',pv_kwh:3.5,pv_flow:${JSON.stringify(flow)},pv_gap:${JSON.stringify(gap)}}]},null)`,ctx);
+ const fills=[...markup.matchAll(/style="fill:([^"]+)"/g)].map(match=>match[1]);
+ // Above: house, car and battery charging; below: PV-charged battery, grid-charged battery, grid.
+ assert.equal(fills.length,6);assert.deepEqual(fills.slice(0,3),['var(--house)','var(--car)','var(--battery)']);
+ assert.match(markup,/usage.pv_uncovered: usage.pv_gap_battery_pv 0.6 kWh · usage.pv_gap_battery_grid 0.2 kWh · usage.pv_gap_grid 0.4 kWh/);
+ const readout=vm.runInContext(`powerReadout({time:'${hours[0]}',solar:3500,pv_flow:{house:1000,car:2000,heat:0,storage:500,export:0},pv_gap:{battery_pv:600,battery_grid:0,battery_unknown:0,grid:400,unknown:0}},'pv')`,ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(readout.lines.map(line=>line[0]))),['usage.pv_to_house','usage.pv_to_car','usage.pv_to_storage','usage.pv_gap_battery_pv','usage.pv_gap_grid']);
 });

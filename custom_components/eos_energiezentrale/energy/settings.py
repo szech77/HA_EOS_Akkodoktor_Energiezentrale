@@ -23,6 +23,26 @@ DAILY = {"schedule": "off", "departure": "", "departure_time": "07:30",
          "holiday_state": "", "holiday_locality": "", "holiday_catholic": False}
 
 
+CONTROL_AREAS = ("battery", "vehicle")
+
+
+def checked_control_scope(scope):
+    if (not isinstance(scope, dict) or scope.keys() != set(CONTROL_AREAS)
+            or any(type(value) is not bool for value in scope.values())):
+        raise ValueError("Invalid persisted control setting")
+    return dict(scope)
+
+
+def load_control_scope(scope_file, control_file, enabled):
+    """Areas enabled for control. ``control.json`` keeps the format of older
+    versions (all controllable areas on/off); it is written first, so a newer
+    ``control.json`` was changed by another version and wins."""
+    if scope_file.exists() and (not control_file.exists()
+                                or scope_file.stat().st_mtime_ns >= control_file.stat().st_mtime_ns):
+        return checked_control_scope(json.loads(scope_file.read_text(encoding="utf-8")))
+    return {area: enabled for area in CONTROL_AREAS}
+
+
 def settings_payload(raw, zone):
     """Interpret form input in the installation zone; retain the native ISO API."""
     if isinstance(raw.get('charge_plans'), list):
@@ -120,7 +140,7 @@ class Configuration:
         options={**options,'vehicle_resource':options.get('vehicle_resource','')}
         self.options = options
         self.zone = ZoneInfo(options["timezone"])
-        for key in ("pv_entity", "house_entity", "grid_entity", "heat_entity", "price_entity", "car_soc_entity", "heat_load_entity"):
+        for key in ("pv_entity", "house_entity", "grid_entity", "heat_entity", "price_entity", "car_soc_entity", "car_range_entity", "heat_load_entity"):
             if options.get(key, "") == "":
                 continue
             if not ENTITY.fullmatch(options[key]) or not options[key].startswith("sensor."):
@@ -149,6 +169,8 @@ class Configuration:
                 or type(control["enabled"]) is not bool):
             raise ValueError("Invalid persisted control setting")
         self.control_enabled = control["enabled"]
+        self.control_scope_file = self.directory / "control_scope.json"
+        self.control_scope = load_control_scope(self.control_scope_file, self.control_file, self.control_enabled)
         self.file = self.directory / "daily.json"
         raw = json.loads(self.file.read_text(encoding="utf-8")) if self.file.exists() else {}
         self.battery_limits_managed = raw.pop("_battery_limits_managed", False)
@@ -174,6 +196,17 @@ class Configuration:
     def set_control_enabled(self, enabled):
         if type(enabled) is not bool:
             raise ValueError("Explicit boolean required for control setting")
-        if enabled != self.control_enabled:
+        self.set_control_scope({area: enabled for area in CONTROL_AREAS}, enabled)
+
+    def set_control_scope(self, scope, enabled):
+        """Persist the enabled areas. ``enabled`` is the legacy flag: true only
+        when every controllable area is enabled, so an older version never
+        takes over more devices than chosen here."""
+        scope = checked_control_scope(scope)
+        if type(enabled) is not bool:
+            raise ValueError("Explicit boolean required for control setting")
+        if enabled != self.control_enabled or not self.control_file.exists():
             save(self.control_file, {"enabled": enabled})
             self.control_enabled = enabled
+        save(self.control_scope_file, scope)
+        self.control_scope = scope

@@ -26,6 +26,12 @@ class ForecastNormalizationTests(unittest.TestCase):
         self.assertEqual(result[0]['end'],(NOW+timedelta(hours=1)).isoformat())
         self.assertEqual(result[1]['time'],(NOW+timedelta(hours=2)).isoformat())
 
+    def test_pv_view_window_reaches_72_hours_and_keeps_bounded_cloud_coverage(self):
+        raw=[row(30,cloud_coverage=40),row(71,cloud_coverage=101),row(73)]
+        self.assertEqual(hourly_rows(raw,'°C','mm',NOW),[])
+        result=hourly_rows(raw,'°C','mm',NOW,hours=72)
+        self.assertEqual([item['cloud_coverage'] for item in result],[40,None])
+
     def test_units_zero_and_missing_fields_remain_distinct(self):
         result=hourly_rows([row(temperature=32,precipitation=1)],'°F','in',NOW)[0]
         self.assertEqual(result['temperature'],32)

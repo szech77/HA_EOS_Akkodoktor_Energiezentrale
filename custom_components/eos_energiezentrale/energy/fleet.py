@@ -6,14 +6,16 @@ import re
 
 from .clients import reading
 from .controller import Controller
+from .consumption import ConsumptionBalance, apply_balance, split_vehicles
 from .domain import BatteryCommand, battery_command, house_only, instant
 from .drivers import WALLBOX_DRIVERS
 from .settings import Configuration, changed_settings, daily_settings, save
 from .history import History
+from .vehicle_projection import average_power
 from .display import DisplayValues
 from .alignment import ChargeTransitionDisplay, report_times
 from .vehicle_limits import optional_charger
-from .power_supply import configured_supply, requires_pause
+from .power_supply import configured_supply, requires_pause, supply_view
 
 SHARED_BATTERY_SETTINGS = {'battery_min_soc','battery_max_soc','battery_pv_support',
                            'battery_pv_start','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w',
@@ -30,7 +32,7 @@ def vehicle_options(options):
     identities=set()
     controls=set()
     devices=set()
-    allowed={"id","name","resource","soc_entity","soc_scale","capacity_wh",
+    allowed={"id","name","resource","soc_entity","soc_scale","range_entity","capacity_wh",
              "charging_efficiency","max_current_a","wallbox_type","wallbox_parameters"}
     for row in rows:
         if not isinstance(row,dict) or row.keys()-allowed:
@@ -41,7 +43,10 @@ def vehicle_options(options):
         identities.add(identity)
         values={**options,"vehicles":"[]","vehicle_name":row.get("name","E-Auto"),
                 "vehicle_resource":row.get("resource",identity),"car_soc_entity":row.get("soc_entity",""),
-                "car_soc_scale":row.get("soc_scale","factor"),"wallbox_type":row.get("wallbox_type","nrgkick"),
+                "car_soc_scale":row.get("soc_scale","factor"),
+                # A single listed vehicle may use the range sensor from the source sensors.
+                "car_range_entity":row.get("range_entity") or (options.get("car_range_entity","") if len(rows)==1 else ""),
+                "wallbox_type":row.get("wallbox_type","nrgkick"),
                 "wallbox_parameters":json.dumps(row.get("wallbox_parameters",{}))}
         for key in ("capacity_wh","charging_efficiency","max_current_a"):
             if key in row:
@@ -129,6 +134,7 @@ class FleetController(Controller):
         self.global_options=options
         self.primary_history=None
         self.fleet_display_values=DisplayValues(options.get("display_hold_s",900))
+        self.fleet_consumption=ConsumptionBalance()
         self.fleet_alignment=ChargeTransitionDisplay(options.get("display_hold_s",900),options.get("display_transition_s",30))
         for index,(identity,values) in enumerate(vehicles):
             child_dir=directory if index==0 else directory/"vehicles"/identity
@@ -156,6 +162,7 @@ class FleetController(Controller):
             controller.support_driver = self.battery_driver
             # Children follow the fleet's remembered intent, including the
             # assumption that devices may still hold commands after a crash.
+            controller.scope = dict(self.scope)
             controller.owned = self.armed
             self.controllers.append((identity,controller,proxy))
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
@@ -240,7 +247,7 @@ class FleetController(Controller):
                 # plugin row would let source resolution reinsert raw headroom.
                 proxy.rows[opts["grid_entity"]]={"state":None,"attributes":{"unit_of_measurement":"W"}}
             if app is not self:
-                app.armed=self.armed
+                app.scope=dict(self.scope)
                 if self.restore_pending:
                     app.restore_pending=True
             try:
@@ -267,8 +274,16 @@ class FleetController(Controller):
         self.live["grid"]=grid
         self.live["car"]=sum(actual.values()) if complete else None
         self.live["car_soc"]=None
-        self.live["house"]=house_only(self.live.get("house_total"),self.live["car"],
-            self.live.get("heat") if opts["heat_entity"] else 0)
+        self.live.update(car_range=None,car_range_source=None,car_range_per_soc=None)
+        # The primary tick saw a reserved grid value; balance the fleet on the real meter.
+        self.live["house_total"]=self.live.get("house_total_measured")
+        commanded=[app.commanded_car_w for _,app,_ in self.controllers]
+        balance=self.fleet_consumption.update(self.live,now,car_enabled=True,heat_enabled=bool(opts["heat_entity"]),
+            commanded_car_w=sum(commanded) if self.armed and all(value is not None for value in commanded) else None,
+            island=supply_view(self.power_supply,now)['state']=='backup')
+        balance["consumers"].update({"car/"+identity:value for identity,value in
+            split_vehicles(balance["consumers"]["car"],actual,self.targets).items()})
+        apply_balance(self.live,balance,True,bool(opts["heat_entity"]))
         self.display.pop("car",None)
         self.display.pop("house",None)
         if complete:
@@ -302,11 +317,12 @@ class FleetController(Controller):
         car_times=[instant(rows.get(proxy.ids["power"],{}).get("last_reported") or rows.get(proxy.ids["power"],{}).get("last_updated")) for _,_,proxy in self.controllers]
         times["car"]=min(car_times) if all(car_times) else None
         commands=[app.last_write for _,app,_ in self.controllers if app.last_write is not None]
-        expected=sum(max(self.targets.get(identity,0),actual[identity] or 0) for identity,_,_ in self.controllers) if self.armed else None
+        expected=sum(max(self.targets.get(identity,0),actual[identity] or 0) for identity,_,_ in self.controllers) if 'vehicle' in self.control_domains() else None
         self.flow_display=self.fleet_alignment.update(self.live,times,now,True,bool(opts["heat_entity"]),self.display,
             expected_car_w=expected,command_at=max(commands) if commands else None)
         for payload in snapshots:
-            payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"]}
+            payload["live"]={**payload["live"],"grid":grid,"house":self.live["house"],"house_total":self.live["house_total"],
+                             "house_total_measured":self.live["house_total_measured"],"balance":self.live["balance"]}
         # Diagnostics describe the actual shared meter, rather than temporary
         # headroom suppression when a charger measurement is missing.
         for report in [self.source_configuration]+[payload['source_configuration'] for payload in snapshots]:
@@ -314,7 +330,7 @@ class FleetController(Controller):
             for status in ('missing','unavailable'):
                 report[status]=sorted((set(report[status])-set(shared_keys))|set(shared_sources[status]))
         self.history.write(now,self.live)
-        if (not self.armed or any(app.backup_paused for _,app,_ in self.controllers)
+        if ('battery' not in self.control_domains() or any(app.backup_paused for _,app,_ in self.controllers)
                 or not any(app.owned for _,app,_ in self.controllers)):
             return
         self.control_step="battery_control"
@@ -340,17 +356,39 @@ class FleetController(Controller):
     def release_battery(self,states):
         self.battery_driver.release(states)
 
+    def pause_vehicles(self,states,now):
+        errors=[]
+        for key,app,_ in self.controllers:
+            app.pv_support.reset()
+            try:
+                app.config.wallbox.pause(app.config.wallbox.read(states,now))
+            except Exception as error:
+                errors.append(error)
+            else:
+                app.holding.discard('vehicle')
+            app.pv_session=False
+            app.commanded_car_w=None
+            app.phase_target=app.candidate=None
+            self.targets[key]=0
+        if errors:
+            raise errors[0]
+
     def release_until_ready(self,states,now,*,pause_wallbox=True):
         """While another vehicle already regulates its wallbox and the shared
         battery, a waiting primary vehicle releases only its own wallbox."""
         if not any(app.owned for _,app,_ in self.controllers if app is not self):
             return Controller.release_until_ready(self,states,now,pause_wallbox=pause_wallbox)
-        if not pause_wallbox:
+        if not pause_wallbox or 'vehicle' not in self.holding|self.control_domains():
             return
         self.control_step='restore_release'
         self.targets[self.controllers[0][0]]=0
         try:
-            Controller.release(self,states,now)  # MeterOnlyBattery: no battery command.
+            # Only the primary wallbox; MeterOnlyBattery: no battery command.
+            self.pv_support.reset()
+            self.config.wallbox.pause(self.config.wallbox.read(states,now))
+            self.owned=False
+            self.pv_session=False
+            self.phase_target=self.candidate=None
         except (OSError,ValueError) as error:
             self.record_failure('release',error)
         else:
@@ -358,10 +396,11 @@ class FleetController(Controller):
 
     def release(self,states,now,*,pause_wallbox=True):
         errors=[]
+        held=set().union(*(app.holding for _,app,_ in self.controllers))|self.control_domains()
         for key,app,_ in self.controllers:
             app.pv_support.reset()
             try:
-                if pause_wallbox:
+                if pause_wallbox and 'vehicle' in held:
                     app.config.wallbox.pause(app.config.wallbox.read(states,now))
             except Exception as error:
                 errors.append(error)
@@ -369,7 +408,8 @@ class FleetController(Controller):
             app.phase_target=app.candidate=None
             self.targets[key]=0
         try:
-            self.battery_driver.release(states)
+            if 'battery' in held:
+                self.battery_driver.release(states)
         except Exception as error:
             errors.append(error)
         if errors:
@@ -402,5 +442,16 @@ class FleetController(Controller):
         references=[vehicle.get("power_reference",{}).get("car") for vehicle in self.vehicle_snapshots]
         result["power_reference"]["car"]=sum(references) if references and all(value is not None for value in references) else None
         result["vehicle_name"]="E-Autos"
-        result["forecast"]=[{k:v for k,v in row.items() if k not in {"car","car_soc"}} for row in result["forecast"]]
+        # Total charging power: the sum of every vehicle's forecast, only where all of them are known.
+        vehicle_rows=[payload.get("forecast") or [] for payload in self.vehicle_snapshots]
+        def total(row):
+            start,end=instant(row.get("time")),instant(row.get("end"))
+            if start is None or end is None or end<=now or not vehicle_rows:
+                return None
+            values=[average_power(rows,max(start,now),end) for rows in vehicle_rows]
+            return sum(values) if all(value is not None for value in values) else None
+        # Rows that only carried the primary vehicle's local estimate are dropped.
+        rows=[{k:v for k,v in row.items() if k not in {"car","car_soc"}} for row in result["forecast"]]
+        result["forecast"]=[{**row,**({"car":power} if (power:=total(row)) is not None else {})}
+                            for row in rows if set(row)-{"time","end"}]
         return result

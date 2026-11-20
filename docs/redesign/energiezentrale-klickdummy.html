@@ -1,0 +1,1292 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Energiezentrale Klick-Dummy</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: app shell — status band (control state + one primary action) above tabbed views; bottom tab bar on phones. */
+:root {
+  --bg:#eef2f6; --surface:#ffffff; --surface2:#f4f7fb; --ink:#162231; --dim:#4f6075; --edge:#d4dee9; --accent:#185da4; --on-accent:#ffffff;
+  --solar:#956400; --grid:#52677e; --battery:#277448; --house:#216da7; --car:#7252aa; --heat:#a54723;
+  --ok:#277448; --ok-bg:#e3f3e9; --warn:#8a5a00; --warn-bg:#fff3d6; --crit:#b42318; --crit-bg:#fde8e6; --info:#185da4; --info-bg:#e4effb;
+  --ring-track:#d4dee9;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --radius:12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#10151d; --surface:#181f2a; --surface2:#202938; --ink:#eef4fc; --dim:#a7b6ca; --edge:#303c50; --accent:#8ec5ff; --on-accent:#0b1420;
+  --solar:#ffcb62; --grid:#9bacc3; --battery:#75dba0; --house:#7bc9fc; --car:#c6a7ff; --heat:#ffac83;
+  --ok:#75dba0; --ok-bg:#16302a; --warn:#ffd27a; --warn-bg:#33290f; --crit:#ff8a80; --crit-bg:#3a1a1a; --info:#8ec5ff; --info-bg:#172a40;
+  --ring-track:#303c50; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --bg:#10151d; --surface:#181f2a; --surface2:#202938; --ink:#eef4fc; --dim:#a7b6ca; --edge:#303c50; --accent:#8ec5ff; --on-accent:#0b1420;
+  --solar:#ffcb62; --grid:#9bacc3; --battery:#75dba0; --house:#7bc9fc; --car:#c6a7ff; --heat:#ffac83;
+  --ok:#75dba0; --ok-bg:#16302a; --warn:#ffd27a; --warn-bg:#33290f; --crit:#ff8a80; --crit-bg:#3a1a1a; --info:#8ec5ff; --info-bg:#172a40;
+  --ring-track:#303c50; color-scheme:dark; }
+
+* { box-sizing:border-box; }
+body { background:var(--bg); color:var(--ink); font:15px/1.45 var(--font); margin:0; }
+.shell { max-width:1080px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:0 96px; }
+h1,h2,h3,p { margin:0; }
+h1 { font-size:clamp(24px,4vw,32px); line-height:1.15; letter-spacing:-.03em; text-wrap:balance; }
+h2 { font-size:17px; text-wrap:balance; }
+h3 { font-size:15px; }
+small, .dim { color:var(--dim); font-size:12.5px; }
+strong, .num { font-variant-numeric:tabular-nums; }
+button, select, input { font:inherit; color:inherit; }
+button { cursor:pointer; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+a { color:var(--accent); }
+
+/* Demo bar — not part of the proposed UI */
+.demo { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:8px 0; border-bottom:1px dashed var(--edge); font-size:12.5px; color:var(--dim); }
+.demo b { color:var(--ink); font-weight:600; }
+.demo .chips { display:flex; flex-wrap:wrap; gap:6px; }
+.demo button { border:1px solid var(--edge); background:var(--surface); border-radius:99px; padding:4px 10px; font-size:12.5px; min-height:32px; }
+.demo button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+
+/* Header + navigation */
+header.top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 0 10px; flex-wrap:wrap; }
+.brand { display:flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none; }
+.brand svg { width:34px; height:34px; color:var(--accent); }
+.brand b { font-size:19px; letter-spacing:.03em; display:block; line-height:1.1; }
+.brand span { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
+nav.tabs { display:flex; gap:4px; background:var(--surface); border:1px solid var(--edge); border-radius:10px; padding:4px; }
+nav.tabs a { display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:7px; color:var(--dim); text-decoration:none; min-height:40px; font-weight:550; }
+nav.tabs a[aria-current="page"] { background:var(--surface2); color:var(--ink); }
+nav.tabs svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.badge { min-width:18px; height:18px; padding:0 5px; border-radius:99px; font-size:11px; font-weight:700; display:inline-grid; place-items:center; background:var(--crit); color:var(--surface); }
+.badge.warn { background:var(--warn); }
+.badge.info { background:var(--info); }
+
+/* Status band: the single place for control state and its action */
+.status { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center; background:var(--surface); border:1px solid var(--edge); border-left:5px solid var(--state); border-radius:var(--radius); padding:14px 16px; }
+.status .dot { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; background:var(--state-bg); color:var(--state); }
+.status .dot svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.status h2 { font-size:16px; }
+.status p { color:var(--dim); font-size:13px; margin-top:2px; }
+.status .actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.btn { border:1px solid var(--edge); background:var(--surface2); border-radius:8px; padding:8px 14px; min-height:42px; font-weight:600; }
+.btn.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.btn.danger { background:transparent; border-color:var(--crit); color:var(--crit); }
+.btn.ghost { background:transparent; }
+.confirm { grid-column:1/-1; display:grid; gap:10px; border-top:1px solid var(--edge); padding-top:12px; }
+.confirm ul { margin:0; padding-left:18px; color:var(--dim); font-size:13px; }
+.confirm .actions { justify-content:flex-start; }
+.state-ok { --state:var(--ok); --state-bg:var(--ok-bg); }
+.state-warn { --state:var(--warn); --state-bg:var(--warn-bg); }
+.state-crit { --state:var(--crit); --state-bg:var(--crit-bg); }
+.state-info { --state:var(--info); --state-bg:var(--info-bg); }
+.state-off { --state:var(--dim); --state-bg:var(--surface2); }
+@media (max-width:640px) { .status { grid-template-columns:auto minmax(0,1fr); } .status .actions { grid-column:1/-1; justify-content:stretch; } .status .actions .btn { flex:1; } }
+
+/* Notices: grouped by severity, each with effect + next step */
+.notices { display:grid; gap:8px; margin-top:10px; }
+.notice { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px 12px; align-items:start; background:var(--n-bg); border:1px solid color-mix(in srgb,var(--n) 35%,transparent); border-radius:10px; padding:10px 12px; }
+.notice .sev { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--n); padding-top:2px; white-space:nowrap; }
+.notice b { display:block; }
+.notice p { font-size:13px; color:var(--ink); opacity:.85; }
+.notice .meta { font-size:12px; color:var(--dim); margin-top:3px; }
+.notice a { white-space:nowrap; font-size:13px; font-weight:600; }
+.n-crit { --n:var(--crit); --n-bg:var(--crit-bg); }
+.n-warn { --n:var(--warn); --n-bg:var(--warn-bg); }
+.n-info { --n:var(--info); --n-bg:var(--info-bg); }
+@media (max-width:520px) { .notice { grid-template-columns:minmax(0,1fr); } }
+
+/* Cards and grids */
+.view { display:grid; gap:14px; margin-top:16px; }
+.page-head { display:flex; justify-content:space-between; align-items:end; gap:10px; flex-wrap:wrap; }
+.eyebrow { color:var(--accent); font-size:11px; font-weight:650; letter-spacing:.13em; text-transform:uppercase; margin-bottom:4px; }
+.panel { background:var(--surface); border:1px solid var(--edge); border-radius:var(--radius); padding:16px; min-width:0; }
+.panel-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.kpi { background:var(--surface); border:1px solid var(--edge); border-radius:var(--radius); padding:12px 14px; display:grid; gap:2px; min-width:0; }
+.kpi strong { font-size:clamp(18px,2.6vw,24px); line-height:1.2; }
+.kpi small { overflow-wrap:anywhere; }
+@media (max-width:760px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.two { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:14px; }
+@media (max-width:860px) { .two { grid-template-columns:minmax(0,1fr); } }
+.tag { display:inline-flex; align-items:center; gap:5px; background:var(--surface2); border-radius:99px; padding:3px 9px; color:var(--dim); font-size:12px; }
+.tag.est { border:1px dashed var(--edge); }
+
+/* Energy flow */
+.flow { position:relative; width:100%; aspect-ratio:16/10; min-height:300px; }
+.flow svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+.wire { fill:none; stroke:var(--edge); stroke-width:3; vector-effect:non-scaling-stroke; stroke-linecap:round; }
+.pulse { fill:none; stroke:var(--c); stroke-width:4; vector-effect:non-scaling-stroke; stroke-linecap:round; stroke-dasharray:6 94; animation:stream 2.6s linear infinite; }
+.pulse.rev { animation-direction:reverse; }
+.pulse.off { display:none; }
+@keyframes stream { to { stroke-dashoffset:-100; } }
+@media (prefers-reduced-motion:reduce) { .pulse { animation:none; stroke-dasharray:none; opacity:.55; } }
+.node { --o:27px; position:absolute; transform:translateY(-50%); display:flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none; }
+.node.l { flex-direction:row-reverse; text-align:right; right:calc(100% - var(--x) - var(--o)); }
+.node.r { left:calc(var(--x) - var(--o)); }
+.node .orb { position:relative; flex:none; width:54px; height:54px; border-radius:50%; display:grid; place-items:center; background:var(--surface2); border:2px solid var(--c); color:var(--c); transition:box-shadow .15s; }
+.node:hover .orb { box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 18%,transparent); }
+.node .orb svg { position:static; width:28px; height:28px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.node .txt { display:grid; line-height:1.2; min-width:0; }
+.node .txt span { font-size:12px; color:var(--dim); white-space:nowrap; }
+.node .txt strong { font-size:17px; white-space:nowrap; }
+.node .txt em { font-style:normal; font-size:11px; color:var(--dim); white-space:nowrap; }
+.node.off .orb { border-color:var(--edge); color:var(--dim); filter:grayscale(1); opacity:.6; }
+.node.problem .orb { border-style:dashed; }
+.node .flag { position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%; background:var(--crit); color:var(--surface); font-size:12px; font-weight:800; display:grid; place-items:center; }
+.node.warnflag .flag { background:var(--warn); }
+.hub { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:68px; height:68px; border-radius:50%; background:var(--surface2); border:2px solid var(--edge); display:grid; place-items:center; color:var(--accent); }
+.hub svg { position:static; width:38px; height:38px; }
+.c-solar { --c:var(--solar); } .c-grid { --c:var(--grid); } .c-battery { --c:var(--battery); } .c-house { --c:var(--house); } .c-car { --c:var(--car); } .c-heat { --c:var(--heat); }
+
+/* Plan timeline */
+.timeline { display:grid; gap:8px; }
+.track { display:flex; height:30px; border-radius:6px; overflow:hidden; position:relative; }
+.seg { flex:var(--d) 1 0; background:var(--m); border-right:2px solid var(--surface); min-width:0; color:var(--surface); font-size:11px; font-weight:650; display:flex; align-items:center; padding-left:6px; overflow:hidden; white-space:nowrap; border-left:0; border-top:0; border-bottom:0; }
+.seg.future { background:repeating-linear-gradient(135deg,transparent 0 5px,color-mix(in srgb,var(--surface) 30%,transparent) 5px 8px),var(--m); }
+.seg[aria-pressed="true"] { outline:2px solid var(--ink); outline-offset:-2px; }
+.nowline { position:absolute; top:-4px; bottom:-4px; left:25%; border-left:2px solid var(--ink); }
+.axis { display:flex; justify-content:space-between; font-size:11.5px; color:var(--dim); }
+.legend { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--dim); }
+.legend i { display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--m); margin-right:5px; vertical-align:-1px; }
+.m-own { --m:var(--battery); } .m-grid { --m:var(--grid); } .m-hold { --m:var(--dim); } .m-pv { --m:var(--solar); }
+
+.list { display:grid; gap:0; }
+.row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 0; border-top:1px solid var(--edge); }
+.row:first-child { border-top:0; }
+.row a { text-decoration:none; color:inherit; }
+
+/* Vehicle */
+.soc { display:grid; grid-template-columns:auto minmax(0,1fr); gap:16px; align-items:center; }
+.ring { width:118px; height:118px; }
+.ring circle { fill:none; stroke-width:10; }
+.ring .t { stroke:var(--ring-track); }
+.ring .v { stroke:var(--car); stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; }
+.ring .goal { stroke:var(--ink); stroke-width:3; }
+.ring text { fill:var(--ink); font:700 22px var(--font); }
+.ring .sub { fill:var(--dim); font:500 10px var(--font); }
+.switches { display:grid; gap:8px; }
+.switch { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--edge); border-radius:10px; background:var(--surface2); }
+.switch small { display:block; }
+.toggle { appearance:none; width:44px; height:26px; border-radius:99px; background:var(--edge); position:relative; cursor:pointer; flex-shrink:0; border:0; }
+.toggle::after { content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:var(--surface); transition:left .15s; }
+.toggle:checked { background:var(--accent); }
+.toggle:checked::after { left:21px; }
+@media (prefers-reduced-motion:reduce) { .toggle::after { transition:none; } }
+.goal-card { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:12px; align-items:center; padding:12px; border:1px solid var(--edge); border-radius:10px; }
+.goal-card .when { text-align:center; min-width:56px; }
+.goal-card .when b { display:block; font-size:18px; }
+.goal-card.next { border-color:var(--car); background:color-mix(in srgb,var(--car) 7%,var(--surface)); }
+
+/* Settings */
+.settings-layout { display:grid; grid-template-columns:200px minmax(0,1fr); gap:14px; align-items:start; }
+.side { display:grid; gap:2px; position:sticky; top:12px; }
+.side a { padding:9px 12px; border-radius:8px; color:var(--dim); text-decoration:none; font-weight:550; }
+.side a[aria-current="true"] { background:var(--surface); color:var(--ink); border:1px solid var(--edge); }
+@media (max-width:760px) { .settings-layout { grid-template-columns:minmax(0,1fr); } .side { position:static; grid-auto-flow:column; overflow-x:auto; } .side a { white-space:nowrap; } }
+.fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+@media (max-width:520px) { .fields { grid-template-columns:minmax(0,1fr); } }
+.field { display:grid; gap:4px; min-width:0; }
+.field label { font-weight:550; font-size:13.5px; }
+.field .input { display:flex; align-items:center; border:1px solid var(--edge); border-radius:8px; background:var(--surface2); }
+.field input, .field select { border:0; background:transparent; padding:9px 10px; width:100%; min-width:0; }
+.field .unit { padding:0 10px; color:var(--dim); font-size:13px; }
+.field.invalid .input { border-color:var(--crit); }
+.field .err { color:var(--crit); font-size:12.5px; }
+.help { color:var(--dim); font-size:12.5px; }
+details.expert { border:1px dashed var(--edge); border-radius:10px; padding:10px 12px; }
+details.expert summary { cursor:pointer; font-weight:600; min-height:28px; }
+.savebar { position:fixed; left:0; right:0; bottom:0; z-index:5; background:var(--surface); border-top:1px solid var(--edge); padding-block:10px calc(10px + env(safe-area-inset-bottom, 0px)); padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); display:flex; justify-content:center; }
+.savebar > div { width:100%; max-width:1080px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.toast { position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:8px 14px; border-radius:8px; font-size:13px; z-index:6; }
+
+/* Heute tiles + detail views */
+.kpis.balance { grid-template-columns:repeat(5,minmax(0,1fr)); }
+@media (max-width:900px) { .kpis.balance { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:560px) { .kpis.balance { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.tile-link { text-decoration:none; color:inherit; transition:border-color .15s; }
+.tile-link:hover { border-color:var(--accent); }
+.tile-link .more { color:var(--accent); font-size:12px; font-weight:600; margin-top:4px; }
+.tile-link.feed { background:color-mix(in srgb,var(--solar) 7%,var(--surface)); }
+.back { display:inline-flex; align-items:center; gap:4px; font-weight:600; text-decoration:none; min-height:34px; margin-bottom:4px; font-size:13.5px; }
+.subnav { display:flex; gap:6px; flex-wrap:wrap; }
+.subnav a { border:1px solid var(--edge); background:var(--surface); border-radius:99px; padding:5px 12px; text-decoration:none; color:var(--dim); font-size:13px; min-height:34px; display:inline-flex; align-items:center; }
+.subnav a[aria-current="page"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.chart-wrap { position:relative; }
+.chart { display:grid; grid-template-columns:repeat(24,minmax(0,1fr)); gap:2px; height:190px; border-bottom:1px solid var(--edge); }
+.chart.div { border-bottom:0; }
+.chart.div::after { content:""; position:absolute; left:0; right:0; top:50%; border-top:1px solid var(--edge); pointer-events:none; }
+.bar { all:unset; display:grid; grid-template-rows:minmax(0,1fr); height:100%; min-width:0; cursor:pointer; border-radius:3px; }
+.chart.div .bar { grid-template-rows:minmax(0,1fr) minmax(0,1fr); }
+.bar .up { display:flex; flex-direction:column-reverse; min-height:0; }
+.bar .down { display:flex; flex-direction:column; min-height:0; }
+.bar span { flex:none; display:block; background:var(--m); }
+.bar .up span:last-child { border-radius:3px 3px 0 0; }
+.bar .down span:last-child { border-radius:0 0 3px 3px; }
+.bar:hover span { filter:brightness(1.08); }
+.bar[aria-pressed="true"] { outline:2px solid var(--ink); outline-offset:1px; }
+.bar:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.bar.future { cursor:default; background:color-mix(in srgb,var(--edge) 30%,transparent); }
+.nowmark { position:absolute; top:-14px; bottom:0; border-left:2px dashed var(--ink); pointer-events:none; }
+.nowmark::before { content:"Jetzt"; position:absolute; top:-2px; left:4px; font-size:11px; color:var(--dim); }
+.haxis { display:grid; grid-template-columns:repeat(24,minmax(0,1fr)); gap:2px; font-size:11px; color:var(--dim); margin-top:4px; }
+.haxis span { white-space:nowrap; }
+.side-label { display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin-bottom:4px; }
+.stack { display:flex; height:14px; border-radius:99px; overflow:hidden; gap:2px; }
+.stack span { flex:var(--v) 1 0; background:var(--m); }
+.dotl { display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--m); margin-right:7px; vertical-align:-1px; }
+.rowlink { text-decoration:none; color:inherit; }
+.rowlink:hover b { color:var(--accent); }
+/* Wetter & PV-Prognose */
+.wx-ico { width:28px; height:28px; flex:none; }
+.wx-ico .sun { fill:var(--solar); stroke:var(--solar); }
+.wx-ico .cloud { fill:var(--surface2); stroke:var(--dim); stroke-width:1.5; }
+.wx-ico .rain { stroke:var(--house); stroke-width:1.8; stroke-linecap:round; }
+.wx-ico .moon { fill:var(--dim); }
+.wx-now { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid var(--edge); }
+.wx-now .wx-ico { width:46px; height:46px; }
+.wx-now .temp { font-size:30px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; }
+.wx-now .meta { display:flex; flex-wrap:wrap; gap:4px 14px; color:var(--dim); font-size:13px; }
+.wx-strip { display:flex; gap:2px; overflow-x:auto; padding:12px 0 4px; scrollbar-width:thin; }
+.wx-h { all:unset; box-sizing:border-box; flex:1 0 46px; display:grid; justify-items:center; gap:3px; padding:6px 2px; border-radius:8px; cursor:pointer; font-size:12px; text-align:center; }
+.wx-h:hover { background:var(--surface2); }
+.wx-h[aria-pressed="true"] { background:var(--surface2); outline:2px solid var(--ink); outline-offset:-2px; }
+.wx-h:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.wx-h .t { color:var(--dim); font-variant-numeric:tabular-nums; }
+.wx-h .tmp { font-weight:650; }
+.wx-h .pvbar { width:16px; height:56px; display:flex; align-items:flex-end; background:var(--surface2); border-radius:4px; overflow:hidden; }
+.wx-h .pvbar i { display:block; width:100%; background:var(--solar); border-radius:4px 4px 0 0; }
+.wx-h .kwh { font-weight:650; font-variant-numeric:tabular-nums; }
+.wx-h .cc { color:var(--dim); font-size:11px; }
+.wx-h.now { background:color-mix(in srgb,var(--solar) 10%,transparent); }
+.wx-gap { flex:0 0 auto; display:grid; place-items:center; padding:0 8px; color:var(--dim); font-size:11px; text-align:center; border-inline:1px dashed var(--edge); margin-inline:4px; writing-mode:horizontal-tb; }
+.wx-days { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:10px; }
+.wx-day { border:1px solid var(--edge); border-radius:10px; padding:10px 12px; display:grid; gap:4px; min-width:0; }
+.wx-day .hd { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.wx-day b { font-size:14px; }
+.wx-day strong { font-size:18px; font-variant-numeric:tabular-nums; }
+.wx-day .range { position:relative; height:6px; background:var(--surface2); border-radius:99px; }
+.wx-day .range i { position:absolute; top:0; bottom:0; background:color-mix(in srgb,var(--solar) 45%,transparent); border-radius:99px; }
+.wx-day .range u { position:absolute; top:-3px; width:3px; height:12px; background:var(--solar); border-radius:2px; transform:translateX(-50%); }
+@media (max-width:760px) { .wx-days { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:640px) { .wx-now .temp { font-size:26px; } .wx-h { flex:0 0 44px; } }
+.flow-meta { display:flex; align-items:center; gap:8px; }
+.wx-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 10px 2px 4px; border:1px solid var(--edge); border-radius:99px; background:var(--surface2); color:var(--ink); text-decoration:none; font-weight:650; font-size:13.5px; min-height:34px; }
+.wx-chip:hover { border-color:var(--accent); }
+.wx-chip .wx-ico { width:26px; height:26px; }
+.m-car { --m:var(--car); }
+.m-pause { --m:var(--edge); }
+#cp-track .seg.m-pause { color:var(--dim); }
+.socplot { position:relative; height:96px; margin:4px 0 8px; }
+.socplot svg { position:absolute; inset:0; width:100%; height:100%; }
+.soc-area { fill:color-mix(in srgb,var(--car) 14%,transparent); }
+.soc-line { fill:none; stroke:var(--car); stroke-width:2.5; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
+.soc-goal { stroke:var(--ink); stroke-width:1; stroke-dasharray:4 4; vector-effect:non-scaling-stroke; opacity:.5; }
+.soclbl { position:absolute; font-size:12px; font-weight:650; color:var(--ink); white-space:nowrap; background:color-mix(in srgb,var(--surface) 80%,transparent); padding:0 3px; border-radius:4px; }
+.cp-axis { position:relative; height:18px; margin-top:4px; font-size:11.5px; color:var(--dim); }
+.cp-axis span { position:absolute; top:0; white-space:nowrap; }
+.cp-axis span:not(:first-child):not(:last-child) { transform:translateX(-50%); }
+.cp-compare { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; }
+.cp-compare > div { border:1px solid var(--edge); border-radius:10px; padding:10px 12px; display:grid; gap:2px; }
+.cp-compare > div.win { border-color:var(--ok); background:color-mix(in srgb,var(--ok) 8%,var(--surface)); }
+.cp-compare strong { font-size:18px; }
+#cp-alert .notice { margin-bottom:10px; }
+#car-plan.overridden .track, #car-plan.overridden .socplot { opacity:.45; }
+.plan-link { display:inline-block; margin-top:8px; font-weight:600; font-size:13.5px; text-decoration:none; }
+.chart.dense { gap:1px; }
+.bar.nodata { cursor:default; background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--edge) 70%,transparent) 0 2px,transparent 2px 6px); }
+.legend i.hatch { background:repeating-linear-gradient(135deg,var(--edge) 0 2px,transparent 2px 4px); }
+.bar.partial span { opacity:.7; }
+.view > * { min-width:0; }
+.d-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+.d-lead { margin-top:4px; font-size:14px; }
+.period { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--edge); border-radius:var(--radius); padding:8px; }
+.segctl { display:inline-grid; grid-auto-flow:column; grid-auto-columns:1fr; background:var(--surface2); border-radius:9px; padding:3px; gap:2px; }
+.segctl button { border:0; background:transparent; border-radius:7px; padding:6px 18px; min-height:36px; font-weight:600; color:var(--dim); }
+.segctl button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgb(0 0 0 / .15); }
+.pnav { display:flex; align-items:center; gap:8px; }
+.pnav b { min-width:170px; text-align:center; font-variant-numeric:tabular-nums; }
+.pbtn { width:40px; height:40px; border:1px solid var(--edge); background:var(--surface2); border-radius:8px; font-size:22px; line-height:1; display:grid; place-items:center; padding:0; }
+.pbtn:disabled { opacity:.35; cursor:default; }
+details.acc > summary { display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; list-style:none; min-height:32px; }
+details.acc > summary::-webkit-details-marker { display:none; }
+details.acc > summary h2::before { content:"›"; display:inline-block; width:16px; color:var(--dim); transition:transform .15s; }
+details.acc[open] > summary h2::before { transform:rotate(90deg); }
+details.acc[open] > summary { margin-bottom:10px; }
+@media (prefers-reduced-motion:reduce) { details.acc > summary h2::before { transition:none; } }
+.ph { font-size:12px; font-weight:650; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; margin:4px 0 2px; }
+.ph + .prow { border-top:0; }
+.ph:not(:first-child) { margin-top:14px; }
+.prow { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:3px 12px; align-items:center; padding:7px 0; border-top:1px solid var(--edge); font-size:13.5px; }
+.prow .num { text-align:right; }
+.prow .pb { grid-column:1/-1; height:4px; background:var(--surface2); border-radius:99px; overflow:hidden; }
+.prow .pb i { display:block; height:100%; background:var(--grid); border-radius:99px; }
+.prow.sum { font-weight:700; border-top:2px solid var(--ink); }
+.l-short { display:none; }
+.notice-pill { display:none; align-items:center; gap:8px; margin-top:8px; background:var(--n-bg); border:1px solid color-mix(in srgb,var(--n) 35%,transparent); border-radius:10px; padding:8px 12px; font-size:13px; color:var(--ink); text-decoration:none; min-height:40px; }
+.notice-pill .sev { font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--n); }
+.notice-pill .txt { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Phone portrait: weniger auf einmal, Details eingeklappt */
+@media (max-width:640px) {
+  .demo .chips { flex-wrap:nowrap; overflow-x:auto; max-width:100%; scrollbar-width:none; }
+  .demo button { white-space:nowrap; }
+  header.top { padding:8px 0 6px; }
+  .brand svg { width:28px; height:28px; } .brand b { font-size:17px; }
+  .status { grid-template-columns:auto minmax(0,1fr) auto; gap:10px; padding:10px 12px; }
+  .status .dot { width:30px; height:30px; } .status .dot svg { width:17px; height:17px; }
+  .status h2 { font-size:14.5px; } .status > div > p { display:none; }
+  .status > .actions { grid-column:auto; } .status > .actions .btn { flex:none; min-height:38px; padding:6px 12px; font-size:13.5px; }
+  .status .confirm .actions .btn { flex:1; }
+  .l-long { display:none; } .l-short { display:inline; }
+  #top-notices { display:none; }
+  .notice-pill { display:flex; }
+  .view { gap:10px; margin-top:12px; }
+  .panel { padding:12px; }
+  .kpi { padding:10px 12px; }
+  .kpis.balance { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; margin-inline:-12px; padding-inline:12px; }
+  .kpis.balance .kpi { flex:0 0 44%; scroll-snap-align:start; }
+  .tile-link .more { display:none; }
+  .d-head { flex-wrap:nowrap; }
+  .subnav { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; min-width:0; }
+  .subnav a { white-space:nowrap; padding:4px 10px; min-height:32px; }
+  .period { flex-direction:column; align-items:stretch; gap:6px; }
+  .segctl { display:grid; }
+  .pnav { justify-content:space-between; } .pnav b { min-width:0; }
+  .d-kpis .kpi strong { font-size:19px; }
+  .d-lead { font-size:13px; }
+  .chart { height:150px; }
+  .haxis { font-size:10px; }
+  .back { white-space:nowrap; }
+  .flow { aspect-ratio:1/1; max-height:none; }
+  .node { --o:22px; gap:6px; }
+  .node .orb { width:44px; height:44px; } .node .orb svg { width:22px; height:22px; }
+  .node .txt strong { font-size:15px; } .node .txt span { font-size:11px; } .node .txt em { font-size:10.5px; }
+  .hub { width:54px; height:54px; } .hub svg { width:30px; height:30px; }
+}
+
+.s-pv { --m:var(--solar); } .s-bat { --m:var(--battery); } .s-grid { --m:var(--grid); } .s-feed { --m:var(--solar); } .s-direct { --m:var(--house); }
+
+/* Review annotations */
+.note { border-left:3px solid var(--accent); background:var(--info-bg); padding:8px 12px; border-radius:0 8px 8px 0; font-size:12.5px; color:var(--ink); }
+.note b { color:var(--accent); }
+.notes-hidden .note { display:none; }
+
+/* Phone: bottom tab bar */
+@media (max-width:640px) {
+  nav.tabs { position:fixed; left:0; right:0; bottom:0; z-index:4; border-radius:0; border-width:1px 0 0; justify-content:space-around; padding-block:6px calc(6px + env(safe-area-inset-bottom, 0px)); padding-left:max(8px, env(safe-area-inset-left, 0px)); padding-right:max(8px, env(safe-area-inset-right, 0px)); }
+  nav.tabs a { flex-direction:column; gap:2px; font-size:11px; padding:4px 8px; }
+  .savebar { bottom:62px; }
+}
+</style>
+
+<div class="shell" id="app">
+  <div class="demo" aria-label="Demo-Steuerung">
+    <b>Klick-Dummy</b> Szenario:
+    <div class="chips" id="scenarios"></div>
+    <label style="display:inline-flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="show-notes" checked> Review-Hinweise</label>
+  </div>
+
+  <header class="top">
+    <a class="brand" href="#uebersicht">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 9h10M11 16h8M11 23h10M11 9v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="26" cy="7" r="3" fill="var(--solar)"/></svg>
+      <div><b>EOS</b><span>Energiezentrale</span></div>
+    </a>
+    <nav class="tabs" aria-label="Hauptnavigation">
+      <a href="#uebersicht" data-route="uebersicht"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7M5 10v10h14V10"/></svg>Übersicht</a>
+      <a href="#auto" data-route="auto"><svg viewBox="0 0 24 24"><path d="M4 17H2v-5l3-2 2.5-5h7L18 10l3 1.5V17h-2M8 17h8"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg>Auto</a>
+      <a href="#hinweise" data-route="hinweise"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4l2-2M10 21h4"/></svg>Hinweise <span class="badge" id="nav-badge" hidden></span></a>
+      <a href="#einstellungen" data-route="einstellungen"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg>Einstellungen</a>
+    </nav>
+  </header>
+
+  <section class="status" id="status" aria-live="polite"></section>
+  <p class="note" style="margin-top:8px"><b>Review 1 · Steuerzustand:</b> Heute steht der Zustand als kleiner Tag oben rechts, der Schalter liegt unten auf der Einstellungsseite. Vorschlag: ein Statusband auf jeder Seite, mit Ursache, Folge und der passenden Aktion. Das Bestätigen geschieht direkt im Band, ohne Browser-Dialog.</p>
+  <div class="notices" id="top-notices"></div>
+  <a class="notice-pill" id="notice-pill" href="#hinweise" hidden></a>
+
+  <main>
+    <!-- Übersicht -->
+    <section class="view" data-view="uebersicht">
+      <div class="kpis" id="kpis"></div>
+      <div class="two">
+        <div class="panel">
+          <div class="panel-head"><h2>Energiefluss</h2><span class="flow-meta"><a class="wx-chip" id="wx-chip" href="#pv" aria-label="Wetter: sonnig, 7 Grad. PV und Wetter öffnen"></a></span></div>
+          <div class="flow" id="flow"></div>
+          <div style="display:flex;justify-content:flex-end;margin:6px 0 10px"><span class="tag" id="flow-time">Stand 14:32:05</span></div>
+          <p class="note"><b>Review 2 · Energiefluss:</b> Geräte mit Problem tragen ein Warnzeichen. Geschätzte oder ältere Werte sind mit „≈“ markiert, das Alter steht direkt darunter. Ein Klick auf einen Knoten führt zur Geräteansicht oder zur Tagesauswertung (PV führt zu „PV &amp; Wetter“, Netz zu „Netz &amp; Einspeisung“, EOS in der Mitte zur Gesamtbilanz). Das Wetter steht als Icon oben rechts.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>EOS-Plan · nächste 12 h</h2><span class="tag">Speicher</span></div>
+          <div class="timeline">
+            <div class="track" id="track"><span class="nowline" aria-hidden="true"></span></div>
+            <div class="axis"><span>11:30</span><span>Jetzt</span><span>20:00</span><span>02:30</span></div>
+            <div class="legend"><span><i class="m-own"></i>Eigenverbrauch</span><span><i class="m-grid"></i>Netzladen</span><span><i class="m-hold"></i>Halten</span><span><i class="m-pv"></i>PV-Laden</span></div>
+            <p class="dim" id="seg-detail" aria-live="polite">Abschnitt antippen für Details.</p>
+          </div>
+          <div class="list" style="margin-top:10px" id="next-list"></div>
+          <a class="plan-link" href="#auto" data-plan>Ladeplan Auto ansehen →</a>
+          <p class="note"><b>Review 3 · Plan:</b> Die Karten „Nächster Modus“ werden zu einer Liste „Was als Nächstes passiert“, in Alltagssprache und mit Uhrzeit. Der Zeitstrahl ist bedienbar, auch per Tastatur.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Heute</h2><span class="dim" id="today-sum"></span></div>
+        <div class="kpis balance" id="balance"></div>
+        <p class="note" style="margin-top:12px"><b>Review 10 · Einspeisung:</b> Die Einspeisung taucht an fünf Stellen auf: als eigene Kachel unter „Heute“, im Kopf der Tagesbilanz als Vergütung, im Netz-Wert oben, im Plan („Speicher voll · Überschuss geht ins Netz“) und als eigene Auswertung „Netz &amp; Einspeisung“ mit der Frage „Wohin ging der PV-Strom?“. Die Vergütung pflegt man unter Einstellungen › Kosten.</p>
+      </div>
+    </section>
+
+    <!-- PV & Wetter -->
+    <section class="view" data-view="pv" hidden>
+      <div class="d-head"><a class="back" href="#uebersicht">← Übersicht</a></div>
+      <div><p class="eyebrow">Erzeugung</p><h1>PV &amp; Wetter</h1><p class="dim d-lead">7,5 kW jetzt · heute 21,3 kWh erzeugt · Rest ≈ 9 kWh · morgen ≈ 6 kWh</p></div>
+      <div class="panel" id="weather">
+        <div class="panel-head"><h2>Wetter &amp; PV-Prognose</h2><span class="tag">Augsburg · Stand 14:00</span></div>
+        <div class="wx-now" id="wx-now"></div>
+        <div class="wx-strip" id="wx-strip" role="list" aria-label="Stündliche Prognose"></div>
+        <p class="dim" id="wx-detail" aria-live="polite" style="margin-top:6px">Stunde antippen für Details.</p>
+        <div class="wx-days" id="wx-days" role="list" aria-label="Tagesprognose"></div>
+        <div class="list" id="wx-effects" style="margin-top:8px"></div>
+        <p class="note" style="margin-top:10px"><b>Review 13 · Wetter:</b> In der Übersicht steht das Wetter nur als kleines Icon oben rechts im Energiefluss. Diese Ansicht öffnet sich über den PV-Knoten oder das Icon. Wetter und PV-Prognose stehen hier zusammen, weil das eine das andere erklärt: Bewölkung und Sonnenstunden je Stunde direkt über dem erwarteten PV-Ertrag. Jeder Tag hat eine Spanne statt einer scheinbar exakten Zahl. Darunter steht, was EOS daraus macht (Speicher nachts laden, Auto aus dem Netz). Die Wetterdaten sind Beispielwerte; in der echten Umsetzung kommen sie aus der in EOS konfigurierten Wetter- und PV-Prognosequelle.</p>
+      </div>
+      <a class="plan-link" href="#auswertung-netz">Wohin ging der PV-Strom heute? → Netz &amp; Einspeisung</a>
+    </section>
+
+    <!-- Auswertung (Detail) -->
+    <section class="view" data-view="detail" hidden>
+      <div class="d-head">
+        <a class="back" href="#uebersicht">← Übersicht</a>
+        <nav class="subnav" id="d-nav" aria-label="Auswertung wählen"></nav>
+      </div>
+      <div class="period">
+        <div class="segctl" id="p-seg" role="group" aria-label="Zeitraum"><button type="button" data-p="tag">Tag</button><button type="button" data-p="monat">Monat</button><button type="button" data-p="jahr">Jahr</button></div>
+        <div class="pnav"><button type="button" class="pbtn" id="p-prev" aria-label="Vorheriger Zeitraum">‹</button><b id="p-label" aria-live="polite"></b><button type="button" class="pbtn" id="p-next" aria-label="Nächster Zeitraum">›</button></div>
+      </div>
+      <div><p class="eyebrow" id="d-eyebrow"></p><h1 id="d-title"></h1><p class="dim d-lead" id="d-lead"></p></div>
+      <div class="kpis d-kpis" id="d-kpis"></div>
+      <div class="panel">
+        <div class="panel-head"><h2>Verlauf</h2><span class="tag" id="d-unit">kWh pro Stunde</span></div>
+        <div class="side-label" id="d-side-top" hidden><span>↑ Bezug</span></div>
+        <div class="chart-wrap"><div class="chart" id="d-chart"></div><span class="nowmark" id="d-now" aria-hidden="true" hidden></span></div>
+        <div class="side-label" id="d-side-bottom" hidden style="margin-top:4px"><span>↓ Einspeisung</span></div>
+        <div class="haxis" id="d-axis" aria-hidden="true"></div>
+        <div class="legend" id="d-legend" style="margin-top:10px"></div>
+        <p class="dim" id="d-hour" aria-live="polite" style="margin-top:6px">Balken antippen für Details.</p>
+      </div>
+      <div class="two">
+        <details class="panel acc" id="acc-prices" open><summary><h2>Preise &amp; Kosten</h2><span class="tag" id="d-price-tag"></span></summary><div id="d-prices"></div></details>
+        <details class="panel acc" id="acc-mix" open><summary><h2 id="d-mix-title"></h2><span class="tag" id="d-mix-total"></span></summary><div class="stack" id="d-stack" aria-hidden="true"></div><div class="list" id="d-mix" style="margin-top:8px"></div></details>
+      </div>
+      <details class="panel acc" id="acc-facts" open><summary><h2>Was auffällt</h2></summary><div class="list" id="d-facts"></div></details>
+      <p class="note"><b>Review 9 · Auswertung:</b> Alle Auswertungen sind gleich aufgebaut: Zeitraum, Kernaussage, vier Kennzahlen, Verlauf, Preise und Kosten, Herkunft und „Was auffällt“. Tag, Monat und Jahr schaltet man oben um, mit ‹ › blättert man zurück. Auf dem Smartphone sind die unteren Bereiche eingeklappt.</p>
+      <p class="note"><b>Review 11 · Für die echte Umsetzung nötig:</b> (1) Langzeitdaten: Die InfluxDB hält Rohdaten heute nur 30 Tage. Für Monat und Jahr braucht es verdichtete Stunden- und Tageswerte (Downsampling oder HA-Langzeitstatistik). (2) Tarifbestandteile: Netzentgelt, Abgaben, Steuern und Grundpreise müssen unter Einstellungen › Kosten gepflegt werden; den Börsenpreis liefert EOS stündlich. (3) Abrechnung pro Stunde: Kosten werden mit dem Preis der jeweiligen Stunde gerechnet, nicht mit einem Tagesmittel.</p>
+    </section>
+
+    <!-- Auto -->
+    <section class="view" data-view="auto" hidden>
+      <div class="page-head"><div><p class="eyebrow">Fahrzeug</p><h1>ID.4</h1></div><span class="tag" id="car-state">Lädt mit PV-Überschuss</span></div>
+      <div class="two">
+        <div class="panel">
+          <div class="soc">
+            <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Ladestand 40 Prozent, Ziel 80 Prozent">
+              <circle class="t" cx="60" cy="60" r="48"/>
+              <circle class="v" cx="60" cy="60" r="48" stroke-dasharray="120.6 301.6"/>
+              <circle class="goal" cx="60" cy="60" r="48" stroke-dasharray="2 301.6" stroke-dashoffset="-241.3" transform="rotate(-90 60 60)"/>
+              <text x="60" y="62" text-anchor="middle">40 %</text><text class="sub" x="60" y="80" text-anchor="middle">Ziel 80 %</text>
+            </svg>
+            <div style="display:grid;gap:6px;min-width:0">
+              <h2>Bis Donnerstag 07:00 auf 80 %</h2>
+              <p class="dim">Noch 30,8 kWh. EOS plant 5,4 kWh aus PV bis 16:00 und 25,4 kWh Netzladen ab 02:00 (24,1 ct/kWh). <a href="#auto" id="to-plan">Zum Ladeplan ↓</a></p>
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag">3,7 kW · 1-phasig</span><span class="tag est">SoC vom Fahrzeug · vor 12 min</span></div>
+            </div>
+          </div>
+          <p class="note" style="margin-top:12px"><b>Review 4 · Ziel zuerst:</b> Die Geräteansicht beantwortet zuerst die Frage „Ist das Auto rechtzeitig voll?“. Diagramme und Rohwerte kommen danach.</p>
+        </div>
+        <div class="panel">
+          <h2 style="margin-bottom:10px">Laden</h2>
+          <div class="switches">
+            <label class="switch"><span><b>PV-Überschussladen</b><small>Lädt nur mit Überschuss bis 70 %</small></span><input class="toggle" type="checkbox" id="sw-pv" checked></label>
+            <label class="switch"><span><b>Schnellladen</b><small>Volle Leistung bis zum Ziel, unabhängig vom Plan</small></span><input class="toggle" type="checkbox" id="sw-fast"></label>
+            <label class="switch"><span><b>Phasen automatisch umschalten</b><small>1-/3-phasig je nach Überschuss</small></span><input class="toggle" type="checkbox" id="sw-phase" checked></label>
+          </div>
+          <p class="note" style="margin-top:12px"><b>Review 5 · Sofort wirksam:</b> Schalter wirken sofort und melden „Gespeichert“. Heute stehen sie in einem Formular mit eigenem Speichern-Knopf; das ist leicht zu übersehen.</p>
+        </div>
+      </div>
+      <div class="panel" id="car-plan">
+        <div class="panel-head"><h2>EOS-Ladeplan bis Do 07:00</h2><span class="tag" id="cp-tag">Plan von 14:31</span></div>
+        <div id="cp-alert"></div>
+        <div class="socplot" aria-hidden="true">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <polygon class="soc-area" points="0,80.8 8.9,70.9 69.6,70.9 83.8,24.2 100,24.2 100,100 0,100"/>
+            <line class="soc-goal" x1="0" y1="24.2" x2="100" y2="24.2"/>
+            <polyline class="soc-line" points="0,80.8 8.9,70.9 69.6,70.9 83.8,24.2 100,24.2"/>
+          </svg>
+          <span class="soclbl" style="left:0;top:calc(80.8% - 20px)">40 %</span>
+          <span class="soclbl" style="left:69.6%;top:calc(70.9% - 20px);transform:translateX(-100%)">47 %</span>
+          <span class="soclbl" style="right:0;top:calc(24.2% - 20px)">Ziel 80 % ab 04:20</span>
+        </div>
+        <div class="track" id="cp-track" role="group" aria-label="Ladeplan"></div>
+        <div class="cp-axis" aria-hidden="true"><span style="left:0">Jetzt</span><span style="left:21.1%">18:00</span><span style="left:45.4%">22:00</span><span style="left:69.6%">02:00</span><span style="left:100%;transform:translateX(-100%)">Do 07:00</span></div>
+        <div class="legend" style="margin-top:8px"><span><i class="m-pv"></i>PV-Überschuss</span><span><i class="m-pause"></i>Pause</span><span><i class="m-grid"></i>Netzladen</span><span><i class="m-car"></i>Ziel erreicht</span></div>
+        <p class="dim" id="cp-detail" aria-live="polite" style="margin-top:6px">Abschnitt antippen für Details.</p>
+        <div class="list" id="cp-list" style="margin-top:6px"></div>
+        <div class="cp-compare" id="cp-compare"></div>
+        <p class="note" style="margin-top:10px"><b>Review 12 · Ladeplan:</b> Der Plan beantwortet drei Fragen: Wann lädt das Auto, woher kommt der Strom, und was kostet es im Vergleich zum Sofortladen? Die Ladestandskurve zeigt, wann das Ziel erreicht ist. Wird der Plan überstimmt (Schnellladen) oder kann er nicht umgesetzt werden (Wallbox weg, Lesemodus), steht das direkt im Plan.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Ladeziele</h2><button class="btn" type="button" id="add-goal">+ Ladeziel</button></div>
+        <div style="display:grid;gap:8px" id="goals"></div>
+        <p class="note" style="margin-top:10px"><b>Review 6 · Ladeziele:</b> Kompakte Zeilen statt großer Formularblöcke. Das aktive Ziel ist hervorgehoben, Bearbeiten öffnet die Details. Feiertage erscheinen als Hinweis am Ziel.</p>
+      </div>
+    </section>
+
+    <!-- Hinweise -->
+    <section class="view" data-view="hinweise" hidden>
+      <div class="page-head"><div><p class="eyebrow">Zustand</p><h1>Hinweise</h1></div><span class="tag" id="notice-count"></span></div>
+      <div class="notices" id="all-notices"></div>
+      <div class="panel" id="resolved">
+        <h2 style="margin-bottom:8px">Zuletzt behoben</h2>
+        <div class="list">
+          <div class="row"><span><b>EOS-Plan wieder verfügbar</b><br><small>14:05 · nach 3 min Ersatzplan</small></span><span class="tag">eos</span></div>
+          <div class="row"><span><b>Speicher wieder erreichbar</b><br><small>Gestern 22:41</small></span><span class="tag">battery_read</span></div>
+        </div>
+      </div>
+      <p class="note"><b>Review 7 · Hinweise:</b> Heute werden alle Meldungen in einen einzigen Absatz verkettet („Daten oder Steuerung prüfen · a, b, c“). Vorschlag: eine Karte pro Problem, nach Schwere sortiert. Jede Karte nennt Folge und nächsten Schritt und trägt dieselbe Kennung wie das Backend-Log. Behobene Probleme bleiben kurz sichtbar.</p>
+    </section>
+
+    <!-- Einstellungen -->
+    <section class="view" data-view="einstellungen" hidden>
+      <div class="page-head"><div><p class="eyebrow">EOS im Alltag</p><h1>Einstellungen</h1></div></div>
+      <div class="settings-layout">
+        <nav class="side" aria-label="Einstellungsbereiche" id="side">
+          <a href="#einstellungen" data-sec="speicher" aria-current="true">Speicher</a>
+          <a href="#einstellungen" data-sec="auto">E-Auto</a>
+          <a href="#einstellungen" data-sec="kalender">Kalender</a>
+          <a href="#einstellungen" data-sec="kosten">Kosten</a>
+          <a href="#einstellungen" data-sec="system">System</a>
+        </nav>
+        <form class="panel" id="settings-form" novalidate>
+          <div data-sec-body="speicher" style="display:grid;gap:14px">
+            <div><h2>Speicher</h2><p class="help">Grenzen, die EOS bei der Planung einhält.</p></div>
+            <div class="fields">
+              <div class="field" id="f-min"><label for="min-soc">Mindest-SoC</label><div class="input"><input id="min-soc" type="number" min="0" max="99" value="10"><span class="unit">%</span></div><span class="err" hidden>Muss kleiner als der Maximal-SoC sein.</span></div>
+              <div class="field" id="f-max"><label for="max-soc">Maximal-SoC</label><div class="input"><input id="max-soc" type="number" min="1" max="100" value="95"><span class="unit">%</span></div></div>
+            </div>
+            <p class="tag" style="justify-self:start">✓ Von EOS bestätigt · 10–95 %</p>
+            <label class="switch"><span><b>Speicher unterstützt PV-Autoladung</b><small>Entladung während laufender PV-Ladung erlauben</small></span><input class="toggle" type="checkbox" id="sw-support"></label>
+            <details class="expert"><summary>Expertenwerte für die Regelung</summary>
+              <div class="fields" style="margin-top:10px">
+                <div class="field"><label for="reserve">Einspeisereserve</label><div class="input"><input id="reserve" type="number" value="100"><span class="unit">W</span></div></div>
+                <div class="field"><label for="interval">Regelintervall</label><div class="input"><input id="interval" type="number" value="20"><span class="unit">s</span></div></div>
+                <div class="field"><label for="pv-min">Speicher-Untergrenze für PV-Start</label><div class="input"><input id="pv-min" type="number" value="40"><span class="unit">%</span></div></div>
+                <div class="field"><label for="pv-wait">Wartezeit vor Speicherstart</label><div class="input"><input id="pv-wait" type="number" value="120"><span class="unit">s</span></div></div>
+              </div>
+            </details>
+          </div>
+          <div data-sec-body="auto" hidden style="display:grid;gap:14px">
+            <div><h2>E-Auto (alle Fahrzeuge)</h2><p class="help">Gilt für jedes Fahrzeug. Ladeziele stellst du direkt am Fahrzeug ein.</p></div>
+            <label class="switch"><span><b>PV-Laden mit Speicher starten</b><small>Startet die Ladung auch knapp unter dem Mindestüberschuss</small></span><input class="toggle" type="checkbox" checked></label>
+            <div class="fields"><div class="field"><label for="surplus">Mindestüberschuss für Speicherstart</label><div class="input"><input id="surplus" type="number" value="1400"><span class="unit">W</span></div></div></div>
+          </div>
+          <div data-sec-body="kalender" hidden style="display:grid;gap:14px">
+            <div><h2>Kalender</h2><p class="help">Feiertage für wiederkehrende Ladeziele.</p></div>
+            <div class="fields">
+              <div class="field"><label for="state">Bundesland</label><div class="input"><select id="state"><option>Bundesweit</option><option selected>Bayern</option><option>Baden-Württemberg</option></select></div></div>
+              <div class="field"><label for="loc">Ort</label><div class="input"><select id="loc"><option>Kein besonderer Ort</option><option>Augsburg</option></select></div></div>
+            </div>
+          </div>
+          <div data-sec-body="kosten" hidden style="display:grid;gap:14px">
+            <div><h2>Kosten</h2><p class="help">Grundlage für die Verbrauchs- und Kostenbilanz.</p></div>
+            <div class="fields">
+              <div class="field"><label for="pvprice">PV-Strompreis</label><div class="input"><select id="pvprice"><option>Aus EOS</option><option>Manuell</option></select></div></div>
+              <div class="field"><label for="feedin">Einspeisevergütung</label><div class="input"><input id="feedin" type="number" step="0.01" value="8.03"><span class="unit">ct/kWh</span></div><span class="help">Für die Einspeise-Bilanz und als Wert von selbst genutztem PV-Strom.</span></div>
+              <div class="field"><label for="cap">Speicherkapazität</label><div class="input"><input id="cap" type="number" value="10240"><span class="unit">Wh</span></div></div>
+            </div>
+            <div><h3>Arbeitspreis-Bestandteile</h3><p class="help">Netto pro kWh. Der Börsenpreis kommt stündlich aus EOS, die Mehrwertsteuer (19 %) wird aufgeschlagen.</p></div>
+            <div class="fields">
+              <div class="field"><label for="t-boerse">Börsenstrompreis</label><div class="input"><select id="t-boerse"><option>Stündlich aus EOS</option><option>Fester Arbeitspreis</option></select></div></div>
+              <div class="field"><label for="t-aufschlag">Anbieteraufschlag</label><div class="input"><input id="t-aufschlag" type="number" step="0.01" value="1.79"><span class="unit">ct/kWh</span></div></div>
+              <div class="field"><label for="t-netz">Netzentgelt</label><div class="input"><input id="t-netz" type="number" step="0.01" value="8.20"><span class="unit">ct/kWh</span></div></div>
+              <div class="field"><label for="t-ka">Konzessionsabgabe</label><div class="input"><input id="t-ka" type="number" step="0.01" value="1.99"><span class="unit">ct/kWh</span></div></div>
+              <div class="field"><label for="t-umlagen">Umlagen (KWKG, §19, Offshore)</label><div class="input"><input id="t-umlagen" type="number" step="0.01" value="1.68"><span class="unit">ct/kWh</span></div></div>
+              <div class="field"><label for="t-steuer">Stromsteuer</label><div class="input"><input id="t-steuer" type="number" step="0.01" value="2.05"><span class="unit">ct/kWh</span></div></div>
+            </div>
+            <div><h3>Grundpreise</h3><p class="help">Brutto pro Monat, werden tageweise auf die Auswertung verteilt.</p></div>
+            <div class="fields">
+              <div class="field"><label for="g-anbieter">Grundpreis Anbieter</label><div class="input"><input id="g-anbieter" type="number" step="0.01" value="9.90"><span class="unit">€/Monat</span></div></div>
+              <div class="field"><label for="g-netz">Netz-Grundpreis</label><div class="input"><input id="g-netz" type="number" step="0.01" value="6.50"><span class="unit">€/Monat</span></div></div>
+              <div class="field"><label for="g-mess">Messstellenbetrieb</label><div class="input"><input id="g-mess" type="number" step="0.01" value="2.50"><span class="unit">€/Monat</span></div></div>
+            </div>
+          </div>
+          <div data-sec-body="system" hidden style="display:grid;gap:14px">
+            <div><h2>System</h2><p class="help">Verbindungen und Geräte. Adressen und Treiber änderst du in Home Assistant.</p></div>
+            <div class="list">
+              <div class="row"><span><b>Akkudoktor EOS</b><br><small>Plan von 14:31</small></span><span class="tag" style="color:var(--ok)">verbunden</span></div>
+              <div class="row"><span><b>InfluxDB</b><br><small>Rohdaten 30 Tage · Stunden- und Tageswerte dauerhaft</small></span><span class="tag" style="color:var(--ok)">verbunden</span></div>
+              <div class="row"><span><b>Fronius GEN24</b><br><small>Speicher · Netzladen ja · Einspeisen nein</small></span><span class="tag" id="sys-battery">erreichbar</span></div>
+              <div class="row"><span><b>NRGkick</b><br><small>Wallbox · Phasenumschaltung ja</small></span><span class="tag" id="sys-wallbox">erreichbar</span></div>
+            </div>
+          </div>
+          <p class="note" style="margin-top:14px"><b>Review 8 · Einstellungen:</b> Heute steht alles auf einer langen Seite mit drei getrennten Speichern-Knöpfen, und die Steuerfreigabe liegt dazwischen. Vorschlag: Bereiche links, Expertenwerte eingeklappt, Fehler direkt am Feld und eine Speicherleiste, die nur bei ungespeicherten Änderungen erscheint.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="savebar" id="savebar" hidden><div><span><b id="dirty-count">1 Änderung</b> <span class="dim">nicht gespeichert</span></span><span style="display:flex;gap:8px"><button class="btn ghost" type="button" id="discard">Verwerfen</button><button class="btn primary" type="button" id="save">Speichern</button></span></div></div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(() => {
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+  const icons = {
+    ok:'<svg viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></svg>',
+    wait:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    pause:'<svg viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>',
+    alert:'<svg viewBox="0 0 24 24"><path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4M12 17v.5"/></svg>',
+    off:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>'
+  };
+
+  // Scenarios mirror backend control_status / notices.
+  const scenarios = {
+    normal: { label:'Normalbetrieb', control:'active' },
+    restart: { label:'Wiederanlauf', control:'waiting', notices:[
+      {sev:'info', id:'eos_run', title:'EOS berechnet einen neuen Plan', text:'Die Steuerung wartet seit 42 s auf Plan und Messwerte. Speicher und Wallbox sind solange freigegeben.', meta:'Kennung eos_run · System', link:['Status in EOS','#einstellungen']}]},
+    backup: { label:'Notstrom', control:'backup', grid:'off', notices:[
+      {sev:'info', id:'backup_power_paused', title:'Notstrombetrieb aktiv', text:'Die Steuerung pausiert. Sie läuft nach bestätigter Netzwiederkehr automatisch weiter.', meta:'Kennung system/power_supply · seit 13:58'}]},
+    unknown: { label:'Netzstatus unbekannt', control:'supply_waiting', grid:'warn', notices:[
+      {sev:'warn', id:'backup_power_unknown', title:'Netzbetriebsstatus unbekannt', text:'binary_sensor.notstrom meldet „unavailable“. Speicher und Wallbox sind freigegeben, bis wieder ein frischer Netzstatus vorliegt.', meta:'Kennung system/power_supply · seit 14:20', link:['Statusquelle prüfen','#einstellungen']}]},
+    wallbox: { label:'Wallbox nicht erreichbar', control:'active', car:'crit', notices:[
+      {sev:'crit', id:'wallbox_stop', title:'Ladestopp nicht bestätigt', text:'Die Wallbox ist nicht erreichbar. Das Fahrzeug kann weiterhin laden. Der Stopp wird alle 5 s wiederholt; die übrige Regelung läuft weiter.', meta:'Kennung wallbox_stop · vehicle/1 · seit 14:29', link:['Diagnose','#hinweise']},
+      {sev:'warn', id:'sources_unavailable', title:'Keine gültigen Messwerte: Ladeleistung', text:'Die Ladeleistung fehlt seit 3 min. Der Hausverbrauch wird ohne Wallbox berechnet.', meta:'Kennung sources_unavailable · vehicle/1'}]},
+    off: { label:'Lesemodus', control:'read_only' }
+  };
+  const controlView = {
+    active:{cls:'state-ok', icon:'ok', title:'Steuerung aktiv', text:'EOS steuert Speicher und Wallbox. Nächster Wechsel 16:00: Speicher auf Eigenverbrauch.', action:['release','Steuerung zurückgeben','btn']},
+    waiting:{cls:'state-info', icon:'wait', title:'Aktiv · warte auf Messwerte und Plan', text:'Die Freigabe ist gespeichert. Die Regelung startet von selbst, sobald EOS einen aktuellen Plan liefert.', action:['release','Steuerung zurückgeben','btn']},
+    backup:{cls:'state-info', icon:'pause', title:'Steuerung pausiert · Notstrombetrieb', text:'Neue Regelbefehle sind gesperrt. Dein Steuerungswunsch bleibt gespeichert.', action:['release','Steuerung zurückgeben','btn ghost']},
+    supply_waiting:{cls:'state-warn', icon:'pause', title:'Steuerung pausiert · warte auf bestätigte Netzwiederkehr', text:'Ohne gültigen Netzstatus sendet die Energiezentrale keine Regelbefehle.', action:['release','Steuerung zurückgeben','btn ghost']},
+    read_only:{cls:'state-off', icon:'off', title:'Lesemodus', text:'Die Energiezentrale zeigt Werte an, steuert aber keine Geräte.', action:['take','Steuerung übernehmen','btn primary']}
+  };
+  const confirmText = {
+    release:{title:'Steuerung zurückgeben?', items:['Der Speicher kehrt in den Automatikmodus zurück.','Die Wallbox wird pausiert; eine laufende Ladung endet.','Die Einstellung bleibt über Neustarts erhalten.'], ok:'Zurückgeben', cls:'btn danger'},
+    take:{title:'Steuerung übernehmen?', items:['EOS steuert ab sofort Speicher und Wallbox.','Die Regelung startet, sobald Messwerte und ein aktueller Plan vorliegen.'], ok:'Übernehmen', cls:'btn primary'}
+  };
+
+  let scenario = 'wallbox';
+  let control = scenarios[scenario].control;
+  let confirming = null;
+
+  function renderScenarios() {
+    $('#scenarios').innerHTML = Object.entries(scenarios).map(([k,v]) =>
+      `<button type="button" data-s="${k}" aria-pressed="${k===scenario}">${v.label}</button>`).join('');
+  }
+  function notices() { return scenarios[scenario].notices || []; }
+  const sevName = {crit:'Kritisch', warn:'Warnung', info:'Info'};
+  function noticeHTML(n, compact) {
+    return `<div class="notice n-${n.sev}" role="${n.sev==='crit'?'alert':'status'}"><span class="sev">${sevName[n.sev]}</span>
+      <div><b>${n.title}</b>${compact ? '' : `<p>${n.text}</p>`}<div class="meta">${compact ? n.text : n.meta}</div></div>
+      ${n.link ? `<a href="${n.link[1]}">${n.link[0]} →</a>` : '<span></span>'}</div>`;
+  }
+  function renderStatus() {
+    const v = controlView[control];
+    const s = $('#status');
+    s.className = 'status ' + v.cls;
+    let html = `<span class="dot" aria-hidden="true">${icons[v.icon]}</span>
+      <div><h2>${v.title}</h2><p>${v.text}</p></div>
+      <div class="actions"><button type="button" class="${v.action[2]}" data-act="${v.action[0]}"><span class="l-long">${v.action[1]}</span><span class="l-short">${v.action[0] === 'take' ? 'Übernehmen' : 'Zurückgeben'}</span></button></div>`;
+    if (confirming) {
+      const c = confirmText[confirming];
+      html += `<div class="confirm"><b>${c.title}</b><ul>${c.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+        <div class="actions"><button type="button" class="${c.cls}" data-act="confirm">${c.ok}</button><button type="button" class="btn ghost" data-act="cancel">Abbrechen</button></div></div>`;
+    }
+    s.innerHTML = html;
+    const ns = notices();
+    const sorted = [...ns].sort((a,b)=>['crit','warn','info'].indexOf(a.sev)-['crit','warn','info'].indexOf(b.sev));
+    $('#top-notices').innerHTML = sorted.slice(0,2).map(n=>noticeHTML(n,true)).join('');
+    const pill = $('#notice-pill');
+    pill.hidden = !sorted.length;
+    if (sorted.length) {
+      pill.className = 'notice-pill n-' + sorted[0].sev;
+      pill.innerHTML = `<span class="sev">${sevName[sorted[0].sev]}</span><span class="txt">${sorted[0].title}${sorted.length > 1 ? ` · +${sorted.length - 1} weitere` : ''}</span><span aria-hidden="true">→</span>`;
+    }
+    $('#all-notices').innerHTML = sorted.length ? sorted.map(n=>noticeHTML(n,false)).join('') :
+      '<div class="panel"><b>Alles in Ordnung</b><p class="dim">Keine offenen Hinweise. Messwerte, EOS und Geräte melden sich regelmäßig.</p></div>';
+    $('#notice-count').textContent = sorted.length ? `${sorted.length} offen` : 'keine offen';
+    const badge = $('#nav-badge');
+    badge.hidden = !sorted.length;
+    badge.textContent = sorted.length;
+    badge.className = 'badge' + (sorted[0]?.sev==='warn' ? ' warn' : sorted[0]?.sev==='info' ? ' info' : '');
+  }
+
+  function renderKpis() {
+    const backup = scenarios[scenario].grid === 'off';
+    const unknown = scenarios[scenario].grid === 'warn';
+    const k = [
+      ['PV jetzt','7,5 kW','Rest heute ≈ 9 kWh · morgen ≈ 6'],
+      ['Strompreis','30,4 ct/kWh','ab 18:00 36,8 ct'],
+      ['Netz', backup ? 'getrennt' : '−0,3 kW', backup ? 'Notstrombetrieb' : unknown ? 'Status unbekannt' : 'Einspeisung · heute 6,4 kWh'],
+      ['Speicher','60 %','lädt 1,2 kW · voll ≈ 15:40']
+    ];
+    $('#kpis').innerHTML = k.map(([a,b,c])=>`<div class="kpi"><small>${a}</small><strong>${b}</strong><small>${c}</small></div>`).join('');
+    const t = agg([dayTotals(TODAY)]), nm = netzMetrics(t);
+    $('#today-sum').textContent = `Verbrauch ${fmt(nm.use)} kWh · ${eur(nm.cost + nm.base)} · Einspeisung +${eur(nm.feedVal)}`;
+    $('#balance').innerHTML = [...CONS.map(c => { const m = metrics(t, c); return [c, detailNames[c], `${fmt(m.use)} kWh`, `${pct(m.share)} eigen · ${eur(m.cost)}`]; }),
+      ['netz','Einspeisung',`${fmt(t.feed)} kWh`,`+${eur(nm.feedVal)} · Bezug ${fmt(t.gesamt.grid)} kWh`],
+      ['gesamt','Gesamt',`${fmt(nm.use)} kWh`,`${eur(nm.cost + nm.base)} · netto ${eur(nm.net)}`]]
+      .map(([k,a,b,c])=>`<a class="kpi tile-link${k==='netz'?' feed':''}" href="#auswertung-${k}"><small>${a}</small><strong>${b}</strong><small>${c}</small><span class="more">Auswertung →</span></a>`).join('');
+  }
+
+  function renderFlow() {
+    const sc = scenarios[scenario];
+    const gridOff = sc.grid === 'off', carCrit = sc.car === 'crit';
+    const nodes = [
+      ['solar','PV','7,5 kW','',30,17,'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M19 5l-1.5 1.5m-11 11L5 19"/>'],
+      ['grid','Netz',gridOff?'—':'−0,3 kW',gridOff?'getrennt':'Einspeisung',30,50,'<path d="m8 21 3-18h2l3 18M7 7h10M5 12h14"/>'],
+      ['battery','Speicher','1,2 kW','60 % · lädt',30,83,'<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4M5 10v4M8 10v4M11 10v4"/>'],
+      ['house','Haus','1,5 kW','',70,17,'<path d="M3 10.5 12 3l9 7.5M5.5 9v11h13V9"/>'],
+      ['car','ID.4',carCrit?'≈ 3,7 kW':'3,7 kW',carCrit?'vor 3 min':'40 % · PV',70,50,'<path d="M4 17H2v-5l3-2 2.5-5h7L18 10l3 1.5V17h-2M8 17h8"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="17" r="2"/>'],
+      ['heat','Wärmepumpe','0,8 kW','',70,83,'<path d="M3 7c3-4 6 4 9 0s6 4 9 0M3 13c3-4 6 4 9 0s6 4 9 0M3 19c3-4 6 4 9 0s6 4 9 0"/>']
+    ];
+    const paths = {solar:'M30 17 Q41 17 45 42', grid:'M30 50 H44', battery:'M45 58 Q41 83 30 83', house:'M55 42 Q59 17 70 17', car:'M56 50 H70', heat:'M55 58 Q59 83 70 83'};
+    const nodeHref = {solar:'#pv', grid:'#auswertung-netz', battery:'#uebersicht', house:'#auswertung-haus', car:'#auto', heat:'#auswertung-waermepumpe'};
+    const dir = {solar:'', grid:' rev', battery:' rev', house:'', car:'', heat:''};
+    const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      ${Object.values(paths).map(d=>`<path class="wire" d="${d}"/>`).join('')}
+      ${Object.entries(paths).map(([k,d])=>`<path class="pulse c-${k}${dir[k]}${(k==='grid'&&gridOff)?' off':''}" pathLength="100" d="${d}"/>`).join('')}
+    </svg>`;
+    const hub = `<a class="hub" href="#auswertung-gesamt" aria-label="EOS · Tagesbilanz"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M11 9h10M11 16h8M11 23h10M11 9v14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></a>`;
+    $('#flow').innerHTML = svg + hub + nodes.map(([k,name,val,sub,x,y,ico]) => {
+      const off = k==='grid' && gridOff, warn = k==='grid' && sc.grid==='warn', crit = k==='car' && carCrit;
+      return `<a class="node ${x < 50 ? 'l' : 'r'} c-${k}${off?' off':''}${crit?' problem':''}${warn?' warnflag':''}" style="--x:${x}%;top:${y}%" href="${nodeHref[k]}">
+        <span class="orb"><svg viewBox="0 0 24 24" aria-hidden="true">${ico}</svg>${(crit||warn)?`<span class="flag" aria-label="Problem">!</span>`:''}</span>
+        <span class="txt"><span>${name}</span><strong>${val}</strong>${sub?`<em>${sub}</em>`:''}</span></a>`;
+    }).join('');
+  }
+
+  const segments = [
+    {m:'own', d:3, t:'11:30–14:30', txt:'Eigenverbrauch · Speicher deckt das Haus', past:true},
+    {m:'pv', d:1.5, t:'14:30–16:00', txt:'PV-Laden · Speicher lädt mit Überschuss bis 95 %'},
+    {m:'own', d:6, t:'16:00–22:00', txt:'Eigenverbrauch · Abendspitze aus dem Speicher (36,8 ct/kWh)'},
+    {m:'hold', d:4, t:'22:00–02:00', txt:'Halten · Reserve für den Morgen'},
+    {m:'grid', d:1, t:'02:00–03:00', txt:'Netzladen · günstiger Tarif 24,1 ct/kWh bis 60 %'}
+  ];
+  const label = {own:'Eigenverbrauch', pv:'PV-Laden', hold:'Halten', grid:'Netzladen'};
+  function renderTrack() {
+    $('#track').innerHTML = segments.map((s,i)=>`<button type="button" class="seg m-${s.m}${s.past?'':' future'}" style="--d:${s.d}" data-i="${i}" aria-pressed="false" aria-label="${s.t}: ${label[s.m]}">${s.d>=2?label[s.m]:''}</button>`).join('') + '<span class="nowline" aria-hidden="true"></span>';
+    $('#next-list').innerHTML = [
+      ['15:40','Speicher voll · Überschuss geht ins Netz','≈ 1,8 kWh Einspeisung bis Sonnenuntergang · 8,03 ct/kWh'],
+      ['16:00','Speicher wechselt auf Eigenverbrauch','Abendspitze 36,8 ct/kWh'],
+      ['22:00','Speicher hält 45 % als Reserve','kein Entladen über Nacht'],
+      ['02:00','Auto lädt aus dem Netz bis 80 %','Abfahrt Do 07:00 · 24,1 ct/kWh']
+    ].map(([t,a,b])=>`<div class="row"><span><b>${a}</b><br><small>${b}</small></span><span class="tag num">${t}</span></div>`).join('');
+  }
+
+  const goals = [
+    {day:'Do', time:'07:00', title:'Arbeit', detail:'wiederkehrend Mo–Fr · ohne Feiertage', soc:80, next:true, on:true},
+    {day:'Sa', time:'09:30', title:'Wochenendausflug', detail:'einmalig 22.11.', soc:95, on:true},
+    {day:'So', time:'—', title:'Urlaub', detail:'ausgeschaltet', soc:100, on:false}
+  ];
+  function renderGoals() {
+    $('#goals').innerHTML = goals.map((g,i)=>`<div class="goal-card${g.next?' next':''}"${g.on?'':' style="opacity:.6"'}>
+      <div class="when"><b>${g.day}</b><small class="num">${g.time}</small></div>
+      <div style="min-width:0"><b>${g.title} · ${g.soc} %</b><br><small>${g.next?'Nächstes Ziel · ':''}${g.detail}</small></div>
+      <input class="toggle" type="checkbox" ${g.on?'checked':''} data-goal="${i}" aria-label="${g.title} aktiv"></div>`).join('');
+  }
+  function renderCarState() {
+    const crit = scenarios[scenario].car === 'crit';
+    $('#car-state').textContent = crit ? 'Wallbox nicht erreichbar' : $('#sw-fast').checked ? 'Schnellladen' : 'Lädt mit PV-Überschuss';
+    $('#car-state').style.color = crit ? 'var(--crit)' : '';
+    $('#sys-wallbox').textContent = crit ? 'nicht erreichbar' : 'erreichbar';
+    $('#sys-wallbox').style.color = crit ? 'var(--crit)' : 'var(--ok)';
+    $('#sys-battery').style.color = 'var(--ok)';
+    renderCarPlan();
+  }
+
+  // Wetter & PV-Prognose (Beispielwerte)
+  const wxIcon = {
+    sun:'<svg class="wx-ico" viewBox="0 0 32 32" aria-hidden="true"><circle class="sun" cx="16" cy="16" r="6"/><g class="sun" stroke-width="2" stroke-linecap="round"><path d="M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.8 2.8M22.4 22.4l2.8 2.8M25.2 6.8l-2.8 2.8M9.6 22.4l-2.8 2.8"/></g></svg>',
+    partly:'<svg class="wx-ico" viewBox="0 0 32 32" aria-hidden="true"><circle class="sun" cx="12" cy="11" r="5"/><g class="sun" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M3 11h2.5M5.6 4.6l1.8 1.8M18.4 4.6l-1.8 1.8"/></g><path class="cloud" d="M10 26h14a5 5 0 0 0 0-10 7 7 0 0 0-13.3 2A4 4 0 0 0 10 26Z"/></svg>',
+    cloud:'<svg class="wx-ico" viewBox="0 0 32 32" aria-hidden="true"><path class="cloud" d="M8 25h16a6 6 0 0 0 0-12 8 8 0 0 0-15.3 2.5A4.8 4.8 0 0 0 8 25Z"/></svg>',
+    rain:'<svg class="wx-ico" viewBox="0 0 32 32" aria-hidden="true"><path class="cloud" d="M8 20h16a6 6 0 0 0 0-12 8 8 0 0 0-15.3 2.5A4.8 4.8 0 0 0 8 20Z"/><path class="rain" d="M11 24l-1.5 4M17 24l-1.5 4M23 24l-1.5 4"/></svg>',
+    moon:'<svg class="wx-ico" viewBox="0 0 32 32" aria-hidden="true"><path class="moon" d="M20 4a12 12 0 1 0 8 19A10 10 0 0 1 20 4Z"/></svg>'
+  };
+  const wxText = {sun:'sonnig', partly:'heiter bis wolkig', cloud:'bedeckt', rain:'Regen', moon:'klar'};
+  const wxHours = [
+    {d:'Heute', t:'14', w:'sun', tmp:7, cc:5, sun:60, pv:3.4, now:true, note:'14:32–15:00, Rest der Stunde'},
+    {d:'Heute', t:'15', w:'sun', tmp:6, cc:10, sun:60, pv:4.4},
+    {d:'Heute', t:'16', w:'partly', tmp:4, cc:25, sun:35, pv:1.2, note:'Sonnenuntergang 16:36'},
+    {gap:'Nacht · klar · bis −1 °C'},
+    {d:'Do', t:'08', w:'cloud', tmp:1, cc:90, sun:0, pv:.2},
+    {d:'Do', t:'09', w:'cloud', tmp:2, cc:90, sun:0, pv:.6},
+    {d:'Do', t:'10', w:'partly', tmp:3, cc:70, sun:15, pv:1.0},
+    {d:'Do', t:'11', w:'partly', tmp:4, cc:65, sun:20, pv:1.4},
+    {d:'Do', t:'12', w:'cloud', tmp:5, cc:85, sun:5, pv:1.2},
+    {d:'Do', t:'13', w:'cloud', tmp:6, cc:90, sun:0, pv:.9},
+    {d:'Do', t:'14', w:'cloud', tmp:5, cc:95, sun:0, pv:.5},
+    {d:'Do', t:'15', w:'rain', tmp:5, cc:100, sun:0, pv:.2, note:'Regen ab 15 Uhr'}
+  ];
+  const wxDays = [
+    {d:'Heute', w:'sun', hi:8, lo:-1, pv:30.3, min:29.5, max:31, sunh:6.5, sub:'21,3 kWh erreicht'},
+    {d:'Do 19.', w:'cloud', hi:6, lo:1, pv:6.0, min:4, max:8, sunh:0.7},
+    {d:'Fr 20.', w:'rain', hi:8, lo:4, pv:2.0, min:1, max:3, sunh:0},
+    {d:'Sa 21.', w:'partly', hi:7, lo:2, pv:9.0, min:5, max:13, sunh:3.1}
+  ];
+  function renderWeather() {
+    $('#wx-chip').innerHTML = `${wxIcon.sun}7 °C`;
+    $('#wx-now').innerHTML = `${wxIcon.sun}<span class="temp">7 °C</span>
+      <div style="display:grid;gap:2px;min-width:0"><b>Sonnig · gefühlt 4 °C</b><div class="meta"><span>Bewölkung 5 %</span><span>Wind 12 km/h W</span><span>Sonnenuntergang 16:36</span><span>PV jetzt 7,5 kW · ≈ 98 % der Prognose</span></div></div>`;
+    const maxPv = Math.max(...wxHours.filter(h => !h.gap).map(h => h.pv));
+    $('#wx-strip').innerHTML = wxHours.map((h, i) => h.gap
+      ? `<div class="wx-gap" role="listitem">${h.gap.replace(' · ', '<br>')}</div>`
+      : `<button type="button" role="listitem" class="wx-h${h.now ? ' now' : ''}" data-i="${i}" aria-pressed="false" aria-label="${h.d} ${h.t} Uhr: ${wxText[h.w]}, ${h.tmp} Grad, PV ${fmt(h.pv)} kWh">
+          <span class="t">${h.now ? 'Jetzt' : (h.t === '08' || i === 0 ? h.d + ' ' : '') + h.t}</span>${wxIcon[h.w]}<span class="tmp">${h.tmp}°</span>
+          <span class="pvbar"><i style="height:${(h.pv / maxPv * 100).toFixed(0)}%"></i></span><span class="kwh">${fmt(h.pv)}</span><span class="cc">☁ ${h.cc} %</span></button>`).join('');
+    $('#wx-detail').textContent = 'Stunde antippen für Details. Balken: erwarteter PV-Ertrag in kWh pro Stunde.';
+    const scale = 32;
+    $('#wx-days').innerHTML = wxDays.map(d => `<div class="wx-day" role="listitem"><div class="hd"><b>${d.d}</b>${wxIcon[d.w]}</div>
+      <small>${wxText[d.w]} · ${d.hi}° / ${d.lo}° · ☀ ${fmt(d.sunh)} h</small>
+      <strong>≈ ${fmt(d.pv)} kWh</strong>
+      <div class="range" aria-label="Spanne ${fmt(d.min, 0)} bis ${fmt(d.max, 0)} kWh"><i style="left:${d.min / scale * 100}%;width:${(d.max - d.min) / scale * 100}%"></i><u style="left:${d.pv / scale * 100}%"></u></div>
+      <small>${d.sub || `Spanne ${fmt(d.min, 0)}–${fmt(d.max, 0)} kWh`}</small></div>`).join('');
+    $('#wx-effects').innerHTML = [
+      ['Morgen kaum Sonne', 'Do nur ≈ 6 kWh PV erwartet. EOS lädt den Speicher heute Nacht 02:00–03:00 günstig auf 60 %.', 'Speicher'],
+      ['Auto lädt nachts aus dem Netz', 'Der PV-Ertrag bis Do 07:00 reicht nicht für 80 %. Netzladen ab 02:00 zu 24,1 ct/kWh.', 'Ladeplan →', '#auto'],
+      ['Freitag Regen', 'Ab Do 15 Uhr Regen, Fr ≈ 2 kWh. Der Plan für Fr wird morgen mit frischer Prognose neu berechnet.', 'Ausblick']
+    ].map(([t, s, tag, href]) => href
+      ? `<a class="row rowlink" href="${href}" data-plan><span><b>${t}</b><br><small>${s}</small></span><span class="tag" style="color:var(--accent)">${tag}</span></a>`
+      : `<div class="row"><span><b>${t}</b><br><small>${s}</small></span><span class="tag">${tag}</span></div>`).join('');
+  }
+  $('#wx-strip').addEventListener('click', e => {
+    const b = e.target.closest('.wx-h'); if (!b) return;
+    $$('#wx-strip .wx-h').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    const h = wxHours[+b.dataset.i];
+    $('#wx-detail').textContent = `${h.d} ${h.t}:00 · ${wxText[h.w]}, ${h.tmp} °C · Bewölkung ${h.cc} % · Sonne ${h.sun} min · PV ≈ ${fmt(h.pv)} kWh${h.note ? ' · ' + h.note : ''}`;
+  });
+
+  // EOS-Ladeplan fürs Auto: jetzt (14:32) bis Do 07:00 = 16,47 h
+  const carSegs = [
+    {m:'pv', d:1.47, t:'14:32–16:00', txt:'PV-Überschuss · 3,7 kW 1-phasig · +5,4 kWh (40 → 47 %) · bewertet mit 8,03 ct/kWh'},
+    {m:'pause', d:10, t:'16:00–02:00', txt:'Pause · kein PV mehr, Abendspitze bis 36,8 ct/kWh'},
+    {m:'grid', d:2.33, t:'02:00–04:20', txt:'Netzladen · 11 kW 3-phasig · +25,4 kWh (47 → 80 %) · 24,1 ct/kWh'},
+    {m:'car', d:2.67, t:'04:20–07:00', txt:'Ziel 80 % erreicht · 2 h 40 min Puffer bis zur Abfahrt'}
+  ];
+  const carLabel = {pv:'PV', pause:'Pause', grid:'Netz', car:'Bereit'};
+  function renderCarPlan() {
+    const crit = scenarios[scenario].car === 'crit', fast = $('#sw-fast').checked, ro = control === 'read_only';
+    $('#cp-track').innerHTML = carSegs.map((s, i) => `<button type="button" class="seg m-${s.m}" style="--d:${s.d}" data-i="${i}" aria-pressed="false" aria-label="${s.t}: ${s.txt}">${s.d >= 2 ? carLabel[s.m] : ''}</button>`).join('');
+    $('#cp-list').innerHTML = [
+      ['bis 16:00','Lädt mit PV-Überschuss','+5,4 kWh · auf 47 % · 0,43 €'],
+      ['16:00','Pause über die Abendspitze','Netzstrom jetzt 30,4, ab 18:00 36,8 ct/kWh'],
+      ['02:00','Netzladen 3-phasig mit 11 kW','+25,4 kWh · 24,1 ct/kWh · 6,12 €'],
+      ['04:20','80 % erreicht','2 h 40 min Puffer bis Do 07:00']
+    ].map(([t, a, b]) => `<div class="row"><span><b>${a}</b><br><small>${b}</small></span><span class="tag num">${t}</span></div>`).join('');
+    $('#cp-compare').innerHTML = `<div class="${fast ? '' : 'win'}"><small>EOS-Plan</small><strong>6,55 €</strong><small>Ø 21,3 ct/kWh · 80 % um 04:20</small></div>
+      <div class="${fast ? 'win' : ''}"><small>Sofort laden${fast ? ' (aktiv)' : ''}</small><strong>≈ 8,40 €</strong><small>Ø 27,3 ct/kWh · 80 % um ≈ 17:20</small></div>`;
+    let alert = '';
+    if (crit) alert = `<div class="notice n-crit"><span class="sev">Kritisch</span><div><b>Plan wird gerade nicht umgesetzt</b><div class="meta">Die Wallbox ist nicht erreichbar. EOS plant weiter; Befehle gehen raus, sobald sie wieder antwortet.</div></div><a href="#hinweise">Diagnose →</a></div>`;
+    else if (fast) alert = `<div class="notice n-warn"><span class="sev">Überstimmt</span><div><b>Schnellladen ist an</b><div class="meta">Das Auto lädt jetzt mit voller Leistung, 80 % um ≈ 17:20. Der EOS-Plan greift wieder, wenn du Schnellladen ausschaltest.</div></div><span></span></div>`;
+    else if (ro) alert = `<div class="notice n-info"><span class="sev">Info</span><div><b>Lesemodus</b><div class="meta">Der Plan wird nur angezeigt. Die Energiezentrale steuert die Wallbox nicht.</div></div><span></span></div>`;
+    $('#cp-alert').innerHTML = alert;
+    $('#car-plan').classList.toggle('overridden', fast || ro);
+    $('#cp-tag').textContent = fast ? 'überstimmt' : crit ? 'ausgesetzt' : ro ? 'nur Anzeige' : 'Plan von 14:31';
+    $('#cp-detail').textContent = 'Abschnitt antippen für Details.';
+  }
+  $('#cp-track').addEventListener('click', e => {
+    const b = e.target.closest('.seg'); if (!b) return;
+    $$('#cp-track .seg').forEach(s => s.setAttribute('aria-pressed', s === b ? 'true' : 'false'));
+    const s = carSegs[+b.dataset.i];
+    $('#cp-detail').textContent = `${s.t} · ${s.txt}`;
+  });
+  document.addEventListener('click', e => {
+    const a = e.target.closest('#to-plan, [data-plan]'); if (!a) return;
+    e.preventDefault();
+    if (location.hash !== '#auto') location.hash = '#auto';
+    requestAnimationFrame(() => $('#car-plan').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'}));
+  });
+
+  // ===== Auswertungen: Datenmodell (Beispielwerte, deterministisch erzeugt) =====
+  const TODAY = new Date(2026, 10, 18), NOW_H = 14, NOW_FRAC = 32/60;
+  const START = new Date(2025, 2, 1); // Inbetriebnahme: ältere Zeiträume ohne Daten
+  const FEED_CT = 8.03;
+  const fmt = (n, d=1) => (Math.round(n * 10**d) / 10**d).toFixed(d).replace('.', ',');
+  const eur = n => fmt(n, 2) + ' €';
+  const pct = v => Math.round(v * 100) + ' %';
+  const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const MON_S = ['Jan.','Feb.','März','Apr.','Mai','Juni','Juli','Aug.','Sep.','Okt.','Nov.','Dez.'];
+  const WD = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const CONS = ['haus','auto','waermepumpe'], SRC = ['pv','bat','grid'];
+  const rng = seed => { let t = seed >>> 0; return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t); r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; }; };
+  const dkey = d => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  const isToday = d => dkey(d) === dkey(TODAY);
+  const sum = a => a.reduce((s, v) => s + v, 0);
+  const pad24 = a => [...a, ...Array(24 - a.length).fill(0)];
+  const norm = a => { const s = sum(a); return a.map(v => s ? v / s : 0); };
+  const maxBy = (arr, f) => arr.reduce((b, x) => f(x) > f(b) ? x : b, arr[0]);
+
+  // Tarif (Beispielwerte, gepflegt unter Einstellungen › Kosten), ct/kWh netto
+  const TARIFF_FIX = [['Anbieteraufschlag', 1.79], ['Netzentgelt', 8.20], ['Konzessionsabgabe', 1.99], ['Umlagen (KWKG, §19, Offshore)', 1.68], ['Stromsteuer', 2.05]];
+  const FIXED_NET = sum(TARIFF_FIX.map(t => t[1]));
+  const gross = boerse => (boerse + FIXED_NET) * 1.19;
+  const BASE_MONTH = 9.90 + 6.50 + 2.50; // Grundpreis Anbieter + Netz + Messstelle, brutto pro Monat
+  const BASE_DAY = BASE_MONTH * 12 / 365;
+
+  // Gemessene Stundenwerte heute 00:00–14:32 (kWh)
+  const todayH = {
+    haus: { pv:pad24([0,0,0,0,0,0,0,0,.1,.3,.55,.7,.9,.95,.7]), bat:pad24([0,0,0,0,0,0,.3,.55,.7,.45,.3,.2,.14,.1,0]), grid:pad24([.4,.36,.34,.34,.36,.4,.45,.5,.3,.2,.15,.15,.12,.1,.09]) },
+    auto: { pv:pad24([0,0,0,0,0,0,0,0,0,0,0,0,0,3.1,2.0]), bat:pad24([]), grid:pad24([]) },
+    waermepumpe: { pv:pad24([0,0,0,0,0,0,0,0,0,.12,.15,.18,.2,.2,.16]), bat:pad24([]), grid:pad24([.1,.1,.1,.1,.12,.12,.15,.15,.15]) },
+    feed: pad24([0,0,0,0,0,0,0,0,0,.3,.9,1.6,2.0,1.2,.4]), boerse: 9.84, charge: 4.59
+  };
+  // Tagesform für alle anderen Tage
+  const SH = {
+    haus: { pv:norm([0,0,0,0,0,0,0,0,.1,.3,.55,.7,.9,.95,.85,.6,.3,.05,0,0,0,0,0,0]), bat:norm([0,0,0,0,0,0,.3,.55,.7,.45,.3,.2,.14,.1,.1,.2,.4,.75,.85,.8,.7,.6,.3,.1]), grid:norm([.4,.36,.34,.34,.36,.4,.45,.5,.3,.2,.15,.15,.12,.1,.09,.1,.1,.05,.05,.05,.05,.1,.3,.4]) },
+    auto: { pv:norm([0,0,0,0,0,0,0,0,0,0,.4,1,1,1,.8,.3,0,0,0,0,0,0,0,0]), bat:Array(24).fill(0), grid:norm([0,0,1,1,1,.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) },
+    waermepumpe: { pv:norm([0,0,0,0,0,0,0,0,0,.12,.15,.18,.2,.2,.2,.15,0,0,0,0,0,0,0,0]), bat:norm([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,.1,.15,.2,.2,.15,.1,0,0]), grid:norm([.1,.1,.1,.1,.12,.12,.15,.15,.15,0,0,0,0,0,0,0,.1,.15,.2,.2,.2,.15,.12,.1]) },
+    feed: norm([0,0,0,0,0,0,0,0,0,.3,.9,1.6,2.0,1.6,1.0,.4,0,0,0,0,0,0,0,0])
+  };
+  const sunM = [.18,.28,.45,.6,.72,.78,.8,.72,.58,.4,.3,.15], wpM = [11,9,7,4,2,1.5,1.5,1.5,2,4,6,9];
+  const feedM = [.8,2.5,7,13,18,21,22,18,11,5,2.5,1], boerseM = [11.2,10.1,8.4,7.2,6.1,6.8,7.9,8.3,9.0,9.9,10.4,11.0];
+  const dayCache = new Map();
+  function dayTotals(d) {
+    const k = dkey(d);
+    if (dayCache.has(k)) return dayCache.get(k);
+    let o;
+    if (k === dkey(TODAY)) {
+      o = {}; CONS.forEach(c => { o[c] = {}; SRC.forEach(s => o[c][s] = sum(todayH[c][s])); });
+      o.feed = sum(todayH.feed); o.boerse = todayH.boerse; o.charge = todayH.charge;
+    } else {
+      const r = rng(k), m = d.getMonth();
+      const sun = Math.min(.95, sunM[m] * (.45 + r()));
+      const haus = 11 + ([0,1,10,11].includes(m) ? 2 : 0) + r() * 4, wp = wpM[m] * (.75 + r() * .5);
+      const auto = r() < .45 ? 0 : 4 + r() * 10, aPv = Math.min(1, sun * 1.3);
+      o = { haus:{pv:haus*sun*.55, bat:haus*sun*.45, grid:haus*(1-sun)},
+            auto:{pv:auto*aPv, bat:0, grid:auto*(1-aPv)},
+            waermepumpe:{pv:wp*sun*.5, bat:wp*sun*.2, grid:wp*(1-sun*.7)},
+            feed: feedM[m] * (sun / sunM[m]) * (.6 + r() * .6), boerse: boerseM[m] * (.85 + r() * .3) };
+      o.charge = (o.haus.bat + o.waermepumpe.bat) / .92;
+    }
+    dayCache.set(k, o); return o;
+  }
+  function agg(list) {
+    const o = {days:list.length, feed:0, charge:0}; let bw = 0;
+    CONS.forEach(c => o[c] = {pv:0, bat:0, grid:0});
+    list.forEach(t => { CONS.forEach(c => SRC.forEach(s => o[c][s] += t[c][s])); o.feed += t.feed; o.charge += t.charge; bw += t.boerse * sum(CONS.map(c => t[c].grid)); });
+    o.gesamt = {pv:0, bat:0, grid:0}; CONS.forEach(c => SRC.forEach(s => o.gesamt[s] += o[c][s]));
+    o.boerse = o.gesamt.grid ? bw / o.gesamt.grid : (list[0]?.boerse || 10);
+    return o;
+  }
+  const daysBetween = (a, b) => { const out = [], d = new Date(a); while (d <= b) { out.push(new Date(d)); d.setDate(d.getDate() + 1); } return out; };
+  const dataDays = (s, e) => daysBetween(s < START ? START : s, e > TODAY ? TODAY : e);
+
+  // Zeitraum
+  let period = 'tag', offset = 0;
+  function periodInfo() {
+    if (period === 'tag') { const d = new Date(TODAY); d.setDate(d.getDate() + offset); return {start:d, end:d, d}; }
+    if (period === 'monat') { const s = new Date(TODAY.getFullYear(), TODAY.getMonth() + offset, 1); return {start:s, end:new Date(s.getFullYear(), s.getMonth() + 1, 0)}; }
+    const y = TODAY.getFullYear() + offset; return {start:new Date(y, 0, 1), end:new Date(y, 11, 31)};
+  }
+  function periodLabel(pi) {
+    if (period === 'tag') { const d = pi.d, b = `${d.getDate()}. ${MON_S[d.getMonth()]}`; return offset === 0 ? `Heute, ${b}` : offset === -1 ? `Gestern, ${b}` : `${WD[d.getDay()]}, ${b} ${d.getFullYear()}`; }
+    if (period === 'monat') return `${MONTHS[pi.start.getMonth()]} ${pi.start.getFullYear()}`;
+    return String(pi.start.getFullYear());
+  }
+  const canPrev = pi => { const s = new Date(pi.start); s.setDate(s.getDate() - 1); return s >= START; };
+  const running = pi => pi.end >= TODAY;
+
+  function buildBins(pi) {
+    if (period === 'tag') {
+      const today = isToday(pi.d), t = dayTotals(pi.d);
+      return [...Array(24).keys()].map(h => {
+        const hh = String(h).padStart(2, '0'), state = today ? (h < NOW_H ? 'done' : h === NOW_H ? 'partial' : 'future') : 'done';
+        if (state === 'future') return {state, axis: h % 6 ? '' : hh};
+        const v = {}; CONS.forEach(c => { v[c] = {}; SRC.forEach(s => v[c][s] = today ? todayH[c][s][h] : t[c][s] * SH[c][s][h]); });
+        v.feed = today ? todayH.feed[h] : t.feed * SH.feed[h]; v.boerse = t.boerse; v.charge = 0;
+        return {state, axis: h % 6 ? '' : hh, title: state === 'partial' ? `${hh}:00–14:32 (läuft)` : `${hh}:00–${String(h + 1).padStart(2, '0')}:00`, unit:'Stunde', v:agg([v])};
+      });
+    }
+    if (period === 'monat') {
+      return daysBetween(pi.start, pi.end).map(d => {
+        const n = d.getDate(), state = d > TODAY ? 'future' : d < START ? 'nodata' : isToday(d) ? 'partial' : 'done';
+        const b = {state, axis: [1,8,15,22,29].includes(n) ? String(n) : ''};
+        if (state === 'done' || state === 'partial') Object.assign(b, {title:`${WD[d.getDay()]}, ${n}. ${MON_S[d.getMonth()]}${state === 'partial' ? ' (bis 14:32)' : ''}`, unit:'Tag', v:agg([dayTotals(d)])});
+        return b;
+      });
+    }
+    return [...Array(12).keys()].map(m => {
+      const y = pi.start.getFullYear(), s = new Date(y, m, 1), e = new Date(y, m + 1, 0);
+      const state = s > TODAY ? 'future' : e < START ? 'nodata' : e >= TODAY ? 'partial' : 'done';
+      const b = {state, axis: MONTHS[m][0]};
+      if (state === 'done' || state === 'partial') Object.assign(b, {title:`${MONTHS[m]} ${y}${state === 'partial' ? ' (bis heute)' : ''}`, unit:'Monat', v:agg(dataDays(s, e).map(dayTotals))});
+      return b;
+    });
+  }
+  const periodTotals = pi => agg(period === 'tag' ? [dayTotals(pi.d)] : dataDays(pi.start, pi.end).map(dayTotals));
+
+  function metrics(tot, key) {
+    const c = tot[key], use = c.pv + c.bat + c.grid, self = c.pv + c.bat, price = gross(tot.boerse);
+    const costGrid = c.grid * price / 100, costSelf = self * FEED_CT / 100, cost = costGrid + costSelf;
+    return {c, use, self, share: use ? self / use : 0, price, costGrid, costSelf, cost, saving: use * price / 100 - cost};
+  }
+  function netzMetrics(tot) {
+    const g = metrics(tot, 'gesamt'), prod = tot.gesamt.pv + tot.charge + tot.feed;
+    const base = tot.days * BASE_DAY, feedVal = tot.feed * FEED_CT / 100;
+    return {...g, prod, eigen: prod ? (prod - tot.feed) / prod : 0, base, feedVal, net: g.cost + base - feedVal};
+  }
+
+  // Heute: von Hand beschriebene Beobachtungen
+  function todayFacts(key) {
+    const carCrit = scenarios[scenario].car === 'crit';
+    return {
+      haus:[['Die Nacht kam aus dem Netz','2,2 kWh zwischen 00 und 06 Uhr. Der Speicher hielt seine Reserve für die Morgenspitze.','00–06'],
+            ['Speicher hat die Morgenspitze übernommen','1,6 kWh zwischen 06 und 09 Uhr statt Netzstrom.','06–09'],
+            ['Prognose bis Mitternacht','EOS erwartet noch ≈ 6,5 kWh, davon ≈ 5,0 kWh aus dem Speicher.','EOS']],
+      auto:[[carCrit ? 'Ladevorgang seit 13:10 · Wallbox nicht erreichbar' : 'Ladevorgang seit 13:10', carCrit ? 'Ladeleistung fehlt seit 14:29. Bis dahin 3,7 kW · 1-phasig · PV-Überschuss.' : 'Ø 3,7 kW · 1-phasig · 100 % PV-Überschuss.', carCrit ? 'geschätzt' : 'läuft'],
+            ['Bis zum Ladeziel Do 07:00','Noch 30,8 kWh · Plan: 5,4 kWh PV bis 16:00, 25,4 kWh Netz ab 02:00.','Ladeplan →','#auto']],
+      waermepumpe:[['Nachtbetrieb aus dem Netz','1,1 kWh zwischen 00 und 09 Uhr.','00–09'],
+            ['Ab 09 Uhr mit PV','1,0 kWh direkt aus der Anlage.','09–14'],
+            ['Idee für EOS','Den Warmwasser-Zyklus in die PV-Zeit 11–15 Uhr legen. Das spart ≈ 0,20 € am Tag.','Vorschlag']],
+      netz:[['Einspeisung vor allem 11–13 Uhr','3,6 kWh, bevor das Auto um 13:10 angesteckt wurde.','11–13'],
+            ['Verschenktes Potenzial','Früher angesteckt, hätte das Auto bis zu 3,6 kWh mehr PV geladen: ≈ 0,80 € gespart.','Tipp','#auto'],
+            ['Speicher speist nicht ein','Fronius GEN24: Einspeisen aus dem Speicher ist gesperrt. Eingespeist wird nur direkter PV-Überschuss.','Gerät'],
+            ['Rest des Tages','Speicher voll ≈ 15:40, danach erwartet EOS ≈ 1,8 kWh Einspeisung.','EOS']]
+    }[key];
+  }
+  function factsFor(key, bins, tot) {
+    if (key === 'gesamt') {
+      return [...CONS.map(c => { const m = metrics(tot, c); return [detailNames[c], `${fmt(m.use)} kWh · ${pct(m.share)} eigen · ${eur(m.cost)}`, 'Auswertung →', `#${PREFIX}${c}`]; }),
+        ['Einspeisung', `${fmt(tot.feed)} kWh · +${eur(tot.feed * FEED_CT / 100)}`, 'Auswertung →', `#${PREFIX}netz`]];
+    }
+    if (period === 'tag' && offset === 0) return todayFacts(key);
+    const done = bins.filter(b => b.v), U = done[0]?.unit;
+    if (!done.length) return [['Keine Daten', 'Für diesen Zeitraum liegen keine Werte vor.', '—']];
+    const ppd = tot.days > 1;
+    if (key === 'netz') {
+      const f = maxBy(done, b => b.v.feed), g = maxBy(done, b => b.v.gesamt.grid);
+      return [['Meiste Einspeisung', `${f.title} · ${fmt(f.v.feed)} kWh`, '+' + eur(f.v.feed * FEED_CT / 100)],
+              ['Höchster Netzbezug', `${g.title} · ${fmt(g.v.gesamt.grid)} kWh`, eur(g.v.gesamt.grid * gross(g.v.boerse) / 100)],
+              ...(ppd ? [['Ø pro Tag', `${fmt(tot.feed / tot.days)} kWh eingespeist · ${fmt(tot.gesamt.grid / tot.days)} kWh bezogen`, 'Ø']] : []),
+              ['Speicher speist nicht ein', 'Fronius GEN24: Einspeisen aus dem Speicher ist gesperrt.', 'Gerät']];
+    }
+    const useOf = b => { const c = b.v[key]; return c.pv + c.bat + c.grid; };
+    const avg = sum(done.map(useOf)) / done.length;
+    const cand = done.filter(b => useOf(b) > Math.max(.05, avg * .3));
+    if (!cand.length) return [['Kein Verbrauch', key === 'auto' ? 'In diesem Zeitraum wurde nicht geladen.' : 'Für diesen Zeitraum liegen keine Werte vor.', '—']];
+    const share = b => (b.v[key].pv + b.v[key].bat) / useOf(b);
+    const best = maxBy(cand, share), worst = maxBy(cand, b => b.v[key].grid), m = metrics(tot, key);
+    const rows = [[{Stunde:'Beste Stunde', Tag:'Bester Tag', Monat:'Bester Monat'}[U], `${best.title} · ${pct(share(best))} aus eigener Erzeugung`, pct(share(best))]];
+    if (worst.v[key].grid > .05) rows.push(['Höchster Netzbezug', `${worst.title} · ${fmt(worst.v[key].grid)} kWh aus dem Netz`, `${fmt(worst.v[key].grid)} kWh`]);
+    if (key === 'auto' && U === 'Tag') rows.push(['Ladetage', `An ${cand.length} von ${done.length} Tagen geladen`, `${cand.length} Tage`]);
+    if (ppd) rows.push(['Ø pro Tag', `${fmt(m.use / tot.days)} kWh · ${eur(m.cost / tot.days)}`, 'Ø']);
+    rows.push(['Ersparnis gegenüber Netzstrom', `${eur(m.saving)} · Eigenstrom zu 8,03 ct statt ${fmt(m.price)} ct/kWh`, '+' + eur(m.saving)]);
+    return rows;
+  }
+
+  const detailNames = {haus:'Haus', auto:'Auto', waermepumpe:'Wärmepumpe', netz:'Netz', gesamt:'Gesamt'};
+  const PREFIX = 'auswertung-';
+  let currentDetail = null, lastRoute = null;
+
+  function renderPrices(key, tot) {
+    const all = key === 'gesamt' || key === 'netz';
+    const m = metrics(tot, key === 'netz' ? 'gesamt' : key), nm = netzMetrics(tot);
+    const grid = m.c.grid, price = m.price, net = tot.boerse + FIXED_NET;
+    const comps = [['Börsenstrom Ø (dynamisch)', tot.boerse], ...TARIFF_FIX, ['Mehrwertsteuer 19 %', net * .19]];
+    const row = (n, ct, e, cls='') => `<div class="prow ${cls}"><span>${n}</span><span class="num dim">${ct}</span><span class="num">${e}</span></div>`;
+    let h = `<p class="ph">Netzstrom Ø ${fmt(price, 2)} ct/kWh</p>`;
+    h += comps.map(([n, ct]) => `<div class="prow"><span>${n}</span><span class="num dim">${fmt(ct, 2)} ct</span><span class="num">${eur(grid * ct / 100)}</span><span class="pb"><i style="width:${(ct / price * 100).toFixed(1)}%"></i></span></div>`).join('');
+    h += `<p class="ph">Kosten im Zeitraum</p>`;
+    h += row(`Netzbezug ${fmt(grid)} kWh`, `${fmt(price, 2)} ct`, eur(m.costGrid));
+    let total = m.costGrid;
+    if (all) { h += row(`Grundpreise anteilig (${tot.days} ${tot.days === 1 ? 'Tag' : 'Tage'})`, `${fmt(BASE_MONTH, 2)} €/Mon.`, eur(nm.base)); total += nm.base; }
+    if (key !== 'netz') { h += row(`Eigenstrom ${fmt(m.self)} kWh`, `${fmt(FEED_CT, 2)} ct`, eur(m.costSelf)); total += m.costSelf; }
+    if (all) { h += row(`Einspeisevergütung ${fmt(tot.feed)} kWh`, `${fmt(FEED_CT, 2)} ct`, '−' + eur(nm.feedVal)); total -= nm.feedVal; }
+    h += row(key === 'netz' ? 'Saldo Netz' : key === 'gesamt' ? 'Netto' : 'Kosten', '', eur(total), 'sum');
+    h += `<p class="help" style="margin-top:8px">Eigenstrom ist mit der entgangenen Einspeisevergütung bewertet.${all ? '' : ' Grundpreise stehen nur in der Gesamtbilanz.'} Tarifwerte sind Beispiele aus Einstellungen › Kosten.</p>`;
+    $('#d-prices').innerHTML = h;
+    $('#d-price-tag').textContent = `${fmt(price, 1)} ct/kWh`;
+  }
+
+  function renderDetail(key) {
+    const pi = periodInfo(), bins = buildBins(pi), tot = periodTotals(pi);
+    const sc = scenarios[scenario], todayView = period === 'tag' && offset === 0;
+    const span = todayView ? ' bis 14:32' : running(pi) ? ' bis heute' : '';
+    $$('#p-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === period));
+    $('#p-label').textContent = periodLabel(pi);
+    $('#p-prev').disabled = !canPrev(pi);
+    $('#p-next').disabled = offset >= 0;
+    $('#d-nav').innerHTML = Object.entries(detailNames).map(([k, n]) => `<a href="#${PREFIX}${k}"${k === key ? ' aria-current="page"' : ''}>${n}</a>`).join('');
+    $('#d-title').textContent = {haus:'Haus', auto:'Auto · ID.4', waermepumpe:'Wärmepumpe', netz:'Netz & Einspeisung', gesamt:'Gesamtbilanz'}[key];
+    $('#d-eyebrow').textContent = {haus:'Verbraucher', auto:'Verbraucher', waermepumpe:'Verbraucher', netz:'Netz', gesamt:'Alle Verbraucher'}[key] + ' · ' + periodLabel(pi);
+
+    // Kernaussage + Kennzahlen
+    let lead, kpis;
+    const perDay = v => tot.days > 1 ? `Ø ${fmt(v / tot.days)} kWh pro Tag` : span ? span.trim() : 'ganzer Tag';
+    if (key === 'netz' || key === 'gesamt') {
+      const nm = netzMetrics(tot);
+      if (key === 'netz') {
+        lead = `${fmt(tot.feed)} kWh eingespeist · ${fmt(tot.gesamt.grid)} kWh bezogen · ${pct(nm.eigen)} des PV-Stroms selbst genutzt.` + (todayView && sc.grid === 'off' ? ' Seit 13:58 Notstrombetrieb, keine Einspeisung.' : '');
+        kpis = [['Einspeisung', `${fmt(tot.feed)} kWh`, `+${eur(nm.feedVal)} · ${fmt(FEED_CT, 2)} ct/kWh`], ['Bezug', `${fmt(tot.gesamt.grid)} kWh`, `${eur(nm.costGrid)} · Ø ${fmt(nm.price)} ct/kWh`], ['Eigenverbrauch', pct(nm.eigen), 'des PV-Stroms selbst genutzt'], ['Autarkie', pct(nm.share), 'des Verbrauchs selbst gedeckt']];
+      } else {
+        lead = `${fmt(nm.use)} kWh${span} · ${pct(nm.share)} selbst versorgt · netto ${eur(nm.net)}.`;
+        kpis = [['Verbrauch', `${fmt(nm.use)} kWh`, perDay(nm.use)], ['Autarkie', pct(nm.share), `${fmt(nm.self)} kWh aus PV und Speicher`], ['Kosten', eur(nm.cost + nm.base), 'inkl. Grundpreise'], ['Netto', eur(nm.net), `nach ${eur(nm.feedVal)} Vergütung`]];
+      }
+    } else {
+      const m = metrics(tot, key), est = key === 'auto' && todayView && sc.car === 'crit' ? '≈ ' : '';
+      lead = m.use ? `${est}${fmt(m.use)} kWh${span} · ${pct(m.share)} aus eigener Erzeugung · ${eur(m.cost)}.` + (est ? ' Ladeleistung fehlt seit 14:29, Wert geschätzt.' : '') : (key === 'auto' ? 'In diesem Zeitraum wurde nicht geladen.' : 'Kein Verbrauch in diesem Zeitraum.');
+      kpis = [[key === 'auto' ? 'Geladen' : 'Verbrauch', `${est}${fmt(m.use)} kWh`, est ? 'geschätzt · Messwert fehlt' : perDay(m.use)], ['Eigenversorgung', m.use ? pct(m.share) : '—', `${fmt(m.c.pv)} PV · ${fmt(m.c.bat)} Speicher`], ['Kosten', eur(m.cost), m.use ? `Ø ${fmt(m.cost / m.use * 100)} ct/kWh` : '—'], ['Ersparnis', eur(m.saving), 'ggü. reinem Netzbezug']];
+    }
+    $('#d-lead').textContent = lead;
+    $('#d-kpis').innerHTML = kpis.map(([a, b, c]) => `<div class="kpi"><small>${a}</small><strong>${b}</strong><small>${c}</small></div>`).join('');
+
+    // Verlauf
+    const div = key === 'netz', cKey = div ? 'gesamt' : key;
+    const up = div ? [['Bezug', 's-grid', b => b.v.gesamt.grid]] : [['PV direkt', 's-pv', b => b.v[cKey].pv], ['Speicher', 's-bat', b => b.v[cKey].bat], ['Netz', 's-grid', b => b.v[cKey].grid]];
+    const down = div ? [['Einspeisung', 's-feed', b => b.v.feed]] : [];
+    const has = bins.filter(b => b.v), tot1 = (L, b) => sum(L.map(l => l[2](b)));
+    const max = Math.max(...has.map(b => tot1(up, b)), ...has.map(b => tot1(down, b)), .001);
+    const seg = (l, b) => { const v = l[2](b); return v > 0 ? `<span class="${l[1]}" style="height:${(v / max * 100).toFixed(2)}%"></span>` : ''; };
+    const chart = $('#d-chart'), n = bins.length, cols = `repeat(${n},minmax(0,1fr))`;
+    chart.className = 'chart' + (div ? ' div' : '') + (n > 24 ? ' dense' : '');
+    chart.style.gridTemplateColumns = cols; $('#d-axis').style.gridTemplateColumns = cols;
+    chart.innerHTML = bins.map((b, i) => b.v
+      ? `<button type="button" class="bar${b.state === 'partial' ? ' partial' : ''}" data-i="${i}" aria-pressed="false" aria-label="${b.title}"><span class="up">${up.map(l => seg(l, b)).join('')}</span>${div ? `<span class="down">${down.map(l => seg(l, b)).join('')}</span>` : ''}</button>`
+      : `<span class="bar ${b.state}" aria-hidden="true"></span>`).join('');
+    $('#d-axis').innerHTML = bins.map(b => `<span>${b.axis}</span>`).join('');
+    $('#d-now').hidden = !todayView;
+    $('#d-now').style.left = `calc(${((NOW_H + NOW_FRAC) / 24 * 100).toFixed(2)}% - 1px)`;
+    $('#d-side-top').hidden = $('#d-side-bottom').hidden = !div;
+    $('#d-unit').textContent = 'kWh pro ' + {tag:'Stunde', monat:'Tag', jahr:'Monat'}[period];
+    const legend = [...up, ...down].filter(l => has.some(b => l[2](b) > 0)).map(l => `<span><i class="${l[1]}"></i>${l[0]}</span>`);
+    if (bins.some(b => b.state === 'future')) legend.push('<span><i style="--m:color-mix(in srgb,var(--edge) 60%,transparent)"></i>noch offen</span>');
+    if (bins.some(b => b.state === 'nodata')) legend.push('<span><i class="hatch"></i>vor Inbetriebnahme</span>');
+    $('#d-legend').innerHTML = legend.join('');
+    $('#d-hour').textContent = 'Balken antippen für Details.';
+    chart.onclick = e => {
+      const btn = e.target.closest('.bar[data-i]'); if (!btn) return;
+      $$('.bar', chart).forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false'));
+      const b = bins[+btn.dataset.i];
+      const parts = [...up, ...down].filter(l => l[2](b) > 0).map(l => `${l[0]} ${fmt(l[2](b), period === 'tag' ? 2 : 1)} kWh`);
+      $('#d-hour').textContent = `${b.title} · ${parts.length ? parts.join(' · ') : 'kein Verbrauch'}`;
+    };
+
+    renderPrices(key, tot);
+
+    // Herkunft bzw. Verwendung des PV-Stroms
+    const mix = div
+      ? {title:'Wohin ging der PV-Strom?', items:[['Direkt verbraucht', 's-direct', tot.gesamt.pv], ['In den Speicher', 's-bat', tot.charge], ['Ins Netz eingespeist', 's-feed', tot.feed]]}
+      : {title:'Woher kam der Strom?', items:[['PV direkt', 's-pv', tot[cKey].pv], ['Aus dem Speicher', 's-bat', tot[cKey].bat], ['Aus dem Netz', 's-grid', tot[cKey].grid]]};
+    const mt = sum(mix.items.map(it => it[2]));
+    $('#d-mix-title').textContent = mix.title;
+    $('#d-mix-total').textContent = `${fmt(mt)} kWh`;
+    $('#d-stack').innerHTML = mix.items.filter(it => it[2] > 0).map(([, c, v]) => `<span class="${c}" style="--v:${v}"></span>`).join('');
+    $('#d-mix').innerHTML = mix.items.map(([nm, c, v]) => `<div class="row"><span><i class="dotl ${c}"></i>${nm}</span><span class="num">${fmt(v)} kWh · ${mt ? Math.round(v / mt * 100) : 0} %</span></div>`).join('');
+
+    $('#d-facts').innerHTML = factsFor(key, bins, tot).map(([t, s, tag, href]) => href
+      ? `<a class="row rowlink" href="${href}"><span><b>${t}</b><br><small>${s}</small></span><span class="tag" style="color:var(--accent)">${tag}</span></a>`
+      : `<div class="row"><span><b>${t}</b><br><small>${s}</small></span><span class="tag">${tag}</span></div>`).join('');
+  }
+  $('#p-seg').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b || !currentDetail) return; period = b.dataset.p; offset = 0; renderDetail(currentDetail); });
+  $('#p-prev').addEventListener('click', () => { offset--; renderDetail(currentDetail); });
+  $('#p-next').addEventListener('click', () => { if (offset < 0) { offset++; renderDetail(currentDetail); } });
+
+  // Routing (hash only; avoids reserved names)
+  const routes = ['uebersicht','auto','hinweise','einstellungen','pv'];
+  function route() {
+    const h = location.hash.slice(1);
+    const dk = h.startsWith(PREFIX) && detailNames[h.slice(PREFIX.length)] ? h.slice(PREFIX.length) : null;
+    const r = dk ? 'detail' : routes.includes(h) ? h : 'uebersicht';
+    if (dk && !currentDetail) { period = 'tag'; offset = 0; }
+    const changed = dk !== currentDetail;
+    currentDetail = dk;
+    if (dk) { renderDetail(dk); if (changed) window.scrollTo(0, 0); }
+    const navR = r === 'detail' || r === 'pv' ? 'uebersicht' : r;
+    if (r === 'pv' && lastRoute !== 'pv') window.scrollTo(0, 0);
+    lastRoute = r;
+    $$('[data-view]').forEach(v => v.hidden = v.dataset.view !== r);
+    $$('nav.tabs a').forEach(a => { if (a.dataset.route === navR) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
+    $('#savebar').hidden = !(r === 'einstellungen' && dirty.size);
+  }
+
+  // Toast
+  let toastTimer;
+  function toast(msg) { const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.hidden=true,2200); }
+
+  // Settings dirty tracking + validation
+  const dirty = new Set();
+  const initial = {};
+  $$('#settings-form input, #settings-form select').forEach(el => initial[el.id] = el.type==='checkbox' ? el.checked : el.value);
+  function validate() {
+    const min = +$('#min-soc').value, max = +$('#max-soc').value, bad = !(min < max);
+    $('#f-min').classList.toggle('invalid', bad);
+    $('#f-min .err').hidden = !bad;
+    $('#save').disabled = bad;
+    return !bad;
+  }
+  function updateDirty(el) {
+    if (!el.id) return;
+    const now = el.type==='checkbox' ? el.checked : el.value;
+    if (now === initial[el.id]) dirty.delete(el.id); else dirty.add(el.id);
+    $('#dirty-count').textContent = dirty.size === 1 ? '1 Änderung' : `${dirty.size} Änderungen`;
+    $('#savebar').hidden = !dirty.size;
+    validate();
+  }
+  $('#settings-form').addEventListener('input', e => updateDirty(e.target));
+  $('#discard').addEventListener('click', () => {
+    Object.entries(initial).forEach(([id,v]) => { const el=document.getElementById(id); if (el.type==='checkbox') el.checked=v; else el.value=v; });
+    dirty.clear(); $('#savebar').hidden = true; validate(); toast('Änderungen verworfen');
+  });
+  $('#save').addEventListener('click', () => {
+    if (!validate()) return;
+    $$('#settings-form input, #settings-form select').forEach(el => initial[el.id] = el.type==='checkbox' ? el.checked : el.value);
+    dirty.clear(); $('#savebar').hidden = true; toast('Gespeichert · EOS-Grenzen werden übertragen');
+  });
+  $('#side').addEventListener('click', e => {
+    const a = e.target.closest('a[data-sec]'); if (!a) return;
+    e.preventDefault();
+    $$('#side a').forEach(x => x.setAttribute('aria-current', x===a ? 'true' : 'false'));
+    $$('[data-sec-body]').forEach(b => b.hidden = b.dataset.secBody !== a.dataset.sec);
+  });
+
+  // Events
+  $('#scenarios').addEventListener('click', e => {
+    const b = e.target.closest('[data-s]'); if (!b) return;
+    scenario = b.dataset.s; control = scenarios[scenario].control; confirming = null;
+    renderAll();
+  });
+  $('#status').addEventListener('click', e => {
+    const act = e.target.closest('[data-act]')?.dataset.act; if (!act) return;
+    if (act === 'release' || act === 'take') confirming = act;
+    else if (act === 'cancel') confirming = null;
+    else if (act === 'confirm') {
+      const wasRelease = confirming === 'release';
+      control = wasRelease ? 'read_only' : 'waiting'; confirming = null;
+      toast(wasRelease ? 'Steuerung zurückgegeben · Geräte bestätigt' : 'Steuerung übernommen · warte auf Plan');
+    }
+    renderStatus(); renderCarPlan();
+  });
+  $('#track').addEventListener('click', e => {
+    const b = e.target.closest('.seg'); if (!b) return;
+    $$('.seg').forEach(s => s.setAttribute('aria-pressed', s===b ? 'true' : 'false'));
+    const s = segments[+b.dataset.i];
+    $('#seg-detail').textContent = `${s.t} · ${s.txt}`;
+  });
+  ['sw-pv','sw-fast','sw-phase'].forEach(id => $('#'+id).addEventListener('change', e => {
+    toast(`${e.target.closest('label').querySelector('b').textContent} ${e.target.checked?'ein':'aus'} · gespeichert`);
+    renderCarState();
+  }));
+  $('#goals').addEventListener('change', e => {
+    const i = e.target.dataset.goal; if (i === undefined) return;
+    goals[i].on = e.target.checked; goals[i].detail = e.target.checked ? (goals[i].detail==='ausgeschaltet'?'einmalig':goals[i].detail) : 'ausgeschaltet';
+    renderGoals(); toast(`Ladeziel „${goals[i].title}“ ${e.target.checked?'aktiv':'deaktiviert'}`);
+  });
+  $('#add-goal').addEventListener('click', () => toast('Öffnet den Dialog „Neues Ladeziel“'));
+  $('#show-notes').addEventListener('change', e => document.body.classList.toggle('notes-hidden', !e.target.checked));
+  window.addEventListener('hashchange', route);
+
+  function renderAll() { renderScenarios(); renderStatus(); renderKpis(); renderFlow(); renderCarState(); if (currentDetail) renderDetail(currentDetail); }
+  // Smartphone hochkant: Review-Hinweise aus, untere Auswertungsbereiche eingeklappt
+  if (matchMedia('(max-width:640px)').matches) {
+    $('#show-notes').checked = false; document.body.classList.add('notes-hidden');
+    ['#acc-prices','#acc-mix','#acc-facts'].forEach(id => $(id).open = false);
+  }
+  renderAll(); renderTrack(); renderGoals(); renderWeather(); route(); validate();
+})();
+</script>
+
+</body></html>

@@ -23,6 +23,7 @@
           "price_entity": "Bezugspreis",
           "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
+          "car_range_entity": "E-Auto-Reichweite (optional)",
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
           "heat_load_scale": "Skalierung der Auslastung",
           "weather_entity": "Wetter (optional; leer = automatische Auswahl)",
@@ -189,6 +190,7 @@
           "price_entity": "Bezugspreis",
           "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
+          "car_range_entity": "E-Auto-Reichweite (optional)",
           "heat_load_entity": "Wärmepumpe: Leistungsauslastung (optional)",
           "heat_load_scale": "Skalierung der Auslastung",
           "weather_entity": "Wetter (optional; leer = automatische Auswahl)",
@@ -268,6 +270,7 @@
           "resource": "EOS-Ressource",
           "soc_entity": "SoC-Sensor (optional)",
           "soc_scale": "SoC-Skalierung",
+          "range_entity": "Reichweitensensor (optional)",
           "capacity_wh": "Kapazität (Wh)",
           "charging_efficiency": "Ladewirkungsgrad",
           "max_current_a": "Maximalstrom (A)",
@@ -289,6 +292,7 @@
           "resource": "EOS-Ressource",
           "soc_entity": "SoC-Sensor (optional)",
           "soc_scale": "SoC-Skalierung",
+          "range_entity": "Reichweitensensor (optional)",
           "capacity_wh": "Kapazität (Wh)",
           "charging_efficiency": "Ladewirkungsgrad",
           "max_current_a": "Maximalstrom (A)",
@@ -309,6 +313,7 @@
           "resource": "EOS-Ressource",
           "soc_entity": "SoC-Sensor (optional)",
           "soc_scale": "SoC-Skalierung",
+          "range_entity": "Reichweitensensor (optional)",
           "capacity_wh": "Kapazität (Wh)",
           "charging_efficiency": "Ladewirkungsgrad",
           "max_current_a": "Maximalstrom (A)",
@@ -344,6 +349,7 @@
           "resource": "EOS-Ressource",
           "soc_entity": "SoC-Sensor (optional)",
           "soc_scale": "SoC-Skalierung",
+          "range_entity": "Reichweitensensor (optional)",
           "capacity_wh": "Kapazität (Wh)",
           "charging_efficiency": "Ladewirkungsgrad",
           "max_current_a": "Maximalstrom (A)",
@@ -491,6 +497,12 @@
     "switch": {
       "control": {
         "name": "Energiesteuerung"
+      },
+      "control_battery": {
+        "name": "Speichersteuerung"
+      },
+      "control_vehicle": {
+        "name": "E-Auto-Ladesteuerung"
       },
       "pv": {
         "name": "PV-Überschussladen"
@@ -1071,6 +1083,14 @@
           "name": "Netzleistung mit Vorzeichen (optional)"
         }
       }
+    }
+  },
+  "exceptions": {
+    "invalid_settings": {
+      "message": "Einstellungen abgelehnt ({reason}): {fields}"
+    },
+    "invalid_report": {
+      "message": "Bilanzanfrage abgelehnt ({reason}): {fields}"
     }
   }
 }

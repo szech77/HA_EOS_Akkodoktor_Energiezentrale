@@ -16,7 +16,8 @@ from homeassistant.exceptions import Unauthorized
 from custom_components.eos_energiezentrale import async_setup_entry, async_unload_entry
 from custom_components.eos_energiezentrale.adapter import HomeAssistantAdapter
 from custom_components.eos_energiezentrale.config_flow import ConfigFlow, OptionsFlow, check
-from custom_components.eos_energiezentrale.const import DEFAULTS, DOMAIN, GROUPS
+from custom_components.eos_energiezentrale.const import DOMAIN, GROUPS
+from sample_options import DEFAULTS
 from custom_components.eos_energiezentrale.coordinator import EnergyCoordinator
 from custom_components.eos_energiezentrale.diagnostics import async_get_config_entry_diagnostics
 from custom_components.eos_energiezentrale.frontend import websocket_request
@@ -135,6 +136,18 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             coordinator._present(raw)
         assert first['power_supply']['grid_active'] is False
         assert sum('backup_power_active' in item for item in logs.output) == 1
+        # The settings diagnostics are presented by the backend with every snapshot.
+        assert first['source_diagnostics']['sources'] == [] and first['source_diagnostics']['balance'] is None
+
+    async def test_mode_timeline_splits_history_and_plan_at_the_snapshot_time(self):
+        from datetime import timedelta
+        coordinator, _ = self.controller()
+        measured = datetime.now(timezone.utc) - timedelta(minutes=10)
+        raw = {'live':{'time':measured.isoformat()}, 'plan':{'battery':[{'time':measured.isoformat(), 'mode':'IDLE'}]}}
+        battery = coordinator._present(raw)['mode_timeline']['battery']
+        split = measured.timestamp() * 1000
+        assert max(row['end'] for row in battery if row['kind'] == 'history') == split
+        assert min(row['start'] for row in battery if row['kind'] == 'plan') == split
 
     async def asyncTearDown(self):
         await self.hass.async_stop(force=True)
@@ -298,6 +311,15 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report["settings"]["pv_price_ct"],8)
         self.assertEqual(report["date"],"2026-11-01")
         self.assertEqual(report["consumers"],{})
+        self.assertNotIn("power_profile",report)
+        # A day report carries the power profile from the local minute history.
+        from custom_components.eos_energiezentrale.energy.history import History
+        app.history = History(self.directory/"profile.sqlite3")
+        stamp = datetime(2026,11,9,9,tzinfo=timezone.utc)
+        app.history.write(stamp,{"time":stamp.isoformat(),"solar":2000,"grid":0,"battery_charge":0,"battery_discharge":0,"house_total":2000})
+        app.config.options["timezone"] = "Europe/Berlin"
+        day = await coordinator.async_accounting({"period":"day","date":"2026-11-09"})
+        self.assertEqual(day["power_profile"]["points"][0]["total"],{"pv":2000,"battery":0,"grid":0,"unknown":0})
         with self.assertRaises(ValueError):
             await coordinator.async_accounting({"settings":{"charge_efficiency":0}})
 
@@ -809,12 +831,13 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         from test_plugins import generic_wallbox
         params,_=generic_wallbox()
         result=await flow.async_step_vehicle_parameters({'id':'second','name':'Second EV','resource':'ev2','soc_entity':'sensor.ev2_soc',
-            'soc_scale':'factor','capacity_wh':60000,'charging_efficiency':.9,'max_current_a':16,'wallbox_parameters':params})
+            'soc_scale':'factor','range_entity':'sensor.ev2_range','capacity_wh':60000,'charging_efficiency':.9,'max_current_a':16,'wallbox_parameters':params})
         self.assertEqual(result['type'],'create_entry')
         stored=json.loads(result['data']['vehicles'])
         self.assertEqual(len(stored),2)
         self.assertEqual(stored[0]['wallbox_type'],'nrgkick')
         self.assertEqual(stored[1]['wallbox_type'],'generic')
+        self.assertEqual(stored[1]['range_entity'],'sensor.ev2_range')
 
     async def test_generic_helpers_use_only_the_matching_home_assistant_services(self):
         seen=[]
@@ -981,6 +1004,21 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
                 connection=await self.invoke({'action':'language','language':'de'})
                 self.assertEqual(connection.send_error.call_args.args[1],code)
                 self.assertNotIn('missing file',connection.send_error.call_args.args[2])
+
+    async def test_rejected_settings_return_reason_and_field_names_only(self):
+        from custom_components.eos_energiezentrale.energy.failures import BackendError
+        coordinator,_=self.controller()
+        coordinator.async_change=AsyncMock(side_effect=BackendError('private value 96',reason='battery_bounds',
+            fields=('battery_min_soc','battery_max_soc','not_allowed')))
+        connection=await self.invoke({'action':'settings','values':{'battery_min_soc':96}})
+        args,kwargs=connection.send_error.call_args
+        self.assertEqual(args[1],'invalid_settings')
+        self.assertEqual(kwargs['translation_key'],'invalid_settings')
+        self.assertEqual(kwargs['translation_placeholders'],{'reason':'battery_bounds','fields':'battery_max_soc,battery_min_soc'})
+        self.assertNotIn('96',json.dumps([args,kwargs],default=str))
+        coordinator.async_change=AsyncMock(side_effect=ValueError('plain private failure'))
+        connection=await self.invoke({'action':'settings','values':{}})
+        self.assertNotIn('translation_placeholders',connection.send_error.call_args.kwargs)
 
     async def test_unexpected_ui_backend_failure_returns_an_error_instead_of_timing_out(self):
         coordinator,_=self.controller()
@@ -1217,7 +1255,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         answered = asyncio.Event()
         connection = Mock(user=SimpleNamespace(is_admin=True))
         connection.send_result.side_effect = lambda *_: answered.set()
-        connection.send_error.side_effect = lambda *_: answered.set()
+        connection.send_error.side_effect = lambda *_, **__: answered.set()
         websocket_request(self.hass, connection, {"id": 1, **msg})
         await asyncio.wait_for(answered.wait(), timeout=5)
         return connection
@@ -1228,6 +1266,16 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             connection = await self.invoke({"action": "control", "values": values})
             connection.send_error.assert_called_once()
         app.set_armed.assert_not_called()
+
+    async def test_websocket_control_switches_single_areas_and_rejects_unknown_ones(self):
+        coordinator, app = self.controller()
+        for values in ({}, {"battery": 1}, {"battery": True, "heat": True}, {"enabled": True, "battery": True}):
+            connection = await self.invoke({"action": "control", "values": values})
+            connection.send_error.assert_called_once()
+        app.set_control.assert_not_called()
+        connection = await self.invoke({"action": "control", "values": {"vehicle": False}})
+        connection.send_result.assert_called_once()
+        app.set_control.assert_called_once_with(vehicle=False)
 
     async def test_backend_source_warning_is_logged_without_a_frontend_request(self):
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
@@ -1363,7 +1411,11 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         coordinator,app=self.controller()
         with patch.object(coordinator.weather_forecast,'async_read',return_value={'status':'empty','rows':[]}) as read:
             connection=await self.invoke({'action':'weather_forecast'})
-            connection.send_result.assert_called_once_with(1,{'status':'empty','rows':[]})
+            connection.send_result.assert_called_once()
+            sent=connection.send_result.call_args.args[1]
+            # Without weather rows the PV strip still comes from the snapshot forecast; no weather is invented.
+            self.assertEqual((sent['status'],sent['rows'],sent['days']),('empty',[],[]))
+            self.assertTrue(sent['hours'] and all(item['condition'] is None for item in sent['hours']))
             read.assert_awaited_once_with(app.config.options)
             connection=await self.invoke({'action':'weather_forecast','values':{'entity_id':'weather.other'}})
             connection.send_error.assert_called_once()

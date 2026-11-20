@@ -138,6 +138,7 @@ python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --c
 node --check custom_components/eos_energiezentrale/energy/web/accounting.js
 node --check custom_components/eos_energiezentrale/energy/web/app.js
 node --check custom_components/eos_energiezentrale/energy/web/panel.js
+node --check custom_components/eos_energiezentrale/energy/web/status.js
 node --test tests/*.test.cjs
 python -m bandit -r custom_components tools -ll
 python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict

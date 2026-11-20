@@ -145,8 +145,13 @@ Venus kann allerdings selbst fehlende D-Bus-Werte als 0 bereitstellen; Modbus
 liefert dazu keinen Messzeitstempel oder vollständigen Qualitätsstatus. Ein
 erfolgreicher Read beweist deshalb nicht die Aktualität jedes internen Sensors.
 
-DC-Akkuleistung wird mit `charge_efficiency` und `discharge_efficiency` (Standard
-je 0,95) auf AC angenähert. A-Ladebudgets werden mit aktueller Spannung umgerechnet
+Liest das Plugin Netzleistung und System-AC-Verbrauch, ergibt sich die AC-seitige
+Lade- bzw. Entladeleistung aus der AC-Bilanz des GX: PV + Netz − Verbrauch. So
+gehen die tatsächlichen Wandlungsverluste nicht in den Hausverbrauch ein. Weicht
+dieser Wert um mehr als 500 W bzw. 25 % von der Näherung über die Wirkungsgrade ab,
+etwa weil eine PV-Quelle nicht gelesen wird, gilt die Näherung. Für die Steuerung
+gilt immer die Näherung. Ohne Verbrauchswerte wird die DC-Akkuleistung mit
+`charge_efficiency` und `discharge_efficiency` (Standard je 0,95) auf AC angenähert. A-Ladebudgets werden mit aktueller Spannung umgerechnet
 und abgerundet. DVCC begrenzt auch Solarladung. DC-PV, Verbraucher im DC-System und
 wechselnde Verluste begrenzen die Genauigkeit der AC-Näherung. BMS, BatteryLife und
 Geräte begrenzen weiterhin die real erreichbare Leistung; bestätigte Registerwerte
@@ -272,7 +277,11 @@ inside −32768…32766 W, PV/consumption below 65534 W per phase. Endpoints, in
 the GX's max−1 saturation value, are rejected.
 Larger systems should use the HA/MQTT plugins. Missing requests are errors, but
 Venus may itself return 0 for missing internal data: Modbus has no full freshness
-or quality information. Efficiencies (default 0.95) approximate DC/AC conversion.
+or quality information. With grid and system AC consumption read, the AC-side battery
+power for reading is PV + grid − consumption, so actual conversion losses do not count as
+house consumption; beyond 500 W / 25 % from the efficiency estimate (e.g. an unread PV
+source) the estimate stays. Control always uses the estimate. Otherwise efficiencies
+(default 0.95) approximate DC/AC conversion.
 DVCC also limits solar charging; BMS and hardware can constrain achieved power.
 Communication loss does not guarantee automatic expiry of the settings. Retain
 device-side protections and a suitable local failure strategy. Tests use a local

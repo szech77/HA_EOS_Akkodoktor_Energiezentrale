@@ -98,6 +98,13 @@ class History:
             db.execute("INSERT OR REPLACE INTO samples VALUES (?, ?)", (minute, json.dumps(values)))
             db.execute("DELETE FROM samples WHERE stamp < ?", (minute - 172800,))
 
+    def read_range(self, start, end):
+        """Samples with start <= minute < end (UTC datetimes), oldest first."""
+        with closing(self.connect()) as db:
+            rows = db.execute("SELECT payload FROM samples WHERE stamp >= ? AND stamp < ? ORDER BY stamp",
+                              (int(start.timestamp()), int(end.timestamp()))).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
     def read(self, now):
         with closing(self.connect()) as db:
             rows = db.execute("SELECT payload FROM samples WHERE stamp >= ? ORDER BY stamp",

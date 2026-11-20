@@ -13,7 +13,7 @@ function fixture(count=1){
  const ctx={snapshot:original,history:{local:[],vehicles:Object.fromEntries(vehicles.map((v,i)=>[v.id,[row(-60000,20+i)]]))},
   EosChartData,day,windowNow:()=>now,valid:Number.isFinite,decimal:String,html:String,t:key=>messages[key]??key,th:key=>messages[key]??key,
   byId:id=>{if(!nodes.has(id))nodes.set(id,{classList:{toggle(){}},innerHTML:''});return nodes.get(id);},
-  vehicleActive:()=>true,vehicleSettings(){},vehicleCards:()=>'',time:String,vehicleForecastNote:()=>'',
+  vehicleActive:()=>true,vehicleSettings(){},carView(){},vehicleCards:()=>'',time:String,vehicleForecastNote:()=>'',
   cards:()=>'',displayed:()=>30,percent:String,stateLabel:String,modeLabel:String,solarToday:()=>'',solarForecastCards:()=>[],displayedPower:()=>'',displayAge:()=>'',timeline:()=>'',showProbe(){}};
  vm.createContext(ctx);
  vm.runInContext('function actualPoints(){return history.local;}',ctx);

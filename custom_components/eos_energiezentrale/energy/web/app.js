@@ -101,6 +101,14 @@ const power = value => valid(value) ? `${decimal(Math.abs(value) / 1000, 2)} ${t
 const percent = value => valid(value) ? `${decimal(value)} %` : '—';
 const price = value => valid(value) ? `${decimal(value)} ${t('unit.price')}` : '—';
 const time = value => value ? new Intl.DateTimeFormat(language.locale, {timeZone: snapshot.zone, dateStyle:'short', timeStyle:'short'}).format(new Date(value)) : '—';
+// Same local day: clock time; within six days: weekday and time; otherwise date and time.
+const when = value => {
+  if (!value) return '—';
+  const stamp=new Date(value).getTime(), today=windowNow(), dayOf=ms=>new Intl.DateTimeFormat('sv-SE',{timeZone:snapshot.zone}).format(new Date(ms));
+  const options={timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'};
+  if (dayOf(stamp)===dayOf(today)) return new Intl.DateTimeFormat(language.locale,options).format(stamp);
+  return Math.abs(stamp-today)<6*day ? new Intl.DateTimeFormat(language.locale,{...options,weekday:'short'}).format(stamp) : time(value);
+};
 const modes = {
   IDLE:['mode.idle','grid'], NON_EXPORT:['mode.pv','battery'], SELF_CONSUMPTION:['mode.own','house'],
   FORCED_CHARGE:['mode.grid','car'], GRID_SUPPORT_IMPORT:['mode.grid','car'],
@@ -128,13 +136,16 @@ window.addEventListener('message', event => {
   if (!pending) return;
   clearTimeout(pending.timer);
   pendingRequests.delete(event.data.id);
-  if (event.data.error) pending.reject(requestError(event.data.error,pending.action));
+  if (event.data.error) pending.reject(requestError(event.data.error,pending.action,event.data));
   else pending.resolve(event.data.result);
 });
-function requestError(code,action) {
+function requestError(code,action,details={}) {
   const safeCode=typeof code==='string'&&/^[a-z_]{1,64}$/.test(code)?code:'request_failed';
   const error=Error(`${t(`action.${action}`)}: ${language.messages[`error.${safeCode}`]??t('error.request')}`);
-  error.code=safeCode;error.action=action;return error;
+  error.code=safeCode;error.action=action;
+  error.reason=typeof details.reason==='string'&&/^[a-z_]{1,40}$/.test(details.reason)?details.reason:null;
+  error.fields=Array.isArray(details.fields)?details.fields.filter(field=>typeof field==='string'&&/^[a-z_]{1,40}$/.test(field)):[];
+  return error;
 }
 
 function showStartupError(stage,error) {
@@ -144,7 +155,7 @@ function showStartupError(stage,error) {
   if(byId('startup-details'))byId('startup-details').hidden=false;
   if(byId('startup-details-title'))byId('startup-details-title').textContent=t('startup.details');
   if(byId('startup-detail'))byId('startup-detail').textContent=[stage,error?.code??error?.name??'Error',error?.asset??'',error?.code?'':String(error?.message??'').slice(0,200)].filter(Boolean).join(' · ');
-  for(const id of ['overview','detail','settings','usage'])if(byId(id))byId(id).hidden=true;
+  for(const id of ['overview','detail','settings','usage','notices','status-band','top-notices','notice-pill'])if(byId(id))byId(id).hidden=true;
 }
 
 async function api(path, body) {
@@ -171,10 +182,6 @@ function actualPoints(key) {
   const local = history.local.filter(row => valid(row[key]));
   const first = Date.parse(local[0]?.time ?? '');
   return [...influx.filter(row => !first || Date.parse(row.time) < first), ...local];
-}
-
-function nextPlan(key,source=snapshot) {
-  return source.next_mode?.[key];
 }
 
 const localDay = value => new Intl.DateTimeFormat('sv-SE', {timeZone:snapshot.zone}).format(new Date(value));
@@ -219,12 +226,6 @@ function socBarCount(soc) {
   return valid(soc) && soc>=0 && soc<=100 ? Math.ceil(soc/20) : null;
 }
 
-function controlStatus(value) {
-  const control=t(`control.${value.control_status??'read_only'}`),run=value.eos_run;
-  return ['calculating','updating'].includes(run?.state)
-    ? control+' · '+t(`eos.run_${run.state}`,{seconds:run.elapsed_s??0}) : control;
-}
-
 function carIcon(soc) {
   const filled=socBarCount(soc);
   const bars=Array.from({length:5},(_,index)=>`<rect class="car-soc-bar${filled!==null && index<filled ? ' filled' : ''}" x="${(6.4+index*2.2).toFixed(1)}" y="10.8" width="1.5" height="4.4" rx=".35"/>`).join('');
@@ -251,7 +252,7 @@ function layoutFlow() {
     container.replaceChildren();paths.replaceChildren();
     vehicles.forEach(vehicle=>{
       const node=document.createElement('a');
-      node.className='node car';node.href='#car/'+encodeURIComponent(vehicle.id);
+      node.className='node car r';node.href='#car/'+encodeURIComponent(vehicle.id);
       node.innerHTML=`<span class="orb" aria-hidden="true">${carIcon(null)}</span><span></span><strong></strong>`;
       container.append(node);
       const path=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -264,16 +265,28 @@ function layoutFlow() {
     flow:document.querySelector(`[data-flow="${key}"]`),enabled:consumerEnabled(key) && !(key==='car' && vehicles.length)}));
   entries.forEach(({node,flow,enabled})=>{node.hidden=!enabled;flow.style.display=enabled ? '' : 'none';});
   const cars=vehicles.map((vehicle,index)=>({key:'car',vehicle,node:container.children[index],flow:paths.children[index],enabled:true}));
+  const left=entries.slice(0,3).filter(entry=>entry.enabled);
   const right=[entries[3],...(vehicles.length ? cars : [entries[4]]),entries[5]].filter(entry=>entry.enabled);
   const height=Math.max(360,right.length*144);
   byId('energy-flow').style.height=height+'px';
-  right.forEach((entry,index)=>{
-    const y=(index+.5)*100/right.length;
-    entry.node.style.setProperty('--x','82%');entry.node.style.setProperty('--y',y+'%');
-    entry.flow.setAttribute('d',`M57 50 Q66 ${y} 82 ${y}`);
+  // Sources and consumers share the same row rule and mirrored wires into the hub, so equal
+  // counts sit on the same heights. The battery wire runs from the hub (charging is positive).
+  const row=(index,count)=>Math.round((index+.5)*1000/count)/10;
+  // Narrow screens spread the columns outwards so the diagram uses the width; the wires end at
+  // the hub edge, which is relatively wider there.
+  const narrow=(globalThis.window?.innerWidth??1000)<600,outer=narrow?17:30,edge=narrow?41:44,bend=value=>Math.round(value*10)/10;
+  const near=bend(outer+(edge-outer)*.57),far=bend(100-outer-(100-outer-(100-edge))*.57);
+  left.forEach((entry,index)=>{
+    const y=row(index,left.length);
+    entry.node.style.setProperty('--x',outer+'%');entry.node.style.setProperty('--y',y+'%');
+    entry.flow.setAttribute('d',entry.key==='battery' ? `M${edge} 50 Q${near} ${y} ${outer} ${y}` : y===50 ? `M${outer} 50 H${edge}` : `M${outer} ${y} Q${near} ${y} ${edge} 50`);
   });
-  byId('flow-wires').setAttribute('d',[...entries.slice(0,3).filter(entry=>entry.enabled),...right]
-    .map(entry=>entry.flow.getAttribute('d')).join(' '));
+  right.forEach((entry,index)=>{
+    const y=row(index,right.length);
+    entry.node.style.setProperty('--x',(100-outer)+'%');entry.node.style.setProperty('--y',y+'%');
+    entry.flow.setAttribute('d',y===50 ? `M${100-edge} 50 H${100-outer}` : `M${100-edge} 50 Q${far} ${y} ${100-outer} ${y}`);
+  });
+  byId('flow-wires').setAttribute('d',[...left,...right].map(entry=>entry.flow.getAttribute('d')).join(' '));
   return [...entries,...cars].filter(entry=>entry.enabled);
 }
 
@@ -357,6 +370,17 @@ function renderFlow() {
       node.setAttribute('aria-label',[node.getAttribute('aria-label'),t('chart.soc')+' '+percent(soc),warning].filter(Boolean).join(' · '));
     }
     updatePowerRing(node,key,value,source);
+    // The backend maps open notices to flow nodes; the browser only marks them.
+    const problem=snapshot.node_problems?.[vehicle ? 'car/'+vehicle.id : key];
+    node.classList.toggle('problem-error',problem==='error');
+    node.classList.toggle('problem-warning',problem==='warning');
+    const orb=node.querySelector('.orb');
+    let flag=orb.querySelector('.flag');
+    if (problem && !flag) {
+      flag=document.createElement('span');flag.className='flag';flag.setAttribute('aria-hidden','true');flag.textContent='!';orb.append(flag);
+    }
+    if (flag) flag.hidden=!problem;
+    if (problem) node.setAttribute('aria-label',node.getAttribute('aria-label')+' · '+t('flow.problem_'+problem));
     flow.classList.toggle('inactive', !valid(value) || Math.abs(value) < 10);
     flow.classList.toggle('reverse', value < 0);
     flow.style.setProperty('--speed', `${Math.max(1.4, 5 - Math.abs(value || 0) / 2200)}s`);
@@ -370,16 +394,52 @@ function renderFlow() {
   });
 }
 
-function modeCards() {
-  const entries=[{key:'battery',source:snapshot,name:t('device.battery'),href:'#battery'}];
-  if (consumerEnabled('car')) {
-    if (snapshot.vehicles?.length) entries.push(...snapshot.vehicles.map(vehicle=>({key:'car',source:vehicle,name:vehicle.name,href:'#car/'+encodeURIComponent(vehicle.id)})));
-    else entries.push({key:'car',source:snapshot,name:t('node.car'),href:'#car'});
-  }
-  return entries.map(({key,source,name,href})=>{
-    const item=nextPlan(key,source);
-    return `<div><small>${th('metric.eos_mode')} · <a href="${html(href)}">${html(name)}</a></small><b>${html(modeLabel(source.live[key+'_mode']))}</b><span>${item ? html(time(item.time)+' · '+modeLabel(item.mode)) : th('status.no_next_mode')}</span></div>`;
+const planWindow = {before:3*3_600_000, after:12*3_600_000};
+const clock = value => new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,hour:'2-digit',minute:'2-digit'}).format(new Date(value));
+function overviewTrack(now) {
+  const start=now-planWindow.before, end=now+planWindow.after, span=end-start;
+  const rows=(snapshot.mode_timeline?.battery??[]).map(row=>({...row,start:Math.max(start,row.start),end:Math.min(end,row.end)}))
+    .filter(row=>row.end>row.start);
+  if (!rows.some(row=>row.kind==='plan'&&row.mode)) return `<p class="footnote">${th('plan.no_valid')}</p>`;
+  const legend=new Map();
+  const segments=rows.map(row=>{
+    const color=Object.hasOwn(modes,row.mode) ? modes[row.mode][1] : 'edge';
+    const label=row.mode ? modeLabel(row.mode) : t('timeline.no_data');
+    legend.set(label,color);
+    const info=t('timeline.interval',{kind:t(`timeline.${row.kind}`),start:when(row.start),end:when(row.end),mode:label});
+    return `<button type="button" class="mode-segment${row.kind==='plan' ? ' future' : ''}" style="--start:${(row.start-start)/span};--duration:${(row.end-row.start)/span};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${row.end-row.start>=5_400_000 ? `<span>${html(label)}</span>` : ''}</button>`;
   }).join('');
+  const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
+  return `<div class="plan-track-wrap"><div class="plan-track" role="group" aria-label="${th('timeline.aria')}">${segments}</div><span class="plan-now" style="left:${at(now)}" aria-hidden="true"></span></div>
+    <div class="plan-axis" aria-hidden="true"><span style="left:0">${html(clock(start))}</span><span style="left:${at(now)}">${th('chart.now')}</span><span style="left:${at(now+6*3_600_000)}">${html(clock(now+6*3_600_000))}</span><span style="left:100%">${html(clock(end))}</span></div>
+    <div class="mode-legend">${[...legend].map(([label,color])=>`<span><i style="--mode:var(--${color})"></i>${html(label)}</span>`).join('')}</div>`;
+}
+function planEventText(event) {
+  const vehicle=event.vehicle_name ?? snapshot.vehicle_name ?? t('node.car');
+  if (event.kind==='battery_full') return t('plan_event.battery_full',{soc:decimal(event.soc,0)});
+  if (event.kind==='car_target') return t('plan_event.car_target',{vehicle,soc:decimal(event.soc,0)});
+  if (event.device==='battery') {
+    // The backend derives what the battery does from the forecast; the EOS mode name alone can mislead at night.
+    if (event.effect) return t('plan_event.effect_'+event.effect);
+    const key='plan_event.battery_'+event.mode;
+    return Object.hasOwn(language.messages,key) ? t(key) : t('plan_event.battery',{mode:modeLabel(event.mode)});
+  }
+  return t('plan_event.car',{vehicle,mode:modeLabel(event.mode)});
+}
+function nextEvents() {
+  const events=snapshot.plan_events ?? [];
+  if (!events.length) return `<p class="footnote">${th('status.no_next_mode')}</p>`;
+  return events.map(event=>{
+    const details=[event.effect ? t('plan_event.eos_mode',{mode:modeLabel(event.mode)}) : '',valid(event.price_ct) ? t('plan_event.price',{price:price(event.price_ct)}) : ''].filter(Boolean).join(' · ');
+    return `<div class="row"><span><b>${html(planEventText(event))}</b>${details ? `<br><small>${html(details)}</small>` : ''}</span><span class="tag">${html(when(event.time))}</span></div>`;
+  }).join('');
+}
+
+// The expanded state of the event list is a per-viewer convenience only.
+const nextDetailsKey='eos-energiezentrale.next-events-open';
+function restoreNextDetails() {
+  try { const saved=localStorage.getItem(nextDetailsKey); if(saved!==null)byId('next-details').open=saved==='1'; } catch { /* storage unavailable */ }
+  byId('next-details').addEventListener('toggle',()=>{try { localStorage.setItem(nextDetailsKey,byId('next-details').open?'1':'0'); } catch { /* storage unavailable */ }});
 }
 
 function overview() {
@@ -409,18 +469,22 @@ function overview() {
     weatherNode.setAttribute('aria-label', description+' · '+t('forecast.open'));
     weatherNode.title = description+' · '+t('forecast.open');
   }
-  byId('connection').textContent = controlStatus(snapshot);
   const flowAge=Math.max(0,...['solar','grid','car','battery'].map(key=>snapshot.flow_display?.[key]?.age_s ?? 0));
-  byId('live-time').textContent = live.time ? time(Date.parse(live.time)-flowAge*1000) : t('status.no_readings');
+  byId('live-time').textContent = live.time ? t('flow.as_of',{time:when(Date.parse(live.time)-flowAge*1000)}) : t('status.no_readings');
   byId('overview-kpis').innerHTML = cards([
     [t('metric.pv_today'),solarToday(),remaining ? t('metric.remaining',{energy:remaining}) : t('metric.available_intervals')],
     [t('metric.price_now'),price(displayed('price')),t('metric.import')],
     [t('metric.grid_connection'),backup ? t('power_supply.backup') : displayedPower('grid'),
       backup ? t('power_supply.grid_disconnected') : snapshot.power_supply?.state === 'unknown' ? t('power_supply.unknown')
-      : valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—']
+      : valid(displayed('grid')) ? displayed('grid') < 0 ? t('metric.export') : displayed('grid') > 0 ? t('metric.import') : t('metric.no_grid_flow') : '—'],
+    [t('node.battery'),percent(displayed('battery_soc')),valid(displayed('battery')) && Math.abs(displayed('battery'))>=10
+      ? `${displayed('battery') < 0 ? t('metric.discharging') : t('mode.charging')} · ${displayedPower('battery')}` : t('metric.battery_idle')]
   ]);
   renderFlow();
-  byId('next').innerHTML=modeCards();
+  byId('overview-track').innerHTML=overviewTrack(windowNow());
+  byId('next-events').innerHTML=nextEvents();
+  const count=(snapshot.plan_events??[]).length;
+  byId('next-count').hidden=!count;byId('next-count').textContent=count;
 }
 
 const chartModels = new Map();
@@ -539,7 +603,10 @@ function timeline(key, now) {
     legend.set(label,color);
     const info = t('timeline.interval', {kind:t(`timeline.${kind}`),
       start:time(start), end:time(end), mode:label});
-    return `<button type="button" class="mode-segment${kind==='plan' ? ' future' : ''}" style="--duration:${(end-start)/day};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
+    // Segments are placed by time, so the centre line is "now" however many segments EOS sends.
+    const first=Math.max(start,now-day), last=Math.min(end,now+day);
+    if (last<=first) return '';
+    return `<button type="button" class="mode-segment${kind==='plan' ? ' future' : ''}" style="--start:${(first-now+day)/(2*day)};--duration:${(last-first)/(2*day)};--mode:var(--${color})" data-mode="${html(info)}" aria-label="${html(info)}"></button>`;
   }).join('');
   return `<h2>${key === 'car' ? th('timeline.car_title') : th('timeline.battery_title')}</h2>
     <div class="mode-halves"><span>${th('timeline.history_range')}</span><span>${th('timeline.plan_range')}</span></div>
@@ -559,11 +626,14 @@ function vehicleSocChart(vehicle, now) {
 }
 function vehicleForecastNote(vehicle) {
   const source=vehicle.vehicle_forecast_source;
-  return ['eos','pv_estimate','constant','unavailable'].includes(source)
+  return ['eos','pv_estimate','fast_estimate','constant','unavailable'].includes(source)
     ? `<p class="footnote">${th(`forecast.vehicle_${source}`)}</p>` : '';
 }
 function detail(key) {
-  byId('vehicle-settings').hidden=key!=='car'&&!key.startsWith('car/');
+  const carPage=key==='car'||key.startsWith('car/');
+  byId('car-view').hidden=!carPage;
+  byId('vehicle-goals').hidden=!carPage;
+  byId('detail-kpis').hidden=false;
   byId('detail-kpis').classList.toggle('vehicle-inactive', (key === 'car' || key.startsWith('car/')) && !vehicleActive(snapshot));
   const usageLink=byId('usage-link');
   usageLink.hidden=!['house','car','heat'].includes(key)&&!key.startsWith('car/');
@@ -581,7 +651,7 @@ function detail(key) {
     } finally {snapshot=original;history=originalHistory;}
     return;
   }
-  if (key==='car') vehicleSettings();
+  if (key==='car') {vehicleSettings();carView();}
   if (key==='car' && snapshot.vehicles?.length) {
     chartModels.clear();
     byId('detail-title').textContent=t('fleet.title');
@@ -621,6 +691,8 @@ function detail(key) {
     + (['battery','car','grid','heat'].includes(key) ? chart(t('chart.price'),'price',1,t('unit.price'),'heat',now) : '');
   if (activeProbe) showProbe(activeProbe.id,activeProbe.ratio);
   const upcoming = snapshot.upcoming_plan?.[key] ?? [];
+  // The car page answers goal and plan above; its raw KPIs and mode list would repeat them.
+  if (key === 'car' && snapshot.charge_plan) {byId('detail-kpis').hidden=true;byId('plan').hidden=true;return;}
   byId('plan').hidden = !withPlan && key !== 'heat' && key !== 'house';
   byId('plan').innerHTML = withPlan
     ? `<h2>${th('plan.next')}</h2>${upcoming.length ? '<dl>'+upcoming.map(item => `<dt>${html(time(item.time))}</dt><dd>${html(modeLabel(item.mode))}</dd>`).join('')+'</dl>' : `<p>${th('plan.no_valid')}</p>`}`
@@ -647,8 +719,47 @@ function holidayFields() {
   if(catholic.disabled) catholic.checked=false;
 }
 const vehicleForm=byId('vehicle-daily');
+const goalForm=byId('vehicle-goals');
 let vehicleFormKey=null;
 let chargePlanCounter=0;
+let vehicleSaving=false;
+let planScrollPending=false;
+function selectedVehicle() {
+  const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
+  return vehicles.find(item=>item.id===selector.value)??snapshot;
+}
+/* Range of a SoC with the factor the backend learned from the vehicle's last report (km per %).
+   Shown next to every SoC field and updated while the value is typed. */
+// The vehicle page renders with that vehicle's snapshot, but events run later against the whole
+// snapshot; keep the factor of the vehicle whose form is shown.
+let vehicleRangeFactor=null;
+function rangeText(soc, factor=vehicleRangeFactor) {
+  return valid(factor)&&valid(soc)&&soc>=0&&soc<=100 ? t('car.range',{range:decimal(soc*factor,0)}) : '';
+}
+// SoC with its expected range, e.g. "70 % · ≈ 294 km"; without a learned factor only the SoC.
+function socValueText(soc) {
+  if(!valid(soc)) return '';
+  const range=rangeText(soc);
+  return `${decimal(soc,0)} %`+(range ? ' · '+range : '');
+}
+// Each SoC field has a slider; field, slider and the value with its range follow each other.
+// The slider being dragged is not moved back by a refresh.
+function socRanges(root=document, active=null) {
+  const focused=document.activeElement;
+  for(const input of root.querySelectorAll('input[data-soc-range]')) {
+    const field=input.closest('.soc-field'), soc=Number(input.value), known=input.value!=='' && soc>=1 && soc<=100;
+    const slider=field?.querySelector('[data-soc-slider]'), value=field?.querySelector('[data-soc-value]');
+    if(value) value.textContent=known ? socValueText(soc) : '';
+    if(slider && slider!==active && slider!==focused && known) slider.value=String(soc);
+  }
+}
+// Moving the slider sets the SoC field.
+function socFromSlider(slider) {
+  const input=slider.closest('.soc-field')?.querySelector('input[data-soc-range]'), soc=Number(slider.value);
+  if(!input || !valid(soc)) return null;
+  input.value=String(Math.max(1,Math.min(100,Math.round(soc))));
+  return input;
+}
 function vehicleSettings() {
   const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
   byId('vehicle-selector-label').hidden=!vehicles.length;
@@ -656,34 +767,67 @@ function vehicleSettings() {
     selector.innerHTML=vehicles.map(item=>`<option value="${html(item.id)}">${html(item.name)}</option>`).join('');
     selector.dataset.vehicles=vehicles.map(item=>item.id).join(',');
   }
-  const selected=vehicles.find(item=>item.id===selector.value)??snapshot;
+  const selected=selectedVehicle();
+  const factor=selected.live?.car_range_per_soc;
+  vehicleRangeFactor=valid(factor) && factor>0 ? factor : null;
   const identity=selected.id??'primary';
   const key=(location.hash??'')+':'+identity;
-  if(vehicleFormKey===key) return;
-  vehicleFormKey=key;
   vehicleForm.dataset.vehicleId=selected.id??'';
-  for(const name of ['pv','fast','phase_auto']) vehicleForm.elements[name].checked=selected.settings[name];
-  vehicleForm.elements.pv_target_soc.value=selected.settings.pv_target_soc;
-  vehicleForm.elements.fast_target_soc.value=selected.settings.target_soc;
+  goalForm.dataset.vehicleId=selected.id??'';
+  // Switches follow the backend on every refresh; a running save keeps the user's choice visible.
+  if(!vehicleSaving) for(const name of ['pv','fast','phase_auto']) vehicleForm.elements[name].checked=selected.settings[name];
   vehicleForm.elements.phase_auto.disabled=selected.plugins?.wallbox?.features?.phase_switching===false;
   if(vehicleForm.elements.phase_auto.disabled)vehicleForm.elements.phase_auto.checked=false;
+  const hint=byId('car-pv-hint'), fastHint=byId('car-fast-hint');
+  if(hint) hint.textContent=t('car.pv_hint',{soc:decimal(selected.settings.pv_target_soc,0)});
+  if(fastHint) fastHint.textContent=t('car.fast_hint',{soc:decimal(selected.settings.target_soc,0)});
+  // Before the first snapshot there are no goals yet; do not lock the editor to that empty state.
+  socRanges();
+  if(vehicleFormKey===key || !selected.charge_plan_view) return;
+  vehicleFormKey=key;
+  vehicleForm.elements.pv_target_soc.value=selected.settings.pv_target_soc;
+  vehicleForm.elements.fast_target_soc.value=selected.settings.target_soc;
   byId('charge-plans').innerHTML='';
   for(const row of selected.charge_plan_view??[]) appendChargePlan(row);
   byId('vehicle-saved').textContent='';
+  socRanges();
 }
-function appendChargePlan(row) {
+const weekdayKeys=['mon','tue','wed','thu','fri','sat','sun'];
+function weekdayText(days) {
+  const sorted=[...new Set(days)].sort((a,b)=>a-b), label=index=>t(`weekday.${weekdayKeys[index]}`);
+  if(sorted.length===7) return t('car.goal_daily');
+  const runs=[];
+  for(const value of sorted) {
+    const run=runs.at(-1);
+    if(run && value===run[1]+1) run[1]=value; else runs.push([value,value]);
+  }
+  return runs.map(([first,last])=>last-first>=2 ? `${label(first)}–${label(last)}` : first===last ? label(first) : `${label(first)}, ${label(last)}`).join(', ');
+}
+function goalSummary(row) {
+  const schedule=row.schedule==='weekly'
+    ? `${weekdayText(row.weekdays??[])} ${row.departure_time??''}`.trim()
+    : row.next_departure ? when(row.next_departure) : (row.departure_local??'').replace('T',' ');
+  const next=row.next_departure===undefined ? t('car.goal_unsaved') : row.next_departure ? t('plans.next',{date:when(row.next_departure)}) : t('plans.no_next');
+  const tags=[row.selected ? `<span class="tag accent">${th('car.goal_next')}</span>` : '',
+    row.active===false ? `<span class="tag">${th('car.goal_inactive')}</span>` : '',
+    row.schedule==='weekly' && row.holidays ? `<span class="tag">${th('car.goal_holidays')}</span>` : ''].join('');
+  const range=rangeText(row.target_soc);
+  return `<span class="goal-when"><b>${html(decimal(row.target_soc,0))} %</b>${range ? `<small>${html(range)}</small>` : ''}</span>
+    <span class="goal-text"><b>${html(schedule||t('plans.no_next'))}</b><small>${html(next)}</small></span>
+    <span class="goal-tags">${tags}<button type="button" class="btn goal-edit" aria-expanded="false">${th('car.goal_edit')}</button></span>`;
+}
+function appendChargePlan(row, open=false) {
   const card=document.createElement('fieldset');
-  card.className='charge-goal';card.dataset.id=row.id;
-  card.innerHTML=`<legend>${th('plans.goal')}</legend><div class="goal-header">
+  card.className='charge-goal'+(row.selected?' selected':'');card.dataset.id=row.id;
+  card.innerHTML=`<legend class="sr-only">${th('plans.goal')}</legend><div class="goal-summary">${goalSummary(row)}</div><div class="goal-editor"${open?'':' hidden'}><div class="goal-header">
     <label class="check"><input name="active" type="checkbox" ${row.active?'checked':''}>${th('plans.active')}</label>
     <button type="button" class="delete-goal">${th('plans.delete')}</button></div>
     <div class="fields"><label>${th('settings.schedule')}<select name="schedule"><option value="once">${th('settings.once')}</option><option value="weekly">${th('settings.weekly')}</option></select></label>
-    <label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required value="${html(row.target_soc)}"></label>
+    <div class="soc-field"><label>${th('settings.target_soc')}<input name="target_soc" type="number" min="1" max="100" required data-soc-range value="${html(row.target_soc)}"></label><div class="soc-slide"><span>${th('car.slider_soc_label')}</span><input type="range" class="soc-slider" data-soc-slider="soc" min="1" max="100" step="1" aria-label="${th('car.slider_soc')}"><output data-soc-value aria-live="polite">${html(socValueText(row.target_soc))}</output></div></div>
     <label data-goal-schedule="once">${th('settings.departure')}<input name="departure_local" type="datetime-local" value="${html(row.departure_local??'')}"></label>
     <label data-goal-schedule="weekly">${th('settings.departure_time')}<input name="departure_time" type="time" value="${html(row.departure_time??'07:30')}"></label></div>
-    <div data-goal-schedule="weekly" class="checks">${['mon','tue','wed','thu','fri','sat','sun'].map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}
-    <label><input name="holidays" type="checkbox" ${row.holidays?'checked':''}>${th('plans.holidays')}</label></div>
-    <p class="footnote">${row.next_departure===undefined?th('plans.save_preview'):row.next_departure?th('plans.next',{date:time(row.next_departure)}):th('plans.no_next')}</p>`;
+    <div data-goal-schedule="weekly" class="checks">${weekdayKeys.map((day,i)=>`<label><input name="day" type="checkbox" value="${i}" ${(row.weekdays??[]).includes(i)?'checked':''}>${th(`weekday.${day}`)}</label>`).join('')}
+    <label><input name="holidays" type="checkbox" ${row.holidays?'checked':''}>${th('plans.holidays')}</label></div></div>`;
   card.querySelector('[name=schedule]').value=row.schedule;
   const update=()=>{
     const mode=card.querySelector('[name=schedule]').value;
@@ -693,6 +837,13 @@ function appendChargePlan(row) {
   };
   card.querySelector('[name=schedule]').addEventListener('change',update);
   card.querySelector('.delete-goal').addEventListener('click',()=>{if(confirm(t('plans.delete_confirm')))card.remove();});
+  const edit=card.querySelector('.goal-edit'), editor=card.querySelector('.goal-editor');
+  if(edit && editor) {
+    edit.setAttribute?.('aria-expanded',String(open));
+    edit.addEventListener('click',()=>{editor.hidden=!editor.hidden;edit.setAttribute?.('aria-expanded',String(!editor.hidden));
+      edit.textContent=t(editor.hidden?'car.goal_edit':'car.goal_close');});
+    if(open) edit.textContent=t('car.goal_close');
+  }
   update();byId('charge-plans').append(card);
 }
 function chargePlanValues() {
@@ -703,6 +854,175 @@ function chargePlanValues() {
       departure_time:value('departure_time').value,holidays:value('holidays').checked,
       weekdays:[...card.querySelectorAll('[name=day]:checked')].map(input=>Number(input.value))};
   });
+}
+async function saveVehicleSwitch(input) {
+  const output=byId('vehicle-switch-saved'), values={};
+  if(input.type==='checkbox') values[input.name]=input.checked;
+  else {
+    const value=Number(input.value);
+    if(input.value===''||!Number.isFinite(value)||value<1||value>100) {output.textContent=t('car.invalid');return;}
+    values[input.name==='fast_target_soc' ? 'target_soc' : input.name]=value;
+  }
+  if(vehicleForm.dataset.vehicleId) values.vehicle_id=vehicleForm.dataset.vehicleId;
+  vehicleSaving=true;output.textContent=t('car.saving');
+  try {await api('settings',values);output.textContent=t('settings.saved');}
+  catch(error) {
+    if(input.type==='checkbox') input.checked=!input.checked;
+    output.textContent=error.message;
+  } finally {vehicleSaving=false;}
+  await refresh();
+}
+
+const kwhText=value=>`${decimal(value,1)} kWh`;
+const euro=value=>new Intl.NumberFormat(language.locale,{style:'currency',currency:'EUR'}).format(value);
+const chargeKinds={pv:'solar',grid:'grid',pause:'edge',ready:'car'};
+function durationText(seconds) {
+  const minutes=Math.round(seconds/60), hours=Math.floor(minutes/60);
+  return hours ? t('car.duration',{h:hours,m:minutes%60}) : t('car.duration_min',{m:minutes});
+}
+function phaseText(phases) {
+  return phases===1||phases===3 ? t('car.phases_'+phases) : '';
+}
+function chargePowerText(segment) {
+  return [`${decimal(segment.power_w/1000,1)} ${t('unit.kw')}`,phaseText(segment.phases)].filter(Boolean).join(' ');
+}
+function chargeSummary(plan) {
+  if(plan.state==='disconnected') return t('car.summary_disconnected');
+  if(plan.state==='reached') return t('car.summary_reached');
+  if(!plan.segments?.length) return t('car.summary_no_plan');
+  const parts=[];
+  if(plan.pv_kwh>=.05) parts.push(t('car.summary_pv',{kwh:kwhText(plan.pv_kwh),time:when(plan.pv_until)}));
+  if(plan.grid_kwh>=.05) parts.push(t('car.summary_grid',{kwh:kwhText(plan.grid_kwh),time:when(plan.grid_from),price:price(plan.grid_price_ct)}));
+  const text=[valid(plan.remaining_kwh) ? t('car.remaining',{kwh:kwhText(plan.remaining_kwh)}) : '',
+    parts.length ? t('car.summary_plan',{parts:parts.join(t('car.summary_and'))}) : t('car.summary_none')];
+  const late=plan.departure && (!plan.reached_at || Date.parse(plan.reached_at)>Date.parse(plan.departure));
+  if(late) text.push(t('car.summary_late'));
+  return text.filter(Boolean).join(' ');
+}
+function socRing(soc, target) {
+  const circle=301.6, value=valid(soc) ? Math.max(0,Math.min(100,soc)) : 0;
+  const goal=valid(target) ? `<circle class="goal" cx="60" cy="60" r="48" stroke-dasharray="2 ${circle}" stroke-dashoffset="${(-target/100*circle).toFixed(1)}" transform="rotate(-90 60 60)"/>` : '';
+  const label=t('car.ring',{soc:percent(soc),target:percent(target)});
+  return `<svg class="soc-ring" viewBox="0 0 120 120" role="img" aria-label="${html(label)}"><circle class="t" cx="60" cy="60" r="48"/>
+    <circle class="v" cx="60" cy="60" r="48" stroke-dasharray="${(value/100*circle).toFixed(1)} ${circle}" transform="rotate(-90 60 60)"/>${goal}
+    <text x="60" y="62" text-anchor="middle">${html(valid(soc) ? decimal(soc,0)+' %' : '—')}</text>${valid(target) ? `<text class="sub" x="60" y="80" text-anchor="middle">${html(t('car.ring_target',{soc:decimal(target,0)}))}</text>` : ''}</svg>`;
+}
+// The vehicle's reported range, or the SoC times the learned factor (≈).
+function currentRange(live) {
+  if(!valid(live?.car_range)) return '';
+  return t(live.car_range_source==='estimate' ? 'car.range' : 'car.range_measured',{range:decimal(live.car_range,0)});
+}
+function carGoal(plan) {
+  const live=snapshot.live??{}, target=plan.target_soc;
+  const title=plan.departure ? t('car.goal_until',{when:when(plan.departure),soc:decimal(target,0)}) : t('car.goal_open',{soc:decimal(target,0)});
+  const charging=valid(live.car) && live.car>=100;
+  const tags=[charging ? `<span class="tag">${html([power(live.car),phaseText(live.phases)].filter(Boolean).join(' · '))}</span>` : '',
+    `<span class="tag">${html(modeLabel(live.car_mode))}</span>`,
+    live.soc_source ? `<span class="tag">${html(t('car.soc_source',{source:stateLabel('source',live.soc_source)}))}</span>` : '',
+    currentRange(live) ? `<span class="tag">${html(t('car.range_now',{range:currentRange(live)}))}</span>` : ''].join('');
+  return `<div class="soc-goal-head">${socRing(plan.soc,target)}<div class="goal-copy"><h2>${html(title)}</h2>
+    <p class="dim">${html(chargeSummary(plan))}${plan.segments?.length ? ` <a href="#car-plan" class="to-plan">${th('car.to_plan')}</a>` : ''}</p>
+    <div class="goal-tags">${tags}</div></div></div>`;
+}
+const chargeAlerts={suspended:['crit','error'],overridden:['warn','override'],read_only:['info','info'],disconnected:['off','info']};
+function chargeAlert(plan) {
+  const alert=chargeAlerts[plan.state];
+  if(!alert) return '';
+  const immediate=plan.immediate_cost?.reached_at;
+  const meta=plan.state==='overridden' && immediate ? t('car.alert_overridden_at',{soc:decimal(plan.target_soc,0),time:when(immediate)}) : t(`car.alert_${plan.state}`);
+  const link=plan.state==='suspended' ? `<a href="#notices">${th('car.alert_diagnose')}</a>` : '<span></span>';
+  return `<div class="notice-card tone-${alert[0]}" role="${alert[0]==='crit'?'alert':'status'}"><span class="sev">${th('car.sev_'+alert[1])}</span>
+    <div><b>${th(`car.alert_${plan.state}_title`)}</b><small>${html(meta)}</small></div>${link}</div>`;
+}
+function socPlot(plan, start, span) {
+  const points=(plan.curve??[]).map(point=>({x:Math.max(0,Math.min(100,(Date.parse(point.time)-start)*100/span)),y:100-Math.max(0,Math.min(100,point.soc))}));
+  if(!points.length) return '';
+  points.push({x:100,y:points.at(-1).y});
+  const line=points.map(point=>`${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  const target=valid(plan.target_soc) ? 100-plan.target_soc : null;
+  const reached=plan.reached_at ? t('car.plot_target_at',{soc:decimal(plan.target_soc,0),time:when(plan.reached_at)}) : valid(plan.target_soc) ? t('car.ring_target',{soc:decimal(plan.target_soc,0)}) : '';
+  return `<div class="socplot" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none">
+    <polygon class="soc-area" points="${line} 100,100 0,100"/>${target===null ? '' : `<line class="soc-target" x1="0" y1="${target}" x2="100" y2="${target}"/>`}
+    <polyline class="soc-line" points="${line}"/></svg>
+    <span class="soclbl" style="left:0;top:calc(${points[0].y.toFixed(1)}% - 20px)">${html(decimal(plan.soc,0))} %</span>
+    ${target===null ? '' : `<span class="soclbl" style="right:0;top:calc(${Math.max(0,target).toFixed(1)}% - 20px)">${html(reached)}</span>`}</div>`;
+}
+function segmentText(segment) {
+  const parts=[`${clock(segment.start)}–${clock(segment.end)}`,t('car.kind_'+segment.kind)];
+  if(segment.kwh>=.05) {
+    parts.push(chargePowerText(segment));
+    parts.push(t('car.seg_energy',{kwh:kwhText(segment.kwh),from:decimal(segment.soc_start,0),to:decimal(segment.soc_end,0)}));
+    parts.push(segment.kind==='pv' && valid(segment.value_ct) ? t('car.seg_valued',{price:price(segment.value_ct)}) : price(segment.price_ct));
+  } else if(segment.kind==='pause' && valid(segment.price_ct)) parts.push(t('car.row_pause_price',{price:price(segment.price_ct)}));
+  return parts.filter(Boolean).join(' · ');
+}
+function segmentRow(segment, plan) {
+  let title, detail, stamp=when(segment.start);
+  if(segment.kind==='pv') {
+    title=t('car.row_pv');stamp=t('car.row_until',{time:when(segment.end)});
+    detail=[t('car.row_charge',{kwh:kwhText(segment.kwh),soc:decimal(segment.soc_end,0)}),valid(segment.cost_eur) ? euro(segment.cost_eur) : ''];
+  } else if(segment.kind==='grid') {
+    title=t(segment.phases ? 'car.row_grid_phases' : 'car.row_grid',{power:`${decimal(segment.power_w/1000,1)} ${t('unit.kw')}`,phases:phaseText(segment.phases)});
+    detail=[t('car.row_charge',{kwh:kwhText(segment.kwh),soc:decimal(segment.soc_end,0)}),price(segment.price_ct),valid(segment.cost_eur) ? euro(segment.cost_eur) : ''];
+  } else if(segment.kind==='ready') {
+    title=t('car.row_ready',{soc:decimal(plan.target_soc,0)});
+    detail=[plan.buffer_s && plan.departure ? t('car.row_buffer',{duration:durationText(plan.buffer_s),when:when(plan.departure)}) : ''];
+  } else {
+    title=t('car.row_pause');detail=[valid(segment.price_ct) ? t('car.row_pause_price',{price:price(segment.price_ct)}) : ''];
+  }
+  detail=detail.filter(Boolean).join(' · ');
+  return `<div class="row"><span><b>${html(title)}</b>${detail ? `<br><small>${html(detail)}</small>` : ''}</span><span class="tag">${html(stamp)}</span></div>`;
+}
+function chargeCompare(plan) {
+  const planned=plan.plan_cost, now=plan.immediate_cost, fast=plan.state==='overridden';
+  if(!planned && !now) return '';
+  const box=(label,cost,approximate,win)=>`<div class="${win ? 'win' : ''}"><small>${html(label)}</small><strong>${cost ? html((approximate ? '≈ ' : '')+euro(cost.eur)) : '—'}</strong>
+    <small>${cost ? html([valid(cost.price_ct) ? t('car.compare_avg',{price:price(cost.price_ct)}) : '',
+      cost.reached_at ? t(approximate ? 'car.compare_at_estimated' : 'car.compare_at',{soc:decimal(plan.target_soc,0),time:when(cost.reached_at)}) : ''].filter(Boolean).join(' · ')) : html(t('car.compare_none'))}</small></div>`;
+  const cheaper=planned && now ? planned.eur<=now.eur : Boolean(planned);
+  const note=valid(plan.pv_price_ct) ? t('car.compare_note',{price:price(plan.pv_price_ct)}) : t('car.compare_note_free');
+  return `<div class="cp-compare">${box(t('car.compare_plan'),planned,false,!fast&&cheaper)}${box(t(fast ? 'car.compare_now_active' : 'car.compare_now'),now,true,fast)}</div>
+    <p class="footnote">${html(note)}</p>`;
+}
+function carPlanPanel(plan) {
+  const start=windowNow(), end=Math.max(start+3_600_000,Date.parse(plan.end)), span=end-start;
+  const title=plan.departure ? t('car.plan_title',{when:when(plan.departure)}) : t('car.plan_title_open');
+  const tag=chargeAlerts[plan.state] ? t('car.state_'+plan.state)
+    : plan.generated_at ? t('car.plan_from',{time:when(plan.generated_at)}) : '';
+  const segments=plan.segments??[];
+  const track=segments.map((segment,index)=>{
+    const from=Math.max(start,Date.parse(segment.start)), to=Math.min(end,Date.parse(segment.end)), share=(to-from)/span;
+    const info=segmentText(segment);
+    if (share<=0) return '';
+    return `<button type="button" class="mode-segment" style="--start:${((from-start)/span).toFixed(4)};--duration:${share.toFixed(4)};--mode:var(--${chargeKinds[segment.kind]})" data-charge="${index}" data-mode="${html(info)}" aria-label="${html(info)}" aria-pressed="false">${share>=.12 ? `<span>${th('car.short_'+segment.kind)}</span>` : ''}</button>`;
+  }).join('');
+  const at=stamp=>`${((stamp-start)*100/span).toFixed(2)}%`;
+  const step=span>12*3_600_000 ? 4*3_600_000 : span>4*3_600_000 ? 2*3_600_000 : 3_600_000;
+  const ticks=[];
+  for(let stamp=Math.ceil((start+step/2)/step)*step;stamp<end-step/2;stamp+=step) ticks.push(stamp);
+  const legend=[...new Set(segments.map(segment=>segment.kind))].map(kind=>`<span><i style="--mode:var(--${chargeKinds[kind]})"></i>${th('car.kind_'+kind)}</span>`).join('');
+  const body=segments.length ? `<div class="plan-track-wrap"><div class="plan-track charge-track" role="group" aria-label="${th('car.track_aria')}">${track}</div></div>
+    <div class="plan-axis" aria-hidden="true"><span style="left:0">${th('chart.now')}</span>${ticks.map(stamp=>`<span style="left:${at(stamp)}">${html(clock(stamp))}</span>`).join('')}<span style="left:100%">${html(when(end))}</span></div>
+    <div class="mode-legend">${legend}</div>
+    <p class="mode-detail" id="car-plan-detail" aria-live="polite">${th('car.track_hint')}</p>
+    <div class="list">${segments.filter(segment=>Date.parse(segment.end)-Date.parse(segment.start)>=(segment.kind==='pause' ? 1_800_000 : 600_000)||segment.kwh>=.5).map(segment=>segmentRow(segment,plan)).join('')}</div>
+    ${chargeCompare(plan)}` : `<p class="footnote">${th(plan.state==='disconnected' ? 'car.summary_disconnected' : 'car.no_plan')}</p>`;
+  return `<div class="panel-heading"><h2>${html(title)}</h2>${tag ? `<span class="tag">${html(tag)}</span>` : ''}</div>
+    ${chargeAlert(plan)}${socPlot(plan,start,span)}${body}`;
+}
+function carView() {
+  const plan=snapshot.charge_plan;
+  const fleet=Boolean(snapshot.vehicles?.length);
+  byId('car-goal').hidden=fleet||!plan;
+  byId('car-plan').hidden=fleet||!plan;
+  if(fleet||!plan) {planScrollPending=false;return;}
+  byId('car-goal').innerHTML=carGoal(plan);
+  byId('car-plan').innerHTML=carPlanPanel(plan);
+  byId('car-plan').classList.toggle('overridden',plan.state==='overridden'||plan.state==='read_only');
+  if(planScrollPending) {
+    planScrollPending=false;
+    requestAnimationFrame(()=>byId('car-plan').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}));
+  }
 }
 function batteryGroupDetails(group) {
   if(!group)return '';
@@ -720,22 +1040,258 @@ function batteryGroupDetails(group) {
     (group.battery_count===0?`<dd>${th('plugin.no_storage')}</dd>`:'');
 }
 
+/* Settings: one save bar for all sections; field errors come from the backend's allow-listed field names. */
+const settingsUi = {section:'battery', baseline:null, costBaseline:null, costLoading:null, saving:false};
+const costForm = byId('cost-settings');
+function formState(target) {
+  const values={};
+  for (const element of target.elements) if (element.name) values[element.name]=element.type==='checkbox' ? element.checked : element.value;
+  return values;
+}
+function dirtySettings() {
+  const result=[];
+  for (const [target,baseline,group] of [[form,settingsUi.baseline,'daily'],[costForm,settingsUi.costBaseline,'cost']]) {
+    if (!baseline) continue;
+    const now=formState(target);
+    for (const key of Object.keys(now)) if (now[key]!==baseline[key]) result.push({group,key});
+  }
+  return result;
+}
+function updateSavebar() {
+  const dirty=dirtySettings();
+  byId('savebar').hidden=route!=='settings' || !dirty.length;
+  byId('dirty-count').textContent=dirty.length===1 ? t('settings.one_change') : t('settings.changes',{count:dirty.length});
+  byId('save-settings').disabled=settingsUi.saving;
+  byId('discard-settings').disabled=settingsUi.saving;
+}
+function showSettingsSection(name) {
+  const links=[...byId('settings-side').querySelectorAll('[data-section]')];
+  const target=links.some(link=>link.dataset.section===name && !link.hidden) ? name : 'battery';
+  settingsUi.section=target;
+  links.forEach(link=>link.setAttribute('aria-current',String(link.dataset.section===target)));
+  document.querySelectorAll('[data-settings-section]').forEach(section=>{section.hidden=section.dataset.settingsSection!==target;});
+  if (target==='costs') void ensureCostSettings();
+}
+function ensureCostSettings() {
+  if (settingsUi.costBaseline || settingsUi.costLoading) return settingsUi.costLoading ?? Promise.resolve();
+  settingsUi.costLoading=loadCostSettings().then(()=>{settingsUi.costBaseline=formState(costForm);})
+    .catch(error=>{byId('cost-saved').textContent=error.message;})
+    .finally(()=>{settingsUi.costLoading=null;updateSavebar();});
+  return settingsUi.costLoading;
+}
+const fieldLabel = name => [form,costForm].map(target=>target.elements.namedItem(name)).find(Boolean)?.closest('label') ?? null;
+function clearFieldError(label) {
+  label.classList.remove('invalid');
+  const message=label.querySelector('.field-error');
+  if (message) {message.hidden=true;message.textContent='';}
+}
+function showFieldErrors(fields,reason) {
+  let first=null;
+  for (const name of fields) {
+    const label=fieldLabel(name);
+    if (!label) continue;
+    label.classList.add('invalid');
+    let message=label.querySelector('.field-error');
+    if (!message) {message=document.createElement('span');message.className='field-error';label.append(message);}
+    const key='settings.error_'+reason;
+    message.textContent=Object.hasOwn(language.messages,key) ? t(key) : t('settings.error_field');
+    message.hidden=false;
+    first??=label;
+  }
+  if (first) {
+    showSettingsSection(first.closest('[data-settings-section]')?.dataset.settingsSection);
+    first.closest('details')?.setAttribute('open','');
+    first.querySelector('input,select')?.focus();
+  }
+  return first!==null;
+}
+function dailyValues() {
+  const values = {};
+  for (const name of ['reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
+  for (const name of ['battery_pv_support','battery_pv_start','holiday_catholic']) values[name] = form.elements[name].checked;
+  for (const name of ['holiday_state','holiday_locality']) values[name] = form.elements[name].value;
+  return values;
+}
+let toastTimer=null;
+function toast(message) {
+  const node=byId('toast');
+  node.textContent=message;node.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{node.hidden=true;},3500);
+}
+async function saveSettings() {
+  if (settingsUi.saving) return;
+  document.querySelectorAll('#settings label.invalid').forEach(clearFieldError);
+  const dirty=dirtySettings();
+  if (!dirty.length) return;
+  // Browser input constraints only catch unparsable or empty numbers; the backend validates the values.
+  const unreadable=dirty.map(item=>(item.group==='daily' ? form : costForm).elements.namedItem(item.key))
+    .filter(element=>element && !element.disabled && !element.checkValidity());
+  if (unreadable.length) {showFieldErrors(unreadable.map(element=>element.name),'input');toast(t('settings.fix_fields'));return;}
+  settingsUi.saving=true;updateSavebar();
+  try {
+    if (dirty.some(item=>item.group==='daily')) {await api('settings',dailyValues());settingsUi.baseline=formState(form);vehicleFormKey=null;}
+    if (dirty.some(item=>item.group==='cost')) {await saveCostSettings();settingsUi.costBaseline=null;await ensureCostSettings();}
+    toast(t('settings.saved'));
+  } catch (error) {
+    toast(showFieldErrors(error.fields ?? [],error.reason) ? t('settings.fix_fields') : error.message);
+  } finally {
+    settingsUi.saving=false;updateSavebar();
+  }
+  await refresh();
+}
+function discardSettings() {
+  for (const [target,baseline] of [[form,settingsUi.baseline],[costForm,settingsUi.costBaseline]]) {
+    if (!baseline) continue;
+    for (const element of target.elements) {
+      if (!element.name || !Object.hasOwn(baseline,element.name)) continue;
+      if (element.type==='checkbox') element.checked=baseline[element.name]; else element.value=baseline[element.name];
+    }
+  }
+  holidayFields();
+  costForm.elements.pv_price_ct.disabled=costForm.elements.pv_price_source.value==='eos';
+  document.querySelectorAll('#settings label.invalid').forEach(clearFieldError);
+  updateSavebar();toast(t('settings.discarded'));
+}
+
+/* Storage and vehicle charging control are enabled separately; the backend reports which areas have a matching device. */
+const areaControl={confirming:null,busy:false,result:''};
+function controlAreas() {
+  for (const area of document.querySelectorAll('[data-control-area]')) {
+    const key=area.dataset.controlArea, view=snapshot.control?.[key] ?? {};
+    const held=Boolean(view.enabled || view.release_pending), confirming=areaControl.confirming===key;
+    const button=area.querySelector('[data-area-action="toggle"]');
+    button.hidden=!view.available;
+    button.disabled=!formReady || areaControl.busy || Boolean(areaControl.confirming);
+    button.className='btn'+(held?'':' primary');
+    button.textContent=t(held ? 'control.release' : 'control.take');
+    area.querySelector('.control-area-state').textContent=!view.available ? t(`control.area_unavailable.${key}`)
+      : t(view.release_pending ? 'control.area_releasing' : view.enabled ? 'control.area_on' : 'control.area_off');
+    const box=area.querySelector('.control-area-confirm');
+    box.hidden=!confirming || !view.available;
+    if (box.hidden) continue;
+    box.querySelector('p').textContent=t(held ? `control.area_release_confirm.${key}` : `control.area_confirm.${key}`);
+    const confirmButton=box.querySelector('[data-area-action="confirm"]');
+    confirmButton.className='btn '+(held?'danger':'primary');
+    confirmButton.textContent=t(held ? 'control.release_confirm' : 'control.take_confirm');
+    confirmButton.disabled=areaControl.busy;
+    box.querySelector('[data-area-action="cancel"]').disabled=areaControl.busy;
+  }
+  byId('control-result').textContent=areaControl.result;
+}
+
+// Numeric source diagnostics: the backend supplies values and the balance rule.
+function diagnosticNumber(value,unit) {
+  if(!valid(value))return '—';
+  const digits=unit==='W'?0:unit==='ct/kWh'?2:1;
+  return `${value<0?'−':''}${decimal(Math.abs(value),digits)} ${html(unit)}`;
+}
+function diagnosticTable(head,rows,numeric=[1]) {
+  return `<div class="diagnostics-scroll"><table class="diagnostics"><thead><tr>${head.map((label,index)=>`<th${numeric.includes(index)?' class="num"':''}>${label}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+function diagnosticSource(row) {
+  if(!row.source)return '—';
+  const kind=row.source_type?th(`diagnostics.source_${row.source_type}`)+': ':'';
+  return kind+(row.source_type==='sensor'?`<code>${html(row.source)}</code>`:html(row.source));
+}
+function diagnosticStatus(row) {
+  return row.available?th('diagnostics.ok'):th(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
+}
+// Derived values in display order; shared by the table and the text export.
+function diagnosticDerived(view) {
+  const derived=view.derived??{},balance=view.balance;
+  const rows=[['diagnostics.house_total',derived.house_total,false],['diagnostics.minus_car',derived.car,false],
+    ['diagnostics.minus_heat',derived.heat,false],['diagnostics.house',derived.house,true],
+    ['diagnostics.house_total_measured',derived.house_total_measured,false],
+    ['diagnostics.residual',balance?.residual_w,true],['diagnostics.tolerance',balance?.tolerance_w,false]];
+  const state=view.complete===false?'incomplete':!balance?'measured_missing':balance.balanced?'balanced':'unbalanced';
+  const estimates=(view.estimates??[]).map(item=>[item.key==='house'?'diagnostics.house_label':`measurement.${item.key}`,`diagnostics.estimate.${item.reason}`]);
+  return {rows,state,estimates};
+}
+function sourceDiagnostics(view) {
+  if(!view)return `<p>${th('diagnostics.empty')}</p>`;
+  const W='W',sources=diagnosticTable([th('diagnostics.measurement'),th('diagnostics.source'),th('diagnostics.value'),th('diagnostics.age'),th('diagnostics.status')],
+    (view.sources??[]).map(row=>`<tr class="${row.available?'':'warn'}"><td>${th(`measurement.${row.key}`)}</td><td>${diagnosticSource(row)}</td><td class="num">${diagnosticNumber(row.value,row.unit)}</td><td class="num">${valid(row.age_s)?decimal(row.age_s,0)+' s':'—'}</td><td>${diagnosticStatus(row)}</td></tr>`),[2,3]);
+  const {rows:derivedValues,state,estimates}=diagnosticDerived(view);
+  const derivedRows=[...derivedValues.map(([key,value,strong])=>`<tr><td>${strong?`<strong>${th(key)}</strong>`:th(key)}</td><td class="num">${diagnosticNumber(value,W)}</td></tr>`),
+    `<tr class="${state==='balanced'?'':'warn'}"><td colspan="2"><strong>${th(`diagnostics.${state}`)}</strong></td></tr>`];
+  const estimateTable=estimates.length?`<h3>${th('diagnostics.estimates')}</h3>`+diagnosticTable([th('diagnostics.measurement'),th('diagnostics.reason')],
+    estimates.map(([key,reason])=>`<tr><td>${th(key)}</td><td>${th(reason)}</td></tr>`),[]):'';
+  const devices=(view.devices??[]).map(device=>`<h3>${html(device.name)}${device.plugin?' · '+html(device.plugin):''}</h3>
+    <p class="footnote">${th(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+th('diagnostics.read_error',{error:device.read_error}):''}</p>`+
+    diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],Object.entries(device.values??{}).map(([key,value])=>
+      `<tr><td>${th(`measurement.${key}`)}</td><td class="num">${diagnosticNumber(value,key==='battery_soc'?'%':W)}</td></tr>`))).join('');
+  const vehicles=(view.vehicles??[]).length?`<h3>${th('diagnostics.vehicles')}</h3>`+diagnosticTable([th('source.vehicle'),th('measurement.car'),th('measurement.car_soc')],
+    view.vehicles.map(item=>`<tr><td>${html(item.name)} · ${th(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}</td><td class="num">${diagnosticNumber(item.car,W)}</td><td class="num">${diagnosticNumber(item.car_soc,'%')}${item.soc_source==='estimate'?' ('+th('source.estimate')+')':''}${valid(item.car_range)?' · '+diagnosticNumber(item.car_range,'km'):''}</td></tr>`),[1,2]):'';
+  return `<p class="footnote">${th('diagnostics.time',{time:view.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,timeStyle:'medium'}).format(new Date(view.time)):'—'})}</p>${sources}
+    <h3>${th('diagnostics.derived')}</h3>${diagnosticTable([th('diagnostics.measurement'),th('diagnostics.value')],derivedRows)}${estimateTable}
+    ${devices?`<h3>${th('diagnostics.devices')}</h3>${devices}`:''}${vehicles}`;
+}
+
+// Plain-text copy of the same backend diagnostics for analysis outside the panel.
+function diagnosticsText(view) {
+  const plain=value=>String(value??'').replace(/[\r\n\t]+/g,' ').trim();
+  const columns=(rows,right=[1])=>{
+    const widths=rows[0].map((_,index)=>Math.max(...rows.map(row=>plain(row[index]).length)));
+    return rows.map(row=>row.map((cell,index)=>right.includes(index)?plain(cell).padStart(widths[index]):plain(cell).padEnd(widths[index])).join('  ').trimEnd());
+  };
+  const number=(value,unit)=>valid(value)?`${decimal(value,unit==='W'?0:unit==='ct/kWh'?2:1)} ${unit}`:'—';
+  const stamp=view?.time?new Intl.DateTimeFormat(language.locale,{timeZone:snapshot.zone,dateStyle:'short',timeStyle:'medium'}).format(new Date(view.time)):'—';
+  const lines=[`EOS Energiezentrale · ${t('diagnostics.title')}`,`${t('diagnostics.time',{time:stamp})} (${view?.time??'—'})`,''];
+  if(!view)return [...lines,t('diagnostics.empty')].join('\n')+'\n';
+  const source=row=>row.source?(row.source_type?t(`diagnostics.source_${row.source_type}`)+': ':'')+row.source:'—';
+  const status=row=>row.available?t('diagnostics.ok'):t(`diagnostics.reason.${row.reason??'state_unavailable'}`,{age:row.max_age_s??'—'});
+  lines.push(...columns([[t('diagnostics.measurement'),t('diagnostics.source'),t('diagnostics.value'),t('diagnostics.age'),t('diagnostics.status')],
+    ...(view.sources??[]).map(row=>[t(`measurement.${row.key}`),source(row),number(row.value,row.unit),valid(row.age_s)?decimal(row.age_s,0)+' s':'—',status(row)])],[2,3]));
+  const {rows:derivedValues,state,estimates}=diagnosticDerived(view);
+  lines.push('',t('diagnostics.derived'),...columns(derivedValues.map(([key,value])=>[t(key),number(value,'W')])),t(`diagnostics.${state}`));
+  if(estimates.length)lines.push('',t('diagnostics.estimates'),...columns(estimates.map(([key,reason])=>[t(key),t(reason)]),[]));
+  for(const device of view.devices??[]){
+    lines.push('',`${t('diagnostics.devices')}: ${plain(device.name)}${device.plugin?' · '+plain(device.plugin):''} · ${t(device.available?'diagnostics.device_ok':'diagnostics.device_incomplete')}${device.read_error?' · '+t('diagnostics.read_error',{error:device.read_error}):''}`,
+      ...columns(Object.entries(device.values??{}).map(([key,value])=>[t(`measurement.${key}`),number(value,key==='battery_soc'?'%':'W')])));
+  }
+  if((view.vehicles??[]).length)lines.push('',t('diagnostics.vehicles'),...columns(view.vehicles.map(item=>[`${plain(item.name)} · ${t(item.connected===false?'diagnostics.disconnected':'diagnostics.connected')}`,
+    number(item.car,'W'),number(item.car_soc,'%')+(item.soc_source==='estimate'?' ('+t('source.estimate')+')':'')]),[1,2]));
+  return lines.join('\n')+'\n';
+}
+async function copyDiagnostics() {
+  const text=diagnosticsText(snapshot.source_diagnostics);
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    // Fallback where the async clipboard is unavailable (e.g. plain HTTP).
+    const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');
+    area.style.cssText='position:fixed;left:-9999px;top:0;';document.body.append(area);area.select();
+    const copied=document.execCommand?.('copy');area.remove();
+    if(!copied){byId('diagnostics-result').textContent=t('diagnostics.copy_failed');return;}
+  }
+  byId('diagnostics-result').textContent=t('diagnostics.copied');
+}
+function exportDiagnostics() {
+  const view=snapshot.source_diagnostics;
+  const stamp=(view?.time??new Date().toISOString()).slice(0,19).replace(/[:T]/g,'-');
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(new Blob([diagnosticsText(view)],{type:'text/plain;charset=utf-8'}));
+  link.download=`eos-messwerte-${stamp}.txt`;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  byId('diagnostics-result').textContent=t('diagnostics.exported',{file:link.download});
+}
+
 function settings() {
-  document.querySelectorAll("[data-optional]").forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
-  if (!formReady && 'schedule' in snapshot.settings) {
+  // Without local edits the form follows backend changes, e.g. from native HA entities.
+  if ('schedule' in snapshot.settings && (!formReady || !dirtySettings().some(item=>item.group==='daily'))) {
     fillForm();
+    settingsUi.baseline=formState(form);
     formReady = true;
   }
-  byId('ownership').textContent = controlStatus(snapshot);
-  byId('control').textContent = snapshot.armed || snapshot.release_pending ? t('control.release') : t('control.take');
-  byId('control').disabled = !formReady;
-  const limits = snapshot.battery_limits;
+  showSettingsSection(settingsUi.section);
+  updateSavebar();
+  controlAreas();
   byId('battery-limits-status').textContent = t(`settings.battery_limits_${snapshot.battery_limits_status??'unmanaged'}`, {
       minimum:snapshot.settings.battery_min_soc, maximum:snapshot.settings.battery_max_soc});
   byId('connections').innerHTML = `<dt>Akkudoktor EOS</dt><dd>${th(`status.${snapshot.eos_status??'connecting'}`)}</dd>
     <dt>InfluxDB</dt><dd>${th(`status.${history.status??'connecting'}`)}</dd>`;
   for(const [kind,plugin] of Object.entries(snapshot.plugins??{})){if(plugin)byId('connections').innerHTML+=`<dt>${html(plugin.name)}</dt><dd>${Object.entries(plugin.features).map(([feature,enabled])=>`${th(`plugin.feature.${feature}`)}: ${th(enabled?'plugin.yes':'plugin.no')}`).join(' · ')}${(plugin.measurements??[]).length?' · '+plugin.measurements.map(key=>th(`measurement.${key}`)).join(', '):''}</dd>`;}
   byId('connections').innerHTML+=batteryGroupDetails(snapshot.battery_group);
+  byId('source-diagnostics').innerHTML=sourceDiagnostics(snapshot.source_diagnostics);
 
 }
 function render() {
@@ -750,28 +1306,74 @@ function noticeText(notice, translate=t) {
   return (notice.vehicle_name?notice.vehicle_name+': ':'')+message;
 }
 
+let shownRoute=null;
+const control={confirming:null,busy:false,result:''};
+const statusContext=()=>({t,html,time:when,modeLabel,text:notice=>noticeText(notice)});
+function browserNotices() {
+  // Browser-side failures stay in the browser; they are shown, never reported to the backend.
+  return [...(connectionFailure?[{severity:'warning',message:'notice.connection',browser:true}]:[]),
+    ...(forecastOpenFailure?[{severity:'warning',message:'forecast.open_failed',browser:true}]:[])];
+}
+function resolvedText(item) {
+  const key=item.code?.startsWith('sources_')?'notice_card.sources_resolved':'notice.'+item.code;
+  return Object.hasOwn(language.messages,key)?t(key,{values:''}):t('notice.unknown');
+}
+const toneOf=severity=>({error:'crit',info:'info'}[severity]??'warn');
+function renderStatus(route) {
+  const ctx=statusContext(), ready='control_status' in snapshot;
+  const notices=EosStatus.sortNotices([...(snapshot.notices??[]),...browserNotices()]);
+  const bandNode=byId('status-band');
+  bandNode.hidden=!ready;
+  if(ready){
+    const view=EosStatus.band(snapshot,ctx,{...control,ready:'schedule' in (snapshot.settings??{}),car:consumerEnabled('car')});
+    bandNode.className='status-band tone-'+view.tone;
+    bandNode.innerHTML=view.html;
+  }
+  const top=byId('top-notices'), pill=byId('notice-pill');
+  top.hidden=route==='notices';
+  top.innerHTML=route==='notices'?'':notices.slice(0,2).map(notice=>EosStatus.noticeCard(notice,ctx,{compact:true})).join('');
+  pill.hidden=route==='notices'||!notices.length;
+  if(notices.length){
+    pill.className='notice-pill tone-'+toneOf(notices[0].severity);
+    pill.innerHTML='<span class="sev">'+th('notice_card.'+(notices[0].severity??'warning'))+'</span><span class="txt">'+html(noticeText(notices[0]))
+      +(notices.length>1?' · '+th('notice_card.more',{count:notices.length-1}):'')+'</span><span aria-hidden="true">→</span>';
+  }
+  const badge=byId('nav-badge');
+  badge.hidden=!notices.length;badge.textContent=String(notices.length);
+  badge.className='badge tone-'+toneOf(notices[0]?.severity);
+  if(route!=='notices')return;
+  byId('notice-count').textContent=notices.length?t('notice_card.open_count',{count:notices.length}):t('notice_card.none_open');
+  byId('all-notices').innerHTML=notices.length?notices.map(notice=>EosStatus.noticeCard(notice,ctx)).join('')
+    :'<div class="plan-panel"><b>'+th('notice_card.all_clear')+'</b><p class="footnote">'+th('notice_card.all_clear_text')+'</p></div>';
+  const resolved=snapshot.resolved_notices??[];
+  byId('resolved-panel').hidden=!resolved.length;
+  byId('resolved-notices').innerHTML=resolved.map(item=>EosStatus.resolvedRow(item,{...ctx,text:resolvedText})).join('');
+}
 function renderView() {
   const requested = location.hash.slice(1);
   if (requested !== route) hideProbe();
   const vehicleRoute=requested.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===requested.slice(4));
   const usageRoute=billingRoute(requested);
-  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || requested === 'settings' ? requested : 'overview';
+  route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || ['settings','notices','pv'].includes(requested) ? requested : 'overview';
+  document.querySelectorAll('[data-optional]').forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
+  const section=route.startsWith('car')?'car':['settings','notices'].includes(route)?route:'overview';
+  document.querySelectorAll('nav a[data-route]').forEach(link=>{if(link.dataset.route===section)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
   byId('usage').hidden=!usageRoute;
   byId('overview').hidden = route !== 'overview';
   byId('settings').hidden = route !== 'settings';
+  byId('notices').hidden = route !== 'notices';
+  byId('pv').hidden = route !== 'pv';
+  updateSavebar();
   byId('detail').hidden = !pages.has(route) && !vehicleRoute;
-  const notices = snapshot.notices??[];
-  const information = notices.filter(notice=>notice.severity==='info').map(notice=>noticeText(notice));
-  const warnings = notices.filter(notice=>notice.severity!=='info').map(notice=>noticeText(notice));
-  if(connectionFailure)warnings.push(t('notice.connection'));
-  if(forecastOpenFailure)warnings.push(t('forecast.open_failed'));
-  byId('notice').textContent = [...information, ...(warnings.length ? [`${t('notice.check')} · ${warnings.join(', ')}`] : [])].join(' · ');
-  byId('notice').classList.toggle('information', information.length>0 && warnings.length===0);
+  renderStatus(route);
+  const entered = route !== shownRoute;
+  // Routes share their names with section ids; keep the status band in view after navigation.
+  if (route !== shownRoute) { if (shownRoute !== null) window.scrollTo(0,0); else requestAnimationFrame(()=>window.scrollTo(0,0)); shownRoute = route; }
   if (usageRoute) usageDetail(route.slice(6));
   else if (route === 'overview') overview();
   else if (route === 'settings') settings();
-  else detail(route);
-  forecastView?.update();
+  else if (route === 'pv') {if (entered || (!forecastView && !forecastOpenFailure)) openPvView(); else forecastView?.update();}
+  else if (route !== 'notices') detail(route);
 }
 let connectionFailure=false;
 async function refresh() {
@@ -789,76 +1391,157 @@ async function refreshHistory() {
   finally { historyRefreshing = false; render(); }
 }
 let forecastView=null;
-let forecastModuleLoading=null,forecastOpenFailure=false;
-function ensureForecastModule(){
-  if(typeof globalThis.EosForecast?.create==='function')return Promise.resolve(globalThis.EosForecast);
-  if(!forecastModuleLoading){
-    // An older cached bootstrap may not know about this optional dependency.
-    const url=new URL('./forecast.js',location.href);
+let forecastOpenFailure=false;
+const moduleLoading=new Map();
+// bootstrap.js itself is requested without a build version, so a browser may run a cached older
+// bootstrap that does not know newer modules. Load such a module with this app's build version.
+function ensureModule(file,ready){
+  if(ready())return Promise.resolve(ready());
+  if(!moduleLoading.has(file)){
+    const url=new URL('./'+file,location.href);
     url.searchParams.set('v',new URL(appScriptUrl).searchParams.get('v')||String(Date.now()));
-    forecastModuleLoading=new Promise((resolve,reject)=>{
+    moduleLoading.set(file,new Promise((resolve,reject)=>{
       const script=document.createElement('script');let finished=false;
       const finish=error=>{
         if(finished)return;finished=true;clearTimeout(timer);script.remove();
-        if(error)reject(requestError('asset_mismatch','interface'));else resolve(globalThis.EosForecast);
+        if(error){const failure=requestError('asset_mismatch','interface');failure.asset=file;reject(failure);}else resolve(ready());
       };
       const timer=setTimeout(()=>finish(true),10000);
       script.src=url.href;
-      script.onload=()=>finish(typeof globalThis.EosForecast?.create!=='function');
+      script.onload=()=>finish(!ready());
       script.onerror=()=>finish(true);
       document.head.append(script);
-    }).catch(error=>{forecastModuleLoading=null;throw error;});
+    }).catch(error=>{moduleLoading.delete(file);throw error;}));
   }
-  return forecastModuleLoading;
+  return moduleLoading.get(file);
 }
-async function openWeatherForecast(){
-  const button=byId('flow-weather');
-  if(button.disabled)return;
-  button.disabled=true;forecastOpenFailure=false;
+function ensureForecastModule(){
+  return ensureModule('forecast.js',()=>typeof globalThis.EosForecast?.create==='function'?globalThis.EosForecast:null);
+}
+let pvViewLoading=false;
+// The PV & weather page replaces the former weather dialog; failures stay a browser notice.
+async function openPvView(){
+  if(pvViewLoading)return;
+  pvViewLoading=true;forecastOpenFailure=false;
   try{
     const module=await ensureForecastModule();
-    if(!byId('weather-dialog')||!byId('forecast-close')||!byId('forecast-body'))throw requestError('asset_mismatch','interface');
-    forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale});
+    if(!byId('pv-strip')||!byId('pv-days')||!byId('pv-effects'))throw requestError('asset_mismatch','interface');
+    forecastView??=module.create({document,request:api,getSnapshot:()=>snapshot,t,html,decimal,getLocale:()=>language.locale,now:windowNow});
     forecastView.open();
   }catch{
     forecastOpenFailure=true;
   }finally{
-    button.disabled=false;render();
+    pvViewLoading=false;
+    if(forecastOpenFailure)render();
   }
 }
-byId('flow-weather').addEventListener('click',openWeatherForecast);
+byId('flow-weather').addEventListener('click',()=>{location.hash='#pv';});
 byId('vehicle-selector').addEventListener('change',()=>{vehicleFormKey=null;vehicleSettings();});
 form.elements.holiday_state.addEventListener('change',holidayFields);
 byId('add-charge-plan').addEventListener('click',()=>{
   if(byId('charge-plans').querySelectorAll('.charge-goal').length>=32)return;
   appendChargePlan({id:'plan_'+Date.now()+'_'+(++chargePlanCounter),active:true,schedule:'weekly',
-    target_soc:80,departure_time:'07:30',weekdays:[0,1,2,3,4],holidays:false});
+    target_soc:80,departure_time:'07:30',weekdays:[0,1,2,3,4],holidays:false},true);
 });
-vehicleForm.addEventListener('submit',async event=>{
+// Switches and limits save immediately; goals are edited together and saved with one button.
+vehicleForm.addEventListener('change',event=>{
+  const input=event.target;
+  // Releasing a slider of an immediately saved limit saves its SoC field.
+  if(input?.matches?.('input[data-soc-slider]')) {
+    const field=socFromSlider(input);
+    socRanges(vehicleForm);
+    if(field) saveVehicleSwitch(field);
+    return;
+  }
+  if(input?.name && ['pv','fast','phase_auto','pv_target_soc','fast_target_soc'].includes(input.name)) saveVehicleSwitch(input);
+});
+vehicleForm.addEventListener('submit',event=>{event.preventDefault();document.activeElement?.blur?.();});
+for(const root of [vehicleForm,byId('charge-plans')]) root.addEventListener('input',event=>{
+  const target=event.target;
+  if(target?.matches?.('input[data-soc-slider]') && socFromSlider(target)) socRanges(root,target);
+  else if(target?.matches?.('input[data-soc-range]')) socRanges(root);
+});
+goalForm.addEventListener('submit',async event=>{
   event.preventDefault();
   const values={charge_plans:chargePlanValues()};
-  for(const name of ['pv','fast','phase_auto'])values[name]=vehicleForm.elements[name].checked;
-  values.pv_target_soc=Number(vehicleForm.elements.pv_target_soc.value);
-  values.target_soc=Number(vehicleForm.elements.fast_target_soc.value);
-  if(vehicleForm.dataset.vehicleId)values.vehicle_id=vehicleForm.dataset.vehicleId;
+  if(goalForm.dataset.vehicleId)values.vehicle_id=goalForm.dataset.vehicleId;
   try{await api('settings',values);vehicleFormKey=null;await refresh();byId('vehicle-saved').textContent=t('settings.saved');}
   catch(error){byId('vehicle-saved').textContent=error.message;}
 });
-form.addEventListener('submit', async event => {
+byId('status-band').addEventListener('click', async event => {
+  const action=event.target.closest('[data-control]')?.dataset.control;
+  if(!action||control.busy)return;
+  if(action==='take'||action==='release'){control.confirming=action;control.result='';}
+  else if(action==='cancel')control.confirming=null;
+  else if(action==='confirm'&&control.confirming){
+    // The confirmation sends an explicit boolean; the backend confirms the device release.
+    const enabled=control.confirming==='take';
+    control.busy=true;render();
+    try{await api('control',{enabled});control.result=t(enabled?'control.taken':'control.released');}
+    catch(error){control.result=error.message;}
+    control.busy=false;control.confirming=null;
+    await refresh();
+    return;
+  }
+  render();
+  if(action==='take'||action==='release')byId('status-band').querySelector('[data-control="confirm"]')?.focus();
+});
+for (const target of [form,costForm]) {
+  target.addEventListener('submit',event=>{event.preventDefault();void saveSettings();});
+  for (const type of ['input','change']) target.addEventListener(type,event=>{
+    const label=event.target.closest?.('label');
+    if (label) clearFieldError(label);
+    updateSavebar();
+  });
+}
+byId('save-settings').addEventListener('click',()=>void saveSettings());
+byId('discard-settings').addEventListener('click',discardSettings);
+byId('settings-side').addEventListener('click',event=>{
+  const link=event.target.closest('[data-section]');
+  if (!link) return;
   event.preventDefault();
-  const values = {};
-  for (const name of ['reserve_w','regulation_interval_s','battery_min_soc','battery_max_soc','battery_pv_min_soc','battery_pv_wait_s','battery_pv_surplus_w']) values[name] = Number(form.elements[name].value);
-  for (const name of ['battery_pv_support','battery_pv_start','holiday_catholic']) values[name] = form.elements[name].checked;
-  for (const name of ['holiday_state','holiday_locality']) values[name] = form.elements[name].value;
-  try { await api('settings',values); vehicleFormKey=null; byId('saved').textContent = t('settings.saved'); await refresh(); }
-  catch (error) { byId('saved').textContent = error.message; }
+  showSettingsSection(link.dataset.section);
 });
-byId('control').addEventListener('click', async () => {
-  const enabled = !snapshot.armed && !snapshot.release_pending;
-  if (enabled && !confirm(t('control.confirm'))) return;
-  try { await api('control',{enabled}); byId('control-result').textContent = enabled ? t('control.taken') : t('control.released'); await refresh(); }
-  catch (error) { byId('control-result').textContent = error.message; await refresh(); }
+byId('overview-track').addEventListener('click',event => {
+  const button = event.target.closest('[data-mode]');
+  if (!button) return;
+  byId('overview-track').querySelectorAll('[data-mode]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+  byId('overview-track-detail').textContent = button.dataset.mode;
 });
+restoreNextDetails();
+byId('car-plan').addEventListener('click',event => {
+  const button = event.target.closest('[data-charge]');
+  if (!button) return;
+  byId('car-plan').querySelectorAll('[data-charge]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+  byId('car-plan-detail').textContent = button.dataset.mode;
+});
+document.addEventListener('click',event => {
+  const link = event.target.closest('.to-plan, .plan-link[href="#car"]');
+  if (!link) return;
+  planScrollPending = true;
+  if (link.classList.contains('to-plan')) {event.preventDefault();carView();}
+});
+byId('control-areas').addEventListener('click', async event => {
+  const action=event.target.closest('[data-area-action]')?.dataset.areaAction;
+  const key=event.target.closest('[data-control-area]')?.dataset.controlArea;
+  if (!action || !key || areaControl.busy) return;
+  if (action==='toggle') {areaControl.confirming=key;areaControl.result='';}
+  else if (action==='cancel') areaControl.confirming=null;
+  else if (action==='confirm' && areaControl.confirming===key) {
+    // Only this area changes; the backend rejects an area without a matching device.
+    const view=snapshot.control?.[key] ?? {}, enabled=!view.enabled && !view.release_pending;
+    areaControl.busy=true;controlAreas();
+    try {await api('control',{[key]:enabled});areaControl.result=t(enabled ? `control.area_taken.${key}` : `control.area_released.${key}`);}
+    catch (error) {areaControl.result=error.message;}
+    areaControl.busy=false;areaControl.confirming=null;
+    await refresh();
+    return;
+  }
+  controlAreas();
+  if (action==='toggle') document.querySelector(`[data-control-area="${key}"] [data-area-action="confirm"]`)?.focus();
+});
+byId('diagnostics-copy').addEventListener('click',copyDiagnostics);
+byId('diagnostics-export').addEventListener('click',exportDiagnostics);
 byId('timeline').addEventListener('click',event => {
   const button = event.target.closest('[data-mode]');
   if (button) byId('mode-detail').textContent = button.dataset.mode;
@@ -886,8 +1569,9 @@ async function start() {
   if(!loaded||typeof loaded.locale!=='string'||!loaded.messages||typeof loaded.messages!=='object')throw requestError('language_invalid','language');
   language={locale:loaded.locale,messages:{...startupMessages[startupLanguage],...loaded.messages}};
   startupStage='view';
-  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
-    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
+  await ensureModule('status.js',()=>typeof globalThis.EosStatus?.band==='function'?globalThis.EosStatus:null);
+  if(typeof globalThis.EosChartData?.powerFraction!=='function'||typeof globalThis.EosStatus?.band!=='function'||typeof initializeBilling!=='function'||!byId('cost-settings')?.elements.pv_price_source){
+    const error=requestError('asset_mismatch','interface');error.asset=typeof globalThis.EosChartData?.powerFraction!=='function'?'chart-data.js':typeof globalThis.EosStatus?.band!=='function'?'status.js':typeof initializeBilling!=='function'?'accounting.js':'index.html';throw error;
   }
   document.documentElement.lang = language.locale;
   document.querySelectorAll('[data-i18n]').forEach(element => {
@@ -897,6 +1581,11 @@ async function start() {
     element.setAttribute('aria-label', t(element.dataset.i18nAria));
   });
   initializeBilling();
+  // The title bar stays at the top; sticky panels and jump targets keep clear of its height.
+  const header=document.querySelector('header');
+  const headerHeight=()=>document.documentElement.style.setProperty('--header-h',header.offsetHeight+'px');
+  headerHeight();
+  if(typeof ResizeObserver==='function')new ResizeObserver(headerHeight).observe(header);
   window.addEventListener('hashchange',render);
   if(!render())return;
   refresh();

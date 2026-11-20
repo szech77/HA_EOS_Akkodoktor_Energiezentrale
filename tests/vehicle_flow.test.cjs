@@ -184,3 +184,19 @@ test('vehicle names remain text, and connected status restores the power after u
  assert.equal(node.querySelector('strong').textContent,'1.4 kW');
  assert.equal(node.classes.has('vehicle-inactive'),false);
 });
+
+test('backend node problems mark the matching node, including a single vehicle of a fleet',()=>{
+ const f=fixture([car('a',40,3700),car('b',50,0)]);
+ f.ctx.snapshot.node_problems={'car/b':'error',battery:'warning'};
+ f.ctx.renderFlow();
+ const second=f.nodes()[1],first=f.nodes()[0],battery=f.selectors['[data-node="battery"]'];
+ assert.ok(second.classList.contains('problem-error')&&!first.classList.contains('problem-error'));
+ assert.ok(battery.classList.contains('problem-warning'));
+ const flag=second.querySelector('.orb').children.find(node=>node.className==='flag');
+ assert.equal(flag.hidden,false);
+ assert.ok(second.getAttribute('aria-label').includes(f.ctx.t('flow.problem_error')));
+ f.ctx.snapshot.node_problems={};
+ f.ctx.renderFlow();
+ assert.equal(flag.hidden,true);
+ assert.ok(!second.classList.contains('problem-error'));
+});

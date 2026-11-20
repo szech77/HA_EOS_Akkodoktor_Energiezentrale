@@ -23,10 +23,25 @@ Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screens
 ### Übersicht: Energiefluss, Wetter und Tagesbilanz
 
 Die Übersicht verbindet aktuelle Leistungen und Ladezustände mit dem animierten
-Energiefluss. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
-Ein Klick auf ein Gerätesymbol öffnet die zugehörige Detailansicht.
+Energiefluss. Name und Wert stehen unter dem jeweiligen Symbol. Hat ein Gerät einen
+offenen Hinweis, trägt sein Symbol ein Warnzeichen; welcher Hinweis zu welchem
+Gerät gehört, legt das Backend fest. Ein Klick auf PV öffnet die Auswertung
+**PV-Erzeugung**, auf das Wettersymbol **PV & Wetter**, auf den Speicher die Detailansicht, auf Netz die Auswertung Netz & Einspeisung, auf Haus und Wärmepumpe
+die Verbrauchsauswertung, auf das Auto die Fahrzeugseite und auf das EOS-Symbol
+in der Mitte die Gesamtbilanz. Der
+Link **Leistungsverlauf** unter dem Diagramm öffnet alle Leistungskurven.
+Darunter steht in voller Breite der EOS-Plan der nächsten 12 Stunden als bedienbarer
+Zeitstrahl und die einklappbare Liste **Was als Nächstes passiert** (mit Anzahl der
+Einträge; der Browser merkt sich, ob sie auf- oder zugeklappt ist): geplante Moduswechsel von
+Speicher und Fahrzeugen, der erwartete Zeitpunkt für einen vollen Speicher und
+für das Erreichen des Ladeziels, jeweils mit dem Netzstrompreis zu diesem
+Zeitpunkt. Moduswechsel, die kürzer als 30 Minuten gelten, erscheinen nicht in der
+Liste. Bei Speicherwechseln steht, was der Speicher laut EOS-Prognose in der ersten
+Stunde tut (lädt mit PV-Überschuss, lädt aus dem Netz, deckt das Haus, hält seinen
+Ladestand); der EOS-Modus steht klein darunter. Folgen zwei Wechsel mit derselben
+Wirkung aufeinander, erscheint nur der erste. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
 
-![Desktop-Übersicht mit Energiefluss, Wetter, Ladezuständen und Tagesverbrauch samt Kosten](docs/screenshots/overview.png)
+![Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten Ereignissen und Heute-Kacheln](docs/screenshots/overview.png)
 
 ### Hausspeicher: Verlauf und EOS-Plan
 
@@ -39,30 +54,69 @@ Linien zeigen Messwerte, gestrichelte Linien die Prognose.
 <details>
 <summary><strong>E-Auto: Ladeleistung, Ladeziel und Prognose</strong></summary>
 
-Die Fahrzeugansicht zeigt Ladeziel und Abfahrtszeit sowie die EOS-Lademodi,
-Wallbox-Leistung, PV-Produktion, SoC und Bezugspreise.
+Die Fahrzeugansicht beantwortet zuerst, ob das Auto rechtzeitig voll ist: Ein
+Ring zeigt Ladestand und Ziel, daneben stehen Abfahrt, die noch fehlende Energie
+und was EOS plant (z. B. „5,4 kWh aus PV bis 16:00 und 27,5 kWh Netzladen ab
+02:00“). Die Schalter PV-Überschussladen, Schnellladen und Phasenautomatik sowie
+die eingeklappten Ladegrenzen wirken sofort und melden „Gespeichert“.
+
+Der **EOS-Ladeplan** bis zur Abfahrt (ohne Abfahrt: 24 Stunden) zeigt die
+Ladestandskurve mit Zielzeitpunkt, einen antippbaren Zeitstrahl mit den Abschnitten
+PV-Überschuss, Pause, Netzladen und Ziel erreicht sowie eine Liste mit Leistung,
+Phasen, Energie, Preis und Kosten je Abschnitt. Darunter vergleicht er die Kosten
+des Plans mit sofortigem Laden bei voller Leistung (≈, mit dem PV-Anteil aus der
+Prognose). Netzstrom wird mit dem Preis des jeweiligen Intervalls, PV-Strom mit der
+Einspeisevergütung bewertet. Das Backend leitet die Abschnitte aus der EOS-Prognose
+ab; ein Intervall gilt als Netzladen, wenn mehr als die Hälfte aus dem Netz kommt.
+Ist Schnellladen an, ist der Plan „überstimmt“; meldet die Wallbox einen Fehler,
+ist er „ausgesetzt“; im Lesemodus dient er „nur zur Anzeige“. Ohne EOS-Kurve für
+das Fahrzeug gibt es keine Abschnitte und keinen Kostenvergleich.
+
+Die **Ladeziele** erscheinen als kompakte Zeilen mit Ziel-SoC, Termin und nächster
+Abfahrt; das Ziel, das den Plan bestimmt, ist hervorgehoben. **Bearbeiten** öffnet
+die Details, neue Ziele starten geöffnet, **Speichern** übernimmt alle Ziele.
+Darunter folgen EOS-Lademodi, Wallbox-Leistung, PV-Produktion, SoC und
+Bezugspreise.
 Auch bei nur einem verwalteten Fahrzeug wird eine vorhandene EOS-SoC-Prognose
 angezeigt, einschließlich eines eigenen SoC-Diagramms in der gemeinsamen
 Autoübersicht. Ohne passende EOS-Kurve wird der aktuelle gültige SoC für die
 nächsten 24 Stunden fortgeschrieben. Bei aktiviertem PV-Laden kann das Backend
 anhand verfügbarer PV- und Hauslastprognosen einen Anstieg bis zum PV-Ziel
-abschätzen. Die Anzeige unterscheidet EOS-Prognose und lokale Schätzung;
+abschätzen, beim Schnellladen einen Anstieg mit maximaler Ladeleistung bis zum
+Ladeziel. Die geschätzte Ladeleistung erscheint dann auch im Leistungsdiagramm:
+0 kW, solange keine Ladung zu erwarten ist (Fahrzeug getrennt, Ziel erreicht oder
+zu wenig PV-Überschuss), sonst die erwartete Leistung; bei mehreren Fahrzeugen
+summiert die Gesamtladeleistung die Fahrzeuge, sofern für alle ein Wert vorliegt.
+Ohne PV-Prognose für ein Intervall bleibt die Leistung leer. Geschätzt wird nur bei
+freigegebener E-Auto-Ladesteuerung, da sonst niemand die Wallbox nach diesen Modi
+regelt. Die Anzeige unterscheidet EOS-Prognose und lokale Schätzung;
 aktuelle Messwerte und Regelung bleiben davon unabhängig.
 Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
 Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt
 dann beim aktuellen SoC und berücksichtigt verfügbare PV-Überschussprognosen.
 
-![E-Auto-Detailansicht mit Ladeziel, Moduszeitleiste, Wallbox-Leistung, SoC und Strompreis](docs/screenshots/vehicle.png)
+![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.png)
 
 </details>
 
 <details>
-<summary><strong>Photovoltaik: Ertrag und Tagesprognosen</strong></summary>
+<summary><strong>PV & Wetter: Prognose und was EOS daraus macht</strong></summary>
 
-Aktuelle PV-Leistung, heutiger Ertrag und Prognosen für heute, morgen und
-übermorgen stehen über dem gemeinsamen Verlauf aus Messung und Prognose.
+Aktuelle PV-Leistung und Wetter, stündliche Leiste mit Wetter über dem erwarteten
+PV-Ertrag, Tageskarten für drei Tage und die Folgen für Speicher, Einspeisung und
+Auto. Der bisherige Leistungsverlauf ist über **Verlauf & Diagramme** erreichbar.
 
-![PV-Detailansicht mit Tagesertrag, Prognosen für drei Tage und Leistungsverlauf](docs/screenshots/solar.png)
+![PV & Wetter mit stündlicher Prognose, Tageskarten und „Was EOS daraus macht“](docs/screenshots/pv.png)
+
+</details>
+
+<details>
+<summary><strong>Auswertung: Verbrauch, Herkunft und Kosten</strong></summary>
+
+Jede Auswertung hat Tag/Monat/Jahr, eine Kernaussage, vier Kennzahlen, den Verlauf
+nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt“.
+
+![Auswertung Hausverbrauch für einen Tag mit Kennzahlen, Verlauf nach Herkunft, Preisen und Auffälligkeiten](docs/screenshots/usage.png)
 
 </details>
 
@@ -72,7 +126,7 @@ Aktuelle PV-Leistung, heutiger Ertrag und Prognosen für heute, morgen und
 Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
 Übersicht; Tagesbilanz und weitere Informationen folgen darunter beim Scrollen.
 
-<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit aktuellen Energiewerten, Wettersymbol und Energieflussdiagramm">
+<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit Statusband, Kennzahlen, Energiefluss und EOS-Plan">
 
 </details>
 
@@ -89,7 +143,9 @@ erreichbar sein; die Änderungen müssen zuvor nach GitHub übertragen worden se
 4. Einstellungen → Geräte & Dienste → Integration hinzufügen → **EOS Energiezentrale**.
 5. EOS-Adresse, Quellsensoren, Hardware und technische Grenzen im Assistenten einrichten.
 6. Das Panel **EOS Energiezentrale** in der Seitenleiste öffnen. Messwerte zunächst
-   im Lesemodus prüfen. Erst danach die Energiesteuerung einschalten.
+   im Lesemodus prüfen. Erst danach über **Steuerung übernehmen** im Statusband alle
+   steuerbaren Bereiche oder unter **Einstellungen → System → Gerätesteuerung** nur die
+   Speichersteuerung bzw. die E-Auto-Ladesteuerung einschalten.
 
 Alternativ `custom_components/eos_energiezentrale` nach
 `/config/custom_components/eos_energiezentrale` kopieren und HA neu starten.
@@ -136,19 +192,34 @@ Home-Assistant-Spracheinstellungen; `language` steuert das eigene Panel.
 
 ### Quellsensoren
 
-Wähle im Sensor-Dialog die tatsächlichen Entitäts-IDs deiner Installation.
-Die folgenden Zuordnungen sind die mitgelieferten Standards und müssen bei
-abweichenden Namen ersetzt werden:
+Wähle im Sensor-Dialog die tatsächlichen Entitäts-IDs deiner Installation. Bei
+einer Neuinstallation sind keine Sensoren vorbelegt; leere Felder werden, soweit
+möglich, von den eingerichteten Plugins versorgt. Die Entitäten in der Tabelle sind
+nur Beispiele:
 
-| Feld / Schlüssel | Standard-Entität | Erwarteter Wert |
+| Feld / Schlüssel | Beispiel-Entität | Erwarteter Wert |
 |---|---|---|
-| PV-Leistung / `pv_entity` | `sensor.fronius_symo_gen24_pv_power` | Positive Leistung in W oder kW. |
-| Gesamter Hausverbrauch / `house_entity` | `sensor.solarnet_leistung_verbrauch` | Positive Leistung in W oder kW, einschließlich Auto und Wärmepumpe. |
-| Netzleistung / `grid_entity` | `sensor.fronius_smartmeter_ip_meter_1_power` | W oder kW; positiv = Bezug, negativ = Einspeisung. |
-| Wärmepumpenleistung / `heat_entity` | `sensor.wp_strommesser_leistung_w_rmepumpe` | Positive Leistung in W oder kW, einschließlich Standby-Verbrauch. |
-| Bezugspreis / `price_entity` | `sensor.blumenstrasse_13_strompreis` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
-| Fahrzeug-SoC / `car_soc_entity` | `sensor.id4_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
-| Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
+| PV-Leistung / `pv_entity` | `sensor.pv_power` | Positive Leistung in W oder kW. |
+| Gesamter Hausverbrauch / `house_entity` | `sensor.house_power` | Positive Leistung in W oder kW, einschließlich Auto und Wärmepumpe. |
+| Netzleistung / `grid_entity` | `sensor.grid_power` | W oder kW; positiv = Bezug, negativ = Einspeisung. |
+| Wärmepumpenleistung / `heat_entity` | `sensor.heat_pump_power` | Positive Leistung in W oder kW, einschließlich Standby-Verbrauch. |
+| Bezugspreis / `price_entity` | `sensor.electricity_price` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
+| Fahrzeug-SoC / `car_soc_entity` | `sensor.ev_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
+| Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` (Vorgabe) | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
+| Fahrzeugreichweite / `car_range_entity` | `sensor.ev_range` | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. Mit Fahrzeugliste gilt der Sensor am Fahrzeug (`range_entity`); ist dort keiner eingetragen, wird dieser bei genau einem Fahrzeug verwendet. |
+
+Mit einem Reichweitensensor bildet das Backend aus Reichweite und gemessenem SoC
+das Verhältnis Kilometer je Prozent. Es wird nur bei einem gemessenen, nicht
+geschätzten SoC ab 10 % neu bestimmt und bleibt bis zur nächsten passenden Meldung
+erhalten. Die Auto-Ansicht zeigt die aktuelle Reichweite; liefert das Fahrzeug
+gerade keine, wird sie aus dem SoC geschätzt (≈). Unter den SoC-Feldern für
+PV-Ladeziel, Schnellladeziel und die Ladeziele steht ein SoC-Schieberegler mit dem
+eingestellten SoC und der dazu erwarteten Reichweite (z. B. „70 % · ≈ 294 km“).
+Regler und Zahlenfeld folgen einander, und die Reichweite aktualisiert sich schon
+während des Verschiebens oder Eintippens. PV- und Schnellladeziel werden beim
+Loslassen gespeichert, Ladeziele wie bisher mit „Speichern“. Ohne Sensor oder ohne
+gelerntes Verhältnis zeigt der Regler nur den SoC. Regelung und Ladeplanung nutzen die
+Reichweite nicht. Die Diagnose „Messquellen“ zeigt den Sensorwert.
 
 Der dargestellte Hausverbrauch wird so berechnet:
 
@@ -343,11 +414,21 @@ erfordert eine Anpassung des Lesers.
 
 ### Alltägliche Ladeeinstellungen
 
-Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entitäten:
+Im Seitenleisten-Panel unter **Einstellungen** und teilweise als native Entitäten.
+Die Einstellungsseite ist in die Bereiche **Speicher**, **E-Auto**, **Kalender**,
+**Kosten** und **System** gegliedert; ohne Wallbox entfallen E-Auto und Kalender.
+Selten benötigte Regelwerte stehen eingeklappt unter **Expertenwerte**. Sobald
+ein Wert geändert wurde, erscheint unten eine Leiste mit der Zahl der Änderungen,
+**Verwerfen** und **Speichern**; ein Klick speichert alle Bereiche gemeinsam. Lehnt
+das Backend einen Wert ab, steht der Grund direkt am betroffenen Feld (zum Beispiel
+an Mindest- und Maximal-SoC, wenn der Mindestwert nicht kleiner ist). Die
+**Energiesteuerung** wird im Statusband oben auf jeder Seite geschaltet.
 
 | Einstellung | Bedeutung |
 |---|---|
-| Energiesteuerung | Explizite Freigabe der Geräteansteuerung; bleibt über Neustarts erhalten. Bei der ersten Einrichtung aus. |
+| Energiesteuerung | Explizite Freigabe der Geräteansteuerung aller steuerbaren Bereiche; bleibt über Neustarts erhalten. Bei der ersten Einrichtung aus. Eingeschaltet, solange mindestens ein Bereich gesteuert wird. |
+| Speichersteuerung | Freigabe nur für den Speicher. Nur vorhanden, wenn das Speicher-Plugin Lade- und Entladegrenzen setzen kann (z. B. nicht bei Victron ohne aktivierte ESS-Steuerung). |
+| E-Auto-Ladesteuerung | Freigabe nur für die Wallbox(en). Nur vorhanden, wenn eine Wallbox konfiguriert ist. |
 | Speicher Mindest-SoC | 0–99 %; kleiner als der Maximal-SoC. Startwert 20 %. Wird an EOS übergeben und lokal beachtet. |
 | Speicher Maximal-SoC | 1–100 %; größer als der Mindest-SoC. Startwert 100 %. Wird an EOS übergeben und lokal beachtet. |
 | Ziel-SoC | 1–100 %; Fahrzeug-Ziel für Terminplanung und Schnellladen. |
@@ -408,9 +489,9 @@ Abfahrtszeitpunkt gesetzt sein. Im Panel werden die Angaben gemeinsam gespeicher
 
 ### Speichergrenzen an EOS übergeben
 
-1. Im Panel **Einstellungen → Hausspeicher** öffnen.
+1. Im Panel **Einstellungen → Speicher** öffnen.
 2. **Speicher Mindest-SoC** und **Speicher Maximal-SoC** setzen, zum Beispiel 30 % und 90 %.
-3. **Speichern** drücken. Die Werte gelten auch für die lokale Speicherregelung.
+3. In der Leiste unten **Speichern** drücken. Die Werte gelten auch für die lokale Speicherregelung.
 4. Unter den Feldern die Rückmeldung prüfen: **EOS bestätigt: Speicher 30–90 %.**
 
 Die Einstellungen stehen zusätzlich als zwei `number`-Entitäten unter dem Gerät
@@ -570,10 +651,54 @@ Template-Änderungen können alternativ über die angebotene Template-Neuladefun
 HA-Neustart erforderlich; reine Panel-JavaScript-/CSS-Updates benötigen eine
 vollständige Browser-Aktualisierung, beispielsweise Strg + F5.
 
+## Speicher und E-Auto getrennt steuern
+
+Unter **Einstellungen → System → Gerätesteuerung** lassen sich Speicher und E-Auto-Laden
+getrennt übernehmen und zurückgeben; beide Aktionen werden dort direkt bestätigt.
+**Steuerung übernehmen** im Statusband übernimmt alle steuerbaren Bereiche, **Steuerung
+zurückgeben** gibt alle gesteuerten Bereiche zurück. Wird nur ein Bereich gesteuert,
+nennt das Statusband, welcher. Ein Bereich wird nur angeboten, wenn ein
+passendes steuerbares Gerät konfiguriert ist:
+
+- **Speicher:** Das Speicher-Plugin (bzw. alle Speicher einer Gruppe) muss Lade- und
+  Entladegrenzen setzen können. Ein nur lesendes Plugin, z. B. Victron ohne aktivierte
+  ESS-Steuerung, liefert weiter Messwerte, bietet aber keine Speichersteuerung an.
+- **E-Auto-Laden:** Eine Wallbox muss konfiguriert sein; bei mehreren Fahrzeugen gilt
+  die Freigabe für alle Wallboxen.
+
+Ein nicht gesteuerter Bereich erhält keine Befehle der Energiezentrale, auch keine
+Freigabe- oder Pausenbefehle; er bleibt in seinem eigenen Automatikbetrieb. Ohne
+Speichersteuerung entfallen PV-Ladeunterstützung und der Start mit Speicherunterstützung,
+die PV-Überschussladung nutzt dann nur den gemessenen Überschuss. Ohne E-Auto-Ladesteuerung
+werden keine Fahrzeugziele an EOS übertragen. Beim Zurückgeben eines Bereichs wird nur
+dieser freigegeben (Speicher in den Automatikbetrieb, Wallbox pausiert); der andere
+Bereich wird weiter geregelt. Eine nicht bestätigte Freigabe bleibt sichtbar und wird
+in jedem Zyklus wiederholt.
+
+Der Schalter **Energiesteuerung** schaltet alle steuerbaren Bereiche gemeinsam; die
+Schalter **Speichersteuerung** und **E-Auto-Ladesteuerung** schalten je einen Bereich
+und werden nur bei passendem Gerät angelegt.
+
 ## Steuerfreigabe über Neustarts erhalten
 
-Der Schalter **Energiesteuerung** wird beim bewussten Ein- und Ausschalten
-dauerhaft in `.storage/eos_energiezentrale/<config-entry-id>/control.json` gespeichert.
+Im Panel steht der Steuerzustand auf jeder Seite im Statusband oben, zusammen
+mit Ursache, Folge und der passenden Aktion **Steuerung übernehmen** oder
+**Steuerung zurückgeben**. Beide Aktionen werden direkt im Band bestätigt; die
+Bestätigung nennt, was mit Speicher und Wallbox geschieht. Offene Hinweise stehen
+als eigene Karten unter **Hinweise**, nach Schwere sortiert, mit derselben
+Kennung wie im Integrationslog (zum Beispiel `system/eos` oder `vehicle/2/goal`)
+und dem Zeitpunkt seit dem der Hinweis besteht. In den letzten 24 Stunden behobene
+Hinweise bleiben dort kurz sichtbar. Fehler, die nur im Browser auftreten (etwa
+eine unterbrochene Verbindung), werden als „nur in diesem Browser“ markiert und
+nicht an das Backend gemeldet.
+
+Die Steuerfreigabe wird beim bewussten Ein- und Ausschalten dauerhaft in
+`.storage/eos_energiezentrale/<config-entry-id>/control_scope.json` (getrennt je
+Bereich) gespeichert. Zusätzlich bleibt `control.json` im bisherigen Format erhalten:
+Sie ist nur eingeschaltet, wenn alle steuerbaren Bereiche freigegeben sind. Eine ältere
+Version übernimmt nach einem Downgrade daher nie mehr Geräte als hier freigegeben;
+eine dort später geänderte Freigabe gilt nach dem nächsten Update für alle Bereiche.
+Bestehende Installationen übernehmen die bisherige Freigabe für alle steuerbaren Bereiche.
 Beim normalen Herunterfahren oder Neuladen werden die Geräte freigegeben, ohne
 diese gespeicherte Einstellung auf aus zu setzen.
 
@@ -581,6 +706,8 @@ Nach einem Neustart bleibt ein zuvor aktivierter Schalter eingeschaltet. Die
 Anzeige **Aktiv · warte auf Messwerte und Plan** bedeutet, dass die Freigabe
 gespeichert ist, die Integration aber noch auf gültige Eingangsdaten und einen
 aktuellen EOS-Speicherplan wartet. Anschließend setzt sie die Regelung selbstständig fort.
+Den EOS-Speicherplan braucht nur die Speichersteuerung; die Wallbox wird nur geprüft,
+wenn die E-Auto-Ladesteuerung freigegeben ist.
 Nach einem unsauberen Ende können Geräte noch die letzten Vorgaben halten. Sind
 Speicher und Wallbox bereits lesbar, fehlen aber EOS-Plan oder Messwerte, werden
 sie während des Wartens freigegeben und die Wallbox pausiert. Ist nur der Speicher
@@ -629,9 +756,66 @@ weiter erscheinen. Der daraus berechnete Hausverbrauch trägt `≈` und den Hinw
 auf die ältere WP-Meldung. Diese Anzeige wird nicht als frische Messung an die
 Regelung oder den lokalen Verlauf übergeben.
 
-Die unteren EOS-Modus-Karten zeigen die **Planung**. Im Lesemodus steuert die
+Zeitstrahl und Liste **Was als Nächstes passiert** zeigen die **Planung**. Im Lesemodus steuert die
 Integration keine Geräte; der reale Speicherbetrieb kann daher davon abweichen.
 Für den tatsächlichen Stromfluss zählen die konfigurierten Leistungssensoren.
+
+### Diagnose der Messquellen
+
+Unter **Einstellungen → Diagnose · Messquellen** zeigt das Panel alle
+konfigurierten Quellen numerisch: Messgröße, Quelle (HA-Sensor mit Entitäts-ID
+oder Plugin), aktueller Wert in W, %, oder ct/kWh, Alter der letzten Meldung und
+Status. Ungültige oder veraltete Werte erscheinen ohne Zahlenwert mit Grund.
+Fehlende Pflichtquellen bleiben sichtbar, nicht konfigurierte optionale Quellen
+werden ausgelassen.
+
+Darunter stehen die abgeleiteten Werte, gemessener und berechneter
+Hausverbrauch sowie die gerade geschätzten Werte mit Grund (siehe
+[Hausverbrauch aus der Energiebilanz](#hausverbrauch-aus-der-energiebilanz)).
+
+### Hausverbrauch aus der Energiebilanz
+
+Der Gesamtverbrauch folgt aus den Quellen: **PV + Netz (Bezug positiv,
+Einspeisung negativ) + Speicherentladung − Speicherladung**. Damit geht die
+Bilanz immer auf, auch wenn Sensoren zeitversetzt melden oder ein Zähler den
+Verbrauch falsch erfasst. Der gemessene Hausverbrauch dient als Rückfall und als
+Kontrolle: Weicht er länger als 15 Minuten um mehr als 10 % bzw. 300 W ab,
+protokolliert das Backend einmalig `house_total_deviation` (Einstellungen → Geräte
+& Dienste → EOS Energiezentrale → Protokolle). Dann fehlt meist eine Quelle,
+z. B. eine nicht erfasste Balkon-PV, oder der Zähler misst falsch. Im
+Notstrombetrieb gilt weiter die gemessene Wechselrichterleistung.
+
+Fahrzeug und Wärmepumpe werden in diesen Gesamtverbrauch eingepasst. Melden sie
+nach einem Schaltvorgang noch den alten Wert, schätzt das Backend für
+höchstens 120 Sekunden:
+
+- Hat diese Integration die Ladeleistung geändert, gilt die befohlene Leistung,
+  auch beim Start, bevor die Wallbox den Anstieg meldet.
+- Fällt die Leistung etwa um den letzten Wert der Wärmepumpe oder des Autos, gilt
+  dieses Gerät als abgeschaltet. Der Hausverbrauch behält seinen letzten Wert.
+- Sonst werden Fahrzeug und Wärmepumpe anteilig an die verfügbare Leistung angepasst.
+- Fehlt ein Messwert kurz, wird der letzte Wert gehalten; fehlt er länger, bleibt
+  sein Anteil im Hausverbrauch, damit der Gesamtverbrauch zugeordnet bleibt.
+- Fehlt eine einzelne Quelle, folgt sie aus dem gemessenen Hausverbrauch und den
+  übrigen Quellen.
+
+Die Auswertung verbucht diese Werte als geschätzt (`≈`). Übersicht und lokaler
+Verlauf zeigen nur Werte aus frischen Messungen; geschätzte Hausverbräuche
+erscheinen dort nicht. „Unbekannt“ bleibt nur, wenn mehrere Quellen länger als
+120 Sekunden fehlen und deshalb keine Bilanz möglich ist. Die Regelung verwendet
+weiterhin nur gemessene Werte.
+
+Für Gerätegruppen folgen die Einzelwerte jedes Geräts (z. B. PV, Netz,
+Hausverbrauch, Speicher-SoC, Lade- und Entladeleistung), bei mehreren Fahrzeugen
+Ladeleistung und SoC je Fahrzeug. Die Anzeige wird mit jedem Snapshot
+aktualisiert und enthält keine Zugangsdaten.
+
+**Messwerte kopieren** legt dieselben Werte als ausgerichteten Text in die
+Zwischenablage, z. B. zum Einfügen in ein GitHub-Issue. **Messwerte exportieren**
+speichert sie als Textdatei `eos-messwerte-<Zeitpunkt>.txt` für eine Analyse.
+Ist die Zwischenablage im Browser gesperrt, meldet das Panel dies; der Export
+funktioniert weiterhin. Der Text enthält Entitäts-IDs und Messwerte, aber keine
+Zugangsdaten. Vor dem Teilen bitte prüfen, ob die Angaben veröffentlicht werden sollen.
 
 
 ## Wechsel vom bisherigen Energiezentrale-Add-on
@@ -656,7 +840,7 @@ in `control.json` gespeichert; fehlt diese Datei bei der erstmaligen Einrichtung
 - Animierter Stromfluss mit PV, Netz, Haus, Speicher, Auto und Wärmepumpe.
 - Detailseiten mit historischen Messwerten, EOS-Prognosen, Strompreis und Modus-Zeitlinien.
 - Native Leistungssensoren in **kW**, SoC in **%**, zusätzlicher Auto-SoC-Faktor **0–1**.
-- Native Schalter für Steuerfreigabe, PV-Überschussladen, Schnellladen und Phasenautomatik.
+- Native Schalter für Steuerfreigabe (gesamt sowie getrennt für Speicher und E-Auto), PV-Überschussladen, Schnellladen und Phasenautomatik.
 - Ziel-SoC, PV-Ziel, Einspeisereserve und Regelintervall als `number`-Entitäten.
 - Einmalige und wiederkehrende Abfahrtsplanung mit Wochentagsauswahl im Panel.
 - Geschätzter Auto-SoC während der Ladung, falls das Fahrzeug keine neuen Werte meldet.
@@ -668,7 +852,7 @@ auf den neuen nativen Auto-SoC-Faktor umstellen.
 
 Allgemeine Einstellungen für Kosten/Bilanzierung, Hausspeicher, PV-Ladestart und
 Regelintervall stehen im Panel unter **Einstellungen**. Fahrzeugbezogene
-Ladeoptionen und Ladeziele stehen in der Detailansicht **Auto → Ladeplanung**.
+Ladeoptionen und Ladeziele stehen in der Detailansicht **Auto**.
 Native Entitäten ergänzen die Bedienung einzelner Parameter.
 Inbetriebnahme-Einstellungen findest du unter Geräte & Dienste → EOS Energiezentrale
 → **Konfigurieren**. Nach deren Änderung wird die Integration neu geladen. Die
@@ -739,7 +923,7 @@ Einzelkonfiguration wird beim ersten Hinzufügen übernommen. Alternativ steht u
 [examples/vehicles.json](examples/vehicles.json). `[]` verwendet weiterhin die
 bisherige Einzelkonfiguration. Eine nicht leere Liste ersetzt die Einzelzuordnung.
 Bis zu acht Fahrzeug-Wallbox-Paare sind möglich; für jedes Paar Name, stabile `id`,
-eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, Kapazität und die fünf
+eigene EOS-`resource` (z. B. `ev1`, `ev2`), SoC-Sensor, optional einen Reichweitensensor (`range_entity`), Kapazität und die fünf
 Wallbox-Entitäten angeben. Die Fahrzeuge müssen auch in EOS angelegt sein.
 Die Konfiguration erstellt oder überschreibt keine EOS-Gerätedefinitionen.
 
@@ -763,9 +947,9 @@ verwenden die gemeinsame EOS-API-Basisadresse; es sind keine zusätzlichen
 EOS-Verbindungen nötig. Ohne Fahrzeugliste bleibt das Feld für die bisherige
 Einzelkonfiguration sichtbar. Neue Fahrzeuge weiterhin unter **Geräte** hinzufügen.
 
-Unter **Auto → Ladeplanung** das Fahrzeug auswählen und PV-Überschussladen mit
-PV-Ziel-SoC, Schnellladen mit eigenem Ziel-SoC sowie automatische Phasenwahl
-einstellen. Die Liste **Ladeziele** unterstützt bis zu 32 Einträge je Fahrzeug:
+In der Ansicht des Fahrzeugs (bzw. unter **Auto** mit Fahrzeugauswahl) wirken
+PV-Überschussladen mit PV-Ziel-SoC, Schnellladen mit eigenem Ziel-SoC sowie die
+automatische Phasenwahl sofort. Die Liste **Ladeziele** unterstützt bis zu 32 Einträge je Fahrzeug:
 einmalige Abfahrt oder wiederkehrende Abfahrt mit Uhrzeit, Wochentagen und
 zusätzlichen Feiertagen, jeweils mit Ziel-SoC und Aktivschalter. Einträge lassen
 sich hinzufügen und nach einer Bestätigung entfernen; erst **Speichern** übernimmt
@@ -777,7 +961,7 @@ verwenden die konfigurierte Anlagenzeitzone. Wiederkehrende Termine in der
 Zeitumstellungslücke werden auf die nächste existierende Uhrzeit verschoben;
 nicht existierende einmalige Uhrzeiten werden zurückgewiesen.
 
-Unter **Einstellungen → Feiertage in Deutschland** Bundesland und gegebenenfalls
+Unter **Einstellungen → Kalender** Bundesland und gegebenenfalls
 Augsburg als örtliche Sonderregelung auswählen. Für betroffene Gemeinden Bayerns,
 Sachsens und Thüringens können örtliche katholische Feiertage aktiviert werden.
 Diese Auswahl richtet sich nach dem Standort, nicht nach der persönlichen
@@ -798,9 +982,8 @@ EOS-Zeitplan. Bis zu acht Fahrzeuge stehen untereinander im Diagramm; dessen Hö
 passt sich der Anzahl sichtbarer Verbraucher an. Nicht angeschlossene oder nicht
 erreichbare Fahrzeuge bleiben ausgegraut, ohne Hinweismeldung im Knoten; der
 Zustand ist im Tooltip und für Screenreader verfügbar. Unbekannte Messwerte bleiben
-unbekannt. Unterhalb der Verbrauchsauswertung steht für jedes Fahrzeug eine eigene
-EOS-Modus-Kachel mit aktuellem Modus und nächstem geplanten Moduswechsel. Der
-Fahrzeugname verlinkt auf die jeweilige Detailansicht. Es entstehen eigene native Sensoren
+unbekannt. Geplante Moduswechsel und das erwartete Erreichen des Ladeziels erscheinen je
+Fahrzeug mit dessen Namen in der Liste **Was als Nächstes passiert**. Es entstehen eigene native Sensoren
 für Leistung, SoC und Status jedes Fahrzeugs. Die Fahrzeug-ID bestimmt deren Identität.
 
 Alle Regler verwenden denselben Netzanschluss. Nicht gemessene Leistungserhöhungen
@@ -863,7 +1046,7 @@ damit nach Erholung automatisch fortgesetzt werden kann. Lokale Sicherheitsgrenz
 und die Frische der HA-Messwerte werden weiterhin geprüft. Pro Fahrzeug wird ein
 eigener Plan gepuffert. Die Diagnose zeigt den aktiven Puffer und seine Restzeit.
 
-Vor dem Planabruf wird `/v1/health` gelesen. Im Kopfbereich und unter Einrichtung
+Vor dem Planabruf wird `/v1/health` gelesen. Im Text des Statusbands und unter Einrichtung
 erscheint **EOS berechnet** mit verstrichenen Sekunden, wenn EOS eine laufende
 Phase meldet oder der Laufstart nach dem letzten Abschluss liegt. Ältere
 EOS-Versionen liefern nur gerundete Start- und Abschlusszeitpunkte. Ist damit
@@ -875,8 +1058,13 @@ verlängern das Fenster nicht. Ein veralteter oder fehlgeschlagener Health-Abruf
 kann Fehler nicht unterdrücken. Gerätestörungen und Konfigurationsfehler bleiben
 sichtbar; die Gültigkeit vorhandener Steuerpläne wird nicht verlängert.
 Zustandswechsel werden im Integrationslog auf INFO-Ebene protokolliert.
+Nutzt die Regelung dabei den letzten gültigen Plan, bleibt das Statusband bei **Steuerung aktiv**; der Hinweis auf den Ersatzplan steht nur als Information im Text.
+Solange EOS **berechnet** meldet, liest die Integration die EOS-Prognose nicht neu
+ab; Diagramme und Plananzeigen behalten die zuletzt fertige Prognose. Nach dem Ende
+der Berechnung wird die neue sofort abgerufen. Meldet EOS länger als 15 Minuten
+eine laufende Berechnung, wird die Prognose wieder normal jede Minute abgerufen.
 
-Die Panel-Meldung **Daten oder Steuerung prüfen · Prognose** erscheint erst,
+Die Panel-Warnung zur EOS-Prognose (Kennung `system/forecast`) erscheint erst,
 wenn der EOS-Prognoseabruf fünf Minuten durchgehend fehlschlägt. Die Frist beginnt
 beim ersten Fehlversuch und wird durch weitere Fehler nicht verlängert. Eine
 erfolgreiche Prognoseantwort entfernt die Warnung sofort und setzt die Frist
@@ -909,23 +1097,36 @@ Teilsummen und werden nicht auf die gesamte Energiemenge hochgerechnet.
 Ohne ausreichende bewertete Energiemenge oder ohne Verbrauch bleibt der Preis
 **— ct/kWh**. Ein tatsächlich kostenloser bewerteter Verbrauch zeigt **0 ct/kWh**.
 
-In der Tagesübersicht öffnet die Karte **Gesamtverbrauch** eine eigene Auswertung für
-die Summe aus Hausverbrauch, Wärmepumpe und Fahrzeugen. Sie zeigt Energie, Kosten,
-gewichteten Durchschnittspreis und die Aufteilung nach Energiequelle gemeinsam
-für alle aktivierten Verbraucher. Einzelne Fahrzeuge werden neben der gemeinsamen
-Fahrzeugbilanz nicht erneut addiert. Bestehende lokale Aufzeichnungen und historische
-Rekonstruktionen werden berücksichtigt; geschätzte und unbekannte Kostenanteile
-bleiben gekennzeichnet.
+Die Kacheln **Heute** in der Übersicht zeigen je Verbraucher Energie, Eigenanteil und
+Kosten, dazu **Einspeisung** (Vergütung und Netzbezug) und **Gesamtverbrauch**
+(Kosten und Netto). Jede Kachel öffnet ihre Auswertung; der Netz-Knoten im
+Energiefluss öffnet **Netz & Einspeisung**, der PV-Knoten **PV-Erzeugung**, Haus und Wärmepumpe ihre Verbrauchsauswertung.
 
-Auf jeder Verbraucher-Detailseite öffnet **Verbrauch & Kosten** die Einzelauswertung.
-Für beide Auswertungen gelten dieselben Ansichten und Bedienelemente:
+**PV-Erzeugung** macht den Energiefluss je Stunde, Tag oder Monat sichtbar. Oberhalb der
+Nulllinie steht der PV-Strom nach Ziel: Haus, E-Auto, Wärmepumpe, Akku laden und
+Netzeinspeisung; die Höhe ist die Erzeugung. Unterhalb steht der Verbrauch dieser
+Verbraucher, den PV nicht gedeckt hat, nach Herkunft: Akku (PV-geladen, netzgeladen oder
+Herkunft unbekannt), Netz oder unbekannte Quelle. So ist erkennbar, ob PV reicht, wie groß
+die Unterdeckung ist und wohin der PV-Strom fließt. Akkuladung aus dem Netz zählt weder
+als PV-Ziel noch als Unterdeckung. Für den Rest des Zeitraums steht die EOS-Prognose als
+umrandeter Balken darüber; sie reicht etwa zwei Tage voraus. In der Tagesansicht zeigt
+**kW** dieselbe Aufteilung als Flächen über die Uhrzeit und die Prognose als gestrichelte
+Linie; die Anzeige am Mauszeiger nennt alle Werte. Die Aufteilung folgt der Abrechnung
+(anteilig nach PV, Netzbezug und Akkuentladung); die Herkunft des Akkustroms stammt in
+kWh aus dem Akkubestand, in kW aus dem Anteil der jeweiligen Stunde. Alle Werte berechnet
+das Backend.
 
-- **Tag:** stündliche Werte; **Monat:** Tageswerte; **Jahr:** Monatswerte.
-- Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert und wird beim nächsten Öffnen wiederhergestellt. Ohne verfügbaren Browserspeicher bleibt die Auswahl für die laufende Sitzung erhalten.
-- Pfeile wechseln den Zeitraum; **Aktuell** springt in den aktuellen Zeitraum.
-- Ein Tages-/Monatsbalken öffnet die nächstfeinere Ansicht. Die Datumswahl ermöglicht direkte Sprünge.
-- Getrennte gestapelte Diagramme zeigen kWh und Euro nach PV, Akku, Netz und unbekannter Quelle.
-- Maus/Fokus zeigt die Werte eines Balkens; die Tabelle enthält die Summen je Quelle.
+Alle Auswertungen sind gleich aufgebaut. Oben wechseln Chips zwischen PV-Erzeugung, Haus, Auto
+(bei mehreren Fahrzeugen auch je Fahrzeug), Wärmepumpe, Netz & Einspeisung und Gesamt:
+
+- **Tag / Monat / Jahr:** stündliche Werte, Tageswerte oder Monatswerte. Der zuletzt gewählte Zeitraum bleibt lokal im Browser gespeichert; ohne Browserspeicher gilt die Auswahl für die laufende Sitzung.
+- **‹ ›** blättern; **Aktuell** springt zurück in den laufenden Zeitraum. Ein Tages- oder Monatsbalken öffnet die nächstfeinere Ansicht, ein Stundenbalken zeigt seine Werte.
+- **Kernaussage und vier Kennzahlen:** bei Verbrauchern Verbrauch, Eigenversorgung, Kosten und Ersparnis gegenüber reinem Netzbezug (Eigenstrommenge × Ø-Netzstrompreis des Zeitraums − Eigenstromkosten); in der Gesamtbilanz Verbrauch, Autarkie, Kosten inklusive Grundpreis und Netto; bei Netz & Einspeisung Einspeisung, Bezug, Eigenverbrauchsquote und Autarkie.
+- **Verlauf:** gestapelt nach PV, Akku, Netz und unbekannter Quelle; bei Netz & Einspeisung der Bezug nach oben und die Einspeisung nach unten. Die Tagesansicht bietet drei Darstellungen: **kW** zeigt die Leistung über die Uhrzeit als farbig gefüllte, übereinanderliegende Flächen; beim Überfahren mit der Maus (oder Antippen) erscheinen Uhrzeit, Gesamtleistung und die Anteile am Zeiger. Grundlage sind die minütlichen Messwerte des lokalen Verlaufs: Das Backend teilt jeden Messpunkt wie die Abrechnung anteilig auf PV, Akku und Netz auf (bei nicht aufgehender Bilanz auf Unbekannt) und fasst je 2 Minuten zusammen; Lücken über 10 Minuten bleiben Lücken. Der lokale Verlauf reicht etwa zwei Tage zurück; für ältere Tage zeigt kW die Stundenbalken. **kWh** und **€** zeigen Balken je Stunde, ein angeklickter Balken zeigt seine Details. Monat und Jahr bieten kWh und € als Balken je Tag bzw. Monat. Der Umschalter **kWh / €** zeigt statt der Energie die Kosten je Quelle (PV zum PV-Kostenansatz, Akku zum Speicherpreis, Netz zum Bezugspreis) bzw. bei Netz & Einspeisung die Bezugskosten nach oben und die Einspeisevergütung nach unten. Die Beträge je Zeitabschnitt berechnet das Backend; Kosten unbekannter Herkunft fehlen im Balken und sind im Tooltip als bekannter Anteil gekennzeichnet. Die Auswahl merkt sich der Browser.
+- **Preise & Kosten:** Ø-Netzstrompreis, Netzbezug, PV direkt (zum PV-Kostenansatz) sowie der Speicherstrom getrennt nach Herkunft seiner Ladung: PV-geladen (PV-Kostenansatz) und netzgeladen (Netzpreis beim Laden), jeweils einschließlich der Speicherverluste, und Summe. Der Speicher führt dafür mit, wie viel seines Inhalts aus PV bzw. dem Netz stammt, und gibt diese Anteile beim Entladen anteilig weiter. Speicherstrom ohne erfasste Herkunft, etwa aus der Zeit vor dieser Aufschlüsselung, steht als „Herkunft unbekannt“ mit dem Speicherpreis. Gesamtbilanz und Netz & Einspeisung enthalten zusätzlich den anteiligen Grundpreis und die Einspeisevergütung; Netz & Einspeisung zeigt den Saldo gegenüber dem Netz einschließlich Speicherladung aus dem Netz.
+- **Woher kam der Strom?** bzw. bei Netz & Einspeisung **Wohin ging der PV-Strom?** (direkt verbraucht, in den Speicher, eingespeist).
+- **Was auffällt:** Das Backend wählt beste und schwächste Zeitabschnitte, höchste Einspeisung und höchsten Bezug, Tagesdurchschnitte, Ladetage und die Ersparnis aus; die Gesamtbilanz verlinkt hier die einzelnen Verbraucher.
+- Auf schmalen Bildschirmen sind Preise, Herkunft und „Was auffällt“ zunächst eingeklappt.
 
 Die neue lokale Bilanz speichert Stundenaggregate dauerhaft in
 `.storage/eos_energiezentrale/<entry_id>/accounting.sqlite3` und ist unabhängig vom
@@ -954,7 +1155,8 @@ Die Datenbankabfragen laufen außerhalb der Gerätesteuerung und sind zeitlich b
 
 ### Einstellungen zur Bilanzierung
 
-Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
+Unter **Einstellungen → Kosten** stehen zur Verfügung (Wirkungsgrade und
+Anfangspreis eingeklappt unter **Wirkungsgrade und Anfangspreis**):
 
 | Einstellung | Bedeutung |
 | --- | --- |
@@ -963,6 +1165,7 @@ Unter **Einstellungen → Kosten & Bilanzierung** stehen zur Verfügung:
 | Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
+| Grundpreis gesamt | €/Monat brutto, Summe aller festen Monatsbeträge. Wird tageweise (Monatsbetrag × 12 / 365) ab Aufzeichnungsbeginn bis heute verteilt und nur in Gesamtbilanz und Netz & Einspeisung ausgewiesen. Standard 0. |
 | Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer: Schätzung als PV-Ladung zum aktuellen PV-Kostenansatz einschließlich Ladeverlusten. |
 
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
@@ -979,6 +1182,22 @@ pro Verbraucher ist mit den vorhandenen Zählern nicht möglich. Größere Wider
 in der Leistungsbilanz erscheinen als unbekannte Quelle. Die Berechnung setzt die
 Leistungen als Werte auf derselben AC-Bilanzgrenze voraus; abweichende DC-Speichermessungen
 führen zu zusätzlichen Modellabweichungen.
+
+Einspeisung und Speicherladung werden je Stunde mitgeschrieben. Die Einspeisung wird
+mit dem PV-Kostenansatz (standardmäßig der EOS-Einspeisevergütung) des jeweiligen
+Zeitpunkts bewertet; ist er unbekannt, bleibt die Vergütung als unbekannt markiert.
+Die Speicherladung wird nach PV und Netz aufgeteilt. Daraus berechnet das Backend
+je Zeitraum Autarkie, Eigenverbrauchsquote des PV-Stroms, physischen Netzbezug,
+Ø-Netzstrompreis, Ersparnis gegenüber reinem Netzbezug und Netto (Kosten der
+Verbraucher + Grundpreis − Einspeisevergütung). Netzgeladene Speicherenergie zählt
+dabei nur einmal, nämlich über den Akku-Kostenbestand bei der Entnahme. Autarkie und
+Eigenversorgung zählen nur PV-Direktstrom und Speicherstrom, der nicht aus dem Netz
+geladen wurde; netzgeladener Speicherstrom ist zeitversetzter Netzstrom. Speicherstrom
+ohne erfasste Herkunft (aus der Zeit vor der Herkunftserfassung) zählt weiterhin als
+eigene Versorgung. Die Ersparnis bewertet dagegen allen PV- und Speicherstrom, weil
+auch günstig geladener Netzstrom gegenüber dem Netzpreis spart. Einspeisung
+wird erst ab diesem Update erfasst; ältere Zeiträume zeigen sie nur, soweit sie aus
+InfluxDB rekonstruiert werden.
 
 Netzladung erhöht den Akku-Kostenbestand zum jeweiligen Strompreis, PV-Ladung zum
 PV-Kostenansatz. Ladeverluste reduzieren die eingelagerte Energie; bei Entladung wird
@@ -1129,33 +1348,44 @@ ohne Wetterentität bleibt die Anzeige verborgen. Nicht verfügbare oder länger
 als eine Stunde nicht gemeldete Werte erscheinen als unbekannt, nicht als 0 °C.
 Die Wetteranzeige hat keinen Einfluss auf die Energieregelung oder EOS-Prognose.
 
-Ein Klick auf das **Wettersymbol** öffnet **Wetter & PV-Vorhersage**. Oben zeigt
-der Dialog Wetterlage, Temperatur und Niederschlagsmengen für die nächsten
-24 Stunden; darunter steht der PV-Forecast aus EOS mit erwartetem Ertrag und
-maximaler Leistung. Beide Diagramme haben denselben Zeitraum. Mit Maus, Antippen
-oder dem gemeinsamen Zeitschieber lassen sich die Werte zum selben Zeitpunkt
-ablesen; der Schieber ist auch per Tastatur bedienbar. Escape oder das Kreuz
-schließt den Dialog und gibt den Fokus an das Wettersymbol zurück.
+Ein Klick auf das **Wettersymbol** oder den PV-Knoten öffnet die Ansicht
+**PV & Wetter**. Oben stehen die aktuelle PV-Leistung, der heutige Ertrag, der
+erwartete Rest und die Prognose für morgen. Darunter folgen das aktuelle Wetter mit
+Bewölkung und der Vergleich „PV jetzt ≈ x % der Prognose“, eine stündliche Leiste bis
+zum Ende des nächsten Tages mit Wetter, Temperatur und Bewölkung über dem erwarteten
+PV-Ertrag je Stunde sowie Tageskarten für heute, morgen und übermorgen. Stunden ohne
+PV-Ertrag fasst das Backend zu einem Nachtblock mit Tiefsttemperatur zusammen;
+Stunden ohne PV-Prognose bleiben sichtbar und gelten nicht als Nacht. Antippen einer
+Stunde zeigt Wetter, Niederschlag, Regenwahrscheinlichkeit und PV-Ertrag. Die
+Tageskarten zeigen einen Erwartungswert, keine Spanne. Beginnt die stündliche
+Wetterprognose erst mit der nächsten vollen Stunde, zeigt „Jetzt“ das aktuelle Wetter.
+Die Leiste lädt neu, wenn sich die PV-Prognose ändert, spätestens alle 15 Minuten;
+bis die neue Prognose da ist, bleibt die bisherige Anzeige stehen.
+
+**Was EOS daraus macht** fasst die nächsten 24 Stunden zusammen: deutlich weniger
+oder mehr Sonne morgen (unter 50 % bzw. über 150 % von heute), Speicher wird mit PV
+voll, Speicher lädt aus dem Netz (Zeitraum, Energie, Ø-Preis), Einspeisung von
+PV-Überschuss und Fahrzeuge, die aus dem Netz oder mit PV laden. Das Backend leitet
+diese Aussagen aus der EOS-Prognose und dem Ladeplan ab; jede Zeile führt zur
+passenden Ansicht. Links führen zu **Verlauf & Diagramme** (bisherige PV-Detailansicht)
+und zu **Netz & Einspeisung**.
 
 Die Wetterquelle muss die **stündliche** Home-Assistant-Aktion
 [`weather.get_forecasts`](https://www.home-assistant.io/integrations/weather/#action-weatherget_forecasts)
-unterstützen. Tagesprognosen werden nicht in Stunden umgerechnet. Abfragen erfolgen
-erst beim Öffnen bzw. Aktualisieren des Dialogs und werden fünf Minuten
-zwischengespeichert. Die ausgewählte Wetterentität wird nicht durch eine andere
-Quelle ersetzt. Temperaturwerte verwenden die HA-Einheit; Niederschlagsmengen
-werden in mm angezeigt, eine vorhandene Niederschlagswahrscheinlichkeit zusätzlich
-in der Detailauswahl. Unbekannte Werte bleiben Lücken, insbesondere bedeutet
-fehlender Niederschlag nicht 0 mm. Der PV-Bereich funktioniert auch bei einem
-Wetterfehler. Bei einer unvollständigen PV-Prognose beziehen sich Ertrag und
-Spitzenleistung nur auf die vorhandenen Intervalle; Nachtstunden zählen nur bei
-einer expliziten 0-W-Prognose als abgedeckt. Die Darstellung nutzt die konfigurierte
-Zeitzone und exakt 24 verstrichene Stunden, auch bei Zeitumstellungen.
+unterstützen. Tagesprognosen werden nicht in Stunden umgerechnet. Die Abfrage reicht
+72 Stunden voraus, erfolgt erst beim Öffnen der Ansicht oder nach einer neuen
+PV-Prognose und wird fünf Minuten zwischengespeichert. Die ausgewählte Wetterentität
+wird nicht durch eine andere Quelle ersetzt. Temperaturwerte verwenden die HA-Einheit;
+Niederschlagsmengen werden in mm angezeigt. Unbekannte Werte bleiben Lücken,
+insbesondere bedeutet fehlender Niederschlag nicht 0 mm. Die PV-Leiste funktioniert
+auch bei einem Wetterfehler; der Grund steht dann über der Leiste.
 
-Nach Updates lädt der Klick ein fehlendes Vorhersagemodul bei Bedarf mit der
-Version des laufenden Panels nach, auch wenn der Browser noch ein älteres
-Startskript verwendet. Schlägt das Nachladen fehl, bleibt die Energieübersicht
-benutzbar und der Klick kann wiederholt werden. Bei weiterhin unvollständigen
-UI-Dateien die Integration vollständig aktualisieren und die Oberfläche neu laden.
+Nach Updates lädt die Ansicht ein fehlendes Modul bei Bedarf mit der Version des
+laufenden Panels nach, auch wenn der Browser noch ein älteres Startskript verwendet.
+Schlägt das Nachladen fehl, bleibt die Oberfläche benutzbar, ein Browserhinweis
+erscheint und ein erneuter Aufruf der Ansicht versucht es wieder. Bei weiterhin
+unvollständigen UI-Dateien die Integration vollständig aktualisieren und die
+Oberfläche neu laden.
 
 ### Schutz der InfluxDB-Zugangsdaten
 

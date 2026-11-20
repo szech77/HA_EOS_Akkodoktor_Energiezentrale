@@ -7,7 +7,7 @@ function fixture(language){
  const html=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
  const ctx={valid:Number.isFinite,html,t,th:(key,values)=>html(t(key,values)),decimal:String,
   power:value=>Number.isFinite(value)?Math.abs(value)/1000+' kW':'—',percent:value=>Number.isFinite(value)?value+' %':'—'};
- vm.runInNewContext(script.slice(script.indexOf('function batteryGroupDetails('),script.indexOf('function settings()')),ctx);
+ vm.runInNewContext(script.slice(script.indexOf('function batteryGroupDetails('),script.indexOf('/* Settings: one save bar')),ctx);
  return ctx;
 }
 test('group diagnostics identify PV-only units, storage SoC and combined capacity in both languages',()=>{

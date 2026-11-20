@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from unittest.mock import Mock
 
-from custom_components.eos_energiezentrale.const import DEFAULTS
+from sample_options import DEFAULTS
 from custom_components.eos_energiezentrale.energy.fleet import create_controller, vehicle_options, reserved_grid
 from custom_components.eos_energiezentrale.energy.drivers import Fronius
 from custom_components.eos_energiezentrale.validation import validate_options
@@ -203,11 +203,17 @@ class FleetRequirements(unittest.TestCase):
     def test_house_subtracts_all_vehicle_measurements_once(self):
         app,ha,opts,_=self.setup_fleet()
         ha.rows[opts["house_entity"]]["state"]="5000"
+        # Consistent sources: 7500 W PV and 2500 W export leave 5000 W site consumption.
+        ha.rows[opts["grid_entity"]]["state"]="-2500"
         ha.rows["sensor.first_power"]["state"]="1000"
         ha.rows["sensor.second_power"]["state"]="2000"
         app.tick(NOW,0)
         self.assertEqual(app.live["house"],2000)
         self.assertEqual(app.live["car"],3000)
+        # Accounting receives the balanced split per vehicle on the real (not reserved) grid meter.
+        consumers=app.live["balance"]["consumers"]
+        self.assertEqual((consumers["house"],consumers["car/first"],consumers["car/second"]),(2000,1000,2000))
+        self.assertEqual(app.live["house_total"],5000)
 
     def test_disarm_attempts_every_charger_and_releases_storage(self):
         app,ha,_,_=self.setup_fleet()
@@ -260,6 +266,7 @@ class FleetRequirements(unittest.TestCase):
                 raise OSError("charger offline")
             return original_set(entity,value)
         ha.set=fail_first
+        app.set_armed(True)  # Release acts on the enabled control areas.
         with self.assertRaises(OSError):
             app.release(ha.states(),NOW)
         self.assertIn(("switch.second_enabled",False),ha.writes)
@@ -291,6 +298,8 @@ class FleetRequirements(unittest.TestCase):
     def test_retained_fleet_power_sums_all_chargers_without_filling_live_measurements(self):
         app,ha,opts,_=self.setup_fleet()
         ha.rows[opts["house_entity"]]["state"]="5000"
+        # Consistent sources: 7500 W PV and 2500 W export leave 5000 W site consumption.
+        ha.rows[opts["grid_entity"]]["state"]="-2500"
         ha.rows["sensor.first_power"]["state"]="1000"
         ha.rows["sensor.second_power"]["state"]="2000"
         app.tick(NOW,0)
@@ -358,5 +367,30 @@ def test_waiting_primary_vehicle_never_releases_a_vehicle_that_already_regulates
             assert first.restore_pending
         app.battery_driver.release.assert_not_called()
         assert not any(entity.startswith("switch.second") and value is False for entity, value in ha.writes)
+    finally:
+        case.doCleanups()
+
+
+def test_fleet_vehicle_area_release_pauses_every_wallbox_and_keeps_the_storage():
+    case = FleetRequirements()
+    try:
+        directory = case.enterContext(temporary_project_directory())
+        opts = {**DEFAULTS, "vehicles":json.dumps(definitions()), "heat_entity":"", "phase_wait_s":10}
+        # A restored intent: devices may still hold commands of every area.
+        create_controller(LocalHA(opts), opts, directory).set_armed(True)
+        app = create_controller(LocalHA(opts), opts, directory)
+        app.battery_driver.release = Mock()
+        pauses = []
+        for _, child, _ in app.controllers:
+            child.config.wallbox.pause = Mock(side_effect=lambda state, child=child: pauses.append(child))
+        app.set_control(vehicle=False)
+        assert pauses == [child for _, child, _ in app.controllers]
+        app.battery_driver.release.assert_not_called()
+        assert app.control_domains() == {'battery'}
+        assert not any('vehicle' in child.holding for _, child, _ in app.controllers)
+        # The persisted choice is restored for every vehicle of the fleet.
+        restored = create_controller(LocalHA(opts), opts, directory)
+        assert restored.control_domains() == {'battery'}
+        assert all(child.control_domains() == {'battery'} for _, child, _ in restored.controllers)
     finally:
         case.doCleanups()

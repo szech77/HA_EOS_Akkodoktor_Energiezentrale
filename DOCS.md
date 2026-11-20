@@ -10,15 +10,16 @@ Ressourcen heißen standardmäßig `battery1` und `ev1` und müssen unterschiedl
 
 ## Quellsensoren
 
-PV und Netz sollten lokal und zeitnah aktualisiert werden. Standardzuordnungen:
+PV und Netz sollten lokal und zeitnah aktualisiert werden. Bei einer Neuinstallation
+sind keine Sensoren vorbelegt; die Entitäten unten sind Beispiele:
 
 | Größe | Entität | Erwartung |
 |---|---|---|
-| PV | `sensor.fronius_symo_gen24_pv_power` | W oder kW, positiv |
-| Netz | `sensor.fronius_smartmeter_ip_meter_1_power` | W oder kW, Bezug positiv, Einspeisung negativ |
-| Haus gesamt | `sensor.solarnet_leistung_verbrauch` | einschließlich Auto und Wärmepumpe |
-| Wärmepumpe | `sensor.wp_strommesser_leistung_w_rmepumpe` | W oder kW |
-| Auto-SoC | `sensor.id4_soc` | Faktor 0–1; alternativ Prozent im Dialog wählen |
+| PV | `sensor.pv_power` | W oder kW, positiv |
+| Netz | `sensor.grid_power` | W oder kW, Bezug positiv, Einspeisung negativ |
+| Haus gesamt | `sensor.house_power` | einschließlich Auto und Wärmepumpe |
+| Wärmepumpe | `sensor.heat_pump_power` | W oder kW |
+| Auto-SoC | `sensor.ev_soc` | Faktor 0–1; alternativ Prozent im Dialog wählen |
 
 Preis: EUR/kWh oder ct/kWh. Die Anzeige erfolgt in ct/kWh.
 Für den dargestellten Hausverbrauch werden Auto und Wärmepumpe vom Gesamtverbrauch

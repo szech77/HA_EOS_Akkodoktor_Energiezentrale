@@ -36,7 +36,7 @@ def test_empty_sensor_uses_declared_plugin_with_timestamp_and_no_stored_changes(
     assert effective['grid_entity']=='@plugin:grid'
     assert rows['@plugin:grid']['state']==-1000
     assert rows['@plugin:grid']['last_reported']==NOW.isoformat()
-    assert report['sources']['grid']=={'source':{'type':'plugin','name':'Test plugin'},'available':True,'reason':None,'max_age_s':45}
+    assert report['sources']['grid']=={'source':{'type':'plugin','name':'Test plugin'},'available':True,'reason':None,'max_age_s':45,'sample':NOW.isoformat()}
     assert opts['grid_entity']==''
 
 

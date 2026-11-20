@@ -14,12 +14,17 @@ from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.clients import ENTITY
 from .energy.controller import Controller
-from .energy.domain import next_departure
+from .energy.domain import instant, next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload
+from .energy.source_diagnostics import source_diagnostics
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
-from .energy.presentation import measured_pv_energy, next24_pv_forecast, mode_timeline
+from .energy.charge_view import charge_plan
+from .energy.pv_view import pv_effects, pv_hours, pv_now, weather_days
+from .energy.power_profile import battery_origin, day_bounds, power_profile
+from .energy.pv_report import pv_forecast
+from .energy.presentation import measured_pv_energy, mode_timeline, node_problems, plan_events
 from .weather_forecast import WeatherForecast
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,12 +111,14 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self.history_for_view = {'local':local, 'vehicles':self.app.vehicle_histories(now)
                     if callable(getattr(type(self.app), 'vehicle_histories', None)) else {}}
                 result['pv_today_kwh'] = measured_pv_energy(local, self.influx_rows, now, result['zone'])
+                result['pv_price_ct'] = ledger.pv_price(now.isoformat())
                 self.app.errors.pop("accounting", None)
             except (OSError, sqlite3.Error, ValueError, TypeError, KeyError) as error:
                 # Reporting failures must never stop an otherwise safe charge.
                 self.app.errors["accounting"] = type(error).__name__
                 result['accounting'] = None
                 result['pv_today_kwh'] = None
+                result['pv_price_ct'] = None
                 if isinstance(self.app, Controller):
                     self.app.record_failure("accounting", error)
             result["errors"] = self.app.visible_errors(now) if isinstance(self.app, Controller) else dict(self.app.errors)
@@ -121,19 +128,36 @@ class EnergyCoordinator(DataUpdateCoordinator):
 
     def _present(self, data):
         now = datetime.now(timezone.utc)
-        retained = {key:self.data[key] for key in ('accounting', 'pv_today_kwh') if self.data and key in self.data}
+        retained = {key:self.data[key] for key in ('accounting', 'pv_today_kwh', 'pv_price_ct') if self.data and key in self.data}
         result = view_state({**retained, **data}, now)
         measured = result.get('pv_today_kwh')
         result['pv_forecast_totals'] = [{**row, 'total_kwh':row['kwh'] + measured if index == 0
             and row.get('kwh') is not None and measured is not None else row.get('kwh'),
             'includes_measured':index == 0 and row.get('kwh') is not None and measured is not None}
             for index, row in enumerate(result.get('pv_daily_forecast', []))]
-        result['pv_next24'] = next24_pv_forecast(result.get('forecast', []), now)
-        result['pv_next24_start'] = now.isoformat()
-        result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], now)
+        # The panel draws "now" at the snapshot time; split history and plan at the same instant.
+        stamp = instant((result.get('live') or {}).get('time'))
+        split = stamp if stamp is not None and stamp <= now else now
+        result['mode_timeline'] = mode_timeline(result, self.history_for_view['local'], split)
         for vehicle in result.get('vehicles', []):
-            vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), now)
+            vehicle['mode_timeline'] = mode_timeline(vehicle, self.history_for_view['vehicles'].get(vehicle['id'], []), split)
+        result['source_diagnostics'] = source_diagnostics(result, now)
+        # A persistently deviating measured site total hints at a missing source or a wrong meter.
+        since = instant(result['source_diagnostics'].get('deviation_since'))
+        self.issue_log.update('consumption', [{'id': 'consumption/house_total', 'code': 'house_total_deviation',
+            'severity': 'info'}] if since and (now - since).total_seconds() >= 900 else [])
         self.issue_log.update('state', result['notices'])
+        since = self.issue_log.active_since('state')
+        result['notices'] = [{**notice, 'since':since.get(notice['id'])} for notice in result['notices']]
+        result['resolved_notices'] = self.issue_log.recently_resolved('state', now)
+        result['node_problems'] = node_problems(result['notices'], result.get('vehicles') or ())
+        result['plan_events'] = plan_events(result, now)
+        if result.get('features', {}).get('car'):
+            result['charge_plan'] = charge_plan(result, now, result.get('pv_price_ct'))
+        for vehicle in result.get('vehicles', []):
+            vehicle['charge_plan'] = charge_plan({'armed':result.get('armed'), **vehicle}, now, result.get('pv_price_ct'))
+        result['pv_now'] = pv_now(result, now)
+        result['pv_effects'] = pv_effects(result, now)
         self.issue_log.update('indicators', [{'id':'battery_minimum', 'code':'battery_minimum', 'severity':'info'}]
                               if result['battery_low'] else [])
         if result['control_status'] != self.control_status:
@@ -241,7 +265,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 self._schedule_vehicle_sync()
 
     def _schedule_goal_sync(self):
-        if not getattr(self.app, "armed", False):
+        if not isinstance(self.app, Controller) or 'vehicle' not in self.app.control_domains():
             return
         for app in self._vehicle_controllers():
             if (not app.goal_sync_ready or app.restore_pending
@@ -403,8 +427,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                 else:
                     self.report_success('accounting/' + key)
 
-    async def async_change(self, *, enabled=None, settings=None):
-        area = 'api/control' if enabled is not None else 'api/settings'
+    async def async_change(self, *, enabled=None, settings=None, control=None):
+        area = 'api/control' if enabled is not None or control is not None else 'api/settings'
         async with self.work_lock:
             if self.closing:
                 raise ValueError("Integration is stopping")
@@ -420,6 +444,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     manage_limits = bool(settings and settings.keys() & {"battery_min_soc", "battery_max_soc"})
                     if enabled is not None:
                         self.app.set_armed(enabled)
+                    if control is not None:
+                        self.app.set_control(**control)
                     if settings is not None and "vehicle_id" in settings:
                         identity=settings["vehicle_id"]
                         if not hasattr(self.app,"change_vehicle_settings"):
@@ -482,7 +508,18 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     ledger.configure(values["settings"])
                     self.accounting_revision += 1
                     return {"ok":True}
-                return ledger.report(values, datetime.now(timezone.utc))
+                report = ledger.report(values, datetime.now(timezone.utc))
+                if report.get('period') == 'day':
+                    # The power profile of the day from the local minute history (about two days).
+                    zone = self.app.config.options['timezone']
+                    start, end = day_bounds(report['date'], zone)
+                    report['power_profile'] = power_profile(self.app.history.read_range(start, end), report['date'], zone,
+                                                            origin=battery_origin(report))
+                if report.get('period') in {'day', 'month', 'year'}:
+                    # The PV report's forecast for the rest of the period, from the current EOS forecast.
+                    report['pv_forecast'] = pv_forecast((self.data or {}).get('forecast'), report,
+                                                        datetime.now(timezone.utc), self.app.config.options['timezone'])
+                return report
             result = await self.hass.async_add_executor_job(read)
         if "settings" in values:
             self.accounting_cache.clear()
@@ -518,6 +555,12 @@ class EnergyCoordinator(DataUpdateCoordinator):
         if values or self.closing:
             raise ValueError('Invalid weather forecast request')
         result = await self.weather_forecast.async_read(self.app.config.options)
+        data, now = self.data or {}, datetime.now(timezone.utc)
+        # Pure in-memory presentation of already loaded data; no I/O in the event loop.
+        result['hours'] = pv_hours(data.get('forecast'), result['rows'], now, data.get('zone') or self.app.config.options['timezone'],
+                                   (data.get('live') or {}).get('weather'))
+        result['days'] = weather_days(result['rows'], data.get('pv_forecast_totals'), data.get('pv_today_kwh'), now,
+                                      data.get('zone') or self.app.config.options['timezone'])
         if result['status'] != 'available':
             self.report_notice('weather_forecast', result['status'], result.get('error_details'))
         else:

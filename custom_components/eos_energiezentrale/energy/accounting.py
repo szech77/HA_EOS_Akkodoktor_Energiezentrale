@@ -10,38 +10,48 @@ from copy import deepcopy
 from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 
-from .domain import instant, number
+from .domain import energy_balance, instant, number
+from .failures import BackendError
 from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, known_rate
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
             "charge_efficiency": .95, "discharge_efficiency": .95,
-            "capacity_wh": 11000.0, "initial_price_ct": None}
+            "capacity_wh": 11000.0, "initial_price_ct": None, "base_price_eur_month": 0.0}
 SOURCES = ("pv", "battery", "grid", "unknown")
+# Ledger rows besides consumers: grid export valued with the feed-in tariff, battery charging by origin.
+EXPORT, STORAGE = "export", "storage"
+# Origin of stored energy: the stock tracks how much of its content (and cost) came from
+# PV or the grid; discharged energy passes these shares on to the battery source.
+ORIGINS = ("pv", "grid")
+ORIGIN_FIELDS = ("pv_kwh", "pv_cost_eur", "grid_kwh", "grid_cost_eur")
+STOCK_ORIGIN = ("pv_kwh", "pv_cost", "grid_kwh", "grid_cost")
 
 
 def checked_settings(values):
     if not isinstance(values, dict) or values.keys() - DEFAULTS.keys():
-        raise ValueError("Unknown accounting setting")
+        raise BackendError("Unknown accounting setting", reason='unknown_fields')
     result = {**DEFAULTS, **values}
-    if result["pv_price_source"] not in {"eos", "manual"}:
-        raise ValueError("Invalid PV price source")
-    if result["efficiency_source"] not in {"eos", "manual"}:
-        raise ValueError("Invalid efficiency source")
+    for key in ("pv_price_source", "efficiency_source"):
+        if result[key] not in {"eos", "manual"}:
+            raise BackendError("Invalid accounting source: " + key, reason='invalid_type', fields=(key,))
     for key, low, high in (("pv_price_ct", -1000, 1000),
                            ("charge_efficiency", .1, 1), ("discharge_efficiency", .1, 1),
-                           ("capacity_wh", 100, 1000000), ("initial_price_ct", -1000, 1000)):
+                           ("capacity_wh", 100, 1000000), ("initial_price_ct", -1000, 1000),
+                           ("base_price_eur_month", 0, 1000)):
         value = result[key]
         if key == "initial_price_ct" and value is None:
             continue
         if isinstance(value, bool) or number(value) is None or not low <= float(value) <= high:
-            raise ValueError("Invalid accounting value: " + key)
+            raise BackendError("Invalid accounting value: " + key, reason='out_of_range', fields=(key,))
         result[key] = float(value)
     return result
 
 
 def empty():
-    return {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0., "seconds": 0., "estimated_seconds":0.,
-            "sources": {key: {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0.} for key in SOURCES}}
+    result = {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0., "seconds": 0., "estimated_seconds":0.,
+              "sources": {key: {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0.} for key in SOURCES}}
+    result["sources"]["battery"].update(dict.fromkeys(ORIGIN_FIELDS, 0.))
+    return result
 
 
 def add(target, source):
@@ -50,6 +60,10 @@ def add(target, source):
     for name in SOURCES:
         for key in ("kwh", "cost_eur", "cost_unknown_kwh", "estimated_kwh"):
             target["sources"][name][key] = target['sources'][name].get(key,0)+source['sources'][name].get(key,0)
+    # Ledger rows written before the origin split carry no origin; they count as unknown origin.
+    for key in ORIGIN_FIELDS:
+        target["sources"]["battery"][key] = (target["sources"]["battery"].get(key,0)
+                                             + source["sources"]["battery"].get(key,0))
 
 
 class Accounting:
@@ -72,6 +86,11 @@ class Accounting:
             db.execute("CREATE INDEX IF NOT EXISTS energy_day ON energy(day)")
             rows = dict(db.execute("SELECT key,value FROM meta"))
         raw = json.loads(rows.get("settings", "{}"))
+        raw = raw if isinstance(raw, dict) else {}
+        # Settings written by a newer version (e.g. a beta) are kept unchanged but not
+        # interpreted, so a downgrade keeps working and an upgrade finds them again.
+        self.foreign_settings = {key: value for key, value in raw.items() if key not in DEFAULTS}
+        raw = {key: value for key, value in raw.items() if key in DEFAULTS}
         # Preserve earlier nonzero manual prices; migrate the former zero default to EOS.
         if "pv_price_source" not in raw and raw.get("pv_price_ct",0) != 0:
             raw["pv_price_source"] = "manual"
@@ -95,7 +114,7 @@ class Accounting:
             raise ValueError("Accounting settings must be an object")
         settings = checked_settings({**self.settings, **values})
         with closing(self.connect()) as db, db:
-            db.execute("INSERT OR REPLACE INTO meta VALUES ('settings',?)", (json.dumps(settings),))
+            db.execute("INSERT OR REPLACE INTO meta VALUES ('settings',?)", (json.dumps({**getattr(self, 'foreign_settings', {}), **settings}),))
         self.settings = settings
 
     def refresh_eos(self, eos, resource, now):
@@ -193,7 +212,7 @@ class Accounting:
             self.stock={'kwh':energy,'cost':0.,'unknown':energy,'estimated':0.}
         elif energy<self.stock['kwh'] and self.stock['kwh']>0:
             ratio=energy/self.stock['kwh']
-            for key in ('cost','unknown','estimated'): self.stock[key]=self.stock.get(key,0)*ratio
+            for key in ('cost','unknown','estimated',*STOCK_ORIGIN): self.stock[key]=self.stock.get(key,0)*ratio
             self.stock['kwh']=energy
         elif energy>self.stock['kwh']:
             self.stock['unknown']+=energy-self.stock['kwh']
@@ -213,10 +232,14 @@ class Accounting:
     def observe(self, live, vehicles=()):
         now=instant(live.get('time'))
         if now is None or (self.previous is not None and now<=self.previous[0]): return
-        consumers={key:live.get(field) for key,field in (('house','house'),('heat','heat'),('car','car'))}
-        consumers.update({'car/'+vehicle['id']:vehicle.get('live',{}).get('car') for vehicle in vehicles})
-        sample={key:number(live.get(key)) for key in FIELDS}
+        # The AC balance defines consumption and its split; raw readings are the fallback.
+        balance=live.get('balance') if isinstance(live.get('balance'),dict) else {}
+        fitted=balance.get('consumers') or {}
+        consumers={key:fitted.get(key,live.get(key)) for key in ('house','heat','car')}
+        consumers.update({'car/'+vehicle['id']:fitted.get('car/'+vehicle['id'],vehicle.get('live',{}).get('car')) for vehicle in vehicles})
+        sample={key:number(balance.get(key,live.get(key))) for key in FIELDS}
         sample.update(time=now.isoformat(),consumers={key:number(value) for key,value in consumers.items()})
+        if balance.get('estimated'): sample['estimated']=True
         effective=self.effective()
         previous=self.previous
         backup=deepcopy((self.stock,self.last_rate,self.initial_pv_valued,self.started,self.reconcile,self.restored))
@@ -278,17 +301,22 @@ class Accounting:
         sources_ok = all(value is not None for value in (pv, grid, discharge, charge))
         # At most 10%/300W balance residual is tolerated. Larger residuals are
         # visible as unknown rather than assigning async meter jumps to PV/grid.
-        load = positive("house_total")
-        supplied = pv + max(0, grid) + discharge if sources_ok else 0
-        sinks = load + charge + max(0, -grid) if sources_ok and load is not None else None
-        balanced = sinks is not None and abs(supplied-sinks) <= max(300, sinks*.1)
-        ratios = {"pv": pv/supplied, "grid": max(0,grid)/supplied, "battery": discharge/supplied} if balanced and supplied > 0 else {}
+        balance = energy_balance(pv, grid, discharge, charge, positive("house_total"))
+        supplied = balance["supplied_w"] if balance else 0
+        ratios = ({"pv": pv/supplied, "grid": max(0,grid)/supplied, "battery": discharge/supplied}
+                  if balance and balance["balanced"] and supplied > 0 else {})
         self.value_unknown(row,effective)
         battery_rate, battery_unknown, battery_estimated = 0., 1., 0.
+        # Per delivered kWh: the share from PV-/grid-charged stock and its cost.
+        origin = dict.fromkeys(ORIGIN_FIELDS, 0.)
         if discharge is not None and discharge > 0 and effective is not None and self.stock is not None:
             needed = discharge*hours_per_thousand/effective["discharge_efficiency"]
             available = min(needed, self.stock["kwh"])
             fraction = available/self.stock["kwh"] if self.stock["kwh"] > 0 else 0
+            delivered = discharge*hours_per_thousand
+            for kind in ORIGINS:
+                origin[kind+"_kwh"] = min(1., self.stock.get(kind+"_kwh",0)*fraction/needed)
+                origin[kind+"_cost_eur"] = self.stock.get(kind+"_cost",0)*fraction/delivered
             cost = self.stock["cost"]*fraction
             unknown = self.stock["unknown"]*fraction + needed-available
             estimated=self.stock.get('estimated',0)*fraction
@@ -300,7 +328,7 @@ class Accounting:
             battery_rate = cost/(discharge*hours_per_thousand)
             battery_unknown = min(1., unknown/needed)
             battery_estimated=min(1.,estimated/needed)
-            for key in ("kwh", "cost", "unknown", "estimated"):
+            for key in ("kwh", "cost", "unknown", "estimated", *STOCK_ORIGIN):
                 self.stock[key] = self.stock.get(key,0)*(1-fraction)
         elif discharge is None or charge is None:
             # Preserve the known book price; flag uncertainty instead of erasing it.
@@ -329,10 +357,42 @@ class Accounting:
                 unknown = part*unknowns.get(source,1)
                 estimated=part*(1 if row.get('estimated') else battery_estimated if source=='battery' else 0)
                 amount["sources"][source] = {"kwh":part,"cost_eur":cost,"cost_unknown_kwh":unknown,'estimated_kwh':estimated}
+                if source == "battery":
+                    amount["sources"][source].update({key: part*share for key, share in origin.items()})
                 amount["cost_eur"] += cost
                 amount["cost_unknown_kwh"] += unknown
                 amount['estimated_kwh']+=estimated
             outputs[name] = amount
+        seconds = hours_per_thousand*3600000
+        if grid is not None and grid < 0:
+            # Export earns the feed-in tariff; its origin follows the local sources that were delivering.
+            energy = -grid*hours_per_thousand
+            amount = empty()
+            amount.update(kwh=energy, seconds=seconds, cost_eur=energy*rates["pv"],
+                          cost_unknown_kwh=energy*unknowns["pv"])
+            if row.get('estimated'): amount.update(estimated_seconds=seconds, estimated_kwh=energy)
+            local = (pv or 0) + (discharge or 0)
+            shares = {"pv": pv/local, "battery": discharge/local} if sources_ok and local > 0 else {"unknown": 1.}
+            for source, share in shares.items():
+                amount["sources"][source] = {"kwh":energy*share, "cost_eur":energy*share*rates["pv"],
+                    "cost_unknown_kwh":energy*share*unknowns["pv"], "estimated_kwh":energy*share if row.get('estimated') else 0.}
+            outputs[EXPORT] = amount
+        if charge is not None and charge > 0:
+            energy = charge*hours_per_thousand
+            amount = empty()
+            amount.update(kwh=energy, seconds=seconds)
+            if row.get('estimated'): amount.update(estimated_seconds=seconds, estimated_kwh=energy)
+            known = {source: ratios.get(source, 0) for source in ("pv", "grid")} if ratios else {}
+            shares = {**known, "unknown": max(0., 1-sum(known.values()))} if known else {"unknown": 1.}
+            for source, share in shares.items():
+                part = energy*share
+                cost = part*rates.get(source, 0)
+                unknown = part*unknowns.get(source, 1)
+                amount["sources"][source] = {"kwh":part, "cost_eur":cost, "cost_unknown_kwh":unknown,
+                                             "estimated_kwh":part if row.get('estimated') else 0.}
+                amount["cost_eur"] += cost
+                amount["cost_unknown_kwh"] += unknown
+            outputs[STORAGE] = amount
         if charge is not None and charge > 0 and self.stock is not None and effective is not None:
             energy = charge*hours_per_thousand
             # A charging battery cannot be its own energy source.
@@ -340,6 +400,9 @@ class Accounting:
             known_ratio = pv_ratio+grid_ratio
             self.stock["kwh"] += energy*effective["charge_efficiency"]
             self.stock["cost"] += energy*(pv_ratio*rates["pv"]+grid_ratio*rates["grid"])
+            for kind, share in (("pv", pv_ratio), ("grid", grid_ratio)):
+                self.stock[kind+"_kwh"] = self.stock.get(kind+"_kwh",0) + energy*effective["charge_efficiency"]*share
+                self.stock[kind+"_cost"] = self.stock.get(kind+"_cost",0) + energy*share*rates[kind]
             self.stock["unknown"] += energy*effective["charge_efficiency"]*min(1.,1-known_ratio+grid_ratio*unknowns["grid"]+pv_ratio*unknowns["pv"])
             if row.get('estimated'): self.stock['estimated']=min(self.stock['kwh'],self.stock.get('estimated',0)+energy*effective['charge_efficiency'])
             self.value_unknown(row,effective)
@@ -395,6 +458,11 @@ class Accounting:
             while stamp < stop.timestamp():
                 hours.append(datetime.fromtimestamp(stamp,timezone.utc).isoformat())
                 stamp += 3600
+        today = now.astimezone(self.zone).date()
+        first = max(start, (instant(self.started).astimezone(self.zone).date() if instant(self.started) else start))
+        last = min(end, today+timedelta(days=1))
+        base_days = max(0, (last-first).days)
         return {"period":period,"date":start.isoformat(),"end":end.isoformat(),"hours":hours,"consumers":consumers,
+                "base_days":base_days,
                 "started":self.started,"settings":self.settings,"effective":self.effective(),
                 "eos_error":self.eos_error,"pv_tariff":self.pv_tariff,"pv_price_ct":self.pv_price(now.isoformat()),"pv_error":self.pv_error,"stock":self.stock,"method":"proportional"}
