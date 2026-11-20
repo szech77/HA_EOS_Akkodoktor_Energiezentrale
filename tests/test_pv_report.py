@@ -73,3 +73,41 @@ def test_power_profile_carries_the_measured_pv_power():
     samples = [{'time': (start + timedelta(minutes=minute)).isoformat(), 'solar': watts, 'grid': 0,
                 'battery_charge': 0, 'battery_discharge': 0, 'house_total': watts} for minute, watts in ((0, 1000), (1, 3000))]
     assert power_profile(samples, '2026-11-18', ZONE)['points'][0]['solar'] == 2000
+
+
+def test_pv_destinations_and_uncovered_supply_per_bin_and_period():
+    house, car = amount(pv=2, grid=1), amount(pv=1, battery=3)
+    # 3 kWh battery energy: 2 kWh PV-charged, 0.5 kWh grid-charged, the rest without recorded origin.
+    car['sources']['battery'].update(pv_kwh=2, grid_kwh=.5)
+    storage, export = amount(pv=1.5, grid=1), amount(pv=.5)
+    report = {'period': 'day', 'base_days': 1, 'consumers': {
+        key: {'total': value, 'bins': [{'time': 'h1', **value}]}
+        for key, value in (('house', house), ('car', car), ('storage', storage), ('export', export))}}
+    balance = report_values(report, ['house', 'car'])['balance']
+    flow = {'house': 2, 'car': 1, 'heat': 0, 'storage': 1.5, 'export': .5}
+    gap = {'battery_pv': 2, 'battery_grid': .5, 'battery_unknown': .5, 'grid': 1, 'unknown': 0}
+    assert balance['bins'][0]['pv_flow'] == pytest.approx(flow) and balance['pv_flow'] == pytest.approx(flow)
+    assert balance['bins'][0]['pv_gap'] == pytest.approx(gap) and balance['pv_gap'] == pytest.approx(gap)
+    # Grid charging of the battery is no uncovered consumption and no PV destination.
+    assert sum(balance['pv_flow'].values()) == pytest.approx(balance['pv_kwh'])
+
+
+def test_power_profile_splits_pv_destinations_and_battery_origin_per_hour():
+    from custom_components.eos_energiezentrale.energy.power_profile import battery_origin
+    start = datetime(2026, 11, 17, 23, tzinfo=timezone.utc)
+    hour = start.isoformat()
+    report = {'consumers': {'house': {'bins': [{'time': hour, 'sources': {'battery': {'kwh': 2, 'pv_kwh': 1.5, 'grid_kwh': .5}}}]}}}
+    origin = battery_origin(report)
+    assert origin == {hour: (.75, .25)}
+    # 3 kW PV and 1 kW battery discharge supply house 2 kW, car 1 kW and 1 kW feed-in.
+    sample = {'time': hour, 'balance': {'solar': 3000, 'grid': -1000, 'battery_discharge': 1000, 'battery_charge': 0,
+                                         'house_total': 3000, 'consumers': {'house': 2000, 'car': 1000, 'heat': 0}}}
+    point = power_profile([sample], '2026-11-18', ZONE, origin=origin)['points'][0]
+    assert point['pv_flow'] == {'house': 1500, 'car': 750, 'heat': 0, 'storage': 0, 'export': 750}
+    assert point['pv_gap'] == {'battery_pv': 562, 'battery_grid': 188, 'battery_unknown': 0, 'grid': 0, 'unknown': 0}
+    # Charging from PV and grid: only the PV share counts as a PV destination.
+    sample = {'time': hour, 'balance': {'solar': 2000, 'grid': 2000, 'battery_discharge': 0, 'battery_charge': 3000,
+                                         'house_total': 1000, 'consumers': {'house': 1000, 'car': 0, 'heat': 0}}}
+    point = power_profile([sample], '2026-11-18', ZONE)['points'][0]
+    assert point['pv_flow']['storage'] == 1500 and point['pv_flow']['house'] == 500
+    assert point['pv_gap']['grid'] == 500 and point['pv_gap']['battery_unknown'] == 0

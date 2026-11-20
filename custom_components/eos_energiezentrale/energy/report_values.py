@@ -82,6 +82,40 @@ def _ratio(numerator, denominator, scale=100):
     return numerator / denominator * scale if denominator > 1e-9 else None
 
 
+# Where PV energy went, and how the consumption PV did not cover was supplied.
+PV_FLOWS = ('house', 'car', 'heat', 'storage', 'export')
+PV_GAPS = ('battery_pv', 'battery_grid', 'battery_unknown', 'grid', 'unknown')
+
+
+def add_pv_flow(flow, gap, key, amount):
+    """Add one consumer/storage/export amount to the PV destinations and the uncovered supply.
+
+    Battery energy keeps the origin of its charge (PV, grid, unknown before the origin was recorded)."""
+    from .accounting import EXPORT, STORAGE
+    sources = amount.get('sources', {})
+    part = lambda source: (sources.get(source) or {}).get('kwh', 0)
+    target = 'export' if key == EXPORT else 'storage' if key == STORAGE else 'car' if key.startswith('car') else key
+    if target in flow:
+        flow[target] += part('pv')
+    if key in (EXPORT, STORAGE):
+        return
+    battery = sources.get('battery') or {}
+    from_pv, from_grid = battery.get('pv_kwh', 0), battery.get('grid_kwh', 0)
+    gap['battery_pv'] += from_pv
+    gap['battery_grid'] += from_grid
+    gap['battery_unknown'] += max(0., battery.get('kwh', 0) - from_pv - from_grid)
+    gap['grid'] += part('grid')
+    gap['unknown'] += part('unknown')
+
+
+def pv_flow_totals(totals, consumers):
+    from .accounting import EXPORT, STORAGE
+    flow, gap = dict.fromkeys(PV_FLOWS, 0.), dict.fromkeys(PV_GAPS, 0.)
+    for key in (*consumers, STORAGE, EXPORT):
+        add_pv_flow(flow, gap, key, totals[key])
+    return flow, gap
+
+
 def balance_values(report, consumers=('house', 'heat', 'car')):
     """Period balance: consumption, self-supply, grid, feed-in, base price and net cost.
 
@@ -116,7 +150,8 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
             target = bins.setdefault(row['time'], {'time':row['time'], 'consumption_kwh':0., 'export_kwh':0.,
                                                    'storage_kwh':0., 'grid_import_kwh':0., 'grid_import_eur':0.,
                                                    'export_eur':0., 'cost_partial':False, 'pv_kwh':0.,
-                                                   'pv_direct_kwh':0., 'pv_storage_kwh':0., 'pv_export_kwh':0.})
+                                                   'pv_direct_kwh':0., 'pv_storage_kwh':0., 'pv_export_kwh':0.,
+                                                   'pv_flow':dict.fromkeys(PV_FLOWS, 0.), 'pv_gap':dict.fromkeys(PV_GAPS, 0.)})
             target[field] += row.get('kwh', 0)
             # Money per bin for the euro chart: grid import cost (consumers and storage) and feed-in credit.
             grid = row if key == EXPORT else (row.get('sources', {}).get('grid') or {})
@@ -131,11 +166,13 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
             use = 'pv_export_kwh' if key == EXPORT else 'pv_storage_kwh' if key == STORAGE else 'pv_direct_kwh'
             target[use] += pv
             target['pv_kwh'] += pv
+            add_pv_flow(target['pv_flow'], target['pv_gap'], key, row)
     unknown = used['cost_unknown_kwh'] + export['cost_unknown_kwh']
     storage_grid = storage['sources']['grid']
     import_cost = source['grid']['cost_eur'] + storage_grid['cost_eur']
     import_known = grid_known + storage_grid['kwh'] - storage_grid['cost_unknown_kwh']
     pv_export = export['sources']['pv']['kwh']
+    flow_total, gap_total = pv_flow_totals(totals, consumers)
     pv_use = {key: {'kwh': value, 'share_percent': _ratio(value, pv_kwh)} for key, value in
               (('direct', source['pv']['kwh']), ('storage', storage['sources']['pv']['kwh']), ('export', pv_export))}
     return {
@@ -149,6 +186,7 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
         'export_kwh': export['kwh'], 'export_eur': export['cost_eur'], 'feed_in_price_ct': feed_in_price,
         'self_consumption_percent': _ratio(pv_kwh - pv_export, pv_kwh), 'pv_export_kwh': pv_export, 'pv_use': pv_use,
         'storage_grid_kwh': storage_grid['kwh'], 'grid_import_cost_eur': import_cost,
+        'pv_flow': flow_total, 'pv_gap': gap_total,
         'grid_import_price_ct': _ratio(import_cost, import_known),
         'grid_balance_eur': import_cost + base - export['cost_eur'], 'total_cost_eur': used['cost_eur'] + base,
         'base_days': base_days, 'base_price_eur_month': base_month, 'base_eur': base,

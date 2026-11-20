@@ -383,7 +383,7 @@ test('the day view draws stacked areas over time; hours without data split them'
  const markup=ctx.stackedAreas(slots,[row('h0',1,2),row('h1',3,1),row('h3',2,0)],
   [{color:'P',value:item=>item.sources.pv.kwh},{color:'B',value:item=>item.sources.battery.kwh},{color:'G',value:item=>item.sources.grid.kwh}],
   index=>index*10,value=>100-value*10);
- const polygons=[...markup.matchAll(/<polygon class="area" points="([^"]+)" fill="(\w)"\/>/g)].map(match=>[match[2],match[1]]);
+ const polygons=[...markup.matchAll(/<polygon class="area" points="([^"]+)" style="fill:(\w)"\/>/g)].map(match=>[match[2],match[1]]);
  // PV: two segments around the missing hour; grid stacks on PV; an all-zero layer is not drawn.
  assert.deepEqual(polygons.map(([color])=>color),['P','P','G']);
  assert.equal(polygons[0][1],'0.0,90.0 10.0,70.0 10.0,100.0 0.0,100.0');
@@ -444,7 +444,7 @@ test('the PV report shows production by use, the forecast ahead and its power cu
  ctx.report={period:'day',date:'2026-11-18',end:'2026-11-19',hours,base_days:1,settings:{},
   consumers:{house:{total:pvAmount(3),bins:hours.slice(0,2).map(time=>({time,...pvAmount(1.5)}))},
    export:{total:pvAmount(1),bins:[{time:hours[1],...pvAmount(1)}]}},
-  power_profile:{step_s:120,gap_s:600,points:[{time:hours[0],solar:2500,house:{pv:2500,battery:0,grid:0,unknown:0},total:{pv:2500,battery:0,grid:0,unknown:0},grid:{import:0,export:0}}]},
+  power_profile:{step_s:120,gap_s:600,points:[{time:hours[0],solar:2500,pv_flow:{house:2500,car:0,heat:0,storage:0,export:0},pv_gap:{battery_pv:0,battery_grid:0,battery_unknown:0,grid:0,unknown:0},house:{pv:2500,battery:0,grid:0,unknown:0},total:{pv:2500,battery:0,grid:0,unknown:0},grid:{import:0,export:0}}]},
   pv_forecast:{bins:[{time:hours[2],kwh:2.2}],points:[{time:hours[2],end:'2026-11-18T13:00:00+00:00',w:2200}],kwh:2.2,complete:true}};
  ctx.cards=values=>{ctx.kpis=values;return '';};
  assert.equal(vm.runInContext("billingRoute('usage/pv')",ctx),true);
@@ -454,7 +454,7 @@ test('the PV report shows production by use, the forecast ahead and its power cu
  assert.match(chart,/aria-label="usage.pv_chart"/);
  // Measured hours stack direct use and feed-in; the hour ahead shows the outlined forecast.
  assert.equal((chart.match(/class="forecast-bar"/g)??[]).length,1);
- assert.match(chart,/usage.pv_produced 2\.5 kWh \(usage.pv_direct 1\.5 kWh · usage.pv_storage 0 kWh · usage.pv_export 1 kWh\)/);
+ assert.match(chart,/usage.pv_produced 2\.5 kWh: usage.pv_to_house 1\.5 kWh · usage.pv_to_export 1 kWh/);
  assert.match(chart,/usage.pv_forecast 2\.2 kWh/);
  assert.equal(ctx.kpis[0][1],'4 kWh');assert.equal(ctx.kpis[3][1],'2.2 kWh');
  vm.runInContext("selectBillingUnit('kw');usageDetail('pv',false)",ctx);
@@ -462,7 +462,7 @@ test('the PV report shows production by use, the forecast ahead and its power cu
  assert.match(power,/aria-label="usage.pv_power_chart"/);
  assert.match(power,/class="forecast-line"/);assert.match(power,/<polygon class="area"/);
  const readout=vm.runInContext("powerHover.points.map(item=>powerReadout(item.row,'pv').lines.map(line=>line[0]).join('+'))",ctx);
- assert.deepEqual(JSON.parse(JSON.stringify(readout)).slice(0,2),['usage.pv_measured','usage.pv_forecast']);
+ assert.deepEqual(JSON.parse(JSON.stringify(readout)).slice(0,2),['usage.pv_to_house','usage.pv_forecast']);
  // There is no euro view of the production; a kept € choice shows kWh here.
  vm.runInContext("selectBillingUnit('eur');usageDetail('pv',false)",ctx);
  assert.match(elements['usage-charts'].innerHTML,/aria-label="usage.pv_chart"/);
@@ -472,4 +472,18 @@ test('the PV node opens the PV report; the weather symbol stays with PV and weat
  assert.match(markup,/class="node solar l"[^>]*href="#usage\/pv"/);
  const app=fs.readFileSync(path.join(__dirname,'../custom_components/eos_energiezentrale/energy/web/app.js'),'utf8');
  assert.match(app,/byId\('flow-weather'\)\.addEventListener\('click',\(\)=>\{location\.hash='#pv';\}\)/);
+});
+
+test('the PV chart shows where PV went above zero and what it did not cover below, battery by origin',()=>{
+ const {ctx,elements}=uiFixture();
+ const hours=['2026-11-18T10:00:00+00:00'];
+ const flow={house:1,car:2,heat:0,storage:.5,export:0},gap={battery_pv:.6,battery_grid:.2,battery_unknown:0,grid:.4,unknown:0};
+ vm.runInContext(`billing.period='day';billing.data={period:'day',date:'2026-11-18',end:'2026-11-19',hours:['${hours[0]}'],consumers:{}}`,ctx);
+ const markup=vm.runInContext(`pvChart({bins:[{time:'${hours[0]}',pv_kwh:3.5,pv_flow:${JSON.stringify(flow)},pv_gap:${JSON.stringify(gap)}}]},null)`,ctx);
+ const fills=[...markup.matchAll(/style="fill:([^"]+)"/g)].map(match=>match[1]);
+ // Above: house, car and battery charging; below: PV-charged battery, grid-charged battery, grid.
+ assert.equal(fills.length,6);assert.deepEqual(fills.slice(0,3),['var(--house)','var(--car)','var(--battery)']);
+ assert.match(markup,/usage.pv_uncovered: usage.pv_gap_battery_pv 0.6 kWh · usage.pv_gap_battery_grid 0.2 kWh · usage.pv_gap_grid 0.4 kWh/);
+ const readout=vm.runInContext(`powerReadout({time:'${hours[0]}',solar:3500,pv_flow:{house:1000,car:2000,heat:0,storage:500,export:0},pv_gap:{battery_pv:600,battery_grid:0,battery_unknown:0,grid:400,unknown:0}},'pv')`,ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(readout.lines.map(line=>line[0]))),['usage.pv_to_house','usage.pv_to_car','usage.pv_to_storage','usage.pv_gap_battery_pv','usage.pv_gap_grid']);
 });

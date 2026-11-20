@@ -40,9 +40,53 @@ def _split(sample):
     return shares, consumers, total, grid
 
 
-def power_profile(samples, day, zone, consumers=CONSUMERS):
+PV_FLOWS = ('house', 'car', 'heat', 'storage', 'export')
+PV_GAPS = ('battery_pv', 'battery_grid', 'battery_unknown', 'grid', 'unknown')
+
+
+def battery_origin(report, consumers=CONSUMERS):
+    """Share of PV- and grid-charged energy in the battery energy of each hour of a day report."""
+    hours = {}
+    for key in consumers:
+        for row in ((report.get('consumers') or {}).get(key) or {}).get('bins', []):
+            battery = (row.get('sources') or {}).get('battery') or {}
+            total = hours.setdefault(row['time'], [0., 0., 0.])
+            total[0] += battery.get('kwh', 0)
+            total[1] += battery.get('pv_kwh', 0)
+            total[2] += battery.get('grid_kwh', 0)
+    return {hour: (pv / kwh, grid / kwh) for hour, (kwh, pv, grid) in hours.items() if kwh > 0}
+
+
+def _pv_flow(sample, shares, values, origin):
+    """PV destinations and uncovered consumption of one sample (W), like the accounting splits energy."""
+    balance = sample.get('balance') if isinstance(sample.get('balance'), dict) else {}
+    value = lambda key: number(balance.get(key, sample.get(key)))
+    pv = max(0., value('solar') or 0)
+    charge, discharge, grid = max(0., value('battery_charge') or 0), max(0., value('battery_discharge') or 0), value('grid')
+    flow, gap = dict.fromkeys(PV_FLOWS, 0.), dict.fromkeys(PV_GAPS, 0.)
+    from_pv, from_grid = origin
+    for key, watts in values.items():
+        if watts is None or key not in flow:
+            continue
+        watts = max(0., watts)
+        flow[key] += watts * shares.get('pv', 0)
+        battery = watts * shares.get('battery', 0)
+        gap['battery_pv'] += battery * from_pv
+        gap['battery_grid'] += battery * from_grid
+        gap['battery_unknown'] += battery * max(0., 1 - from_pv - from_grid)
+        gap['grid'] += watts * shares.get('grid', 0)
+        gap['unknown'] += watts * shares.get('unknown', 0)
+    flow['storage'] = charge * shares.get('pv', 0)
+    if grid is not None and grid < 0 and pv + discharge > 0:
+        flow['export'] = -grid * pv / (pv + discharge)
+    return flow, gap
+
+
+def power_profile(samples, day, zone, consumers=CONSUMERS, origin=None):
     """Average power per STEP_S of the local day: per consumer and in total, split by source (W),
-    plus grid import and feed-in. Empty when the local history does not cover the day."""
+    plus grid import and feed-in, and where PV went and what it did not cover (``pv_flow``,
+    ``pv_gap``; battery origin per hour from ``origin``). Empty when the local history does not
+    cover the day."""
     start, end = day_bounds(day, zone)
     buckets = {}
     for sample in samples:
@@ -50,9 +94,12 @@ def power_profile(samples, day, zone, consumers=CONSUMERS):
         if stamp is None or not start <= stamp < end:
             continue
         shares, values, total, grid = _split(sample)
-        slot = buckets.setdefault(int((stamp - start).total_seconds()) // STEP_S, {'count': 0, 'rows': [], 'solar': []})
+        slot = buckets.setdefault(int((stamp - start).total_seconds()) // STEP_S,
+                                  {'count': 0, 'rows': [], 'solar': [], 'flows': []})
         slot['count'] += 1
         slot['rows'].append((shares, values, total, grid))
+        hour = stamp.replace(minute=0, second=0, microsecond=0).isoformat()
+        slot['flows'].append(_pv_flow(sample, shares, values, (origin or {}).get(hour, (0., 0.))))
         balance = sample.get('balance') if isinstance(sample.get('balance'), dict) else {}
         slot['solar'].append(number(balance.get('solar', sample.get('solar'))))
     points = []
@@ -70,6 +117,9 @@ def power_profile(samples, day, zone, consumers=CONSUMERS):
                 for source, share in shares.items():
                     parts[source] += max(0., watts) * share
             point[key] = {source: round(parts[source] / known) for source in SOURCES} if known else None
+        flows = buckets[index]['flows']
+        for field, keys, position in (('pv_flow', PV_FLOWS, 0), ('pv_gap', PV_GAPS, 1)):
+            point[field] = {key: round(sum(item[position][key] for item in flows) / len(flows)) for key in keys}
         solar = [value for value in buckets[index]['solar'] if value is not None]
         point['solar'] = round(sum(max(0., value) for value in solar) / len(solar)) if solar else None
         grids = [grid for *_, grid in rows if grid is not None]

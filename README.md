@@ -1102,13 +1102,19 @@ Kosten, dazu **Einspeisung** (Vergütung und Netzbezug) und **Gesamtverbrauch**
 (Kosten und Netto). Jede Kachel öffnet ihre Auswertung; der Netz-Knoten im
 Energiefluss öffnet **Netz & Einspeisung**, der PV-Knoten **PV-Erzeugung**, Haus und Wärmepumpe ihre Verbrauchsauswertung.
 
-**PV-Erzeugung** zeigt die erzeugte Energie je Stunde, Tag oder Monat, aufgeteilt in
-direkt verbraucht, in den Speicher und eingespeist, sowie Eigenverbrauchsquote und
-Einspeisung. Für den Rest des gewählten Zeitraums steht die EOS-Prognose als umrandeter
-Balken darüber; die EOS-Prognose reicht etwa zwei Tage voraus. In der Tagesansicht zeigt
-**kW** die gemessene PV-Leistung als Fläche und die Prognose als gestrichelte Linie; die
-Anzeige am Mauszeiger nennt beide Werte. Prognose je Abschnitt und Leistungskurve
-berechnet das Backend aus der aktuellen EOS-Prognose.
+**PV-Erzeugung** macht den Energiefluss je Stunde, Tag oder Monat sichtbar. Oberhalb der
+Nulllinie steht der PV-Strom nach Ziel: Haus, E-Auto, Wärmepumpe, Akku laden und
+Netzeinspeisung; die Höhe ist die Erzeugung. Unterhalb steht der Verbrauch dieser
+Verbraucher, den PV nicht gedeckt hat, nach Herkunft: Akku (PV-geladen, netzgeladen oder
+Herkunft unbekannt), Netz oder unbekannte Quelle. So ist erkennbar, ob PV reicht, wie groß
+die Unterdeckung ist und wohin der PV-Strom fließt. Akkuladung aus dem Netz zählt weder
+als PV-Ziel noch als Unterdeckung. Für den Rest des Zeitraums steht die EOS-Prognose als
+umrandeter Balken darüber; sie reicht etwa zwei Tage voraus. In der Tagesansicht zeigt
+**kW** dieselbe Aufteilung als Flächen über die Uhrzeit und die Prognose als gestrichelte
+Linie; die Anzeige am Mauszeiger nennt alle Werte. Die Aufteilung folgt der Abrechnung
+(anteilig nach PV, Netzbezug und Akkuentladung); die Herkunft des Akkustroms stammt in
+kWh aus dem Akkubestand, in kW aus dem Anteil der jeweiligen Stunde. Alle Werte berechnet
+das Backend.
 
 Alle Auswertungen sind gleich aufgebaut. Oben wechseln Chips zwischen PV-Erzeugung, Haus, Auto
 (bei mehreren Fahrzeugen auch je Fahrzeug), Wärmepumpe, Netz & Einspeisung und Gesamt:

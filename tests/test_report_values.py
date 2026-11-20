@@ -105,7 +105,9 @@ def test_balance_combines_consumers_feed_in_storage_and_base_price_without_doubl
     assert balance['savings_eur'] == pytest.approx(6 * .30 - .62)
     assert balance['bins'] == [{'time':'h1', 'consumption_kwh':12, 'export_kwh':5, 'storage_kwh':0., 'grid_import_kwh':6,
                                'grid_import_eur':pytest.approx(1.80), 'export_eur':pytest.approx(.40), 'cost_partial':False,
-                               'pv_kwh':9, 'pv_direct_kwh':4, 'pv_storage_kwh':0., 'pv_export_kwh':5}]
+                               'pv_kwh':9, 'pv_direct_kwh':4, 'pv_storage_kwh':0., 'pv_export_kwh':5,
+                               'pv_flow':{'house':4, 'car':0., 'heat':0., 'storage':0., 'export':5},
+                               'pv_gap':{'battery_pv':0., 'battery_grid':0., 'battery_unknown':2, 'grid':6, 'unknown':0.}}]
     assert not balance['cost_partial']
     empty_balance = report_values({'consumers':{}}, ['house'])['balance']
     assert empty_balance['autarky_percent'] is None and empty_balance['grid_price_ct'] is None and empty_balance['net_eur'] == 0
