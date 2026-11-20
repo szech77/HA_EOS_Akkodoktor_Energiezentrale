@@ -32,23 +32,24 @@ class Node {
  }
 }
 function fixture(){
- const nodes=Object.fromEntries(['daily','vehicle-daily','vehicle-goals','vehicle-selector','vehicle-selector-label','charge-plans','vehicle-saved','vehicle-switch-saved','car-pv-hint','car-fast-hint','add-charge-plan','saved'].map(id=>[id,new Node()]));
+ const nodes=Object.fromEntries(['daily','vehicle-daily','vehicle-goals','charge-plans','vehicle-saved','vehicle-switch-saved','car-pv-hint','car-fast-hint','add-charge-plan','saved'].map(id=>[id,new Node()]));
  for(const name of ['pv','fast','phase_auto','pv_target_soc','fast_target_soc'])nodes['vehicle-daily'].elements[name]=Object.assign(new Node(),{name,type:['pv','fast','phase_auto'].includes(name)?'checkbox':'number'});
  nodes.daily.elements.holiday_state=new Node();
  const messages=JSON.parse(fs.readFileSync(path.join(root,'i18n/de.json'),'utf8')).messages;
  const goal={id:'morning',active:true,schedule:'weekly',target_soc:72,departure_time:'07:45',weekdays:[0,2],holidays:true,next_departure:'2027-01-01T07:45:00+01:00'};
  const vehicle=id=>({id,live:{car_range_per_soc:4},settings:{pv:true,fast:false,phase_auto:true,pv_target_soc:90,target_soc:85},charge_plan_view:[{...goal,id:id+'_goal'}]});
- const ctx={byId:id=>nodes[id],document:{createElement:()=>new Node(),querySelectorAll:()=>[]},location:{hash:'#car'},valid:Number.isFinite,
-  snapshot:{vehicles:[vehicle('first'),vehicle('second')]},t:(key,values={})=>(messages[key]??key).replace(/\{(\w+)\}/g,(_,name)=>values[name]??`{${name}}`),th:key=>messages[key]??key,
+ const ctx={byId:id=>nodes[id],document:{createElement:()=>new Node(),querySelectorAll:()=>[]},location:{hash:'#car/second'},valid:Number.isFinite,
+  // A vehicle page of a fleet renders with that vehicle's snapshot (see detail()).
+  snapshot:{...vehicle('second'),vehicles:[]},t:(key,values={})=>(messages[key]??key).replace(/\{(\w+)\}/g,(_,name)=>values[name]??`{${name}}`),th:key=>messages[key]??key,
   html:String,time:String,when:String,decimal:String,confirm:()=>false,api:async(op,values)=>{ctx.sent={op,values};},refresh:async()=>{ctx.refreshed=(ctx.refreshed??0)+1;},Date};
  vm.createContext(ctx);
  vm.runInContext(script.slice(script.indexOf("const form = byId('daily')"),script.indexOf('function batteryGroupDetails(')),ctx);
- vm.runInContext(script.slice(script.indexOf("byId('vehicle-selector').addEventListener"),script.indexOf("byId('status-band').addEventListener")),ctx);
- nodes['vehicle-selector'].value='second';ctx.vehicleSettings();
- return {ctx,nodes};
+ vm.runInContext(script.slice(script.indexOf("form.elements.holiday_state.addEventListener('change',holidayFields)"),script.indexOf("byId('status-band').addEventListener")),ctx);
+ ctx.vehicleSettings();
+ return {ctx,nodes,vehicle};
 }
-test('vehicle goals keep unsaved edits during refresh and save only the selected vehicle goals',async()=>{
- const {ctx,nodes}=fixture(),goals=nodes['vehicle-goals'];
+test('vehicle goals keep unsaved edits during refresh and save only the shown vehicle goals',async()=>{
+ const {ctx,nodes,vehicle}=fixture(),goals=nodes['vehicle-goals'];
  assert.equal(goals.dataset.vehicleId,'second');assert.equal(nodes['vehicle-daily'].dataset.vehicleId,'second');
  const card=nodes['charge-plans'].children[0];card.querySelector('[name=target_soc]').value='77';
  ctx.vehicleSettings();assert.equal(nodes['charge-plans'].children[0],card);
@@ -58,8 +59,10 @@ test('vehicle goals keep unsaved edits during refresh and save only the selected
  assert.deepEqual(sent.values.charge_plans[0].weekdays,[0,2]);assert.equal(sent.values.charge_plans[0].holidays,true);
  assert.equal(sent.values.pv,undefined);assert.equal(sent.values.target_soc,undefined);
  assert.equal(sent.values.battery_min_soc,undefined);assert.equal(sent.values.holiday_state,undefined);
- nodes['vehicle-selector'].value='first';nodes['vehicle-selector'].events.change();
+ // Opening another vehicle page loads that vehicle's goals.
+ ctx.location.hash='#car/first';ctx.snapshot={...vehicle('first'),vehicles:[]};ctx.vehicleSettings();
  assert.equal(nodes['charge-plans'].children[0].dataset.id,'first_goal');
+ assert.equal(goals.dataset.vehicleId,'first');
 });
 test('charging switches and limits save immediately with only the changed value',async()=>{
  const {ctx,nodes}=fixture(),form=nodes['vehicle-daily'];
@@ -131,7 +134,7 @@ test('SoC fields show the expected range with the backend factor while the value
  field.input.value='';form.events.input({target:field.input});
  assert.equal(field.value.textContent,'');
  // Without a learned factor no range is invented; the SoC stays.
- ctx.snapshot.vehicles[1].live={};ctx.vehicleSettings();
+ ctx.snapshot.live={};ctx.vehicleSettings();
  assert.equal(ctx.rangeText(80),'');
  field.input.value='60';form.events.input({target:field.input});
  assert.equal(field.value.textContent,'60 %');assert.equal(field.slider.value,'60');

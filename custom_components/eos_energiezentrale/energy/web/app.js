@@ -233,7 +233,8 @@ function carIcon(soc) {
 }
 
 function vehicleCards() {
-  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card${vehicleActive(vehicle) ? '' : ' vehicle-inactive'}" href="#car/${html(vehicle.id)}"><small class="vehicle-heading">${carIcon(valid(vehicle.live.car_soc) ? vehicle.live.car_soc : vehicle.display?.car_soc?.value)}${html(vehicle.name)}</small><strong>${html(vehicleActive(vehicle) ? ((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value)) : vehicleStatus(vehicle))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span></a>`).join('');
+  return (snapshot.vehicles ?? []).map(vehicle=>`<a class="vehicle-card${vehicleActive(vehicle) ? '' : ' vehicle-inactive'}" href="#car/${html(encodeURIComponent(vehicle.id))}"><small class="vehicle-heading">${carIcon(valid(vehicle.live.car_soc) ? vehicle.live.car_soc : vehicle.display?.car_soc?.value)}${html(vehicle.name)}</small><strong>${html(vehicleActive(vehicle) ? ((!valid(vehicle.live.car) && vehicle.display?.car ? "≈ " : "")+power(valid(vehicle.live.car) ? vehicle.live.car : vehicle.display?.car?.value)) : vehicleStatus(vehicle))}</strong><span>${html(percent(vehicle.live.car_soc))} · ${html(modeLabel(vehicle.live.car_mode))}</span>`
+    +`<span class="dim">${html(t('metric.target'))} ${html(percent(vehicle.charge_target_soc ?? vehicle.settings?.target_soc))} · ${html(vehicle.live.departure ? when(vehicle.live.departure) : t('metric.no_departure'))}</span></a>`).join('');
 }
 
 const displayed = key => snapshot.flow_display?.[key]?.value ?? (valid(snapshot.live[key]) ? snapshot.live[key] : snapshot.display?.[key]?.value);
@@ -629,30 +630,54 @@ function vehicleForecastNote(vehicle) {
   return ['eos','pv_estimate','fast_estimate','constant','unavailable'].includes(source)
     ? `<p class="footnote">${th(`forecast.vehicle_${source}`)}</p>` : '';
 }
-function detail(key) {
-  const carPage=key==='car'||key.startsWith('car/');
+// Vehicle pages are #car/<encoded id>; the energy flow and the fleet cards link there.
+function routeVehicleId(key) {
+  if (!key.startsWith('car/')) return null;
+  try {return decodeURIComponent(key.slice(4));} catch {return null;}
+}
+// With one vehicle the Auto page is that vehicle's page, the same as from the energy flow.
+function singleVehicleRoute(requested, vehicles) {
+  return requested==='car' && vehicles.length===1 ? 'car/'+encodeURIComponent(vehicles[0].id) : null;
+}
+// With several vehicles every car page offers "All vehicles" and each vehicle.
+let carNavMarkup='';
+function carNav(activeId) {
+  const nav=byId('car-nav'), vehicles=snapshot.vehicles ?? [];
+  nav.hidden=vehicles.length<2;
+  if (nav.hidden) return;
+  const link=(href,label,current)=>`<a href="${html(href)}"${current ? ' aria-current="page"' : ''}>${html(label)}</a>`;
+  const markup=link('#car',t('fleet.all'),activeId===null)
+    +vehicles.map(vehicle=>link('#car/'+encodeURIComponent(vehicle.id),vehicle.name,vehicle.id===activeId)).join('');
+  // Rebuild only on change so keyboard focus survives the refresh cycle.
+  if (markup!==carNavMarkup) {nav.innerHTML=markup;carNavMarkup=markup;}
+}
+function detail(key, nested=false) {
+  const vehicleId=routeVehicleId(key), fleet=key==='car' && Boolean(snapshot.vehicles?.length);
+  // Goal, charging switches, plan and goals belong to one vehicle, never to the fleet view.
+  const carPage=(key==='car' || vehicleId!==null) && !fleet;
   byId('car-view').hidden=!carPage;
   byId('vehicle-goals').hidden=!carPage;
   byId('detail-kpis').hidden=false;
-  byId('detail-kpis').classList.toggle('vehicle-inactive', (key === 'car' || key.startsWith('car/')) && !vehicleActive(snapshot));
+  byId('detail-kpis').classList.toggle('vehicle-inactive', carPage && !vehicleActive(snapshot));
   const usageLink=byId('usage-link');
-  usageLink.hidden=!['house','car','heat'].includes(key)&&!key.startsWith('car/');
+  usageLink.hidden=!['house','car','heat'].includes(key)&&vehicleId===null;
   usageLink.href='#usage/'+key;
-  if (key.startsWith('car/')) {
-    const vehicle=snapshot.vehicles?.find(item=>item.id===key.slice(4));
+  if (!nested) carNav(fleet ? null : vehicleId);
+  if (vehicleId!==null) {
+    const vehicle=snapshot.vehicles?.find(item=>item.id===vehicleId);
     if (!vehicle) return;
     const original=snapshot, originalHistory=history;
     try {
       snapshot={...original,...vehicle,vehicles:[],vehicle_name:vehicle.name,display:vehicle.display ?? {},flow_display:vehicle.flow_display ?? {}};
       history={local:originalHistory.vehicles?.[vehicle.id] ?? vehicle.history ?? [],influx:[]};
-      detail('car');
+      detail('car',true);
       byId('usage-link').href='#usage/'+key;
       byId('detail-title').textContent=vehicle.name;
     } finally {snapshot=original;history=originalHistory;}
     return;
   }
-  if (key==='car') {vehicleSettings();carView();}
-  if (key==='car' && snapshot.vehicles?.length) {
+  if (fleet) {
+    // All vehicles: state, goal, charging power and SoC of each vehicle side by side.
     chartModels.clear();
     byId('detail-title').textContent=t('fleet.title');
     byId('detail-kpis').innerHTML=vehicleCards();
@@ -663,6 +688,7 @@ function detail(key) {
     byId('plan').innerHTML=`<p>${th('fleet.forecast_note')}</p>`;
     return;
   }
+  if (key==='car') {vehicleSettings();carView();}
   const now = windowNow();
   chartModels.clear();
   if (key === 'energy') {
@@ -724,10 +750,6 @@ let vehicleFormKey=null;
 let chargePlanCounter=0;
 let vehicleSaving=false;
 let planScrollPending=false;
-function selectedVehicle() {
-  const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
-  return vehicles.find(item=>item.id===selector.value)??snapshot;
-}
 /* Range of a SoC with the factor the backend learned from the vehicle's last report (km per %).
    Shown next to every SoC field and updated while the value is typed. */
 // The vehicle page renders with that vehicle's snapshot, but events run later against the whole
@@ -760,14 +782,9 @@ function socFromSlider(slider) {
   input.value=String(Math.max(1,Math.min(100,Math.round(soc))));
   return input;
 }
+// Renders with the shown vehicle's snapshot (the only vehicle, or one vehicle page of a fleet).
 function vehicleSettings() {
-  const selector=byId('vehicle-selector'), vehicles=snapshot.vehicles??[];
-  byId('vehicle-selector-label').hidden=!vehicles.length;
-  if(vehicles.map(item=>item.id).join(',')!==selector.dataset.vehicles) {
-    selector.innerHTML=vehicles.map(item=>`<option value="${html(item.id)}">${html(item.name)}</option>`).join('');
-    selector.dataset.vehicles=vehicles.map(item=>item.id).join(',');
-  }
-  const selected=selectedVehicle();
+  const selected=snapshot;
   const factor=selected.live?.car_range_per_soc;
   vehicleRangeFactor=valid(factor) && factor>0 ? factor : null;
   const identity=selected.id??'primary';
@@ -1012,10 +1029,9 @@ function carPlanPanel(plan) {
 }
 function carView() {
   const plan=snapshot.charge_plan;
-  const fleet=Boolean(snapshot.vehicles?.length);
-  byId('car-goal').hidden=fleet||!plan;
-  byId('car-plan').hidden=fleet||!plan;
-  if(fleet||!plan) {planScrollPending=false;return;}
+  byId('car-goal').hidden=!plan;
+  byId('car-plan').hidden=!plan;
+  if(!plan) {planScrollPending=false;return;}
   byId('car-goal').innerHTML=carGoal(plan);
   byId('car-plan').innerHTML=carPlanPanel(plan);
   byId('car-plan').classList.toggle('overridden',plan.state==='overridden'||plan.state==='read_only');
@@ -1352,7 +1368,12 @@ function renderStatus(route) {
 function renderView() {
   const requested = location.hash.slice(1);
   if (requested !== route) hideProbe();
-  const vehicleRoute=requested.startsWith('car/') && snapshot.vehicles?.some(item=>item.id===requested.slice(4));
+  const vehicles=consumerEnabled('car') ? snapshot.vehicles ?? [] : [];
+  const single=singleVehicleRoute(requested,vehicles);
+  // replace keeps the back button on the previous page; the hash change renders again.
+  if (single) {location.replace('#'+single);return;}
+  const vehicleId=routeVehicleId(requested);
+  const vehicleRoute=vehicleId!==null && vehicles.some(item=>item.id===vehicleId);
   const usageRoute=billingRoute(requested);
   route = usageRoute || vehicleRoute || (pages.has(requested) && consumerEnabled(requested)) || ['settings','notices','pv'].includes(requested) ? requested : 'overview';
   document.querySelectorAll('[data-optional]').forEach(element=>{element.hidden=!consumerEnabled(element.dataset.optional);});
@@ -1437,7 +1458,6 @@ async function openPvView(){
   }
 }
 byId('flow-weather').addEventListener('click',()=>{location.hash='#pv';});
-byId('vehicle-selector').addEventListener('change',()=>{vehicleFormKey=null;vehicleSettings();});
 form.elements.holiday_state.addEventListener('change',holidayFields);
 byId('add-charge-plan').addEventListener('click',()=>{
   if(byId('charge-plans').querySelectorAll('.charge-goal').length>=32)return;

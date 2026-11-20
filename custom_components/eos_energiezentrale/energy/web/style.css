@@ -410,6 +410,7 @@
 #eos-energy-design .subnav {display:flex;gap:6px;flex-wrap:wrap;}
 #eos-energy-design .subnav a {border:1px solid var(--edge);background:var(--surface);border-radius:99px;padding:5px 12px;text-decoration:none;color:var(--dim);font-size:13px;min-height:34px;box-sizing:border-box;display:inline-flex;align-items:center;}
 #eos-energy-design .subnav a[aria-current="page"] {background:var(--ink);color:var(--bg);border-color:var(--ink);}
+#eos-energy-design .car-nav {margin:8px 0 14px;}
 #eos-energy-design .period {display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--edge);border-radius:12px;padding:8px;margin-bottom:14px;}
 #eos-energy-design .segctl {display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface2);border-radius:9px;padding:3px;gap:2px;}
 #eos-energy-design .segctl button {border:0;background:transparent;border-radius:7px;padding:6px 18px;min-height:38px;font:inherit;font-weight:600;color:var(--dim);cursor:pointer;}

@@ -80,7 +80,3 @@ test('without an EOS curve the page says so instead of inventing segments',()=>{
   assert.match(goal.innerHTML,/kein EOS-Ladeplan/);assert.doesNotMatch(panel.innerHTML,/data-charge/);
   assert.match(panel.innerHTML,/Die Kurve schreibt nur den Ladestand fort/);
 });
-test('the fleet page keeps goal and plan hidden',()=>{
-  const {ctx}=render({}, {vehicles:[{id:'a'}]});
-  assert.equal(ctx.byId('car-goal').hidden,true);assert.equal(ctx.byId('car-plan').hidden,true);
-});

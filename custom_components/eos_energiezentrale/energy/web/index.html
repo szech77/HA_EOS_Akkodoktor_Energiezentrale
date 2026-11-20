@@ -68,13 +68,13 @@
     <section id="detail" hidden>
       <a class="back" href="#overview" data-i18n="nav.back"></a>
       <div class="page-top"><div><p class="eyebrow" data-i18n="section.device"></p><h1 id="detail-title"></h1></div><a class="back" href="#settings" data-i18n="nav.settings"></a></div>
+      <nav class="subnav car-nav" id="car-nav" hidden data-i18n-aria="fleet.choose"></nav>
       <a class="back" id="usage-link" hidden data-i18n="billing.open"></a>
       <div id="car-view" hidden>
         <div class="car-top">
           <section class="plan-panel car-goal" id="car-goal"></section>
           <form class="plan-panel" id="vehicle-daily" novalidate>
             <div class="panel-heading"><h2 data-i18n="car.charging"></h2><output id="vehicle-switch-saved" class="tag" role="status"></output></div>
-            <label id="vehicle-selector-label" hidden><span data-i18n="settings.vehicle"></span><select id="vehicle-selector"></select></label>
             <div class="switches">
               <label class="switch"><span><b data-i18n="settings.pv"></b><small id="car-pv-hint"></small></span><input name="pv" type="checkbox" class="toggle"></label>
               <label class="switch"><span><b data-i18n="settings.fast"></b><small id="car-fast-hint"></small></span><input name="fast" type="checkbox" class="toggle"></label>

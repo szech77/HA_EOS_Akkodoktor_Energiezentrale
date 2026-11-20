@@ -52,3 +52,41 @@ test('local fallback renders a constant known SoC above zero in the future graph
  assert.deepEqual(Array.from(f.models().get('vehicle_soc_ev0').series[0].future,p=>p.value),[53,53]);
  assert.match(f.nodes.get('charts').innerHTML,/curve forecast[^>]+d="M50\.000,47\.000 L50\.521,47\.000"/);
 });
+
+test('the fleet view shows all vehicles without one vehicle\'s goal, switches or goals',()=>{
+ const f=fixture(2);f.ctx.detail('car');
+ assert.equal(f.nodes.get('car-view').hidden,true);
+ assert.equal(f.nodes.get('vehicle-goals').hidden,true);
+ assert.equal(f.nodes.get('detail-title').textContent,'Fahrzeuge und Ladepunkte');
+ const nav=f.nodes.get('car-nav');
+ assert.equal(nav.hidden,false);
+ assert.match(nav.innerHTML,/<a href="#car" aria-current="page">Alle Fahrzeuge<\/a>/);
+ assert.match(nav.innerHTML,/<a href="#car\/ev0">Auto 0<\/a><a href="#car\/ev1">Auto 1<\/a>/);
+});
+test('a vehicle page of a fleet keeps the vehicle choice and marks the shown vehicle',()=>{
+ const f=fixture(2);f.ctx.detail('car/ev1');
+ assert.equal(f.nodes.get('car-view').hidden,false);
+ assert.equal(f.nodes.get('vehicle-goals').hidden,false);
+ assert.equal(f.nodes.get('detail-title').textContent,'Auto 1');
+ const nav=f.nodes.get('car-nav');
+ assert.equal(nav.hidden,false);
+ assert.match(nav.innerHTML,/<a href="#car">Alle Fahrzeuge<\/a>/);
+ assert.match(nav.innerHTML,/<a href="#car\/ev1" aria-current="page">Auto 1<\/a>/);
+ assert.equal(f.ctx.snapshot,f.original);
+});
+test('vehicle ids are one encoded route segment and a single vehicle needs no choice',()=>{
+ const f=fixture(2);f.original.vehicles[1].id='a/b';
+ f.ctx.detail('car/a%2Fb');
+ assert.equal(f.nodes.get('detail-title').textContent,'Auto 1');
+ assert.match(f.nodes.get('car-nav').innerHTML,/href="#car\/a%2Fb" aria-current="page"/);
+ assert.equal(f.ctx.routeVehicleId('car/%E0%A4%A'),null);
+ const single=fixture(1);single.ctx.detail('car/ev0');
+ assert.equal(single.nodes.get('car-nav').hidden,true);
+});
+test('the Auto menu opens the only vehicle\'s page, like the energy flow does',()=>{
+ const f=fixture();
+ assert.equal(f.ctx.singleVehicleRoute('car',[{id:'a/b'}]),'car/a%2Fb');
+ assert.equal(f.ctx.singleVehicleRoute('car',[{id:'a'},{id:'b'}]),null);
+ assert.equal(f.ctx.singleVehicleRoute('car',[]),null);
+ assert.equal(f.ctx.singleVehicleRoute('car/a',[{id:'a'}]),null);
+});
