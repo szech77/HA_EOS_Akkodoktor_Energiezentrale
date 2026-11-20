@@ -123,7 +123,8 @@ def dependency_notes(changes, sections):
 
 def dependency_files(read):
     """Dependency snapshot {path: text}; ``read(path)`` returns a file's text or None."""
-    return {path: text for path in (*REQUIREMENTS, *read(WORKFLOWS + '/')) if (text := read(path)) is not None}
+    files = {path: read(path) for path in (*REQUIREMENTS, *read(WORKFLOWS + '/'))}
+    return {path: content for path, content in files.items() if content is not None}
 
 
 def next_version(base, sections):
@@ -319,7 +320,9 @@ def build_plan(root, github, source, channel, beta_number=None, branch='main', t
         def stable(path):
             return [] if path.endswith('/') else file_at(github, baseline['source'], path)
         current_files = dependency_files(local)
-        previous_files = {path: text for path in current_files if (text := stable(path)) is not None}
+        # No assignment expression here: it would rebind this function's ``text`` (the changelog).
+        previous_files = {path: stable(path) for path in current_files}
+        previous_files = {path: content for path, content in previous_files.items() if content is not None}
         sections['Bugfixes'] += dependency_notes(dependency_changes(current_files, previous_files), sections)
     if not any(sections.values()):
         raise ValueError('New Version contains no changes beyond the last stable release')

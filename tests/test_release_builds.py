@@ -369,3 +369,18 @@ def test_added_removed_or_unchanged_dependencies_create_no_entry():
     previous = {'requirements-test.txt': 'pytest==9.2.0\nold==1.0\n', '.github/workflows/ci.yml': WORKFLOW.format(sha='1'*40, version='7.0.1')}
     current = {'requirements-test.txt': 'pytest==9.2.0\nnew==2.0\n', '.github/workflows/ci.yml': WORKFLOW.format(sha='1'*40, version='7.0.1')}
     assert release.dependency_changes(current, previous) == []
+
+
+def test_dependency_notes_keep_the_checked_changelog_for_publication(project):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, 'pytest==9.2.0\n', 'pytest==9.2.1\n')
+    workflow = '.github/workflows/ci.yml'
+    dependencies(project, github, WORKFLOW.format(sha='1'*40, version='7.0.1'), WORKFLOW.format(sha='1'*40, version='7.0.1'), workflow)
+    text = (project/'CHANGELOG.md').read_text(encoding='utf-8')
+    github.files[(SOURCE, 'CHANGELOG.md')] = text
+    result = plan(project, github)
+    # The provenance must hash the source changelog, not a dependency file read for the comparison.
+    assert result['origin']['source_changelog_sha256'] == release.hashlib.sha256(text.encode()).hexdigest()
+    release.publish_build(github, result)
+    assert github.tags['v'+result['version']]
