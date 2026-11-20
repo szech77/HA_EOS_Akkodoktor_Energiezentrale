@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/fleet-battery-measurements",
+  "channel": "beta",
+  "date": "2026-11-20",
+  "notes_sha256": "c27a8596bf40a8101099ea32556c0b7e646e9568b2bcd4c197539759a862aefb",
+  "source_changelog_sha256": "0703829050e8fc860045e9d7efabf91f32977be39b20aebbcb95091562b5bb36",
+  "source_commit": "0d4034bf4dfd537276c349e15a73f7251f455502",
+  "version": "0.24.2b44828132707"
+}
