@@ -17,7 +17,7 @@ from .presentation import daily_pv_forecast, heat_utilization, power_references,
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
-from .vehicle_limits import charging_profile, optional_charger
+from .vehicle_limits import charging_profile, optional_charger, vehicle_box, vehicle_phases
 from .eos_measurements import MeasurementSync, device_samples
 from .failures import connection_lost
 from .status import failure_details
@@ -872,7 +872,8 @@ class Controller:
         # recovery after backup or an unknown status has been observed.
         if requires_pause(self.power_supply, now, opts, states):
             self.backup_paused = True
-        box = self.read_control_input(self.config.wallbox, states, now, 'wallbox_read')
+        box = vehicle_box(self.read_control_input(self.config.wallbox, states, now, 'wallbox_read'),
+                          self.config.wallbox, self.config.options)
         self.update_vehicle(box, now, clock)
         opts, states, self.source_configuration = resolve_sources(opts, states,
             ((self.config.battery, battery), (self.config.wallbox, box)), now)
@@ -1125,6 +1126,9 @@ class Controller:
                 phase = 1
             elif phase == 1 and desired >= 3 * minimum_power + 150 and (not solar_only or box.amps >= maximum - 0.05):
                 phase = 3
+        if vehicle_phases(opts) == 1:
+            # A single-phase vehicle never gains from three phases; keep the wallbox on one.
+            phase = 1
         amps = current_for_power(desired, phase, box.step, maximum, nearest and phase == box.phases, hard, voltage)
         transition = (phase, amps is not None)
         if (not supported and not box.enabled and pv and planned == 0 and desired < (minimum_power * phase + 150)
@@ -1262,8 +1266,10 @@ class Controller:
             charge_limits = None
             if vehicle_resource:
                 phases = self.live.get('phases')
-                auto = (self.config.daily['phase_auto'] and
+                auto = (self.config.daily['phase_auto'] and vehicle_phases(self.config.options) == 3 and
                         getattr(getattr(self.config.wallbox, 'features', None), 'phase_switching', False) is True)
+                if vehicle_phases(self.config.options) == 1 and phases in (1, 3):
+                    phases = 1
                 maximum = self.vehicle_profile[0] if self.vehicle_profile else (
                     self.config.options.get('max_current_a', 0) * 230 * phases if phases in (1, 3) else 0)
                 minimum = self.vehicle_profile[1] if self.vehicle_profile else 6 * 230 * (1 if auto else phases or 0)

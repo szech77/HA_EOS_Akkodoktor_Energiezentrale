@@ -19,6 +19,8 @@ def heat_utilization(states,options,now):
 
 def power_references(options,live,features):
     phases = live.get("phases") if isinstance(features,WallboxFeatures) and not features.phase_switching else 3
+    if options.get("max_phases", 3) == 1 and phases in (1, 3):
+        phases = 1
     current = number(options.get("max_current_a",16))
     car = min(11000,current*230*phases) if current is not None and phases in (1,3) else None
     if isinstance(features,WallboxFeatures) and features.optional_connection:
