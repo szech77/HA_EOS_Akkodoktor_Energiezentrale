@@ -215,7 +215,7 @@ class FleetController(Controller):
             self.backup_paused=True
         battery=self.read_control_input(self.battery_driver,rows,now,'battery_read')
         if not opts.get('backup_mode_entity'):
-            supply=battery.power_supply
+            supply=self.device_supply(battery.power_supply,now)
         if requires_pause(supply,now,opts,rows):
             self.backup_paused=True
         for _,app,_ in self.controllers:

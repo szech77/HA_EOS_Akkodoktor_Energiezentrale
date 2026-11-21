@@ -56,6 +56,10 @@ einer Minute. Bietet EOS keine Mess-API, steht einmalig
 enthält unter `eos_measurements`, ob die API unterstützt wird, welche Schlüssel
 gesendet werden, welche fehlen und wann zuletzt gesendet wurde, ohne Messwerte.
 
+Ein einzelner fehlgeschlagener Abruf eines Speichers, der den Netzstatus selbst
+meldet, erzeugt `backup_power_unknown` erst, wenn der zuletzt bestätigte Netzbetrieb
+älter als 60 Sekunden ist; der Lesefehler bleibt als `plugin_read_failed` sichtbar.
+
 Ist ein Gerät während der Steuerung nicht erreichbar, erscheint statt `runtime`
 die Warnung `control_resume`: Die Steuerung ist pausiert und wird jede Minute
 wieder aufgenommen. Gelingt ein Regelzyklus, wird `control_resume` als behoben
@@ -169,6 +173,10 @@ connection) raises the warning `control_resume` instead of `runtime`: control is
 paused, not stored as switched off, and taken back every minute once readings and
 an EOS plan are valid. After 30 minutes it becomes the `runtime` error and control
 stays off. Refusals and wrong confirmations of a device still switch control off.
+
+A single failed read of a storage device that reports the power supply raises
+`backup_power_unknown` only once the last confirmed grid report is older than
+60 seconds; the read failure itself stays visible as `plugin_read_failed`.
 
 Plugin reads are monitored independently of the selected HA measurement sources.
 Exceptions, suppressed partial failures, incomplete/invalid telemetry and missing
