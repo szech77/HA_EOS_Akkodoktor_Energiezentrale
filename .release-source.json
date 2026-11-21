@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/resume-after-connection-loss",
+  "channel": "beta",
+  "date": "2026-11-21",
+  "notes_sha256": "5590c0e1a6d5bd27db26de5eee0e6e634b76a0a373c6072b81d30574907666c7",
+  "source_changelog_sha256": "0558788bf9b57fc736f791016866b4f6ad3d0146cb18daccf465bffccf1291c5",
+  "source_commit": "ea9d1dceca215b9b8c4a8f7d5f56a81fe56d492a",
+  "version": "0.24.4b44911953898"
+}
