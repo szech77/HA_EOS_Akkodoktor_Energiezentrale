@@ -11,7 +11,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Keine.
+- Meldet ein Victron GX per Modbus, dass er das Gerät hinter der Unit-ID nicht erreicht (Ausnahme 10 „Gateway Path Unavailable“ oder 11 „Gateway Target Device Failed to Respond“), pausiert die Steuerung jetzt wie bei einem Verbindungsausfall und übernimmt automatisch wieder (bis zu 30 Minuten). Bisher galt das als Ablehnung durch das Gerät und schaltete die Steuerung dauerhaft aus, etwa als ein hängender Cerbo kurz nicht antwortete (Issue #33). Andere Modbus-Ablehnungen schalten die Steuerung weiterhin sofort aus.
 
 ### Breaking Changes
 
