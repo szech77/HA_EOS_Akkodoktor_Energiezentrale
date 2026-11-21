@@ -1,0 +1,9 @@
+{
+  "branch": "feature/single-phase-vehicle",
+  "channel": "beta",
+  "date": "2026-11-21",
+  "notes_sha256": "e012d2dd8d2969bce794c8fe2c63cf8ad052b99c6d58418486f51e453202f20a",
+  "source_changelog_sha256": "19f35a5bb6ff5ad196fc7cb4beed94db519633b073279e542f7c2e5989c70512",
+  "source_commit": "7d0e7a320588dfa9e30e8ea6cbd2122f4c45a0ca",
+  "version": "0.25.0b44931492664"
+}
