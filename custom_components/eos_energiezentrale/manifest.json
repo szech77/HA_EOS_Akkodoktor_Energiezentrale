@@ -21,5 +21,5 @@
   "requirements": [
     "holidays>=0.108"
   ],
-  "version": "0.0.0"
+  "version": "0.25.0"
 }
