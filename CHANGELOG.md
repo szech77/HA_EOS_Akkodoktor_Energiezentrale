@@ -12,6 +12,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Bugfixes
 
 - Mit einer Fahrzeugliste überträgt die Energiezentrale jetzt auch den Ladestand sowie die Lade- und Entladeleistung des gemeinsamen Speichers an den Messwertspeicher von EOS; bisher gingen nur die Fahrzeugwerte dorthin (Issue #33). Ohne Speicher-SoC rechnete EOS mit einem leeren Speicher und gab ihn nicht zur Entladung frei, sodass etwa ein Victron GX nachts dauerhaft mit Entladegrenze 0 (ESS #7) lief. Der Speicher wird einmal für die ganze Flotte gesendet.
+- Ein kurzer Verbindungsausfall zu Speicher oder Wallbox schaltet die Steuerung nicht mehr dauerhaft aus. Bisher deaktivierte eine Zeitüberschreitung beim Cerbo die Steuerung bis zum manuellen Einschalten, und der Speicher lief über Nacht ohne EOS-Vorgaben (Issue #33). Jetzt gibt die Energiezentrale die Geräte so weit wie möglich frei, zeigt den Hinweis „Gerät nicht erreichbar“ (`control_resume`) und übernimmt die zuvor gesteuerten Bereiche jede Minute wieder, erst mit gültigen Messwerten und EOS-Plan. Nach 30 Minuten ohne Verbindung bleibt die Steuerung wie bisher aus. Ablehnungen oder falsche Bestätigungen eines Geräts sowie ein manuelles Ausschalten beenden die Steuerung weiterhin sofort.
 
 ### Breaking Changes
 

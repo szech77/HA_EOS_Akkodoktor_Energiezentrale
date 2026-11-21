@@ -1,4 +1,6 @@
 """Structured failure reasons; never expose user values or raw responses."""
+import errno
+
 REASONS = frozenset({'unknown_fields', 'invalid_type', 'out_of_range', 'battery_bounds',
     'invalid_schedule', 'invalid_departure', 'invalid_departure_time', 'invalid_weekdays',
     'profile_invalid', 'profile_nonpositive_power', 'settings_unconfirmed',
@@ -35,3 +37,32 @@ class HardwareAPIError(OSError):
         super().__init__(message)
         self.reason = reason if reason in REASONS else 'device_api_error'
         self.fields = sorted(set(fields) & FIELDS)
+
+
+# Network errors of an unreachable device or service (connect, route, reset).
+_NETWORK_ERRNOS = frozenset(getattr(errno, name) for name in (
+    'ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN', 'EHOSTDOWN', 'ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT')
+    if hasattr(errno, name))
+
+
+def connection_lost(error):
+    """True when a device or service could not be reached: timeout, refused or dropped connection.
+
+    A device that answered with a refusal or a wrong confirmation (Modbus exception,
+    readback mismatch, invalid response) is not a connection loss, even if an earlier
+    timeout is part of the exception context.
+    """
+    for _ in range(6):
+        if not isinstance(error, BaseException):
+            return False
+        reason = getattr(error, 'reason', None)
+        if reason == 'connection_closed':
+            return True
+        if isinstance(reason, str) and reason in TRANSPORT_REASONS:
+            return False
+        if isinstance(error, (TimeoutError, ConnectionError)):
+            return True
+        if isinstance(error, OSError) and error.errno in _NETWORK_ERRNOS:
+            return True
+        error = reason if isinstance(reason, BaseException) else (error.__cause__ or error.__context__)
+    return False
