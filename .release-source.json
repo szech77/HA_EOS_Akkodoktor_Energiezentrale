@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/victron-supply-grace",
+  "channel": "beta",
+  "date": "2026-11-21",
+  "notes_sha256": "610c263084a73d7235ff41dea1d6be932698331d926a50bc8f4b800b848c2261",
+  "source_changelog_sha256": "da2db614bc1c0249caefbc22a43acad711fe48bfa7a6029d4c26151e367aedeb",
+  "source_commit": "3a160cca8a37689610f68b4ee2807a80bed15c08",
+  "version": "0.24.5b44923895698"
+}
