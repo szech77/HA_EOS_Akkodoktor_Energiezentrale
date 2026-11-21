@@ -7,11 +7,11 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Neue Option **Ladephasen des Fahrzeugs** (`max_phases`, 1 oder 3, Standard 3) für Fahrzeuge mit einphasigem Ladegerät, in den Grenzen und je Fahrzeug in der Fahrzeugliste. Bei `1` regelt die Energiezentrale eine Wallbox mit Phasenumschaltung fest einphasig, auch bei eingeschalteter Phasenautomatik und großem PV-Überschuss; bei einer Wallbox ohne Umschaltung rechnet sie Leistung und Strom für die eine Phase, die das Auto nutzt. Das Ladeprofil für EOS und die Anzeige der möglichen Ladeleistung enthalten nur einphasige Leistungen. Bisher meldete die Energiezentrale einem einphasigen Auto an einer dreiphasigen Wallbox bis zu dreifache Ladeleistung an EOS, sodass EOS zu kurze Ladezeiten plante, und PV-Überschuss wurde für drei Phasen berechnet (Issue #33).
+- Keine.
 
 ### Bugfixes
 
-- Keine.
+- Meldet ein Victron GX per Modbus, dass er das Gerät hinter der Unit-ID nicht erreicht (Ausnahme 10 „Gateway Path Unavailable“ oder 11 „Gateway Target Device Failed to Respond“), pausiert die Steuerung jetzt wie bei einem Verbindungsausfall und übernimmt automatisch wieder (bis zu 30 Minuten). Bisher galt das als Ablehnung durch das Gerät und schaltete die Steuerung dauerhaft aus, etwa als ein hängender Cerbo kurz nicht antwortete (Issue #33). Andere Modbus-Ablehnungen schalten die Steuerung weiterhin sofort aus.
 
 ### Breaking Changes
 
