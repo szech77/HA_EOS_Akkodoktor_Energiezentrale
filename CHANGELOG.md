@@ -7,11 +7,11 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Neue Option **Ladephasen des Fahrzeugs** (`max_phases`, 1 oder 3, Standard 3) für Fahrzeuge mit einphasigem Ladegerät, in den Grenzen und je Fahrzeug in der Fahrzeugliste. Bei `1` regelt die Energiezentrale eine Wallbox mit Phasenumschaltung fest einphasig, auch bei eingeschalteter Phasenautomatik und großem PV-Überschuss; bei einer Wallbox ohne Umschaltung rechnet sie Leistung und Strom für die eine Phase, die das Auto nutzt. Das Ladeprofil für EOS und die Anzeige der möglichen Ladeleistung enthalten nur einphasige Leistungen. Bisher meldete die Energiezentrale einem einphasigen Auto an einer dreiphasigen Wallbox bis zu dreifache Ladeleistung an EOS, sodass EOS zu kurze Ladezeiten plante, und PV-Überschuss wurde für drei Phasen berechnet (Issue #33).
+- Keine.
 
 ### Bugfixes
 
-- Keine.
+- Die Modbus-Plugins (Victron GX direkt, Fronius GEN24 direkt, Deye) halten jetzt eine TCP-Verbindung je Gerät offen, statt für jede Registerabfrage eine neue aufzubauen; eine vom Gerät geschlossene ruhende Verbindung wird einmal neu aufgebaut. Das Victron-Plugin braucht außerdem nur noch drei Abfragen pro Lesezyklus statt sieben bis neun: Verbrauch, Netz und aktiver AC-Eingang kommen in einem Block, Kennung und Firmware werden nur bei Verbindungsaufbau, nach Fehlern und alle fünf Minuten geprüft, ESS-Modus und Dynamic ESS vor der Steuerung nach Fehlern oder Neuverbinden und sonst einmal pro Minute. Der Netzbetrieb wird weiterhin bei jedem Regelbefehl frisch geprüft. Das entlastet den Modbus-Dienst des GX, den oft weitere Programme mitbenutzen und der bei vielen kurzen Verbindungen ins Stocken kommen kann (Issue #33).
 
 ### Breaking Changes
 

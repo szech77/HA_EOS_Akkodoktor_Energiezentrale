@@ -100,8 +100,9 @@ def test_legacy_firmware_requires_opt_in_before_all_control_paths_but_still_read
         assert not server.writes
         assert 'firmware_legacy_opt_in_required' in caplog.text
         assert driver.read({},NOW).soc==60
-        # A later firmware upgrade restores control without bypassing guards.
+        # A later firmware upgrade restores control without bypassing guards; the GX restarts for it.
         server.registers[834]=0x0350
+        driver.client.close()
         driver.apply(command('grid_charge',2000,0),{})
         assert target(server)==3000
 
