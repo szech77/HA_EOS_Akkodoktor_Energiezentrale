@@ -750,7 +750,8 @@ in jedem Zyklus, bis die Geräte sie bestätigen.
 Ein bewusst ausgeschalteter Schalter bleibt aus. Ein Regelfehler deaktiviert die
 Steuerung ebenfalls dauerhaft; zur Wiederaufnahme muss sie ausdrücklich aktiviert
 werden. Ausgenommen ist ein bloßer Verbindungsausfall: Ist ein Gerät nicht
-erreichbar (Zeitüberschreitung, abgewiesene oder abgebrochene Verbindung), gibt die
+erreichbar (Zeitüberschreitung, abgewiesene oder abgebrochene Verbindung, oder ein
+Modbus-Gateway wie der Victron GX meldet sein Zielgerät als nicht erreichbar), gibt die
 Energiezentrale die Geräte so weit wie möglich frei und pausiert die Steuerung
 (Hinweis `control_resume`). Jede Minute übernimmt sie die zuvor gesteuerten Bereiche
 wieder, und wie nach einem manuellen Einschalten erst mit gültigen Messwerten und
