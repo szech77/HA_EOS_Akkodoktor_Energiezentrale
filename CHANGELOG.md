@@ -11,7 +11,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Keine.
+- Die Modbus-Plugins (Victron GX direkt, Fronius GEN24 direkt, Deye) halten jetzt eine TCP-Verbindung je Gerät offen, statt für jede Registerabfrage eine neue aufzubauen; eine vom Gerät geschlossene ruhende Verbindung wird einmal neu aufgebaut. Das Victron-Plugin braucht außerdem nur noch drei Abfragen pro Lesezyklus statt sieben bis neun: Verbrauch, Netz und aktiver AC-Eingang kommen in einem Block, Kennung und Firmware werden nur bei Verbindungsaufbau, nach Fehlern und alle fünf Minuten geprüft, ESS-Modus und Dynamic ESS vor der Steuerung nach Fehlern oder Neuverbinden und sonst einmal pro Minute. Der Netzbetrieb wird weiterhin bei jedem Regelbefehl frisch geprüft. Das entlastet den Modbus-Dienst des GX, den oft weitere Programme mitbenutzen und der bei vielen kurzen Verbindungen ins Stocken kommen kann (Issue #33).
 
 ### Breaking Changes
 
