@@ -747,7 +747,15 @@ in jedem Zyklus, bis die Geräte sie bestätigen.
 
 Ein bewusst ausgeschalteter Schalter bleibt aus. Ein Regelfehler deaktiviert die
 Steuerung ebenfalls dauerhaft; zur Wiederaufnahme muss sie ausdrücklich aktiviert
-werden. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
+werden. Ausgenommen ist ein bloßer Verbindungsausfall: Ist ein Gerät nicht
+erreichbar (Zeitüberschreitung, abgewiesene oder abgebrochene Verbindung), gibt die
+Energiezentrale die Geräte so weit wie möglich frei und pausiert die Steuerung
+(Hinweis `control_resume`). Jede Minute übernimmt sie die zuvor gesteuerten Bereiche
+wieder, und wie nach einem manuellen Einschalten erst mit gültigen Messwerten und
+EOS-Plan. Hält der Ausfall länger als 30 Minuten an, schaltet sie die Steuerung wie
+bei jedem anderen Regelfehler dauerhaft aus. Antwortet ein Gerät dagegen mit einer
+Ablehnung oder einer falschen Bestätigung, bleibt es beim sofortigen Ausschalten.
+Ein manuelles Ein- oder Ausschalten beendet die automatische Wiederaufnahme. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
 Neustart aus, die übrigen alltäglichen Einstellungen bleiben erhalten.
 
 Beim ersten Update auf diese Funktion die Steuerung einmal aktivieren, damit die

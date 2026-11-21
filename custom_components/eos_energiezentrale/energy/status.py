@@ -15,7 +15,7 @@ from .failures import BackendError, PluginParameterError, HardwareAPIError, REAS
 
 ERROR_MESSAGES = {key: 'notice.' + key for key in (
     'eos', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
-    'battery_limits', 'vehicle_limits', 'eos_measurements', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection')}
+    'battery_limits', 'vehicle_limits', 'eos_measurements', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection', 'control_resume')}
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
 CONTROL_STATUSES = ('waiting', 'read_only', 'backup', 'power_supply_waiting', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
 BATTERY_LIMIT_STATUSES = ('failed', 'confirmed', 'pending', 'unmanaged')

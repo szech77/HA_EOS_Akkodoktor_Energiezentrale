@@ -56,6 +56,13 @@ einer Minute. Bietet EOS keine Mess-API, steht einmalig
 enthält unter `eos_measurements`, ob die API unterstützt wird, welche Schlüssel
 gesendet werden, welche fehlen und wann zuletzt gesendet wurde, ohne Messwerte.
 
+Ist ein Gerät während der Steuerung nicht erreichbar, erscheint statt `runtime`
+die Warnung `control_resume`: Die Steuerung ist pausiert und wird jede Minute
+wieder aufgenommen. Gelingt ein Regelzyklus, wird `control_resume` als behoben
+protokolliert. Nach 30 Minuten ohne Verbindung wird daraus der Fehler `runtime`,
+und die Steuerung bleibt aus. Eine nicht bestätigte Freigabe während des Ausfalls
+bleibt der Fehler `release`.
+
 Die Meldungskennung bleibt zwischen Anzeige, Log und Diagnosedaten gleich.
 `sources_unavailable` enthält beispielsweise den Messwerttyp `solar`, die Ursache
 `stale` und die erlaubte Höchstaltergrenze. EOS-Fehler enthalten nach Möglichkeit
@@ -156,6 +163,12 @@ and error events contain stable codes, exception/HTTP context and safe field nam
 they never include addresses, credentials, device names, measurements, targets or
 raw exception messages. Diagnostics retain the last 50 transitions in memory.
 INFO includes recovery/normal waiting; DEBUG adds bounded HTTP operation timings.
+
+A device that cannot be reached during control (timeout, refused or dropped
+connection) raises the warning `control_resume` instead of `runtime`: control is
+paused, not stored as switched off, and taken back every minute once readings and
+an EOS plan are valid. After 30 minutes it becomes the `runtime` error and control
+stays off. Refusals and wrong confirmations of a device still switch control off.
 
 Plugin reads are monitored independently of the selected HA measurement sources.
 Exceptions, suppressed partial failures, incomplete/invalid telemetry and missing

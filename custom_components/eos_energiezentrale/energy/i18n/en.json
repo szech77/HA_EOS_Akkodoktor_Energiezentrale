@@ -318,6 +318,7 @@
     "notice.eos": "EOS plan unavailable; check EOS readiness and its connection.",
     "notice.eos_cached": "EOS temporarily unavailable; the last valid plan is being used for up to five minutes.",
     "notice.accounting": "Consumption/cost accounting is temporarily unavailable.",
+    "notice.control_resume": "A device cannot be reached. Control is paused and resumes automatically once the connection is back; until then the device runs on its own.",
     "notice.runtime": "A device command failed; check the integration diagnostics and log.",
     "action.interface": "UI files",
     "weather.clear-night": "Clear night",

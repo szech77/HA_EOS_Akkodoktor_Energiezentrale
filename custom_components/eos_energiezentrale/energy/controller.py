@@ -19,6 +19,7 @@ from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
 from .vehicle_limits import charging_profile, optional_charger
 from .eos_measurements import MeasurementSync, device_samples
+from .failures import connection_lost
 from .status import failure_details
 from .pv_support import PVSupport
 from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
@@ -33,6 +34,12 @@ DOMAINS = ('battery', 'vehicle')
 
 # Longest EOS computation during which the last finished forecast stays on display.
 EOS_RUN_HOLD_S = 900
+
+
+# A device outage while control is active pauses control instead of switching it off:
+# control is taken back every CONNECTION_RETRY_S, at most for CONNECTION_GIVE_UP_S.
+CONNECTION_RETRY_S = 60
+CONNECTION_GIVE_UP_S = 1800
 
 
 class Controller:
@@ -52,6 +59,9 @@ class Controller:
         # A remembered intent may follow an unclean stop: devices can still hold
         # the last commands, so explicit OFF or a failed restore must release them.
         self.owned = self.armed
+        # Set while control is paused for an unreachable device: the areas to take back,
+        # since when and the next attempt ({'scope', 'since', 'retry'}).
+        self.connection_pause = None
         self.live = {}
         self.power_supply = None
         self.backup_paused = False
@@ -188,6 +198,7 @@ class Controller:
                     raise ValueError("Explicit boolean required for control setting")
                 if value and not self.controllable(domain):
                     raise ValueError("No controllable device for " + domain)
+            self.connection_pause = None
             scope = {domain: bool(self.scope.get(domain) if value is None else value) and self.controllable(domain)
                      for domain, value in requested.items()}
             if not any(scope.values()):
@@ -259,6 +270,8 @@ class Controller:
         with self.lock:
             if type(enabled) is not bool:
                 raise ValueError("Explicit boolean required for control setting")
+            # An explicit decision replaces an automatic resume after a device outage.
+            self.connection_pause = None
             if enabled:
                 if not any(self.controllable(domain) for domain in DOMAINS):
                     raise ValueError("No controllable device")
@@ -423,11 +436,16 @@ class Controller:
         while not self.stop_event.is_set():
             started = monotonic()
             with self.lock:
+                self.resume_after_connection(started)
                 try:
                     self.tick(datetime.now(timezone.utc), started)
                     self.errors.pop("runtime", None)
+                    if self.connection_restored():
+                        self.errors.pop("control_resume", None)
                 except Exception as error:
-                    self.record_failure("runtime", error)
+                    paused = self.pause_for_connection(error, started)
+                    self.errors.pop("control_resume" if not paused else "runtime", None)
+                    self.record_failure("control_resume" if paused else "runtime", error)
                     if self.armed and self.owned:
                         try:
                             self.release(self.ha.states(), datetime.now(timezone.utc))
@@ -435,10 +453,11 @@ class Controller:
                             self.errors["release"] = "Gerätefreigabe nicht bestätigt"
                     self.armed = False
                     self.restore_pending = False
-                    try:
-                        self.remember_control(False)
-                    except Exception:
-                        pass  # Persistence failure is exposed in errors.
+                    if not paused:
+                        try:
+                            self.remember_control(False)
+                        except Exception:
+                            pass  # Persistence failure is exposed in errors.
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
     def battery_group_capacity(self):
@@ -1127,6 +1146,46 @@ class Controller:
         return replace(command, min_soc=self.config.daily['battery_min_soc'] if minimum is None else minimum,
                        max_soc=self.config.daily['battery_max_soc'], net_demand_w=demand,
                        required_discharge_w=required)
+
+    def pause_for_connection(self, error, clock):
+        """Pause instead of switching control off when a device is only unreachable.
+
+        True while control was active and the outage is short enough to resume on its own;
+        False for any other failure, which keeps switching control off as before.
+        """
+        pause = self.connection_pause
+        if not connection_lost(error) or (pause is None and not self.armed):
+            self.connection_pause = None
+            return False
+        if pause is None:
+            # Only the areas that were controlled are taken back.
+            pause = self.connection_pause = {'scope': dict(self.scope), 'since': clock}
+        elif clock - pause['since'] >= CONNECTION_GIVE_UP_S:
+            self.connection_pause = None
+            return False
+        pause['retry'] = clock + CONNECTION_RETRY_S
+        return True
+
+    def resume_after_connection(self, clock):
+        """Take control back after a paused outage. Like a manual takeover, the restart
+        waits for valid readings and an EOS plan; a still unreachable device pauses again."""
+        pause = self.connection_pause
+        if pause is None or self.armed or clock < pause.get('retry', clock):
+            return False
+        scope = {domain: bool(pause['scope'].get(domain)) and self.controllable(domain) for domain in DOMAINS}
+        if not any(scope.values()):
+            self.connection_pause = None
+            return False
+        self.scope = scope
+        self.restore_pending = True
+        return True
+
+    def connection_restored(self):
+        """A control cycle after a resume succeeded: the outage is over."""
+        if self.connection_pause is None or not self.armed:
+            return False
+        self.connection_pause = None
+        return True
 
     def record_failure(self, area, error):
         self.errors[area] = type(error).__name__
