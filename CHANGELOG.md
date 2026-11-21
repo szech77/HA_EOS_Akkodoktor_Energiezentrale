@@ -1,9 +1,6 @@
 # Changelog
 
-Die CI erzeugt Version und Releasedatum. Neue Einträge stehen unter New Version;
-veröffentlichte Abschnitte werden in den Release-Tags archiviert.
-
-## New Version
+## 0.25.1 - 2026-11-21
 
 ### Features
 
@@ -12,6 +9,316 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Bugfixes
 
 - Meldet ein Victron GX per Modbus, dass er das Gerät hinter der Unit-ID nicht erreicht (Ausnahme 10 „Gateway Path Unavailable“ oder 11 „Gateway Target Device Failed to Respond“), pausiert die Steuerung jetzt wie bei einem Verbindungsausfall und übernimmt automatisch wieder (bis zu 30 Minuten). Bisher galt das als Ablehnung durch das Gerät und schaltete die Steuerung dauerhaft aus, etwa als ein hängender Cerbo kurz nicht antwortete (Issue #33). Andere Modbus-Ablehnungen schalten die Steuerung weiterhin sofort aus.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.25.0 - 2026-11-21
+
+### Features
+
+- Neue Option **Ladephasen des Fahrzeugs** (`max_phases`, 1 oder 3, Standard 3) für Fahrzeuge mit einphasigem Ladegerät, in den Grenzen und je Fahrzeug in der Fahrzeugliste. Bei `1` regelt die Energiezentrale eine Wallbox mit Phasenumschaltung fest einphasig, auch bei eingeschalteter Phasenautomatik und großem PV-Überschuss; bei einer Wallbox ohne Umschaltung rechnet sie Leistung und Strom für die eine Phase, die das Auto nutzt. Das Ladeprofil für EOS und die Anzeige der möglichen Ladeleistung enthalten nur einphasige Leistungen. Bisher meldete die Energiezentrale einem einphasigen Auto an einer dreiphasigen Wallbox bis zu dreifache Ladeleistung an EOS, sodass EOS zu kurze Ladezeiten plante, und PV-Überschuss wurde für drei Phasen berechnet (Issue #33).
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.24.5 - 2026-11-21
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Ein einzelner fehlgeschlagener Abruf des Victron GX (oder eines anderen Speichers, der den Netzstatus meldet) pausiert die Steuerung nicht mehr sofort als möglichen Notstrom. Bisher gab die Energiezentrale dann den Speicher frei und stoppte die Wallbox, sodass ein Auto mitten im Laden stehen blieb (Issue #33). Jetzt gilt der zuletzt bestätigte Netzbetrieb bis zu 60 Sekunden weiter; meldet das Gerät Notstrom oder einen anderen ausdrücklichen Status, oder ist es länger nicht lesbar, pausiert die Steuerung wie bisher. Eine laufende Pause endet weiterhin nur mit einer frischen Meldung des Netzbetriebs.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.24.4 - 2026-11-21
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Ein kurzer Verbindungsausfall zu Speicher oder Wallbox schaltet die Steuerung nicht mehr dauerhaft aus. Bisher deaktivierte eine Zeitüberschreitung beim Cerbo die Steuerung bis zum manuellen Einschalten, und der Speicher lief über Nacht ohne EOS-Vorgaben (Issue #33). Jetzt gibt die Energiezentrale die Geräte so weit wie möglich frei, zeigt den Hinweis „Gerät nicht erreichbar“ (`control_resume`) und übernimmt die zuvor gesteuerten Bereiche jede Minute wieder, erst mit gültigen Messwerten und EOS-Plan. Nach 30 Minuten ohne Verbindung bleibt die Steuerung wie bisher aus. Ablehnungen oder falsche Bestätigungen eines Geräts sowie ein manuelles Ausschalten beenden die Steuerung weiterhin sofort.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.24.3 - 2026-11-21
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Abhängigkeit `holidays` von 0.108 auf 0.109 aktualisiert (`requirements-test.txt`); automatisch erfasst.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.24.2 - 2026-11-20
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Mit einer Fahrzeugliste überträgt die Energiezentrale jetzt auch den Ladestand sowie die Lade- und Entladeleistung des gemeinsamen Speichers an den Messwertspeicher von EOS; bisher gingen nur die Fahrzeugwerte dorthin (Issue #33). Ohne Speicher-SoC rechnete EOS mit einem leeren Speicher und gab ihn nicht zur Entladung frei, sodass etwa ein Victron GX nachts dauerhaft mit Entladegrenze 0 (ESS #7) lief. Der Speicher wird einmal für die ganze Flotte gesendet.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.24.1 - 2026-11-20
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Victron GX direkt (Modbus TCP): Die Speichersteuerung brach ab, weil Venus OS einen geschriebenen Netzsollwert bzw. eine Entladegrenze quittiert, beim sofortigen Zurücklesen aber noch den alten Wert meldet (Issue #33). Das Plugin liest jetzt bis zu einer Sekunde lang alle 100 ms zurück und akzeptiert weiterhin nur den angeforderten Wert. Schlägt die Bestätigung fehl, nennen Hinweis, Log und Diagnosedaten die Ursache als feste Kennung (`reason`: z. B. `readback_mismatch` oder `not_acknowledged`); das gilt für alle Modbus-Plugins.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.24.0 - 2026-11-20
+
+### Features
+
+- Die Energiezentrale überträgt ihre gemessenen Werte automatisch an den Messwertspeicher von EOS: Ladestand (als Faktor 0–1) sowie Lade- und Entladeleistung des Speichers, Ladestand und Ladeleistung jedes Fahrzeugs. EOS nimmt den Start-Ladestand für die Optimierung aus diesen Messwerten und rechnete ohne eigenen Messeingang mit 0 % – etwa mit einer vollen Netzladung für ein fast volles Auto (Issue #33). Gesendet wird mindestens einmal pro Minute und bei einer SoC-Änderung ab einem Prozentpunkt sofort, nur für Schlüssel, die EOS anbietet, und nie ein Ersatzwert für einen fehlenden Messwert. Fehler erscheinen als Hinweis `eos_measurements`; die Diagnosedaten zeigen gesendete und in EOS fehlende Schlüssel. EOS-Versionen ohne Mess-API bleiben unverändert.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.23.0 - 2026-11-20
+
+### Features
+
+- Panel-Redesign, Teil 1: Ein Statusband auf jeder Seite zeigt den Steuerzustand mit Ursache, Folge und der passenden Aktion. „Steuerung übernehmen“ und „Steuerung zurückgeben“ werden direkt im Band bestätigt, statt über einen Browser-Dialog bzw. ohne Rückfrage; der Schalter liegt nicht mehr unten in den Einstellungen. Die bisher zu einem Absatz verketteten Meldungen erscheinen als eine Karte pro Hinweis, nach Schwere sortiert, mit Backend-Kennung, Zeitpunkt seit Auftreten und Link zur betroffenen Geräteseite; die neue Seite „Hinweise“ zeigt zusätzlich die in den letzten 24 Stunden behobenen Hinweise. Kurze Meldungen wie „Ladeziel“ oder „Gerätefreigabe“ sind ganze Sätze mit Folge und nächstem Schritt. Die Navigation enthält „Auto“ und „Hinweise“ mit Zähler und liegt auf dem Smartphone unten. Die Vorlage liegt unter `docs/redesign/`.
+- Panel-Redesign, Teil 2: Im Energiefluss stehen Name und Wert zentriert unter dem Symbol; die Knoten sitzen näher an der Mitte. Geräte mit offenem Hinweis tragen ein Warnzeichen; die Zuordnung von Hinweis zu Gerät bzw. Fahrzeug liefert das Backend (`node_problems`). Haus und Wärmepumpe öffnen ihre Verbrauchsauswertung, das EOS-Symbol die Gesamtbilanz; der Leistungsverlauf bleibt über einen Link erreichbar. Unter dem Energiefluss zeigt die Übersicht in voller Breite den EOS-Speicherplan der letzten 3 und nächsten 12 Stunden als bedienbaren Zeitstrahl sowie die einklappbare Liste „Was als Nächstes passiert“ (`plan_events`, mit Anzahl der Einträge; auf- oder zugeklappt merkt sich der Browser): Moduswechsel von Speicher und Fahrzeugen in Alltagssprache (Wechsel unter 30 Minuten werden ausgelassen; bei Speicherwechseln steht die Wirkung laut EOS-Prognose, z. B. „hält seinen Ladestand“ statt „lädt mit PV-Überschuss“ in der Nacht, der EOS-Modus steht darunter), der erwartete Zeitpunkt für vollen Speicher und erreichtes Ladeziel aus der EOS-Prognose, jeweils mit dem Netzstrompreis zu diesem Zeitpunkt. Sie ersetzt die Kacheln „Nächster EOS-Modus“. Eine vierte Kennzahl zeigt den Speicher-Ladestand.
+- Panel-Redesign, Teil 3: Die Einstellungen sind in die Bereiche Speicher, E-Auto, Kalender, Kosten und System gegliedert; Expertenwerte sowie Wirkungsgrade und Anfangspreis sind eingeklappt. Statt drei getrennter Speichern-Knöpfe erscheint nur bei ungespeicherten Änderungen eine Leiste mit Änderungszahl, „Verwerfen“ und „Speichern“, die alle Bereiche gemeinsam speichert. Abgelehnte Werte werden direkt am Feld markiert: Das Backend liefert dafür Grund und Feldnamen aus festen Listen (`translation_placeholders` der HA-Fehlermeldung, ohne eingegebene Werte); auch die Kosteneinstellungen melden ihre Fehler jetzt so. Ohne lokale Änderungen übernimmt das Formular Änderungen aus dem Backend, etwa über native Entitäten.
+- Panel-Redesign, Teil 4: Die Verbrauchsbilanz schreibt Einspeisung (bewertet mit der EOS-Einspeisevergütung bzw. dem manuellen PV-Kostenansatz) und Speicherladung (nach PV und Netz) stündlich mit. Der Bericht enthält eine im Backend berechnete Bilanz (`balance`) mit Verbrauch, Autarkie, Eigenverbrauchsquote, physischem Netzbezug, Ø-Netzstrompreis, Einspeisung und Vergütung, anteiligem Grundpreis, Ersparnis und Netto; netzgeladene Speicherenergie wird nicht doppelt gezählt. Neu unter Einstellungen › Kosten ist ein Grundpreis gesamt in €/Monat (Standard 0), der tageweise verteilt wird. Einspeisung wird ab diesem Update erfasst.
+- Panel-Redesign, Teil 5: Die Auswertungen sind neu aufgebaut. Chips wechseln zwischen Haus, Auto, Wärmepumpe, Netz & Einspeisung und Gesamt; Tag/Monat/Jahr mit ‹ › zum Blättern. Jede Auswertung zeigt eine Kernaussage, vier Kennzahlen, den Verlauf, Preise & Kosten, Herkunft bzw. „Wohin ging der PV-Strom?“ und „Was auffällt“; Kennzahlen, Ersparnis und auffällige Zeitabschnitte berechnet das Backend. Neu ist die Auswertung Netz & Einspeisung mit Bezug nach oben und Einspeisung nach unten, Grundpreis und Saldo; der Netz-Knoten im Energiefluss öffnet sie. Die Heute-Kacheln enthalten Einspeisung und Gesamtbilanz mit Netto. Das separate Kostendiagramm und die Datumswahl entfallen. Auf dem Smartphone sind die unteren Bereiche eingeklappt.
+- Panel-Redesign, Teil 6: Die Auto-Ansicht zeigt zuerst das Ziel (Ladestand-Ring, Abfahrt, fehlende Energie und was EOS plant). PV-Überschussladen, Schnellladen, Phasenautomatik und die Ladegrenzen speichern sofort. Neu ist der EOS-Ladeplan bis zur Abfahrt mit Ladestandskurve, Zeitstrahl (PV-Überschuss, Pause, Netzladen, Ziel erreicht), Abschnittsliste mit Leistung, Phasen, kWh, Preis und Kosten sowie einem Kostenvergleich mit sofortigem Laden. Das Backend berechnet die Abschnitte aus der EOS-Prognose (Netzstrom zum Intervallpreis, PV-Strom zur Einspeisevergütung) und den Zustand „überstimmt“ (Schnellladen), „ausgesetzt“ (Wallbox-Fehler), „nur Anzeige“ (Lesemodus) oder „nicht verbunden“. Abschnitte unter 10 Minuten zwischen zwei gleichartigen Abschnitten werden mit diesen zusammengefasst, ohne die kWh-Summen nach PV und Netz zu ändern. Ladeziele erscheinen als kompakte Zeilen; Bearbeiten öffnet die Details.
+- Panel-Redesign, Teil 7: Die neue Ansicht PV & Wetter ersetzt den Wetter-Dialog und öffnet sich über den PV-Knoten oder das Wettersymbol. Sie zeigt PV jetzt, heute erzeugt, Rest und morgen, das aktuelle Wetter mit Bewölkung und „PV jetzt ≈ x % der Prognose“, eine stündliche Leiste bis Ende morgen mit Wetter über dem erwarteten PV-Ertrag (Nachtstunden zusammengefasst) und Tageskarten für drei Tage ohne Spanne. „Was EOS daraus macht“ nennt weniger/mehr Sonne morgen, Speicher voll per PV, Netzladen des Speichers, Einspeisung und Fahrzeug-Netzladen; das Backend berechnet Stunden, Tage und diese Aussagen. Die Wetterabfrage liefert dafür die Bewölkung und reicht 72 statt 24 Stunden voraus. Die nicht mehr genutzte 24-Stunden-PV-Zusammenfassung des Dialogs entfällt.
+- Speicher und E-Auto-Laden lassen sich unter Einstellungen › System › Gerätesteuerung getrennt übernehmen und zurückgeben, jeweils mit Bestätigung im Panel; dazu gibt es die Schalter „Speichersteuerung“ und „E-Auto-Ladesteuerung“. Ein Bereich wird nur angeboten, wenn ein passendes steuerbares Gerät konfiguriert ist: ein Speicher-Plugin mit Lade- und Entladegrenzen (z. B. nicht Victron ohne aktivierte ESS-Steuerung) bzw. eine Wallbox. Ein nicht gesteuerter Bereich erhält keine Befehle; ohne Speichersteuerung entfällt die Speicherunterstützung beim PV-Laden. „Steuerung übernehmen“ im Statusband und der Schalter „Energiesteuerung“ schalten weiterhin alle steuerbaren Bereiche gemeinsam; die Bestätigung im Band nennt nur die vorhandenen bzw. gesteuerten Geräte, und bei nur einem gesteuerten Bereich sagt das Band, welcher es ist. Bestehende Freigaben gelten für alle steuerbaren Bereiche; die Auswahl wird zusätzlich in `control_scope.json` gespeichert, `control.json` behält ihr bisheriges Format für ältere Versionen.
+- Einstellungen › System enthält die Diagnose „Messquellen“: alle konfigurierten Quellen mit Quelle, aktuellem Zahlenwert, Alter und Status, die abgeleiteten Hausverbrauchswerte, die Energiebilanz mit Bilanzrest und erlaubter Abweichung sowie die Einzelwerte der Geräte (einschließlich Lade- und Entladeleistung je Speicher) und Fahrzeuge. Die Bilanzregel ist dieselbe wie in der Auswertung; ein großer Rest erklärt dort verbuchte „Unbekannt“-Anteile. Mit „Messwerte kopieren“ landen die Werte als Text in der Zwischenablage, mit „Messwerte exportieren“ als Textdatei für eine Analyse.
+- Ohne passende EOS-Fahrzeugprognose zeigt die lokale Schätzung jetzt auch die erwartete Ladeleistung in der Zukunft: 0 kW, solange keine Ladung zu erwarten ist (Fahrzeug getrennt, Ladeziel erreicht oder zu wenig PV-Überschuss), sonst die geschätzte PV-Überschussleistung. Neu ist die Schätzung beim Schnellladen mit maximaler Ladeleistung bis zum Ladeziel, samt SoC-Verlauf. Die Gesamtladeleistung mehrerer Fahrzeuge summiert diese Werte, sofern für alle Fahrzeuge ein Wert vorliegt. Geschätzt wird nur bei freigegebener E-Auto-Ladesteuerung; im Lesemodus wird der aktuelle SoC weiterhin fortgeschrieben. Die Schätzung bleibt reine Anzeige und fließt nicht in die Regelung ein.
+- Unter „Preise & Kosten“ wird der bisherige Posten „Eigenstrom“ aufgeschlüsselt in PV direkt, Speicher PV-geladen und Speicher netzgeladen, jeweils mit Energiemenge, Preis und Kosten. Netzgeladener Speicherstrom gilt damit nicht mehr als Eigenstrom. Der Speicher erfasst dafür ab diesem Update, welcher Anteil seines Inhalts aus PV bzw. dem Netz stammt; Speicherstrom aus der Zeit davor oder bei unvollständigen Messwerten steht als „Herkunft unbekannt“. Der Hinweis zur Ersparnis spricht von „PV- und Speicherstrom“.
+- Optionaler Reichweitensensor je Fahrzeug (`car_range_entity` bzw. `range_entity` in der Fahrzeugliste, km oder mi; bei genau einem Fahrzeug in der Liste gilt ohne eigenen Fahrzeugsensor der Sensor aus den Quellsensoren): Das Backend bildet aus Reichweite und gemessenem SoC (ab 10 %) das Verhältnis Kilometer je Prozent. Die Auto-Ansicht zeigt die aktuelle Reichweite (ohne aktuelle Fahrzeugmeldung aus dem SoC geschätzt), und PV-Ladeziel, Schnellladeziel und die Ladeziele haben je einen SoC-Schieberegler, der schon während des Verschiebens oder Eintippens SoC und erwartete Reichweite zeigt (z. B. „70 % · ≈ 294 km“). PV- und Schnellladeziel werden beim Loslassen gespeichert. Ohne gelerntes Verhältnis zeigt der Regler nur den SoC. Die Diagnose „Messquellen“ zeigt den Sensor. Regelung und Planung nutzen die Reichweite nicht.
+- Neue Auswertung **PV-Erzeugung**, erreichbar über den PV-Knoten im Energiefluss: Sie zeigt je Stunde, Tag oder Monat oberhalb der Nulllinie, wohin der PV-Strom fließt (Haus, E-Auto, Wärmepumpe, Akku laden, Netzeinspeisung), und darunter den Verbrauch, den PV nicht gedeckt hat, nach Herkunft (Akku PV-geladen, netzgeladen oder unbekannt, Netz, unbekannte Quelle). Dazu Eigenverbrauchsquote, Einspeisung und die EOS-Prognose für den Rest des Zeitraums als umrandete Balken. Die Tagesansicht in kW zeigt dieselbe Aufteilung als Flächen mit Prognoselinie und allen Werten am Mauszeiger. Das Backend liefert dafür `pv_flow` und `pv_gap` je Abschnitt, je Leistungspunkt und als Summe sowie `pv_forecast`. Das Wettersymbol öffnet weiterhin PV & Wetter.
+- Die Tagesansicht der Auswertungen bietet zusätzlich die Darstellung **kW**: den Leistungsverlauf über die Uhrzeit als farbig gefüllte, gestapelte Flächen je Energiequelle (bei Netz & Einspeisung Bezug nach oben, Einspeisung nach unten). Beim Überfahren mit der Maus oder Antippen zeigt eine Anzeige am Zeiger Uhrzeit, Gesamtleistung und Anteile. Das Backend berechnet den Verlauf aus den minütlichen Messwerten des lokalen Verlaufs mit derselben Aufteilung wie die Abrechnung, als 2-Minuten-Mittel, und liefert ihn im Tagesbericht als `power_profile`. Für Tage außerhalb des lokalen Verlaufs (etwa zwei Tage) zeigt kW die Stundenbalken. kWh und € bleiben Balken je Stunde mit Details zum angeklickten Balken; Monat und Jahr bieten kWh und €.
+- Die Auswertungen haben im Verlauf einen Umschalter **kWh / €** (in der Tagesansicht zusätzlich kW): Verbraucher und Gesamtbilanz zeigen dann die Kosten je Energiequelle, Netz & Einspeisung die Bezugskosten (einschließlich Speicherladung aus dem Netz) nach oben und die Einspeisevergütung nach unten. Die Bilanz liefert dafür je Zeitabschnitt `grid_import_eur`, `export_eur` und `cost_partial`. Die Auswahl merkt sich der Browser. Überlappende Achsenbeschriftungen bei sehr kleiner Einspeisung oder kleinem Bezug entfallen.
+- Die Titelleiste mit Logo und Navigation bleibt beim Scrollen oben sichtbar. Die Bereichsliste der Einstellungen und Sprungziele wie „Zum Ladeplan“ halten dabei Abstand zur Titelleiste; auf schmalen Bildschirmen bleibt die Navigation wie bisher unten.
+- Autarkie, Eigenversorgung, „aus eigener Erzeugung“ und „Bester Tag/Stunde/Monat“ zählen netzgeladenen Speicherstrom nicht mehr als eigene Versorgung, sondern nur PV-Direktstrom und Speicherstrom ohne Netzladung. Speicherstrom ohne erfasste Herkunft zählt wie bisher als eigene Versorgung. Die Ersparnis gegenüber Netzstrom bewertet weiterhin allen PV- und Speicherstrom.
+
+### Bugfixes
+
+- Victron GX direkt (Modbus TCP): Liest das Plugin Netzleistung und System-AC-Verbrauch, ergibt sich die angezeigte und abgerechnete Lade- bzw. Entladeleistung jetzt aus der AC-Bilanz des GX (PV + Netz − Verbrauch) statt aus der DC-Akkuleistung mit geschätztem Wirkungsgrad. Bisher landeten die tatsächlichen Wandlungsverluste beim Laden als Hausverbrauch, bei 5 kW Netzladung mehrere hundert Watt (Issue #33). Weicht die Bilanz um mehr als 500 W bzw. 25 % von der Näherung ab, etwa weil eine PV-Quelle nicht gelesen wird, gilt wie bisher die Näherung. Die Steuerung rechnet unverändert mit der Näherung; die Diagnose zeigt die verwendete Methode.
+- Während EOS einen neuen Plan berechnet, springen Diagramme und Plananzeigen nicht mehr auf einen Zwischenstand: Die EOS-Prognose wird in dieser Zeit nicht neu abgerufen, die zuletzt fertige bleibt sichtbar, und die neue wird direkt nach Ende der Berechnung geholt. Meldet EOS länger als 15 Minuten eine laufende Berechnung, gilt wieder der normale Abruf jede Minute.
+- Eine Neuinstallation startet ohne vorbelegte Quellsensoren. Bisher waren für PV, Hausverbrauch, Netz, Wärmepumpe, Strompreis und Fahrzeug-SoC Entitätsnamen einer Beispielanlage vorbelegt, die bei anderen Anlagen nicht existieren. Bestehende Installationen behalten ihre gespeicherte Zuordnung. README und DOCS zeigen neutrale Beispielnamen.
+- Energiefluss einheitlich gestaltet: PV hat ein Liniensymbol wie die übrigen Knoten statt eines Emojis, alle Knoten zeigen denselben Kreis in ihrer Farbe (bei vorhandener Referenz mit Auslastungsbogen), Erzeuger und Verbraucher stehen auf gleichen Höhen und die Leitungen laufen spiegelbildlich ins Zentrum. Auf schmalen Bildschirmen rücken die Spalten nach außen, damit die Darstellung die Breite nutzt.
+- Rechnet EOS gerade oder antwortet kurz nicht, zeigt das Statusband nicht mehr eine Warnung „EOS-Ersatzplan“, sondern wie im Normalbetrieb „Steuerung aktiv“. Dass bis zu fünf Minuten der letzte gültige Plan gilt und auf den neuen Plan gewartet wird, steht als Information im Text. Auch „EOS berechnet“ bzw. „Warte auf aktuellen EOS-Plan“ steht nicht mehr in der Überschrift, sondern im Text.
+- PV & Wetter flackert nicht mehr: Die Stundenleiste lud bei jeder Aktualisierung (alle 5 s) neu und war dabei kurz leer, weil sich die Rest-PV für heute und die E-Auto-Schätzung ständig ändern. Sie lädt jetzt nur bei geänderter PV-Prognose bzw. spätestens alle 15 Minuten neu und behält währenddessen die bisherige Anzeige. „Jetzt“ zeigt das aktuelle Wetter statt des Symbols für unbekanntes Wetter, wenn die stündliche Prognose erst mit der nächsten vollen Stunde beginnt.
+- Die Zeitstrahlen (EOS-Plan in der Übersicht, Lademodi in der Geräteansicht, Auto-Ladeplan) platzieren jeden Abschnitt nach seiner Zeit. Bisher reihte das Layout die Abschnitte aneinander und gab jedem einige Pixel Rand dazu; bei vielen kurzen EOS-Wechseln verschob sich der Plan dadurch vor die „Jetzt“-Linie. Verlauf und Plan werden zudem an der Messzeit des Snapshots getrennt, an der auch „Jetzt“ steht.
+- Die Verbrauchs- und Kostenbilanz fällt nicht mehr aus („vorübergehend nicht verfügbar“, PV heute „—“), wenn zuvor eine neuere Version zusätzliche Abrechnungseinstellungen wie den Grundpreis gespeichert hat. Solche Einstellungen werden beim Laden übersprungen und beim Speichern unverändert erhalten; unbekannte Eingaben aus dem Panel werden weiterhin abgelehnt.
+- Die Diagnose „Messquellen“ zeigt beim Fahrzeug-SoC den Wert des konfigurierten Sensors. Bisher stand dort bei mehreren Fahrzeugen bzw. Ladepunkten „—“, obwohl der Sensor einen gültigen Wert lieferte; eine SoC-Schätzung ersetzt den Sensorwert dort nicht.
+- Der Hausverbrauch folgt jetzt aus der Energiebilanz der Quellen (PV + Netz + Speicherentladung − Speicherladung) statt aus dem gemessenen Gesamtverbrauch. Dadurch entstehen in der Auswertung keine „Unbekannt“-Anteile mehr durch zeitversetzte Sensoren oder einen falsch messenden Zähler (z. B. Victron-GX-Verbrauch beim Entladen, Issue #33). Fahrzeug und Wärmepumpe werden in den Gesamtverbrauch eingepasst; melden sie nach einem Schaltvorgang noch den alten Wert, schätzt das Backend höchstens 120 Sekunden lang (befohlene Ladeleistung dieser Integration, Einbruch um den letzten Gerätewert, sonst anteilig). Kurz fehlende Werte werden gehalten, eine einzelne fehlende Quelle folgt aus dem gemessenen Hausverbrauch. Die Auswertung verbucht diese Anteile als geschätzt; Übersicht und lokaler Verlauf zeigen keine geschätzten Hausverbräuche, die Regelung nutzt weiter nur Messwerte. Der gemessene Hausverbrauch bleibt Rückfall und Kontrolle: Eine Abweichung über 15 Minuten wird einmalig als `house_total_deviation` protokolliert und in der Diagnose angezeigt. Im Notstrombetrieb gilt weiter die Wechselrichterleistung. „Unbekannt“ bleibt nur, wenn mehrere Quellen länger als 120 Sekunden fehlen.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.22.4 - 2026-11-20
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Release-Prozess: Patch- und Minor-Updates gepinnter Abhängigkeiten (`requirements-dev.txt`, `requirements-test.txt`, GitHub Actions) erhalten in den Release-Notes automatisch einen Eintrag, wenn kein eigener Stichpunkt sie nennt. Reine Dependabot-PRs scheitern damit nicht mehr an der Versionsplanung. Major-Updates und unlesbare Versionen verlangen weiterhin einen eigenen Eintrag.
+- Abhängigkeit `homeassistant` von 2026.11.1 auf 2026.11.2 aktualisiert (`requirements-test.txt`); automatisch erfasst.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.22.3 - 2026-11-18
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Einen nicht bestätigten Stopp einer nicht erreichbaren HA-Wallbox (Status unbekannt) als sichtbaren Fehler `wallbox_stop` melden und in jedem Zyklus wiederholen, statt die Steuerung dauerhaft auszuschalten. Bei unverfügbarer Ladefreigabe nur kurz auf die Bestätigung warten; eine bereits gemeldete Pause benötigt keine zusätzliche Abfrage. Erreichbare Wallboxen ohne Stoppbestätigung bleiben Steuerfehler.
+- Den ausdrücklich gemeldeten Netzbetrieb einer konfigurierten HA-Statusentität nicht mehr wegen eines alten Meldezeitpunkts als unbekannt pausieren. Nicht verfügbare oder unerwartete Zustände pausieren weiterhin; die Netzwiederkehr nach einer Pause verlangt weiterhin einen frischen Netzbetriebsstatus. Bei unbekanntem Status schalten gleichzeitige Lesefehler von Speicher oder Wallbox die Steuerung nicht mehr dauerhaft aus, auch im Mehrfahrzeugbetrieb.
+- Während der Wiederanlauf auf EOS oder Messwerte wartet, einen lesbaren Speicher auch bei noch nicht lesbarer Wallbox freigeben; die Wallbox wird freigegeben, sobald sie lesbar ist. Im Mehrfahrzeugbetrieb gibt ein noch wartendes Fahrzeug nur seine eigene Wallbox frei und pausiert keine bereits regelnde Wallbox mehr.
+- Nach dem Ausschalten fehlgeschlagene Gerätefreigaben in jedem Zyklus wiederholen, bis sie bestätigt sind.
+- Die Quelldiagnose bewertet den Fahrzeug-SoC mit derselben 36-Stunden-Grenze wie die Regelung, auch für Plugin-Werte.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Stoppbefehle der Plugins `nrgkick_local` und `goe_http_v2` auch dann senden, wenn eine abgebrochene Abfrage noch offen ist; dafür ist genau eine zusätzliche Anfrage reserviert. Ohne Bestätigung bleibt der Stopp ein Fehler.
+- EOS-, InfluxDB- und Fronius-Solar-API-Anfragen zusätzlich zur Inaktivitätsfrist von 5 s mit einer Gesamtfrist von 30 s je Anfrage begrenzen. Solange eine abgebrochene Anfrage an denselben Dienst offen ist, scheitern weitere Anfragen dorthin sofort; so können auch verspätet abgeschlossene Konfigurationsschreibvorgänge keine neueren überholen.
+
+## 0.22.2 - 2026-11-17
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Generische und HA-basierte NRGkick-Wallboxen melden einen Stopp nur noch als erfolgreich, wenn die Ladefreigabe `off` bestätigt. Bei nicht verfügbarer oder fehlender Freigabe-Entität den Stopp trotzdem anfordern; eine fehlende Bestätigung bleibt ein sichtbarer Steuerfehler, auch bei Sicherheitsstopps und beim Ausschalten.
+- Einen konfigurierten oder vom Gerät gemeldeten, aber nicht verfügbaren, veralteten oder fehlenden Netzbetriebsstatus wie Notstrom behandeln: Speicher und Wallboxen freigeben, keine neuen Regelbefehle senden und erst nach frischem Netzbetriebsstatus fortsetzen, auch beim Start und im Mehrfahrzeugbetrieb. Der gespeicherte Steuerungswunsch bleibt erhalten.
+- Nach einem Neustart mit gespeicherter Steuerfreigabe die Geräte als möglicherweise noch angesteuert behandeln. Ausschalten vor dem Wiederanlauf gibt Speicher und alle Wallboxen frei. Sind die Geräte lesbar, fehlen aber EOS-Plan oder Messwerte, werden sie während des Wartens freigegeben; fehlgeschlagene Freigaben bleiben sichtbar und werden wiederholt.
+- Fahrzeug-SoC-Werte, deren letzte Meldung mehr als 36 Stunden zurückliegt, nicht mehr als Regelgrundlage oder Startwert der SoC-Schätzung verwenden und nach fünf Minuten ohne gültigen Wert als nicht verfügbar melden.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Lokale HTTP-Anfragen der Plugins `nrgkick_local` und `goe_http_v2` zusätzlich zur Socket-Inaktivitätsfrist mit einer Gesamtfrist begrenzen (NRGkick 5 s, go-e Inaktivitätsfrist plus 2 s). Tröpfelnd gesendete Header oder Antworten können Abfragen, Ausschalten und das Entladen der Integration nicht mehr über die Regelungssperre blockieren; solange eine abgebrochene Anfrage offen ist, scheitern weitere Anfragen an dasselbe Gerät sofort als Gerätefehler.
+
+## 0.22.1 - 2026-11-17
+
+### Features
+
+- Keine.
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Semgrep CE 1.185.0 als zusätzlichen verpflichtenden Python-/JavaScript-Scanner im CI-Job `security` mit sieben versionierten, vor jedem Scan getesteten Projektregeln integrieren. Nur die native Engine aus dem exakt gepinnten offiziellen PyPI-Wheel nach Größen- und SHA-256-Prüfung verwenden; bestehende Scanner erhalten. Befunde mit stabilen Regel-IDs, CWE-Zuordnung, Priorität, Behebungshinweisen und Fundstellen über geschwärzte SARIF-Berichte in GitHub Code Scanning bewertbar machen. Rohcode, expandierte Variablen und private Inhalte nicht hochladen; `nosemgrep`-Unterdrückungen nicht akzeptieren. Unvollständige Scans, fehlgeschlagene Regeltests, kaputte Berichte, Scanner-, Installations- oder Uploadfehler blockieren. PyYAML 6.0.3 explizit als Entwicklungsabhängigkeit für den Regelkatalog aufnehmen.
+
+## 0.22.0 - 2026-11-17
+
+### Features
+
+- Security Policy für das melden von Verwundbarkeiten wurde hinzugefügt
+
+### Bugfixes
+
+- Keine.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.21.0 - 2026-11-17
+
+### Features
+
+- Im bestätigten Notstrombetrieb die frische, summierte AC-Ausgangsleistung der konfigurierten Wechselrichter als Gesamtverbrauch verwenden. Gemessene Wallbox- und Wärmepumpenleistungen weiter separat abziehen; ungültige oder veraltete AC-Werte nicht ersetzen und nach Netzwiederkehr die normale Verbrauchsquelle verwenden. Notstrom als nativen Home-Assistant-Binärsensor mit nicht verfügbarem Zustand bei unbestätigtem Status bereitstellen. E-Auto-Laden während der aktiven Notstrompause standardmäßig auch nach erneutem Start stoppen; manuelles Laden optional über die technischen Grenzen erlauben, während EOS pausiert bleibt.
+- Bestätigten Notstrom im Energieflussdiagramm zusätzlich mit einem roten Haus-/Blitz-Piktogramm am ausgegrauten Netzsymbol kennzeichnen. Bei Netzwiederkehr oder unbestätigtem Status das Piktogramm ausblenden.
+- Notstrombetrieb anhand bestätigter, aktueller Gerätestatus im Backend erkennen und im Panel anzeigen. Im Energiestrom-Diagramm das öffentliche Netz ausgrauen und dessen Flussanimation unterdrücken, ohne Messwerte umzuschreiben. Fronius automatisch über den zugehörigen HA-Notstromsensor oder beim direkten Modbus-Plugin ergänzend über die lokale Solar API erkennen; Victron GX über den Inselstatus und weitere Systeme über eine optionale HA-Statusquelle unterstützen. Unbekannte/veraltete Zustände, Speichergruppen, Rückkehr zum Netz und deduplizierte Backend-Meldungen berücksichtigen; Deutsch und Englisch ergänzen.
+- Beim Push auf Arbeitsbranches nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen bereits stabil veröffentlichte Stichpunkte aus `New Version` durch einen Bot-Commit entfernen und dessen Stand vollständig erneut prüfen. Neue Einträge und die vorhandene Historie erhalten; parallele Pushes nicht überschreiben. Die stabile Release-Historie auch nach bereinigten Quellständen zur Vermeidung doppelter Release-Einträge berücksichtigen.
+
+### Bugfixes
+
+- Stabile Releases nach einem Merge nach `main` trotz absichtlich übersprungener Branch-Changelog-Bereinigung veröffentlichen. Den Publish-Job mit einer expliziten Statusfunktion und erfolgreichem `required`-Ergebnis freigeben; bei fehlgeschlagenen/übersprungenen Pflichtprüfungen, Abbruch oder nicht vorgesehenem Auslöser weiterhin keine Veröffentlichung starten. Regression für stabile Releases und Beta-Branches ergänzen.
+- Bestätigten Notstrom als normalen Pausenzustand statt als Messwertfehler darstellen. Netz-/Hausmesswertwarnungen nur für erwartbare Ausfälle im bestätigten Notstrom unterdrücken; andere Fehler sichtbar lassen. Speicher und Wallboxen freigeben/pausieren, den Steuerungswunsch auch bei mehrtägigen Ausfällen erhalten und erst nach bestätigter Netzwiederkehr, gültigen Messwerten und gültigem Plan automatisch weiterregeln. Unbestätigte Freigaben und unbekannter Netzstatus verhindern den Wiederanlauf; manuelles Ausschalten bleibt bestehen. Auch mehrere Wallboxen berücksichtigen.
+- Bei aktivierter Fronius-Modbus-Notstromerkennung ein fehlendes Solar-API-Feld `BackupMode` als unbestätigten Status anzeigen und im Backend protokollieren. Die Statusquelle nicht mehr still als nicht unterstützt behandeln; Erkennung bei ausgefallenem Smart Meter durch Regressionstests absichern.
+- Die CI-Versionsplanung nach Squash-Merges oder Rebases auch für weitergeführte Branches mit identischem vollständigem stabilem Quellstand ermöglichen. Wirklich veraltete Branches weiterhin zurückweisen. Den Unterschied zwischen `New Version` im Quellbranch und nummeriertem Changelog im veröffentlichten Release-Tag dokumentieren.
+
+### Breaking Changes
+
+- Keine.
+
+### Security
+
+- Keine.
+
+## 0.20.0 - 2026-11-17
+
+### Features
+
+- Versionen aus den neuen Changelog-Einträgen automatisch berechnen. Arbeitsbranches nach erfolgreichen Pflichtprüfungen als Beta veröffentlichen; stabile Versionen ausschließlich auf main erzeugen. Versionsnummer, Datum und archiviertes Changelog in unveränderlichen Release-Snapshots generieren, ohne Bot-Push auf geschützte Branches.
+
+### Bugfixes
+
+- Keine.
 
 ### Breaking Changes
 
@@ -879,4 +1186,3 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Security
 
 - Keine.
-
