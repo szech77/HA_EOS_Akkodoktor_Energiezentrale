@@ -755,7 +755,14 @@ wieder, und wie nach einem manuellen Einschalten erst mit gültigen Messwerten u
 EOS-Plan. Hält der Ausfall länger als 30 Minuten an, schaltet sie die Steuerung wie
 bei jedem anderen Regelfehler dauerhaft aus. Antwortet ein Gerät dagegen mit einer
 Ablehnung oder einer falschen Bestätigung, bleibt es beim sofortigen Ausschalten.
-Ein manuelles Ein- oder Ausschalten beendet die automatische Wiederaufnahme. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
+Ein manuelles Ein- oder Ausschalten beendet die automatische Wiederaufnahme.
+
+Meldet der Speicher (etwa ein Victron GX) den Netzstatus selbst, pausiert ein einzelner
+fehlgeschlagener Abruf die Steuerung nicht mehr sofort als möglichen Notstrom: Der
+zuletzt bestätigte Netzbetrieb gilt bis zu 60 Sekunden weiter. Meldet das Gerät
+Notstrom oder einen anderen ausdrücklichen Status, oder ist es länger nicht lesbar,
+pausiert die Steuerung wie bisher. Eine bereits laufende Pause endet weiterhin nur
+mit einer frischen Meldung des Netzbetriebs. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
 Neustart aus, die übrigen alltäglichen Einstellungen bleiben erhalten.
 
 Beim ersten Update auf diese Funktion die Steuerung einmal aktivieren, damit die

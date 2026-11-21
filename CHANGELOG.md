@@ -11,7 +11,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Ein kurzer Verbindungsausfall zu Speicher oder Wallbox schaltet die Steuerung nicht mehr dauerhaft aus. Bisher deaktivierte eine Zeitüberschreitung beim Cerbo die Steuerung bis zum manuellen Einschalten, und der Speicher lief über Nacht ohne EOS-Vorgaben (Issue #33). Jetzt gibt die Energiezentrale die Geräte so weit wie möglich frei, zeigt den Hinweis „Gerät nicht erreichbar“ (`control_resume`) und übernimmt die zuvor gesteuerten Bereiche jede Minute wieder, erst mit gültigen Messwerten und EOS-Plan. Nach 30 Minuten ohne Verbindung bleibt die Steuerung wie bisher aus. Ablehnungen oder falsche Bestätigungen eines Geräts sowie ein manuelles Ausschalten beenden die Steuerung weiterhin sofort.
+- Ein einzelner fehlgeschlagener Abruf des Victron GX (oder eines anderen Speichers, der den Netzstatus meldet) pausiert die Steuerung nicht mehr sofort als möglichen Notstrom. Bisher gab die Energiezentrale dann den Speicher frei und stoppte die Wallbox, sodass ein Auto mitten im Laden stehen blieb (Issue #33). Jetzt gilt der zuletzt bestätigte Netzbetrieb bis zu 60 Sekunden weiter; meldet das Gerät Notstrom oder einen anderen ausdrücklichen Status, oder ist es länger nicht lesbar, pausiert die Steuerung wie bisher. Eine laufende Pause endet weiterhin nur mit einer frischen Meldung des Netzbetriebs.
 
 ### Breaking Changes
 

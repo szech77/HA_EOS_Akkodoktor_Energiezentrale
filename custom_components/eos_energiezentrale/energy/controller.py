@@ -25,7 +25,7 @@ from .pv_support import PVSupport
 from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
 from .eos_status import EOSRunStatus
 from .pv_availability import PVAvailability
-from .power_supply import configured_supply, requires_pause, supply_view
+from .power_supply import checked_supply, configured_supply, requires_pause, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
 
 # Independently enabled control areas: the storage and the vehicle charging.
@@ -40,6 +40,9 @@ EOS_RUN_HOLD_S = 900
 # control is taken back every CONNECTION_RETRY_S, at most for CONNECTION_GIVE_UP_S.
 CONNECTION_RETRY_S = 60
 CONNECTION_GIVE_UP_S = 1800
+# A storage device that briefly cannot be read keeps its last confirmed grid report
+# this long; a real backup report or a longer outage pauses control as before.
+SUPPLY_GRACE_S = 60
 
 
 class Controller:
@@ -64,6 +67,7 @@ class Controller:
         self.connection_pause = None
         self.live = {}
         self.power_supply = None
+        self.confirmed_grid = None
         self.backup_paused = False
         self.backup_pause_applied = False
         self.display = {}
@@ -373,6 +377,28 @@ class Controller:
         enable = ids.get("enable") if isinstance(ids, Mapping) else None
         switch = not enable or states.get(enable, {}).get("state") in {"on", "off"}
         return battery_ready, switch and box.status not in {"", "unknown", "unavailable"}, switch
+
+    def device_supply(self, reading, now):
+        """Power supply of the storage read, bridging a single failed read.
+
+        A failed or incomplete read reports an unknown status without a sample. While
+        control is not paused, the last confirmed grid report (with its own sample time)
+        stands in for up to SUPPLY_GRACE_S. An explicit report (backup, or an unknown
+        source with a sample) always counts, and a pause still needs a fresh grid report.
+        """
+        if reading is None:
+            return None
+        checked = checked_supply(reading, now)
+        if checked.mode == 'grid':
+            self.confirmed_grid = checked
+            return reading
+        failed_read = reading.mode == 'unknown' and reading.sample is None
+        last = self.confirmed_grid
+        if (failed_read and not self.backup_paused and last is not None
+                and 0 <= (now - last.sample).total_seconds() < SUPPLY_GRACE_S):
+            return last
+        self.confirmed_grid = None
+        return reading
 
     def pause_for_backup(self, states, now, box):
         """Retain user intent until fresh grid status and confirmed cleanup."""
@@ -841,7 +867,7 @@ class Controller:
             self.backup_paused = True
         battery = self.read_control_input(self.config.battery, states, now, 'battery_read')
         if not opts.get('backup_mode_entity') and battery.power_supply is not None:
-            self.power_supply = battery.power_supply
+            self.power_supply = self.device_supply(battery.power_supply, now)
         # Latch before other reads: a later missing status can never imply grid
         # recovery after backup or an unknown status has been observed.
         if requires_pause(self.power_supply, now, opts, states):
