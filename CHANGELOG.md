@@ -11,7 +11,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Ein einzelner fehlgeschlagener Abruf des Victron GX (oder eines anderen Speichers, der den Netzstatus meldet) pausiert die Steuerung nicht mehr sofort als möglichen Notstrom. Bisher gab die Energiezentrale dann den Speicher frei und stoppte die Wallbox, sodass ein Auto mitten im Laden stehen blieb (Issue #33). Jetzt gilt der zuletzt bestätigte Netzbetrieb bis zu 60 Sekunden weiter; meldet das Gerät Notstrom oder einen anderen ausdrücklichen Status, oder ist es länger nicht lesbar, pausiert die Steuerung wie bisher. Eine laufende Pause endet weiterhin nur mit einer frischen Meldung des Netzbetriebs.
+- Keine.
 
 ### Breaking Changes
 
