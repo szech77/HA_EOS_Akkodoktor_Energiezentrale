@@ -1,0 +1,9 @@
+{
+  "branch": "bugfix/modbus-gateway-unavailable",
+  "channel": "beta",
+  "date": "2026-11-21",
+  "notes_sha256": "cc3083d2a9660d900cb3b129190e2119984b266886ce7ce952284c3ab067bb50",
+  "source_changelog_sha256": "71c65ab5f93938493cbfe0bcb2b026b6009ae471cde5bd374dbeade57fd60fb6",
+  "source_commit": "6053c09e098bb13b150c2e9df0eefac760117aeb",
+  "version": "0.25.1b44934049985"
+}
