@@ -36,6 +36,7 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'allow_battery_export': False,
  'allow_backup_ev_charging': False,
  'max_current_a': 16,
+ 'max_phases': 3,
  'phase_wait_s': 60,
  'regulation_interval_s': 20,
  'influx_url': '',
@@ -68,6 +69,7 @@ GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_res
             'allow_battery_export',
             'allow_backup_ev_charging',
             'max_current_a',
+            'max_phases',
             'phase_wait_s',
             'regulation_interval_s'],
  'history': ['influx_url', 'influx_database', 'influx_user', 'influx_password', 'influx_password_env']}

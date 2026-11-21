@@ -838,6 +838,12 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored[0]['wallbox_type'],'nrgkick')
         self.assertEqual(stored[1]['wallbox_type'],'generic')
         self.assertEqual(stored[1]['range_entity'],'sensor.ev2_range')
+        # Without a submitted value the vehicle charges on up to three phases.
+        self.assertEqual([row['max_phases'] for row in stored],[3,3])
+        result=await flow.async_step_vehicle_parameters({'id':'third','name':'Single-phase EV','resource':'ev3','soc_entity':'sensor.ev3_soc',
+            'soc_scale':'factor','capacity_wh':40000,'charging_efficiency':.9,'max_current_a':16,'max_phases':1,'wallbox_parameters':params})
+        self.assertEqual(result['type'],'create_entry')
+        self.assertEqual(json.loads(result['data']['vehicles'])[-1]['max_phases'],1)
 
     async def test_generic_helpers_use_only_the_matching_home_assistant_services(self):
         seen=[]
