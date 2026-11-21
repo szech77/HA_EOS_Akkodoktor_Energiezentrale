@@ -1,0 +1,9 @@
+{
+  "branch": "feature/victron-modbus-efficiency",
+  "channel": "beta",
+  "date": "2026-11-21",
+  "notes_sha256": "767ee28ac214e9b4dd02398ae5036a72887bab42688c65654fd957c543c06057",
+  "source_changelog_sha256": "6458d480943b918fa3a8b31a4ab230d00fa516b308efe6b2856e573255e4a99e",
+  "source_commit": "624842826c17b6dee21747b99b44437440eeb405",
+  "version": "0.25.1b44936688218"
+}
