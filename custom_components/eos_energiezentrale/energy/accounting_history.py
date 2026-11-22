@@ -10,6 +10,7 @@ from datetime import datetime, time, timedelta, timezone
 from .accounting import Accounting, add, empty
 from .domain import house_only, instant, number
 from .accounting_estimates import MAX_GAP_SECONDS, interpolate, repair
+from .base_prices import dynamic_price_required
 
 
 def reconstruct(config, report, now, vehicle_configs=()):
@@ -23,7 +24,10 @@ def reconstruct(config, report, now, vehicle_configs=()):
     options = config.options
     power = [("W",1),("kW",1000)]
     sources = {key:(options[key+"_entity"], power) for key in ("pv","house","grid","heat")}
-    sources["price"] = (options["price_entity"],[("EUR/kWh",100),("ct/kWh",1),("€/kWh",100)])
+    first_day = start.astimezone(config.zone).date()
+    last_day = (end-timedelta(microseconds=1)).astimezone(config.zone).date()+timedelta(days=1)
+    if dynamic_price_required(report['settings'], first_day.isoformat(), last_day.isoformat()):
+        sources["price"] = (options["price_entity"],[("EUR/kWh",100),("ct/kWh",1),("€/kWh",100)])
     battery = getattr(config.battery,"ids",{})
     for key,entity in (("battery_charge","charge_power"),("battery_discharge","discharge_power")):
         sources[key] = (battery.get(entity,""),power)
@@ -51,6 +55,7 @@ def reconstruct(config, report, now, vehicle_configs=()):
                 if stamp is not None and number(value) is not None:
                     rows.setdefault(stamp,{})[key]=value
     model = object.__new__(Accounting)
+    model.zone = config.zone
     prices=sorted((stamp,row['price']) for stamp,row in rows.items() if number(row.get('price')) is not None)
     price_times=[stamp for stamp,_ in prices]
     model.settings = report["settings"]

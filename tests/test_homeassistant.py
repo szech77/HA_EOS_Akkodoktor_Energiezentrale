@@ -307,7 +307,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         app.config.zone = ZoneInfo("Europe/Berlin")
         app.config.influx.url = None
         app.controllers = []
+        coordinator.day_historical = {'old_tariff': True}
         await coordinator.async_accounting({"settings":{"pv_price_ct":8,"efficiency_source":"manual"}})
+        self.assertIsNone(coordinator.day_historical)
         report = await coordinator.async_accounting({"period":"month","date":"2026-11-09"})
         self.assertEqual(report["settings"]["pv_price_ct"],8)
         self.assertEqual(report["date"],"2026-11-01")

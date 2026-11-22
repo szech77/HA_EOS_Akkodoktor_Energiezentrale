@@ -241,7 +241,14 @@ export function createUsageText(host: Host, zone: () => string | undefined, vehi
     const row = (label: string, rate: string, value: string, sum = false): PriceRow => ({ label, rate, value, sum })
     const empty: PriceTable = { heading: null, rows: [], note: null }
     if (!balance && (key === 'pv' || key === 'grid')) return empty
-    const base = (b: Balance) => row(t('usage.base_price', { days: b.base_days }), t('usage.per_month', { value: money(b.base_price_eur_month ?? 0) }), money(b.base_eur ?? 0))
+    const base = (b: Balance): PriceRow[] => b.base_segments?.length
+      ? b.base_segments.map(segment => row(
+        `${t('usage.base_price', { days: segment.days })} · ${segment.start} – ${segment.end}`,
+        t(segment.period === 'day' ? 'usage.price_per_day' : 'usage.per_month', {
+          value: new Intl.NumberFormat(host.locale(), { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(segment.amount_eur),
+        }), money(segment.cost_eur)))
+      : [row(t('usage.base_price', { days: b.base_days }),
+        b.base_segments ? '—' : t('usage.per_month', { value: money(b.base_price_eur_month ?? 0) }), money(b.base_eur ?? 0))]
     const feed = (b: Balance) => row(t('usage.feed_in_credit', { energy: energy(b.export_kwh) }), price(b.feed_in_price_ct),
       isNumber(b.feed_in_price_ct) || b.export_kwh <= 0.0001 ? `−${money(b.export_eur ?? 0)}` : '—')
     if (key === 'pv' && balance) return { heading: null, rows: [feed(balance)], note: null }
@@ -251,14 +258,14 @@ export function createUsageText(host: Host, zone: () => string | undefined, vehi
         heading: t('usage.grid_price', { price: price(balance.grid_import_price_ct) }),
         rows: [
           row(t('usage.grid_import', { energy: energy(balance.grid_import_kwh) }), price(balance.grid_import_price_ct), moneyOr(balance.grid_import_cost_eur, approx)),
-          base(balance), feed(balance), row(t('usage.grid_balance'), '', moneyOr(balance.grid_balance_eur, approx), true),
+          ...base(balance), feed(balance), row(t('usage.grid_balance'), '', moneyOr(balance.grid_balance_eur, approx), true),
         ],
         note: (balance.storage_grid_kwh ?? 0) > 0.0001 ? t('usage.price_note_grid', { energy: energy(balance.storage_grid_kwh ?? 0) }) : null,
       }
     }
     if (!view) return empty
     const rows: PriceRow[] = [row(t('usage.grid_import', { energy: energy(view.grid_kwh ?? 0) }), price(view.grid_price_ct), moneyOr(view.grid_cost_eur, view.cost_partial))]
-    if (key === 'total' && balance) rows.push(base(balance))
+    if (key === 'total' && balance) rows.push(...base(balance))
     // Own power is split by origin; grid-charged storage is listed apart instead of as own power.
     const origin = view.self_origin
     if (origin) {

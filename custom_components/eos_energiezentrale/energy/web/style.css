@@ -92,6 +92,12 @@
   #eos-energy-design .fields label { display:grid; gap:4px; min-width:0; }
   #eos-energy-design .fields input,#eos-energy-design select { min-width:0; width:100%; font:inherit; padding:8px; border:1px solid var(--edge); border-radius:6px; background:var(--surface2); color:var(--ink); }
   #eos-energy-design fieldset { border:1px solid var(--edge); border-radius:6px; margin:0; }
+  #eos-energy-design [data-base-prices] { min-width:0; margin:1rem 0; padding:1rem; }
+  #eos-energy-design [data-base-prices].invalid { border-color:var(--crit); }
+  #eos-energy-design .base-price-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; align-items:start; border-bottom:1px solid var(--edge); padding-bottom:.75rem; margin:.75rem 0; }
+  #eos-energy-design .base-price-row label { display:grid; gap:.4rem; min-width:0; }
+  #eos-energy-design .base-price-row input { width:100%; min-width:0; font:inherit; padding:8px; border:1px solid var(--edge); border-radius:6px; background:var(--surface2); color:var(--ink); }
+  @media(max-width:700px) { #eos-energy-design .base-price-row { grid-template-columns:1fr; } }
   #eos-energy-design .checks,#eos-energy-design .form-footer { display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; }
   #eos-energy-design .checks label,#eos-energy-design .check { display:inline-flex; align-items:center; gap:4px; min-height:36px; }
   #eos-energy-design .form-footer { margin-top:12px; }

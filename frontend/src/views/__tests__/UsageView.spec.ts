@@ -61,6 +61,33 @@ function open(answer: (values: Record<string, unknown>) => unknown, options: { s
 }
 
 describe('report pages', () => {
+  it.each(['de', 'en'] as const)('show dated base fee segments with daily precision in total and grid reports (%s)', async code => {
+    const data = report({ period: 'month', date: '2026-11-01', end: '2026-12-01', base_start: '2026-11-01', base_days: 30,
+      settings: { base_price_eur_month: 999, base_price_history: [
+        { valid_from: '', period: 'month', amount_eur: 18.25 },
+        { valid_from: '2026-11-15', period: 'day', amount_eur: 0.123456789 },
+      ] }, consumers: { house: { total: amount(4, 1.2), bins: [] } } })
+    const page = open(() => data, { code })
+    for (const key of ['total', 'grid']) {
+      page.page.show(key)
+      await flush()
+      const table = page.page.store.text.prices(key, data)
+      const rows = table.rows.filter(row => row.label.includes('2026-11-'))
+      expect(rows).toHaveLength(2)
+      expect(rows[0]?.label).toContain('2026-11-01 – 2026-11-14')
+      expect(rows[1]?.label).toContain('2026-11-15 – 2026-11-30')
+      expect(rows[0]?.rate).toContain(code === 'de' ? '/Monat' : '/month')
+      expect(rows[1]?.rate).toContain(code === 'de' ? '0,123457' : '0.123457')
+      expect(rows[1]?.rate).toContain(code === 'de' ? '/Tag' : '/day')
+      expect(rows[0]?.value).toContain(code === 'de' ? '8,40' : '8.40')
+      expect(rows[1]?.value).toContain(code === 'de' ? '1,98' : '1.98')
+      expect(page.text('.usage-two')).not.toContain('999')
+    }
+    page.page.show('house')
+    await flush()
+    expect(page.page.store.text.prices('house', data).rows.some(row => row.label.includes('2026-11-'))).toBe(false)
+  })
+
   it('show total consumption for every period from backend totals, without ledger rows as consumers', async () => {
     for (const period of ['day', 'month', 'year'] as const) {
       const stamp = period === 'day' ? '2026-02-01T00:00:00+00:00' : period === 'month' ? '2026-02-01' : '2026-02'

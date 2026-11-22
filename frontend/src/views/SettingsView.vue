@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import BasePriceHistory from '@/components/settings/BasePriceHistory.vue'
 import Connections from '@/components/settings/Connections.vue'
 import ControlAreas from '@/components/settings/ControlAreas.vue'
 import SettingField from '@/components/settings/SettingField.vue'
@@ -64,6 +65,9 @@ const changes = computed(() => (dirty.value.length === 1 ? t('settings.one_chang
 
 const field = (name: string) => root.value?.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`) ?? null
 const readable = (name: string) => {
+  if (name === 'base_price_history') {
+    return Array.from(root.value?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-base-prices] input, [data-base-prices] select') ?? []).every(element => element.checkValidity())
+  }
   const element = field(name)
   return !element || element.disabled || element.checkValidity()
 }
@@ -152,9 +156,8 @@ const STATES = [['BW', 'Baden-Württemberg'], ['BY', 'Bayern'], ['BE', 'Berlin']
               </SettingField>
               <SettingField name="pv_price_ct" :label="t('billing.pv_price')"><input v-model="cost.pv_price_ct" name="pv_price_ct" type="number" min="-1000" max="1000" step="0.01" required :disabled="pvPriceLocked"></SettingField>
               <SettingField name="capacity_wh" :label="t('billing.capacity')"><input v-model="cost.capacity_wh" name="capacity_wh" type="number" min="100" max="1000000" step="1" required :disabled="capacityLocked"></SettingField>
-              <SettingField name="base_price_eur_month" :label="t('billing.base_price')"><input v-model="cost.base_price_eur_month" name="base_price_eur_month" type="number" min="0" max="1000" step="0.01" required></SettingField>
             </div>
-            <p class="footnote">{{ t('billing.base_price_note') }}</p>
+            <BasePriceHistory v-model="cost.base_price_history" :zone="snapshot.zone" />
             <p class="footnote">{{ costInfo ? pvEffective : '' }}</p>
             <details class="expert">
               <summary>{{ t('settings.cost_expert') }}</summary>

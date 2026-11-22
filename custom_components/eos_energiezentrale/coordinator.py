@@ -518,6 +518,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         raise ValueError("Unexpected settings fields")
                     ledger.configure(values["settings"])
                     self.accounting_revision += 1
+                    self.day_historical = None
                     return {"ok":True}
                 report = ledger.report(values, datetime.now(timezone.utc))
                 if report.get('period') == 'day':
@@ -557,7 +558,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         return self._accounting_result(merge_reconstruction(result,deepcopy(historical)))
 
     def _accounting_result(self, result):
-        if result['period'] == 'day' and result['date'] == datetime.now(self.app.config.zone).date().isoformat():
+        if (result['period'] == 'day' and result['date'] == datetime.now(self.app.config.zone).date().isoformat()
+                and (self.accounting is None or result['settings'] == self.accounting.settings)):
             self.day_historical = deepcopy(result)
         options = self.app.config.options
         consumers = ['house'] + (['heat'] if options.get('heat_entity') else []) + (['car'] if options.get('wallbox_type') != 'none' else [])

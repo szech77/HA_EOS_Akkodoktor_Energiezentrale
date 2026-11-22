@@ -1229,8 +1229,12 @@ Anfangspreis eingeklappt unter **Wirkungsgrade und Anfangspreis**):
 | Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
-| Grundpreis gesamt | €/Monat brutto, Summe aller festen Monatsbeträge. Wird tageweise (Monatsbetrag × 12 / 365) ab Aufzeichnungsbeginn bis heute verteilt und nur in Gesamtbilanz und Netz & Einspeisung ausgewiesen. Standard 0. |
+| Grundgebühr Netzbezug | Liste mit „Grundgebühr ab“, Betrag in € brutto und Abrechnung pro Monat oder Tag. Tarifwechsel sind rückwirkend und für die Zukunft möglich; je Kalendertag gilt der letzte Eintrag ab seinem Datum. Ein leerer Beginn übernimmt bestehende Monatswerte ab Aufzeichnungsbeginn. Vor dem ersten datierten Eintrag bzw. bei leerer Liste fällt keine Grundgebühr an. Monatsbetrag × 12 / 365 bzw. Tagesbetrag, ohne Zwischenrundung, ab Aufzeichnungsbeginn bis heute; nur Gesamtbilanz und Netz & Einspeisung. Tarifabschnitte werden getrennt ausgewiesen. Standard 0. |
+| Stromtarif / Arbeitspreis | Je Eintrag wahlweise dynamischer Preissensor (Standard) oder fester Brutto-Arbeitspreis in ct/kWh, mit demselben Gültigkeitsbeginn wie die Grundgebühr. Direkter Netzbezug und Netzladung des Speichers verwenden den Festpreis; für diesen Zeitraum ist zur Kostenbewertung kein Preissensor erforderlich. Rückwirkende Änderungen bewerten sowohl den aktuellen netzgeladenen Akkuinhalt als auch bereits entladene Netzanteile in vergangenen Auswertungen nach dem jeweiligen Ladetag und einschließlich der Speicherverluste neu. PV-Anteile und Energiemengen bleiben erhalten. Neue Buchungen speichern die Ladetage mit; bei älteren Stundenbuchungen sind Reihenfolge innerhalb der Stunde und damalige Wirkungsgrade nicht vollständig rekonstruierbar, daher ist deren Neubewertung eine gekennzeichnete Schätzung. Ohne rekonstruierbaren Ladetag wird kein später beginnender Tarif unterstellt; ein Eintrag ohne Beginn deckt auch diese Anteile ab. Die Messhistorie wird nicht überschrieben. Die EOS-Planung hat ihre eigene Tarifkonfiguration in EOS. |
 | Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer: Schätzung als PV-Ladung zum aktuellen PV-Kostenansatz einschließlich Ladeverlusten. |
+
+Bei der Grundgebühr werden auch mehr als fünf Nachkommastellen akzeptiert. Die Tarifanzeige
+rundet auf höchstens sechs Nachkommastellen; gespeichert und berechnet wird ohne diese Anzeigerundung.
 
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
 und `discharging_efficiency` gelesen. Dies verändert keine EOS-Konfiguration. Fehlen diese

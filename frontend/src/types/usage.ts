@@ -108,6 +108,7 @@ export interface Balance {
   readonly net_eur?: Num
   readonly base_days: number
   readonly base_price_eur_month?: number
+  readonly base_segments?: readonly (BasePrice & { readonly start: string; readonly end: string; readonly days: number; readonly cost_eur: number })[]
   readonly base_eur?: number
   readonly cost_partial?: boolean
   readonly bins?: readonly BalanceBin[]
@@ -155,9 +156,17 @@ export interface Report {
   readonly started?: string | null
 }
 
+export interface BasePrice {
+  readonly valid_from: string
+  readonly period: 'month' | 'day'
+  readonly amount_eur: number
+  readonly grid_price_source?: 'dynamic' | 'fixed'
+  readonly grid_price_ct?: number | null
+}
+
 /** Cost settings and their effective values (action "accounting" with period "day"). */
 export interface CostSettings {
-  readonly settings: Readonly<Record<string, string | number | null | undefined>>
+  readonly settings: Readonly<Record<string, string | number | readonly BasePrice[] | null | undefined>>
   readonly pv_price_ct?: Num
   readonly effective?: { readonly charge_efficiency: number; readonly discharge_efficiency: number; readonly capacity_wh: number } | null
 }

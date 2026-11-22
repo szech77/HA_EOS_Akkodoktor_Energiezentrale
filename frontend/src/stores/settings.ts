@@ -5,7 +5,7 @@
 import { computed, inject, reactive, ref, shallowRef, type ComputedRef, type InjectionKey, type Ref, type ShallowRef } from 'vue'
 import type { Host } from '@/types/host'
 import type { ControlKey, StatusSnapshot } from '@/types/status'
-import type { CostSettings } from '@/types/usage'
+import type { BasePrice, CostSettings } from '@/types/usage'
 import { RequestError } from '@/utils/bridge'
 import { isNumber } from '@/utils/format'
 
@@ -17,7 +17,7 @@ export const NUMBER_FIELDS = ['reserve_w', 'regulation_interval_s', 'battery_min
 export const SWITCH_FIELDS = ['battery_pv_support', 'battery_pv_start', 'holiday_catholic'] as const
 export const TEXT_FIELDS = ['holiday_state', 'holiday_locality'] as const
 export const DAILY_FIELDS: readonly string[] = [...NUMBER_FIELDS, ...SWITCH_FIELDS, ...TEXT_FIELDS]
-export const COST_FIELDS = ['pv_price_source', 'pv_price_ct', 'capacity_wh', 'base_price_eur_month', 'efficiency_source', 'charge_efficiency', 'discharge_efficiency', 'initial_price_ct'] as const
+export const COST_FIELDS = ['pv_price_source', 'pv_price_ct', 'capacity_wh', 'base_price_eur_month', 'base_price_history', 'efficiency_source', 'charge_efficiency', 'discharge_efficiency', 'initial_price_ct'] as const
 
 /** Section of each field, to show the first field the backend rejected. */
 const SECTION_OF: Readonly<Record<string, Section>> = {
@@ -122,8 +122,9 @@ export function createSettingsStore(
     const data = await host.request<CostSettings>('accounting', { period: 'day' })
     for (const name of COST_FIELDS) {
       const value = data.settings[name]
-      cost[name] = value ?? ''
+      if (name !== 'base_price_history') cost[name] = typeof value === 'number' || typeof value === 'string' ? value : ''
     }
+    cost['base_price_history'] = JSON.stringify(data.settings['base_price_history'] ?? [{ valid_from: '', period: 'month', amount_eur: data.settings['base_price_eur_month'] ?? 0 }])
     if (capacityLocked.value && isNumber(snapshot.value.battery_group?.capacity_wh)) cost['capacity_wh'] = snapshot.value.battery_group.capacity_wh
     cost['pv_price_source'] = typeof data.settings['pv_price_source'] === 'string' ? data.settings['pv_price_source'] : 'eos'
     // With the EOS price the field shows the price EOS currently supplies.
@@ -174,6 +175,10 @@ export function createSettingsStore(
   function costValues(): Record<string, unknown> {
     const values: Record<string, unknown> = {}
     for (const name of ['pv_price_ct', 'charge_efficiency', 'discharge_efficiency', 'capacity_wh', 'base_price_eur_month']) values[name] = number(cost[name] ?? '')
+    values['base_price_history'] = (JSON.parse(String(cost['base_price_history'] ?? '[]')) as BasePrice[]).map(row => ({
+      ...row, amount_eur: Number(row.amount_eur),
+      ...('grid_price_ct' in row ? { grid_price_ct: row.grid_price_ct == null || String(row.grid_price_ct) === '' ? null : Number(row.grid_price_ct) } : {}),
+    }))
     values['pv_price_source'] = String(cost['pv_price_source'] ?? 'eos')
     values['efficiency_source'] = String(cost['efficiency_source'] ?? 'eos')
     values['initial_price_ct'] = cost['initial_price_ct'] === '' || cost['initial_price_ct'] === undefined ? null : number(cost['initial_price_ct'])

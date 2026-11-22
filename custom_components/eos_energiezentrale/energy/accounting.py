@@ -14,10 +14,13 @@ from .domain import energy_balance, instant, number
 from .failures import BackendError
 from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, known_rate
 from .source_estimates import estimate_sources
+from .base_prices import checked_history, fixed_grid_price, reprice_grid
+from . import grid_inventory
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
             "charge_efficiency": .95, "discharge_efficiency": .95,
-            "capacity_wh": 11000.0, "initial_price_ct": None, "base_price_eur_month": 0.0}
+            "capacity_wh": 11000.0, "initial_price_ct": None, "base_price_eur_month": 0.0,
+            "base_price_history": None}
 SOURCES = ("pv", "battery", "grid", "unknown")
 # Ledger rows besides consumers: grid export valued with the feed-in tariff, battery charging by origin.
 EXPORT, STORAGE = "export", "storage"
@@ -35,6 +38,7 @@ def checked_settings(values):
     for key in ("pv_price_source", "efficiency_source"):
         if result[key] not in {"eos", "manual"}:
             raise BackendError("Invalid accounting source: " + key, reason='invalid_type', fields=(key,))
+    result['base_price_history'] = checked_history(result['base_price_history'])
     for key, low, high in (("pv_price_ct", -1000, 1000),
                            ("charge_efficiency", .1, 1), ("discharge_efficiency", .1, 1),
                            ("capacity_wh", 100, 1000000), ("initial_price_ct", -1000, 1000),
@@ -65,6 +69,11 @@ def add(target, source):
     for key in ORIGIN_FIELDS:
         target["sources"]["battery"][key] = (target["sources"]["battery"].get(key,0)
                                              + source["sources"]["battery"].get(key,0))
+    if source['sources']['battery'].get('grid_charges'):
+        grid_inventory.merge(target['sources']['battery'].setdefault('grid_charges', {}),
+                             source['sources']['battery']['grid_charges'])
+    if source['sources']['battery'].get('grid_charges_estimated'):
+        target['sources']['battery']['grid_charges_estimated'] = True
 
 
 class Accounting:
@@ -114,9 +123,49 @@ class Accounting:
         if not isinstance(values, dict):
             raise ValueError("Accounting settings must be an object")
         settings = checked_settings({**self.settings, **values})
+        stock = deepcopy(self.stock)
+        if stock is not None and settings['base_price_history'] != self.settings['base_price_history']:
+            self.ensure_grid_lots(stock, self.effective())
+            grid_inventory.revalue(stock, settings)
         with closing(self.connect()) as db, db:
             db.execute("INSERT OR REPLACE INTO meta VALUES ('settings',?)", (json.dumps({**getattr(self, 'foreign_settings', {}), **settings}),))
+            if stock is not None:
+                db.execute("INSERT OR REPLACE INTO meta VALUES ('stock',?)", (json.dumps(stock),))
         self.settings = settings
+        self.stock = stock
+
+    def ensure_grid_lots(self, stock, effective):
+        if 'grid_lots' in stock:
+            return
+        rows = []
+        if stock.get('grid_kwh', 0.) > 0 and hasattr(self, 'path'):
+            with closing(self.connect()) as db:
+                rows = [(hour, day, consumer, json.loads(payload)) for hour, day, consumer, payload in
+                        db.execute('SELECT hour,day,consumer,payload FROM energy ORDER BY hour,day,consumer')]
+        grid_inventory.recover(stock, rows, effective or self.settings)
+
+    def report_amount(self, hour, day, consumer, payload):
+        amount = json.loads(payload)
+        source = amount['sources']['battery']
+        untracked = source.get('grid_kwh', 0.) - sum(lot['kwh'] for lot in source.get('grid_charges', {}).values())
+        if (consumer not in (EXPORT, STORAGE) and untracked > 1e-9
+                and any(row.get('grid_price_source') == 'fixed' for row in self.settings.get('base_price_history') or [])):
+            effective = self.effective() or self.settings
+            key = (effective['charge_efficiency'], effective['discharge_efficiency'])
+            cached_key, cached = getattr(self, '_grid_history', (None, {}))
+            if key != cached_key:
+                with closing(self.connect()) as db:
+                    rows = [(stamp, date, name, json.loads(value)) for stamp, date, name, value in
+                            db.execute('SELECT hour,day,consumer,payload FROM energy ORDER BY hour,day,consumer')]
+                cached = {}
+                grid_inventory.legacy_lots(rows, effective, cached)
+                self._grid_history = (key, cached)
+            legacy = cached.get((hour, day, consumer))
+            if legacy is not None:
+                grid_inventory.merge(source.setdefault('grid_charges', {}), legacy['grid_charges'])
+                source['grid_cost_eur'] = source.get('grid_cost_eur', 0.) + legacy['origin_cost_correction']
+                source['grid_charges_estimated'] = True
+        return amount
 
     def refresh_eos(self, eos, resource, now):
         self.refresh_tariff(eos,now)
@@ -196,6 +245,7 @@ class Accounting:
         self.stock.setdefault('estimated',0.)
         rate=self.fallback_rate(row,effective)
         if rate is not None and self.stock['unknown']>0:
+            grid_inventory.value_unknown(self.stock, rate)
             self.stock['cost']+=self.stock['unknown']*rate
             self.stock['estimated']=min(self.stock['kwh'],self.stock['estimated']+self.stock['unknown'])
             self.stock['unknown']=0.
@@ -214,6 +264,7 @@ class Accounting:
         elif energy<self.stock['kwh'] and self.stock['kwh']>0:
             ratio=energy/self.stock['kwh']
             for key in ('cost','unknown','estimated',*STOCK_ORIGIN): self.stock[key]=self.stock.get(key,0)*ratio
+            grid_inventory.scale(self.stock, ratio)
             self.stock['kwh']=energy
         elif energy>self.stock['kwh']:
             self.stock['unknown']+=energy-self.stock['kwh']
@@ -256,7 +307,8 @@ class Accounting:
                         self.reconcile=False
                     self.value_unknown(previous[1],effective)
                     estimated=elapsed>120 or self.restored or any(number(previous[1].get(key)) is None
-                        for key in ('solar','grid','battery_charge','battery_discharge','house_total','price'))
+                        for key in ('solar','grid','battery_charge','battery_discharge','house_total'))
+                    estimated = estimated or self.grid_price(previous[1]) is None
                     estimated=estimated or any(number(previous[1].get('consumers',{}).get(key)) is None and number(value) is not None
                         for key,value in sample['consumers'].items() if key in previous[1].get('consumers',{}))
                     if elapsed>MAX_GAP_SECONDS:
@@ -293,7 +345,14 @@ class Accounting:
         self.previous=(now,sample)
         self.restored=False
 
+    def grid_price(self, row):
+        stamp = instant(row.get('time'))
+        fixed = fixed_grid_price(self.settings, stamp.astimezone(self.zone).date().isoformat()) if stamp else None
+        return fixed if fixed is not None else number(row.get('price'))
+
     def allocate(self, row, hours_per_thousand, effective):
+        if self.stock is not None:
+            self.ensure_grid_lots(self.stock, effective)
         def positive(key):
             value = number(row.get(key))
             return max(0, value) if value is not None else None
@@ -310,6 +369,7 @@ class Accounting:
         battery_rate, battery_unknown, battery_estimated = 0., 1., 0.
         # Per delivered kWh: the share from PV-/grid-charged stock and its cost.
         origin = dict.fromkeys(ORIGIN_FIELDS, 0.)
+        grid_charges = {}
         if discharge is not None and discharge > 0 and effective is not None and self.stock is not None:
             needed = discharge*hours_per_thousand/effective["discharge_efficiency"]
             available = min(needed, self.stock["kwh"])
@@ -329,6 +389,8 @@ class Accounting:
             battery_rate = cost/(discharge*hours_per_thousand)
             battery_unknown = min(1., unknown/needed)
             battery_estimated=min(1.,estimated/needed)
+            grid_charges = grid_inventory.withdrawals(self.stock, fraction, effective['discharge_efficiency'], delivered)
+            grid_inventory.scale(self.stock, 1-fraction)
             for key in ("kwh", "cost", "unknown", "estimated", *STOCK_ORIGIN):
                 self.stock[key] = self.stock.get(key,0)*(1-fraction)
         elif discharge is None or charge is None:
@@ -340,7 +402,7 @@ class Accounting:
             if rate is not None:
                 battery_rate=rate/effective['discharge_efficiency']
                 battery_unknown,battery_estimated=0.,1.
-        price = number(row.get("price"))  # live price is ct/kWh
+        price = self.grid_price(row)  # configured fixed tariff or live ct/kWh
         pv_price = self.pv_price(row.get("time"))
         rates = {"pv": pv_price/100 if pv_price is not None else 0., "grid": price/100 if price is not None else 0., "battery": battery_rate}
         unknowns = {"pv": 1. if pv_price is None else 0., "grid": 1. if price is None else 0., "battery": battery_unknown}
@@ -360,6 +422,9 @@ class Accounting:
                 amount["sources"][source] = {"kwh":part,"cost_eur":cost,"cost_unknown_kwh":unknown,'estimated_kwh':estimated}
                 if source == "battery":
                     amount["sources"][source].update({key: part*share for key, share in origin.items()})
+                    if grid_charges and part > 0:
+                        amount['sources'][source]['grid_charges'] = {}
+                        grid_inventory.merge(amount['sources'][source]['grid_charges'], grid_charges, part)
                 amount["cost_eur"] += cost
                 amount["cost_unknown_kwh"] += unknown
                 amount['estimated_kwh']+=estimated
@@ -404,6 +469,10 @@ class Accounting:
             for kind, share in (("pv", pv_ratio), ("grid", grid_ratio)):
                 self.stock[kind+"_kwh"] = self.stock.get(kind+"_kwh",0) + energy*effective["charge_efficiency"]*share
                 self.stock[kind+"_cost"] = self.stock.get(kind+"_cost",0) + energy*share*rates[kind]
+            stamp = instant(row.get('time'))
+            day = stamp.astimezone(self.zone).date().isoformat() if stamp else ''
+            grid_inventory.merge(self.stock.setdefault('grid_lots', {}), grid_inventory.charging_lot(
+                day, energy*grid_ratio, effective['charge_efficiency'], price))
             self.stock["unknown"] += energy*effective["charge_efficiency"]*min(1.,1-known_ratio+grid_ratio*unknowns["grid"]+pv_ratio*unknowns["pv"])
             if row.get('estimated'): self.stock['estimated']=min(self.stock['kwh'],self.stock.get('estimated',0)+energy*effective['charge_efficiency'])
             self.value_unknown(row,effective)
@@ -447,7 +516,7 @@ class Accounting:
         for hour, day, consumer, payload in rows:
             if consumer in (EXPORT, STORAGE):
                 continue
-            hourly.setdefault(consumer, []).append({**json.loads(payload), 'day':day,
+            hourly.setdefault(consumer, []).append({**self.report_amount(hour, day, consumer, payload), 'day':day,
                                                      'time':datetime.fromtimestamp(hour,timezone.utc).isoformat()})
         for amounts in hourly.values():
             estimate_sources(amounts)
@@ -461,6 +530,9 @@ class Accounting:
             amount = repaired.get((consumer,datetime.fromtimestamp(hour,timezone.utc).isoformat(),day))
             if amount is None:
                 amount = json.loads(payload)
+            if consumer != EXPORT:
+                reprice_grid(amount, fixed_grid_price(self.settings, day))
+                grid_inventory.reprice_battery(amount, self.settings)
             add(entry["total"],amount)
             add(entry["bins"].setdefault(key,empty()),amount)
         for entry in consumers.values():
@@ -480,6 +552,6 @@ class Accounting:
         last = min(end, today+timedelta(days=1))
         base_days = max(0, (last-first).days)
         return {"period":period,"date":start.isoformat(),"end":end.isoformat(),"hours":hours,"consumers":consumers,
-                "base_days":base_days,
+                "base_days":base_days,"base_start":first.isoformat(),
                 "started":self.started,"settings":self.settings,"effective":self.effective(),
                 "eos_error":self.eos_error,"pv_tariff":self.pv_tariff,"pv_price_ct":self.pv_price(now.isoformat()),"pv_error":self.pv_error,"stock":self.stock,"method":"proportional"}

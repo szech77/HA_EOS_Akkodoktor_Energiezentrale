@@ -168,14 +168,108 @@ describe('settings', () => {
     expect(text('[data-settings-section="costs"]')).toContain('96 % / 94 % · 11,06 kWh')
     await set('pv_price_source', 'manual')
     expect(input('pv_price_ct').disabled).toBe(false)
-    await set('base_price_eur_month', '14.5')
+    expect(input('base_price_amount_0').value).toBe('12')
+    expect(input('base_price_from_0').value).toBe('')
+    await set('base_price_amount_0', '14.5')
     await click('#savebar .btn.primary')
     expect(calls).toContainEqual(['accounting', { settings: {
-      pv_price_ct: 8.2, charge_efficiency: 0.95, discharge_efficiency: 0.95, capacity_wh: 20000, base_price_eur_month: 14.5,
+      pv_price_ct: 8.2, charge_efficiency: 0.95, discharge_efficiency: 0.95, capacity_wh: 20000, base_price_eur_month: 12,
+      base_price_history: [{ valid_from: '', period: 'month', amount_eur: 14.5 }],
       pv_price_source: 'manual', efficiency_source: 'eos', initial_price_ct: null,
     } }])
     expect(page.costsChanged.count).toBe(1)
     expect(calls.filter(([action, values]) => action === 'accounting' && values['period'] === 'day')).toHaveLength(2)
+  })
+
+  it.each(['de', 'en'] as const)('edit dated monthly and daily fees, reload and discard in %s', async code => {
+    let saved: Record<string, unknown> = { ...costs.settings }
+    const { input, set, click, calls, text, messages, $ } = open({}, { code, request: (action, values) => {
+      if (action === 'accounting' && values['settings']) saved = values['settings'] as Record<string, unknown>
+      return { ...costs, settings: saved }
+    } })
+    await flush()
+    await click('[data-section="costs"]')
+    expect(text('[data-base-prices] legend')).toBe(messages['billing.base_price_history'])
+    expect(input('base_price_period_0').value).toBe('month')
+    await click('[data-base-add]')
+    await set('base_price_from_1', '2026-10-15')
+    await set('base_price_period_1', 'day')
+    await set('base_price_amount_1', '0.12345')
+    expect(input('base_price_amount_1').checkValidity()).toBe(true)
+    await set('base_price_amount_1', '0.123456789')
+    expect(input('base_price_amount_1').checkValidity()).toBe(true)
+    await click('#savebar .btn.primary')
+    expect(saved['base_price_history']).toEqual([
+      { valid_from: '', period: 'month', amount_eur: 12 },
+      { valid_from: '2026-10-15', period: 'day', amount_eur: 0.123456789 },
+    ])
+    expect(input('base_price_amount_1').value).toBe('0.123456789')
+    expect($('#savebar')).toBeNull()
+    await set('base_price_amount_1', '-1')
+    const writes = () => calls.filter(([, values]) => values['settings']).length
+    await click('#savebar .btn.primary')
+    expect(writes()).toBe(1)
+    expect(text('.field-error')).toBe(messages['settings.error_input'])
+    await click('#savebar .btn.ghost')
+    expect(input('base_price_amount_1').value).toBe('0.123456789')
+    await click('[data-base-remove]')
+    await click('[data-base-remove]')
+    await click('#savebar .btn.primary')
+    expect(saved['base_price_history']).toEqual([])
+    expect($('[data-base-prices] input')).toBeNull()
+  })
+
+  it.each(['de', 'en'] as const)('save a dated fixed kWh price, reload, toggle and discard in %s', async code => {
+    let saved: Record<string, unknown> = { ...costs.settings }
+    const { $, input, set, click, calls, messages } = open({}, { code, request: (action, values) => {
+      if (action === 'accounting' && values['settings']) saved = values['settings'] as Record<string, unknown>
+      return { ...costs, settings: saved }
+    } })
+    await flush()
+    await click('[data-section="costs"]')
+    expect(input('grid_price_source_0').value).toBe('dynamic')
+    expect($('[name="grid_price_ct_0"]')).toBeNull()
+    await set('grid_price_source_0', 'fixed')
+    expect(input('grid_price_ct_0').closest('label')?.textContent).toContain(messages['billing.grid_price_ct'])
+    await click('#savebar .btn.primary')
+    expect(calls.some(([, values]) => values['settings'])).toBe(false)
+    await set('grid_price_ct_0', '29.1234')
+    await set('base_price_from_0', '2026-01-01')
+    await click('#savebar .btn.primary')
+    expect(saved['base_price_history']).toEqual([{
+      valid_from: '2026-01-01', period: 'month', amount_eur: 12, grid_price_source: 'fixed', grid_price_ct: 29.1234,
+    }])
+    expect(input('grid_price_ct_0').value).toBe('29.1234')
+    expect($('#savebar')).toBeNull()
+    await set('grid_price_ct_0', '30')
+    await click('#savebar .btn.ghost')
+    expect(input('grid_price_ct_0').value).toBe('29.1234')
+    await set('grid_price_source_0', 'dynamic')
+    expect($('[name="grid_price_ct_0"]')).toBeNull()
+    await set('grid_price_source_0', 'fixed')
+    expect(input('grid_price_ct_0').value).toBe('29.1234')
+    await set('grid_price_source_0', 'dynamic')
+    await click('#savebar .btn.primary')
+    expect(saved['base_price_history']).toEqual([{
+      valid_from: '2026-01-01', period: 'month', amount_eur: 12, grid_price_source: 'dynamic', grid_price_ct: 29.1234,
+    }])
+  })
+
+  it('show backend date errors on the tariff list and preserve edits', async () => {
+    const { click, set, $, text, messages } = open({}, { request: (action, values) => {
+      if (action === 'accounting' && values['settings']) throw new RequestError('invalid', 'invalid_settings', 'accounting', { fields: ['base_price_history'], reason: 'invalid_type' })
+      return costs
+    } })
+    await flush()
+    await click('[data-section="costs"]')
+    await click('[data-base-add]')
+    await set('base_price_from_1', '')
+    await click('#savebar .btn.primary')
+    expect(text('[data-base-prices] .field-error')).toBe(messages['settings.error_invalid_type'])
+    expect(document.activeElement?.getAttribute('name')).toBe('base_price_history')
+    expect($('#savebar')).not.toBeNull()
+    await set('base_price_from_1', '2026-11-01')
+    expect($('[data-base-prices] .field-error')).toBeNull()
   })
 })
 
