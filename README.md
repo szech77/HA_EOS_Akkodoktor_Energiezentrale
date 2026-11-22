@@ -947,11 +947,13 @@ cd frontend && npm ci && npm run typecheck && npm test && npm run build
 
 Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).
 
-Versionen vergibt die CI automatisch. Nach den erfolgreichen Prüfungen hält der
-Push-/Merge-Lauf vor der Veröffentlichung an: Unter **Actions → CI → Review
-deployments** die Umgebung **release** mit **Approve and deploy** freigeben oder
-mit **Reject** ohne Release beenden. Arbeitsbranches liefern nach Freigabe Betas,
-`main` stabile Releases. Einrichtung der erforderlichen Reviewer: [CI.md](CI.md).
+Versionen vergibt die CI automatisch. Nach den erfolgreichen Prüfungen wartet der
+Push-/Merge-Lauf auf deine Antwort im automatisch angelegten GitHub-Issue; der Link
+steht in der Zusammenfassung des Jobs **Decide whether to publish a release**.
+`szech77` antwortet als eigenen Kommentar exakt **ja** zum Veröffentlichen oder
+**nein** zum erfolgreichen Beenden ohne Release. Schließen oder 60 Minuten ohne
+Antwort überspringen ebenfalls. Arbeitsbranches liefern nach Freigabe Betas,
+`main` stabile Releases. Technische Fehler bleiben Fehler. Details: [CI.md](CI.md).
 Für Betas in HACS
 **Beta-Versionen anzeigen** aktivieren; der Release-Titel nennt den Branch.
 Für Beiträge genügt der Abschnitt **New Version** im [Changelog](CHANGELOG.md).

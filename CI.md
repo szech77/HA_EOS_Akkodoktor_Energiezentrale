@@ -110,47 +110,59 @@ schlägt die Bereinigung sichtbar fehl. `main`, Forks und Pull-Request-Läufe we
 nicht automatisch beschrieben.
 
 Pushes und Merges starten weiterhin alle Pflichtprüfungen. Nach **allen**
-erfolgreichen Pflichtprüfungen hält derselbe Lauf vor dem Publish-Job an und
-wartet auf die manuelle Freigabe der geschützten GitHub-Umgebung `release`.
-Ohne Freigabe starten weder der Release-Build noch die Veröffentlichung.
-Nach Bestätigung gelten folgende Kanäle:
+erfolgreichen Pflichtprüfungen wartet derselbe Lauf im Job `release_decision`
+auf eine Ja/Nein-Antwort im automatisch angelegten GitHub-Issue. Ohne ausdrückliches
+Ja starten weder der Release-Build noch die Veröffentlichung. Nach der Entscheidung
+gelten folgende Kanäle:
 
 | Auslöser im Originalrepository | Veröffentlichung |
 | --- | --- |
 | Push auf `feature/**`, `bug/**`, `bugfix/**`, danach Freigabe | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
 | Push/Merge nach `main`, danach Freigabe | `vX.Y.Z` als stabiles, neuestes Release |
-| Abgelehnte Freigabe | Kein Release; Publish-Job und Workflow werden als fehlgeschlagen markiert |
+| Nein, Schließen ohne Antwort oder 60 Minuten ohne Entscheidung | Kein Release; Entscheidung erfolgreich, Publish-Job übersprungen, Workflow grün |
 | Pull Request, Merge Queue, Fork, manueller Lauf, Bot-Folgeprüfung | Nur Prüfungen, keine Freigabeanfrage und keine Veröffentlichung |
 
-Im betreffenden Lauf unter **Actions → CI** erscheint nach den Prüfungen
-**Review deployments**. Die Umgebung **release** auswählen:
+Im betreffenden Lauf unter **Actions → CI → Decide whether to publish a release**
+steht der Issue-Link im Log und in der Job-Zusammenfassung. Das Issue nennt Branch,
+Kanal, vollständigen geprüften Quellcommit, Laufnummer und Versuch und wird
+`szech77` zugewiesen. Als **eigenen Kommentar** exakt antworten:
 
-- **Ja:** **Approve and deploy** setzt denselben Lauf fort und veröffentlicht.
-- **Nein:** **Reject** beendet den Publish-Job ohne Release. Die bereits grünen
-  Pflichtprüfungen bleiben erfolgreich; der gesamte Workflow gilt wegen der
-  Ablehnung als fehlgeschlagen. Das ist GitHubs vorgesehene Darstellung.
+- **`ja`** oder **`yes`**: Diesen geprüften Stand veröffentlichen.
+- **`nein`** oder **`no`**: Erfolgreich ohne Release abschließen.
 
-Die Freigabe gilt für den im Lauf angezeigten, geprüften Quellcommit. Ein neuer
-Push auf einen Arbeitsbranch kann einen älteren, noch wartenden Lauf entsprechend
-der bestehenden Concurrency-Regel abbrechen. Für weitere Teilfixes kann die Freigabe
-abgelehnt werden; der nächste Push startet wieder alle Prüfungen und fragt danach
-erneut. Der gewöhnliche Frontend-Build im Testjob bleibt Teil der Pflichtprüfungen.
-Siehe [GitHub: Deployments prüfen und freigeben](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments).
+Groß-/Kleinschreibung und umgebende Leerzeichen sind egal. Nur die erste eindeutige
+Antwort des konfigurierten menschlichen Freigebers zählt. Andere Benutzer, Bots,
+Zitate und Sätze wie „ich sage ja“ geben nichts frei. Ohne gültige Antwort bedeutet
+auch das Schließen des Issues „kein Release“. Das Skript fragt alle 15 Sekunden ab;
+nach 60 Minuten ohne Antwort endet es ebenfalls erfolgreich ohne Release. Der Job
+hat 65 Minuten einschließlich Einrichtung und Aufräumen und belegt beim Warten
+einen Runner. Fehler beim API-Zugriff, ungültige API-Antworten oder fehlgeschlagenes
+Aufräumen schlagen den Entscheidungsschritt fehl; sie werden nicht als Nein gewertet.
 
-Die Pause benötigt zusätzlich zur Workflow-Datei die Repository-Einstellung
-**Settings → Environments → release → Required reviewers** mit dem Freigeber
-`szech77`. **Prevent self-review** bleibt deaktiviert, damit derselbe Maintainer
-seine eigenen Push-Läufe freigeben kann. Eine Umgebung ohne Required reviewers
-würde automatisch fortfahren; die YAML-Datei allein erzwingt keine Pause.
-Die Umgebung muss deshalb vor Verwendung dieser Workflow-Version eingerichtet
-sein und bei einer Übernahme in ein anderes Repository erneut konfiguriert werden.
+`tools/release_approval.py` verwendet nur Python-Standardbibliothek und den
+vorhandenen GitHub-Client. Der Entscheidungsjob hat `contents: read` und
+`issues: write`, aber keine Schreibrechte auf Quellcode oder Releases. Das Issue
+wird in einem `always()`-Schritt auch nach Fehlern oder Abbruch geschlossen, soweit
+der Runner und die GitHub-API dies noch ausführen können. Jeder neue Versuch legt
+eine neue Anfrage an und übernimmt keine frühere Freigabe. Ein neuer Push auf einen
+Arbeitsbranch kann einen älteren wartenden Lauf nach der bestehenden Concurrency-Regel
+abbrechen. Der gewöhnliche Frontend-Build im Testjob bleibt Teil der Pflichtprüfungen.
 
-Der Publish-Job prüft ausdrücklich `!cancelled()` und ein erfolgreiches
-`needs.required.result` sowie das Push-Ereignis und die erlaubten Quellbranches.
+Die bisherige geschützte Umgebung `release` wird vom Workflow nicht mehr verwendet;
+ihre Repository-Einstellungen müssen nicht geändert werden. Es erscheint kein
+**Review deployments** mehr. GitHubs native Ablehnung würde weiterhin den Lauf
+fehlschlagen lassen; stattdessen ist Nein hier ein reguläres Skriptergebnis.
+Referenzen: [GitHub: Issue-Kommentare](https://docs.github.com/en/rest/issues/comments),
+[GitHub: Deployment-Ablehnung](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments).
+
+Der Publish-Job prüft ausdrücklich `!cancelled()`, ein erfolgreiches
+`needs.required.result`, einen erfolgreichen Entscheidungsjob und dessen Ausgabe
+`approved == 'true'` sowie Push-Ereignis, Originalrepository und erlaubte Quellbranches.
+Ohne Ja wird der Publish-Job übersprungen; echte Veröffentlichungsfehler bleiben rot.
 Das ist auch nach einem grünen Sammelstatus nötig:
 GitHubs implizites `success()` berücksichtigt übersprungene Vorgänger entlang
 der Abhängigkeitskette. Auf `main` ist die Branch-Changelog-Bereinigung absichtlich
-übersprungen; das darf die Freigabeanfrage und die anschließende stabile
+übersprungen; das darf die Issue-Anfrage und die anschließende stabile
 Veröffentlichung nicht überspringen. Die
 explizite Statusfunktion hebt nur diese implizite Sperre auf. Fehlgeschlagene,
 übersprungene oder abgebrochene Pflichtprüfungen geben keinen Release frei.

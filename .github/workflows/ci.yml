@@ -259,8 +259,8 @@ jobs:
             test "$CLEANUP" = skipped
           fi
 
-  publish:
-    name: Publish stable or beta HACS release
+  release_decision:
+    name: Decide whether to publish a release
     needs: required
     if: >-
       !cancelled() && needs.required.result == 'success' &&
@@ -269,10 +269,56 @@ jobs:
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') ||
       startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
     runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      approved: ${{ steps.decision.outputs.approved }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Create release decision issue
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: python tools/release_approval.py --repository "$REPOSITORY" --create-only
+      - name: Wait for yes or no from szech77
+        id: decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.request.outputs.issue_number }}
+        run: python tools/release_approval.py --repository "$REPOSITORY" --wait-for "$ISSUE_NUMBER"
+      - name: Close the decision issue
+        if: ${{ always() && steps.request.outputs.issue_number != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.request.outputs.issue_number }}
+        run: python tools/release_approval.py --repository "$REPOSITORY" --close "$ISSUE_NUMBER"
+
+  publish:
+    name: Publish stable or beta HACS release
+    needs: [required, release_decision]
+    if: >-
+      !cancelled() && needs.required.result == 'success' &&
+      needs.release_decision.result == 'success' && needs.release_decision.outputs.approved == 'true' &&
+      github.event_name == 'push' &&
+      github.repository == 'szech77/HA_EOS_Akkodoktor_Energiezentrale' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') ||
+      startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Required reviewers must also be configured in the repository environment.
-    environment:
-      name: release
     permissions:
       contents: write
     concurrency:
