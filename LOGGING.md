@@ -60,7 +60,8 @@ Ein einzelner fehlgeschlagener Abruf eines Speichers, der den Netzstatus selbst
 meldet, erzeugt `backup_power_unknown` erst, wenn der zuletzt bestätigte Netzbetrieb
 älter als 60 Sekunden ist; der Lesefehler bleibt als `plugin_read_failed` sichtbar.
 
-Ist ein Gerät während der Steuerung nicht erreichbar, erscheint statt `runtime`
+Ist ein Gerät während der Steuerung nicht erreichbar (auch Modbus-Ausnahme 10 oder 11
+eines Gateways wie des Victron GX), erscheint statt `runtime`
 die Warnung `control_resume`: Die Steuerung ist pausiert und wird jede Minute
 wieder aufgenommen. Gelingt ein Regelzyklus, wird `control_resume` als behoben
 protokolliert. Nach 30 Minuten ohne Verbindung wird daraus der Fehler `runtime`,
@@ -169,7 +170,7 @@ raw exception messages. Diagnostics retain the last 50 transitions in memory.
 INFO includes recovery/normal waiting; DEBUG adds bounded HTTP operation timings.
 
 A device that cannot be reached during control (timeout, refused or dropped
-connection) raises the warning `control_resume` instead of `runtime`: control is
+connection, or Modbus gateway exception 10/11) raises the warning `control_resume` instead of `runtime`: control is
 paused, not stored as switched off, and taken back every minute once readings and
 an EOS plan are valid. After 30 minutes it becomes the `runtime` error and control
 stays off. Refusals and wrong confirmations of a device still switch control off.

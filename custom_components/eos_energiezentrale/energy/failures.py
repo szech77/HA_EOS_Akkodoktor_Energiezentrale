@@ -45,18 +45,26 @@ _NETWORK_ERRNOS = frozenset(getattr(errno, name) for name in (
     if hasattr(errno, name))
 
 
-def connection_lost(error):
-    """True when a device or service could not be reached: timeout, refused or dropped connection.
+# Modbus exceptions of a gateway (e.g. Victron GX) whose target device is unreachable:
+# 10 gateway path unavailable, 11 gateway target device failed to respond.
+GATEWAY_UNREACHABLE = frozenset({10, 11})
 
-    A device that answered with a refusal or a wrong confirmation (Modbus exception,
-    readback mismatch, invalid response) is not a connection loss, even if an earlier
-    timeout is part of the exception context.
+
+def connection_lost(error):
+    """True when a device or service could not be reached: timeout, refused or dropped
+    connection, or a Modbus gateway that cannot reach its target device.
+
+    A device that answered with a refusal or a wrong confirmation (other Modbus
+    exceptions, readback mismatch, invalid response) is not a connection loss, even if
+    an earlier timeout is part of the exception context.
     """
     for _ in range(6):
         if not isinstance(error, BaseException):
             return False
         reason = getattr(error, 'reason', None)
         if reason == 'connection_closed':
+            return True
+        if reason == 'rejected' and getattr(error, 'exception_code', None) in GATEWAY_UNREACHABLE:
             return True
         if isinstance(reason, str) and reason in TRANSPORT_REASONS:
             return False
