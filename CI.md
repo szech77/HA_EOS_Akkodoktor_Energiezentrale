@@ -62,7 +62,8 @@ Einträge für das nächste stabile Release.
 Die Versionsplanung vergleicht außerdem die gepinnten Abhängigkeiten mit dem
 zuletzt stabil veröffentlichten Quellcommit: exakte Pins (`name==version`) in
 `requirements-dev.txt` und `requirements-test.txt`, exakte Versionen in
-`dependencies`/`devDependencies` von `frontend/package.json` sowie Actions mit vollständigem
+`dependencies`/`devDependencies` von `frontend/package.json` (auch npm-Aliase mit
+exakter Zielversion wie `npm:@typescript/typescript6@6.0.2`) sowie Actions mit vollständigem
 Commit-SHA und Versionskommentar (`uses: owner/action@<sha> # vX.Y.Z`) in
 `.github/workflows/*.yml`. Für jedes geänderte Patch- oder Minor-Update, das in
 keinem neuen Stichpunkt namentlich genannt ist, ergänzt sie in den Release-Notes
@@ -83,6 +84,8 @@ Major-Updates (geänderte erste Versionsstelle, bei Kalenderversionen wie
 stoppen die Versionsplanung, bis ein eigener Stichpunkt die Abhängigkeit nennt
 und die geprüfte Auswirkung beschreibt. Neu hinzugefügte oder entfernte
 Abhängigkeiten werden nicht automatisch erfasst.
+Bei npm-Alias-Updates steht der Aliasname mit der Zielversion im Eintrag;
+Versionsbereiche und Tags bleiben von der automatischen Erkennung ausgeschlossen.
 
 Bei einem Push auf `feature/**`, `bug/**` oder `bugfix/**` entfernt die CI im
 Originalrepository bereits stabil veröffentlichte Stichpunkte aus `New Version`.
