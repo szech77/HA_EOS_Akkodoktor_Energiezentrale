@@ -13,6 +13,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from .domain import energy_balance, instant, number
 from .failures import BackendError
 from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, known_rate
+from .source_estimates import estimate_sources
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
             "charge_efficiency": .95, "discharge_efficiency": .95,
@@ -437,13 +438,29 @@ class Accounting:
             raise ValueError("Report date outside supported range")
         start = selected if period=="day" else selected.replace(day=1) if period=="month" else selected.replace(month=1,day=1)
         end = start+timedelta(days=1) if period=="day" else start+timedelta(days=calendar.monthrange(start.year,start.month)[1]) if period=="month" else start.replace(year=start.year+1)
+        first_hour = int(datetime.combine(start,time(),self.zone).timestamp())
+        last_hour = int(datetime.combine(end,time(),self.zone).timestamp())
         with closing(self.connect()) as db:
-            rows = db.execute("SELECT hour,day,consumer,payload FROM energy WHERE day>=? AND day<? ORDER BY hour", (start.isoformat(),end.isoformat())).fetchall()
+            rows = db.execute("SELECT hour,day,consumer,payload FROM energy WHERE hour>=? AND hour<? ORDER BY hour",
+                              (first_hour//3600*3600-MAX_GAP_SECONDS,last_hour+MAX_GAP_SECONDS)).fetchall()
+        hourly = {}
+        for hour, day, consumer, payload in rows:
+            if consumer in (EXPORT, STORAGE):
+                continue
+            hourly.setdefault(consumer, []).append({**json.loads(payload), 'day':day,
+                                                     'time':datetime.fromtimestamp(hour,timezone.utc).isoformat()})
+        for amounts in hourly.values():
+            estimate_sources(amounts)
+        repaired = {(consumer,amount['time'],amount['day']):amount for consumer,amounts in hourly.items() for amount in amounts}
         consumers = {}
         for hour, day, consumer, payload in rows:
+            if not start.isoformat() <= day < end.isoformat():
+                continue
             entry = consumers.setdefault(consumer, {"total":empty(),"bins":{}})
             key = datetime.fromtimestamp(hour,timezone.utc).isoformat() if period=="day" else day if period=="month" else day[:7]
-            amount = json.loads(payload)
+            amount = repaired.get((consumer,datetime.fromtimestamp(hour,timezone.utc).isoformat(),day))
+            if amount is None:
+                amount = json.loads(payload)
             add(entry["total"],amount)
             add(entry["bins"].setdefault(key,empty()),amount)
         for entry in consumers.values():

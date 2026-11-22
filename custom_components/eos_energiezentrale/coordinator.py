@@ -1,7 +1,7 @@
 """Serialize all controller work outside Home Assistant's event loop."""
 import asyncio
 from copy import copy, deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 import logging
 import sqlite3
@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .energy.history import influx_series
 from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
+from .energy.accounting_estimates import MAX_GAP_SECONDS
 from .energy.clients import ENTITY
 from .energy.controller import Controller
 from .energy.domain import instant, next_departure
@@ -513,7 +514,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     # The power profile of the day from the local minute history (about two days).
                     zone = self.app.config.options['timezone']
                     start, end = day_bounds(report['date'], zone)
-                    report['power_profile'] = power_profile(self.app.history.read_range(start, end), report['date'], zone,
+                    margin = timedelta(seconds=MAX_GAP_SECONDS)
+                    report['power_profile'] = power_profile(self.app.history.read_range(start-margin, end+margin), report['date'], zone,
                                                             origin=battery_origin(report))
                 if report.get('period') in {'day', 'month', 'year'}:
                     # The PV report's forecast for the rest of the period, from the current EOS forecast.

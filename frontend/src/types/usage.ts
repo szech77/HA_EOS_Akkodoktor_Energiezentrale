@@ -118,6 +118,7 @@ export interface Balance {
 
 export interface ProfilePoint {
   readonly time: string
+  readonly source_estimated?: boolean
   readonly solar?: Num
   readonly grid?: { readonly import?: Num; readonly export?: Num }
   readonly pv_flow?: Readonly<Partial<Record<PvFlowKey, number>>>

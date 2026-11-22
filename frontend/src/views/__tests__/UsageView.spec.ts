@@ -165,6 +165,9 @@ describe('report pages', () => {
     const readout = page.page.store.charts.readout(day.power_profile!.points[0]!, 'house')
     expect(readout.title).toMatch(/2 kW$/)
     expect(readout.lines.map(([label, value]) => [label, value])).toEqual([[de['billing.pv'], '1,5 kW'], [de['billing.grid'], '0,5 kW']])
+    const estimated = page.page.store.charts.readout({ ...day.power_profile!.points[0]!, source_estimated: true }, 'house')
+    expect(estimated.title).toBe(readout.title)
+    expect(estimated.lines.map(([, value]) => value)).toEqual(['≈ 1,5 kW', '≈ 0,5 kW'])
     expect(page.page.store.charts.readout(day.power_profile!.points[2]!, 'grid').lines.map(([label, value]) => [label, value])).toEqual([[de['usage.import'], '2 kW'], [de['usage.feed_in'], '0 kW']])
     // Costs stay bars on the day view as well.
     page.page.store.selectUnit('eur')

@@ -391,7 +391,7 @@ export function createUsageCharts(text: UsageText, host: { readonly t: (key: str
     if (key === 'pv') {
       const measured = isNumber(point.solar)
       const watts = <K extends string>(values: Readonly<Partial<Record<K, number>>> | undefined, names: readonly (readonly [K, string])[], prefix: string): [string, string, string][] =>
-        measured ? names.filter(([name]) => (values?.[name] ?? 0) > 5).map(([name, color]) => [t(prefix + name), kw(values?.[name]), color]) : []
+        measured ? names.filter(([name]) => (values?.[name] ?? 0) > 5).map(([name, color]) => [t(prefix + name), `${point.source_estimated ? '≈ ' : ''}${kw(values?.[name])}`, color]) : []
       return {
         title: measured ? `${stamp} · PV ${kw(point.solar)}` : stamp,
         lines: [...watts(point.pv_flow, PV_FLOWS, 'usage.pv_to_'), ...watts(point.pv_gap, PV_GAPS, 'usage.pv_gap_'),
@@ -402,7 +402,7 @@ export function createUsageCharts(text: UsageText, host: { readonly t: (key: str
     const total = Object.values(values).reduce((sum, value) => sum + (value ?? 0), 0)
     return {
       title: `${stamp} · ${kw(total)}`,
-      lines: (Object.entries(SOURCE_COLORS) as [Source, string][]).filter(([source]) => (values[source] ?? 0) > 0).map(([source, color]) => [t(`billing.${source}`), kw(values[source]), color]),
+      lines: (Object.entries(SOURCE_COLORS) as [Source, string][]).filter(([source]) => (values[source] ?? 0) > 0).map(([source, color]) => [t(`billing.${source}`), `${point.source_estimated ? '≈ ' : ''}${kw(values[source])}`, color]),
     }
   }
 

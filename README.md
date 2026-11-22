@@ -1223,6 +1223,30 @@ in der Leistungsbilanz erscheinen als unbekannte Quelle. Die Berechnung setzt di
 Leistungen als Werte auf derselben AC-Bilanzgrenze voraus; abweichende DC-Speichermessungen
 führen zu zusätzlichen Modellabweichungen.
 
+Unbekannte Herkunft ergänzt die Auswertung nachträglich aus den bekannten
+Quellenanteilen davor und danach: Die Anteile von PV, Akku und Netz werden nach
+Zeitabstand linear interpoliert und auf den unveränderten unbekannten Verbrauch
+verteilt. Die beiden Stützpunkte dürfen höchstens sechs Stunden auseinanderliegen;
+ohne beidseitige Grundlage bleibt die Herkunft unbekannt. Bereits bekannte Anteile
+werden erhalten. Im kW-Diagramm erfolgt dies vor der Zwei-Minuten-Zusammenfassung
+an den vorhandenen Messpunkten; fehlende Messpunkte und Lücken werden nicht ergänzt.
+Geschätzte Quellenleistungen tragen im Tooltip **≈**. Die Stützpunkte dürfen auch
+vom angrenzenden Tag stammen, soweit der lokale Verlauf sie noch enthält.
+
+Die dauerhafte lokale Bilanz hat nur Stundenaggregate: Dort werden unbekannte
+Verbraucheranteile aus den bekannten Anteilen benachbarter Stunden desselben
+Verbrauchers geschätzt, bevor die Tages-, Monats- und Jahressummen entstehen.
+Auch teilweise bekannte Stunden können mit ihrem bekannten Anteil als Stützpunkt
+dienen. Liegt eine Störung innerhalb nur einer Stunde, ist die Ergänzung deshalb
+gröber als im Leistungsdiagramm; fehlen Nachbarstunden, bleibt sie offen.
+Kosten und Herkunft der Akkuenergie werden anteilig aus diesen Stützpunkten
+angenähert; dort fehlende Preise bleiben unbewertet. Die ergänzte Energie und ihre
+Kosten sind mit **≈** gekennzeichnet. Dies gilt auch für schon aufgezeichnete lokale
+Bilanzdaten. Die gespeicherten Rohaggregate und der laufende Akku-Kostenbestand
+werden dabei nicht verändert. Speicherladung und Einspeisung werden nicht auf
+diese Weise umverteilt; die Influx-Rekonstruktion bleibt beim oben beschriebenen
+Verfahren. Keine dieser Schätzungen fließt in die Gerätesteuerung ein.
+
 Einspeisung und Speicherladung werden je Stunde mitgeschrieben. Die Einspeisung wird
 mit dem PV-Kostenansatz (standardmäßig der EOS-Einspeisevergütung) des jeweiligen
 Zeitpunkts bewertet; ist er unbekannt, bleibt die Vergütung als unbekannt markiert.

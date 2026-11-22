@@ -65,3 +65,38 @@ def test_history_reads_one_range_for_the_profile(tmp_path):
     rows = history.read_range(START, START + timedelta(hours=1))
     assert [row['time'] for row in rows] == [(START + timedelta(minutes=minute)).isoformat() for minute in (0, 1)]
     assert power_profile(rows, '2026-11-18', ZONE)['points'][0]['total']['pv'] == pytest.approx(100)
+
+
+def test_unknown_sources_interpolate_shares_by_time_preserving_observed_load():
+    rows = [sample(0, solar=2000, grid=0),
+            sample(2, solar=0, grid=None, house=4000, heat=1000),
+            sample(6, solar=0, grid=1000)]
+    point = power_profile(rows, '2026-11-18', ZONE)['points'][1]
+    assert point['total'] == {'pv': 2667, 'battery': 0, 'grid': 1333, 'unknown': 0}
+    assert point['heat'] == {'pv': 667, 'battery': 0, 'grid': 333, 'unknown': 0}
+    assert point['source_estimated'] is True
+    assert point['grid'] is None
+    assert rows[1]['balance']['grid'] is None
+
+
+def test_unknown_runs_use_original_anchors_and_keep_long_and_open_gaps_unknown():
+    rows = [sample(0, solar=0, grid=1000),
+            sample(2, solar=9000, grid=0, house=1000),
+            sample(4, solar=9000, grid=0, house=2000),
+            sample(8, solar=1000, grid=0),
+            sample(10, solar=0, grid=None, house=1000)]
+    points = power_profile(rows, '2026-11-18', ZONE)['points']
+    assert points[1]['total']['pv'] == 250
+    assert points[2]['total']['pv'] == 1000
+    assert points[-1]['total']['unknown'] == 1000
+    long = [rows[0], rows[1], sample(361, solar=1000, grid=0)]
+    assert power_profile(long, '2026-11-18', ZONE)['points'][1]['total']['unknown'] == 1000
+
+
+def test_neighboring_days_supply_anchors_without_adding_points_or_missing_samples():
+    rows = [sample(-2, solar=0, grid=1000), sample(0, solar=0, grid=None, house=1000),
+            sample(2, solar=0, grid=1000)]
+    points = power_profile(rows, '2026-11-18', ZONE)['points']
+    assert len(points) == 2
+    assert points[0]['total']['grid'] == 1000
+    assert points[0]['source_estimated'] is True
