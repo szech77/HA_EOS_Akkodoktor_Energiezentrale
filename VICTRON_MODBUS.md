@@ -116,6 +116,20 @@ akzeptiert nur den angeforderten Wert. Eine gescheiterte Rückgabe bleibt als Fe
 Die Rückgabe benötigt keine Akku-Leistungsmessung, prüft aber weiterhin GX und
 ESS/Dynamic ESS, damit fremde Regelmodi nicht überschrieben werden.
 
+### Last am GX
+
+Der Modbus-Dienst des GX bedient oft weitere Programme (z. B. eine HA-Victron-Integration
+oder eigene Modbus-Sensoren). Das Plugin hält deshalb **eine** TCP-Verbindung offen,
+statt für jede Abfrage eine neue aufzubauen. Schließt der GX eine ruhende Verbindung,
+wird die Anfrage einmal über eine neue Verbindung gesendet; nach einem Timeout oder
+einer unverständlichen Antwort wird die Verbindung verworfen. Ein Lesezyklus braucht
+drei Abfragen: Akku, PV (je Quelle) und einen Block mit Verbrauch, Netz und aktivem
+AC-Eingang (817–826). Kennung und Firmware werden beim Verbindungsaufbau, nach jedem
+Fehler und sonst alle fünf Minuten geprüft, ESS-Modus und Dynamic ESS vor der Steuerung
+nach jedem Fehler oder Neuverbinden und sonst einmal pro Minute. Der Netzbetrieb
+(826) wird in jedem Regelbefehl frisch geprüft. Lehnt ein GX den Block als unbekannte
+Adresse ab, liest das Plugin die Bereiche wieder einzeln.
+
 Der flüchtige Netzsollwert 2716/2717 ab 3.50 vermeidet wiederholte persistente
 Writes auf die alten Sollwertregister. Bei einem Kommunikationsausfall gibt es
 über beide Steuerpfade **keinen garantierten automatischen Timeout** der Stellwerte.
@@ -281,6 +295,14 @@ reads, invalid values or wrong operating modes prevent new commands.
 Telemetry uses 16-bit registers: battery/grid power per phase must be strictly
 inside −32768…32766 W, PV/consumption below 65534 W per phase. Endpoints, including
 the GX's max−1 saturation value, are rejected.
+The plugin keeps one TCP connection to the GX instead of opening one per request; an
+idle connection closed by the GX is reopened once, a timeout or broken response drops
+it. A read cycle needs three requests (battery, PV per source and one block of
+consumption, grid and active AC input, 817–826). Identity and firmware are confirmed
+on connect, after any failure and otherwise every five minutes; ESS mode and Dynamic
+ESS before control after any failure or reconnect and otherwise once per minute. The
+grid input (826) is checked fresh for every command. A GX rejecting the block as an
+unknown address is read range by range again.
 Larger systems should use the HA/MQTT plugins. Missing requests are errors, but
 Venus may itself return 0 for missing internal data: Modbus has no full freshness
 or quality information. With grid and system AC consumption read, the AC-side battery

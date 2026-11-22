@@ -80,6 +80,7 @@ def test_detected_firmware_takes_precedence_and_reports_both_versions_after_upgr
         assert driver.read({},NOW).soc==60
         assert driver.read_diagnostics['firmware']['source']=='configured'
         server.registers.update({834:0x0374,835:0x42})
+        driver.client.close()  # The GX restarts for the upgrade.
         driver.apply(command('grid_charge',2000,0),{})
         assert target(server)==3000
         assert driver.read_diagnostics['firmware']=={
@@ -93,6 +94,7 @@ def test_detected_version_replaces_assumed_range_when_it_becomes_available():
         driver.read({},NOW)
         assert driver.read_diagnostics['firmware']['source']=='assumed'
         server.registers.update({834:0x0374,835:0})
+        driver.client.close()  # The GX restarts for the upgrade.
         driver.read({},NOW)
         assert driver.read_diagnostics['firmware']['version']=='v3.74'
         assert driver.read_diagnostics['firmware']['source']=='detected'

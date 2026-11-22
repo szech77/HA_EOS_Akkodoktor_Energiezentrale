@@ -34,9 +34,33 @@ def checked_host(host):
 
 
 class ModbusTCP:
+    """One kept connection per device; it is opened again after any transport failure.
+
+    Opening a connection for every request burdens small servers such as the Victron GX,
+    whose Modbus service also serves other clients.
+    """
+
     def __init__(self, host, port, unit, timeout=3):
         self.host, self.port, self.unit, self.timeout = host, port, unit, timeout
         self.transaction = 0
+        self._connection = None
+        # Counts opened connections; a new one can mean a restarted device.
+        self.opened = 0
+
+    @property
+    def connected(self):
+        return self._connection is not None
+
+    def close(self):
+        connection, self._connection = self._connection, None
+        if connection is not None:
+            try:
+                connection.close()
+            except OSError:
+                pass
+
+    def __del__(self):
+        self.close()
 
     @staticmethod
     def _receive(connection, size, deadline):
@@ -52,18 +76,45 @@ class ModbusTCP:
             result.extend(chunk)
         return bytes(result)
 
-    def _request(self, function, payload):
+    def _exchange(self, function, payload):
         self.transaction = (self.transaction + 1) % 65536
         pdu = bytes([function]) + payload
         header = struct.pack(">HHHB", self.transaction, 0, len(pdu) + 1, self.unit)
-        with socket.create_connection((self.host, self.port), timeout=self.timeout) as connection:
-            deadline = monotonic() + self.timeout
+        kept = self._connection is not None
+        if not kept:
+            self._connection = socket.create_connection((self.host, self.port), timeout=self.timeout)
+            self.opened += 1
+        connection = self._connection
+        deadline = monotonic() + self.timeout
+        try:
+            connection.settimeout(self.timeout)
             connection.sendall(header + pdu)
-            transaction, protocol, size, unit = struct.unpack(">HHHB", self._receive(connection, 7, deadline))
+            first = self._receive(connection, 7, deadline)
+        except (ConnectionError, ModbusError) as error:
+            self.close()
+            # A kept connection the device closed while idle is opened again once; the
+            # request never reached the device, and register writes are idempotent anyway.
+            if kept and (isinstance(error, ConnectionError) or error.reason == "connection_closed"):
+                return None
+            raise
+        except BaseException:
+            self.close()
+            raise
+        try:
+            transaction, protocol, size, unit = struct.unpack(">HHHB", first)
             if (transaction != self.transaction or protocol != 0 or unit != self.unit
                     or not 2 <= size <= 254):
                 raise ModbusError("Invalid Modbus response header", reason="invalid_response")
-            response = self._receive(connection, size - 1, deadline)
+            return self._receive(connection, size - 1, deadline)
+        except BaseException:
+            # The stream position is unknown after a broken response.
+            self.close()
+            raise
+
+    def _request(self, function, payload):
+        response = self._exchange(function, payload)
+        if response is None:
+            response = self._exchange(function, payload)
         if response[0] == function | 0x80:
             raise ModbusError("Modbus device rejected request",
                               exception_code=response[1] if len(response) == 2 else None, reason="rejected")
