@@ -1,0 +1,10 @@
+{
+  "branch": "feature/vue-frontend",
+  "bundle_sha256": "9a37df19475f53d0c03ca7be2b711c9493b1b50c9ec4bfd15574ce26e1a91e75",
+  "channel": "beta",
+  "date": "2026-11-22",
+  "notes_sha256": "e45f2cb2ed869c9a9c2e4cbdef2a17e88d470d5c6d0367077854ae4c9965ed8c",
+  "source_changelog_sha256": "a5f55ee25c617f0c19407470d58aac1a123b7d2e960cbfd2076ffa4e53214301",
+  "source_commit": "500c2e76bdbbdc3034b6bc5e15346e3a7478fcf9",
+  "version": "0.26.0b45011430944"
+}
