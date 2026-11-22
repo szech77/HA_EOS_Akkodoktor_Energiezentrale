@@ -27,8 +27,10 @@ def receive(connection, count):
     return result
 
 
-class Inverter(socketserver.TCPServer):
+class Inverter(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    # Kept client connections must not block other clients of the same test device.
     allow_reuse_address = True
+    daemon_threads = True
 
     def __init__(self, model_address):
         super().__init__(("127.0.0.1", 0), Request)
@@ -63,12 +65,32 @@ class Inverter(socketserver.TCPServer):
                             40069:203,40070:105,40087:1000,40091:0}}
         self.read_units = []
         self.requests = []
+        self.connections = 0
+        # Close the connection instead of answering after this many requests (idle close).
+        self.drop_after_requests = None
 
 
 class Request(socketserver.BaseRequestHandler):
     def handle(self):
+        # Like a real Modbus server, one connection serves requests until the client closes it.
+        self.server.connections += 1
         self.request.settimeout(1)
-        transaction, protocol, length, unit = struct.unpack(">HHHB", receive(self.request, 7))
+        while True:
+            try:
+                header = self.request.recv(7)
+            except OSError:
+                return
+            if not header:
+                return
+            if self.server.drop_after_requests is not None:
+                self.server.drop_after_requests -= 1
+                if self.server.drop_after_requests < 0:
+                    self.server.drop_after_requests = None
+                    return
+            self.answer(header + receive(self.request, 7 - len(header)) if len(header) < 7 else header)
+
+    def answer(self, header):
+        transaction, protocol, length, unit = struct.unpack(">HHHB", header)
         request = receive(self.request, length - 1)
         function = request[0]
         address, count = struct.unpack(">HH", request[1:5])

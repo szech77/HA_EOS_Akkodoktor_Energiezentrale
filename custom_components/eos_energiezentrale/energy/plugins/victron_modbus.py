@@ -10,6 +10,7 @@ import logging
 from math import ceil,floor
 import re
 import struct
+import time
 from time import monotonic
 
 from .._modbus_tcp import ModbusTCP,ModbusError,checked_host
@@ -39,6 +40,14 @@ def configured_firmware(value):
 # a larger gap points to an unread source, so the estimate stays.
 AC_BALANCE_W = 500
 AC_BALANCE_RATIO = .25
+
+# Fewer requests for the GX Modbus service, which other clients often share:
+# identity and firmware are read again after this time or after any request failure,
+# the ESS mode and Dynamic ESS state before control after this time or after a failure.
+IDENTITY_REFRESH_S = 300
+GUARD_REFRESH_S = 60
+# Consumption L1-L3 (817), grid L1-L3 (820), genset (823) and active AC input (826) in one read.
+SYSTEM_BLOCK = (817, 10)
 
 
 class VictronModbus(BatteryDriver):
@@ -75,6 +84,8 @@ class VictronModbus(BatteryDriver):
         self.client=ModbusTCP(host,int(v['port']),100)
         self.phases=int(v['phases']);self.enabled=v['control_enabled']
         self._firmware=None;self._legacy_warning=False;self._legacy_guard_warning=False
+        self._identity_at=None;self._guard_at=None;self._system_block=True;self._source=None
+        self._identity_connection=self._guard_connection=None
         self._configured_firmware=configured_firmware(v['firmware_version'])
         self._firmware_notice=None
         self.read_diagnostics={'phases':self.phases,
@@ -104,12 +115,19 @@ class VictronModbus(BatteryDriver):
         except ValueError: pass
         return f'modbus:{host}:{self.client.port}:100'
 
-    def _registers(self,address,count,stage):
-        # Keep protocol context only; never retain returned words or raw errors.
+    def _context(self,stage,address,count):
         self._read_context={'stage':stage,'unit':100,'address':address,'count':count}
         self._operation_context=dict(self._read_context)
+
+    def _registers(self,address,count,stage):
+        # Keep protocol context only; never retain returned words or raw errors.
+        self._context(stage,address,count)
         try: return self.client.read(address,count)
         except OSError as error:
+            # A failed request confirms identity and control state again; an unknown
+            # register (illegal data address) is a fixed capability answer, not a failure.
+            if getattr(error,'exception_code',None)!=2:
+                self._identity_at=self._guard_at=None
             self._operation_context['exception_code']=getattr(error,'exception_code',None)
             if getattr(error,'reason',None): self._operation_context['reason']=error.reason
             raise
@@ -126,6 +144,20 @@ class VictronModbus(BatteryDriver):
         raise ModbusError(message)
 
     def _identity(self,*,control=False):
+        fresh=(self._identity_at is not None and time.monotonic()-self._identity_at<IDENTITY_REFRESH_S
+               and self.client.connected and self._identity_connection==self.client.opened)
+        if not fresh:
+            self._identity_at=None
+            self._read_identity()
+            self._identity_at,self._identity_connection=time.monotonic(),self.client.opened
+        if control and self._firmware<0x0350 and not self.values['legacy_control_enabled']:
+            self._firmware_error('firmware_legacy_opt_in_required','Older Venus OS requires explicit legacy ESS control permission')
+        if control:
+            # Do not take control if the configured native return value cannot
+            # later be restored using the selected firmware's register format.
+            self._setpoint_command(self.values['release_setpoint'],parameter='release_setpoint')
+
+    def _read_identity(self):
         self._firmware=None
         details=self.read_diagnostics['firmware']=self._firmware_diagnostics()
         serial=struct.pack('>6H',*self._registers(800,6,'identity')).decode('ascii',errors='replace')
@@ -169,12 +201,6 @@ class VictronModbus(BatteryDriver):
             if details['register_status']!='valid' or self._firmware_notice is not None:
                 _LOGGER.info('victron_modbus firmware_status: register=%s source=%s version=%s',*notice)
             self._firmware_notice=notice
-        if control and self._firmware<0x0350 and not self.values['legacy_control_enabled']:
-            self._firmware_error('firmware_legacy_opt_in_required','Older Venus OS requires explicit legacy ESS control permission')
-        if control:
-            # Do not take control if the configured native return value cannot
-            # later be restored using the selected firmware's register format.
-            self._setpoint_command(self.values['release_setpoint'],parameter='release_setpoint')
 
     def _battery(self):
         voltage,_,power,soc=self._registers(840,4,'battery')
@@ -183,9 +209,10 @@ class VictronModbus(BatteryDriver):
             raise ModbusError('Invalid or saturated GX battery telemetry')
         return voltage,power,soc
 
-    def _power(self,address,count,signed_power=False):
+    def _power(self,address,count,signed_power=False,words=None):
         stage={850:'dc_pv',811:'ac_pv_input',808:'ac_pv_output',820:'grid',817:'consumption'}[address]
-        words=self._registers(address,count,stage)
+        if words is None: words=self._registers(address,count,stage)
+        else: self._context(stage,address,count)
         values=[signed(word) for word in words] if signed_power else words
         # The GX server can clamp to max-1; reject that endpoint as well.
         invalid=any(not -32768<value<32766 for value in values) if signed_power else any(value>=65534 for value in values)
@@ -193,16 +220,41 @@ class VictronModbus(BatteryDriver):
             raise ModbusError('Invalid or saturated GX phase power')
         return sum(values)
 
+    def _system(self,grid,consumption):
+        """Grid, consumption and the active AC input of this snapshot.
+
+        One block read where the server supports it; a server that rejects the range
+        (illegal data address) is read register group by register group from then on.
+        """
+        self._source=None
+        if not (grid or consumption):
+            return {}
+        if self._system_block:
+            try:
+                words=self._registers(*SYSTEM_BLOCK,'system')
+            except ModbusError as error:
+                if error.exception_code!=2:raise
+                self._system_block=False
+            else:
+                self._source=words[9]
+                return {'consumption':words[0:self.phases],'grid':words[3:3+self.phases]}
+        return {'grid':self._registers(820,self.phases,'grid') if grid else None,
+                'consumption':self._registers(817,self.phases,'consumption') if consumption else None}
+
     def _telemetry(self,now,*,control=False):
-        start=monotonic();self._identity(control=control)
+        start=monotonic();self._source=None;self._identity(control=control)
         voltage,power,soc=self._battery()
         values={}
         if self.pv_sources:
             values['solar']=sum(self._power(address,count) for address,count in self.pv_sources)
-        if self.values['grid_meter_enabled'] or control:
-            values['grid']=self._power(820,self.phases,True)
+        grid=self.values['grid_meter_enabled'] or control
+        system=self._system(grid,self.provides_site_consumption)
+        if grid:
+            values['grid']=self._power(820,self.phases,True,system['grid'])
         if self.provides_site_consumption:
-            values['house_total']=self._power(817,self.phases)
+            values['house_total']=self._power(817,self.phases,False,system['consumption'])
+        if self._identity_connection!=self.client.opened:
+            self._identity(control=control)
         if monotonic()-start>10:
             self._read_context={'stage':'snapshot_timeout'}
             self._operation_context=dict(self._read_context)
@@ -236,7 +288,7 @@ class VictronModbus(BatteryDriver):
         try:
             # GX /Ac/ActiveIn/Source: 1=grid, 240=inverting/island.
             # 0=unconfigured, 2=generator and 3=shore prove neither mode.
-            source = self._registers(826,1,'backup_status')[0]
+            source = self._source if self._source is not None else self._registers(826,1,'backup_status')[0]
             supply = PowerSupplyReading({1:'grid',240:'backup'}.get(source,'unknown'), now)
         except (OSError, ValueError) as error:
             from ..plugin_diagnostics import partial_read_failure
@@ -250,6 +302,19 @@ class VictronModbus(BatteryDriver):
         return min(1000000,self.values['max_charge_current']*voltage/self.values['charge_efficiency']),self.values['max_discharge_power']
 
     def _guard(self,*,grid=False):
+        if not (self._guard_at is not None and time.monotonic()-self._guard_at<GUARD_REFRESH_S
+                and self.client.connected and self._guard_connection==self.client.opened):
+            self._guard_at=None
+            self._guard_ess()
+            self._guard_at,self._guard_connection=time.monotonic(),self.client.opened
+        if grid:
+            # The active AC input of this control snapshot, read with the grid values.
+            source=self._source if self._source is not None else self._registers(826,1,'grid_connection')[0]
+            if source!=1:
+                self._context('grid_connection',826,1)
+                raise ModbusError('GX grid input is not connected')
+
+    def _guard_ess(self):
         settings=self._registers(2900,3,'ess_mode')
         if settings[2] not in (1,2) or settings[0] not in (*range(2,9),10,11,12):
             raise ModbusError('GX requires optimized ESS Mode 2')
@@ -267,7 +332,6 @@ class VictronModbus(BatteryDriver):
                 self._legacy_guard_warning=True
         else:
             if dynamic_ess!=0: raise ModbusError('Dynamic ESS must be disabled')
-        if grid and self._registers(826,1,'grid_connection')[0]!=1: raise ModbusError('GX grid input is not connected')
 
     def _write(self,address,words):
         if self._registers(address,len(words),'control_readback')!=words:
