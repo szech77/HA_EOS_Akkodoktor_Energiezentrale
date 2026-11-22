@@ -1,0 +1,10 @@
+{
+  "branch": "feature/eos-setup-wizard",
+  "bundle_sha256": "6e702a5b051c0ab65f3f8167bd334b1ae29dcdf9d901774eddb97f1b07be8e32",
+  "channel": "beta",
+  "date": "2026-11-23",
+  "notes_sha256": "f5b2656f69fc8a3e94d912271d2d05eadbf06333984babe414294e3dacf765f8",
+  "source_changelog_sha256": "7d51501c6a2a350ea0b245172735c49fc5bd6bca01b266dc8f370917f1c84a1a",
+  "source_commit": "9a3b81a65daeb9ca0696039bc65292e6e4c5d580",
+  "version": "0.27.0b45083064841"
+}
