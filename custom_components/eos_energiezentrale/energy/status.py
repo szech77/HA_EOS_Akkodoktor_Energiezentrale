@@ -14,7 +14,7 @@ from .measurement_sources import MEASUREMENT_KEYS
 from .failures import BackendError, PluginParameterError, HardwareAPIError, REASONS, FIELDS, TRANSPORT_REASONS
 
 ERROR_MESSAGES = {key: 'notice.' + key for key in (
-    'eos', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
+    'eos', 'eos_price', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
     'battery_limits', 'vehicle_limits', 'eos_measurements', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection', 'control_resume')}
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
 CONTROL_STATUSES = ('waiting', 'read_only', 'backup', 'power_supply_waiting', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')

@@ -139,6 +139,7 @@ def request(url, *, method="GET", payload=None, headers=None):
         '/v1/config/devices/electric_vehicles':'eos_vehicle_config', '/v1/energy-management/plan':'eos_plan',
         '/v1/energy-management/optimization/solution/GENETIC':'eos_solution', '/v1/health':'eos_health',
         '/v1/measurement/keys':'eos_measurement_keys', '/v1/measurement/value':'eos_measurement',
+        '/v1/prediction/series':'eos_prediction_series',
         '/query':'influx_history'}.get(urlsplit(url).path, 'http')
     verb = method if method in {'GET','PUT','POST','PATCH','DELETE'} else 'HTTP'
     started = monotonic()
@@ -208,6 +209,14 @@ class EOS:
 
     def health(self):
         return request(self.url + '/v1/health')
+
+    def electricity_prices(self, now):
+        """Raw prediction slots, with EOS fees applied; independent of optimization readiness."""
+        from .eos_prices import price_intervals
+        query = urlencode({'key': 'elecprice_marketprice_wh', 'processing': 'raw', 'dropna': 'false',
+                           'start_datetime': (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)).isoformat(),
+                           'end_datetime': (now + timedelta(hours=3)).isoformat()})
+        return price_intervals(request(self.url + '/v1/prediction/series?' + query), now)
 
     def feedin_accounting(self, now):
         configuration = request(self.url + "/v1/config")

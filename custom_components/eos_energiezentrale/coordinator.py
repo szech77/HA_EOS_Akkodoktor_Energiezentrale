@@ -14,10 +14,12 @@ from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
 from .energy.accounting_estimates import MAX_GAP_SECONDS
 from .energy.clients import ENTITY
+from .energy.eos_setup import EOSSetup, rejected
+from .energy.eos_measurements import MeasurementSync
 from .energy.controller import Controller
 from .energy.domain import instant, next_departure
 from .energy.drivers import DeviceNotReady
-from .energy.settings import changed_settings, settings_payload
+from .energy.settings import changed_settings, settings_payload, save
 from .energy.source_diagnostics import source_diagnostics
 from .energy.status import IssueLog, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
@@ -48,7 +50,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.day_historical = None
         self.history_for_view = {'local':[], 'vehicles':{}}
         self.eos_poll_tasks = {}
-        self.eos_poll_started = {"plan": float("-inf"), "solution": float("-inf")}
+        self.eos_poll_started = {"plan": float("-inf"), "solution": float("-inf"), "prices": float("-inf")}
         self.battery_sync_task = None
         self.battery_sync_revision = 0
         self.battery_sync_last = float("-inf")
@@ -61,6 +63,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.issue_log = IssueLog(_LOGGER)
         self.control_status = None
         self.eos_run_status = None
+        self.eos_setup = EOSSetup(app.config.eos)
         if isinstance(app, Controller):
             app.external_eos_polling = True
             app.external_battery_sync = True
@@ -366,9 +369,11 @@ class EnergyCoordinator(DataUpdateCoordinator):
         if not isinstance(self.app, Controller):
             return
         now = monotonic()
-        for kind, interval in (("plan", 15), ("solution", 60)):
+        for kind, interval in (("plan", 15), ("solution", 60), ('prices', 60)):
+            if kind == 'prices' and not self.app.needs_eos_prices():
+                continue
             task = self.eos_poll_tasks.get(kind)
-            if (task and not task.done()) or now - self.eos_poll_started[kind] < interval:
+            if (task and not task.done()) or now - self.eos_poll_started.get(kind, float('-inf')) < interval:
                 continue
             self.eos_poll_started[kind] = now
             self.eos_poll_tasks[kind] = self.hass.async_create_background_task(
@@ -388,18 +393,24 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     await self._async_publish_snapshot()
         started = datetime.now(timezone.utc)
         try:
-            result = await self.hass.async_add_executor_job(getattr(self.app.config.eos, kind))
+            call = partial(self.app.config.eos.electricity_prices, started) if kind == 'prices' else getattr(self.app.config.eos, kind)
+            result = await self.hass.async_add_executor_job(call)
             error = None
         except Exception as caught:
             result, error = None, caught
         async with self.work_lock:
             if self.closing:
                 return
+            boundary = getattr(self.app.config, 'eos_configured_at', None)
+            if isinstance(boundary, type(started)) and started < boundary:
+                return
             def apply():
                 with self.app.lock:
                     now = started if error is not None else datetime.now(timezone.utc)
                     if kind == "plan":
                         self.app.apply_eos_plan(result, now, error)
+                    elif kind == 'prices':
+                        self.app.apply_eos_prices(result, now, error)
                     else:
                         self.app.apply_eos_forecast(result, now, error)
             await self.hass.async_add_executor_job(apply)
@@ -437,6 +448,73 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     self.report_notice('accounting/' + key, key, getattr(ledger, key.replace('_error', '_failure_details')))
                 else:
                     self.report_success('accounting/' + key)
+
+    def _setup_hardware(self):
+        options = self.app.config.options
+        rows = []
+        capacity = self.app.battery_group_capacity()
+        if options.get('battery_type') != 'none' or capacity is not None and capacity > 0:
+            rows.append({'kind': 'batteries', 'resource': options['battery_resource'], 'name': 'battery',
+                         'capacity_wh': capacity, 'charge_w': options['battery_charge_w'],
+                         'discharge_w': options['battery_discharge_w'],
+                         'min_soc': self.app.config.daily['battery_min_soc'],
+                         'max_soc': self.app.config.daily['battery_max_soc']})
+        for vehicle in self._vehicle_controllers():
+            values = vehicle.config.options
+            if values.get('wallbox_type') != 'none' and values.get('vehicle_resource'):
+                rows.append({'kind': 'electric_vehicles', 'resource': values['vehicle_resource'],
+                             'name': values.get('vehicle_name', values['vehicle_resource']),
+                             'capacity_wh': values['capacity_wh'],
+                             'charge_w': values.get('max_current_a', 16) * values.get('max_phases', 3) * 230})
+        return rows
+
+    def _setup_reset(self):
+        """Persist a plan barrier before a possibly successful external configuration write."""
+        now = datetime.now(timezone.utc)
+        save(self.app.config.directory / 'eos_setup.json', {'at': now.isoformat()})
+        for app in {self.app, *self._vehicle_controllers()}:
+            app.config.eos_configured_at = now
+            app.plan = None
+            app.resource_plans.clear()
+            app.forecast = []
+            app.eos_prices.clear()
+            app.eos_measurements = MeasurementSync()
+            app.battery_limits_confirmed = None
+            app.vehicle_profile_confirmed = None
+            app.goal_at = None
+            app.goal_sync_revision += 1
+        self.eos_poll_started = {'plan': float('-inf'), 'solution': float('-inf'), 'prices': float('-inf')}
+
+    async def async_eos_setup(self, values):
+        async with self.work_lock:
+            if self.closing or not isinstance(self.app, Controller):
+                rejected('setup_unsupported')
+            operation = values.get('operation')
+            allowed = {'load': {'operation'}, 'preview': {'operation', 'draft'},
+                       'apply': {'operation', 'token', 'confirm'}}
+            if not isinstance(operation, str) or operation not in allowed or values.keys() != allowed[operation]:
+                rejected('unknown_fields')
+            location = {'latitude': self.hass.config.latitude, 'longitude': self.hass.config.longitude,
+                        'timezone': self.app.config.options['timezone']}
+
+            def run():
+                with self.app.lock:
+                    hardware = self._setup_hardware()
+                    if self.app.armed or self.app.owned:
+                        rejected('setup_control_active')
+                    if operation == 'load':
+                        return self.eos_setup.load(hardware, location)
+                    if operation == 'preview':
+                        return self.eos_setup.preview(values['draft'], hardware)
+                    if values['confirm'] is not True:
+                        rejected('invalid_type')
+                    return self.eos_setup.apply(values['token'], hardware, self._setup_reset)
+
+            try:
+                return await self.hass.async_add_executor_job(run)
+            finally:
+                if operation == 'apply':
+                    await self._async_publish_snapshot()
 
     async def async_change(self, *, enabled=None, settings=None, control=None):
         area = 'api/control' if enabled is not None or control is not None else 'api/settings'

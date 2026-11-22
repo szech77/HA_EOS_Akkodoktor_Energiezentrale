@@ -20,7 +20,7 @@
           "house_entity": "Total house power including car and heat pump",
           "grid_entity": "Grid power (positive = import)",
           "heat_entity": "Heat pump (optional; empty = not installed)",
-          "price_entity": "Import price",
+          "price_entity": "Import price (optional; empty = plugin or EOS)",
           "car_soc_entity": "Vehicle SoC (optional)",
           "car_soc_scale": "Vehicle SoC unit",
           "car_range_entity": "Vehicle range (optional)",
@@ -31,7 +31,7 @@
           "backup_active_state": "State for backup power",
           "backup_inactive_state": "State for grid operation"
         },
-        "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. If neither source is configured, the panel shows a configuration notice. Heat pump and vehicle remain optional."
+        "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. For import price, the current EOS price including configured fees is read automatically when no sensor or plugin provides it. Other missing sources produce a configuration notice. Heat pump and vehicle remain optional."
       },
       "hardware": {
         "title": "Hardware drivers",
@@ -188,7 +188,7 @@
           "house_entity": "Total house power including car and heat pump",
           "grid_entity": "Grid power (positive = import)",
           "heat_entity": "Heat pump (optional; empty = not installed)",
-          "price_entity": "Import price",
+          "price_entity": "Import price (optional; empty = plugin or EOS)",
           "car_soc_entity": "Vehicle SoC (optional)",
           "car_soc_scale": "Vehicle SoC unit",
           "car_range_entity": "Vehicle range (optional)",
@@ -199,7 +199,7 @@
           "backup_active_state": "State for backup power",
           "backup_inactive_state": "State for grid operation"
         },
-        "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. If neither source is configured, the panel shows a configuration notice. Heat pump and vehicle remain optional."
+        "description": "Sensors take priority. Empty fields use measurements from a configured plugin when supported. For import price, the current EOS price including configured fees is read automatically when no sensor or plugin provides it. Other missing sources produce a configuration notice. Heat pump and vehicle remain optional."
       },
       "hardware": {
         "title": "Hardware drivers",

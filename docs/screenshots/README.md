@@ -16,6 +16,11 @@ direkte Browseraufnahmen ohne Browser- oder Home-Assistant-Seitenleiste.
   und Speicherherkunft.
 - `costs.jpg`: monatliche Gesamtbilanz mit täglicher Grundgebühr und Kostenanteilen.
 - `settings.jpg`: Tarifliste mit Monats- und Tagesgebühr sowie festem kWh-Preis.
+- `wizard.jpg`: neuer EOS-Einrichtungsassistent, Standortschritt mit manueller
+  Eingabe sowie optionaler Browserortung und Übernahme aus Home Assistant.
+- `wizard-mobile.jpg`: mobiler Ausschnitt des Standortschritts; der vollständige
+  Formularbereich ist sichtbar. Die GPS-Abfrage wurde für die Aufnahmen nicht
+  verwendet; Koordinaten und EOS-Konfiguration sind synthetische Testdaten.
 - `mobile.jpg`: oberer Bereich der Übersicht als Ausschnitt mit 375 × 844 Pixeln
   bei einer Browserbreite von 390 Pixeln einschließlich Scrollleiste.
 

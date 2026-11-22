@@ -9,7 +9,7 @@ import type { BasePrice, CostSettings } from '@/types/usage'
 import { RequestError } from '@/utils/bridge'
 import { isNumber } from '@/utils/format'
 
-export type Section = 'battery' | 'car' | 'calendar' | 'costs' | 'system'
+export type Section = 'battery' | 'car' | 'calendar' | 'costs' | 'system' | 'wizard'
 export type FieldValue = string | number | boolean
 export type Values = Record<string, FieldValue>
 

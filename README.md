@@ -172,6 +172,12 @@ Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
 
 ## Installation
 
+Für die anschließende EOS-Konfiguration steht unter **Einstellungen → EOS-Assistent**
+ein geführter Ablauf bereit: Standort mit optionaler Smartphone-Ortung, PV-Flächen,
+Geräteprofile, Tarife, Verbrauch und Planung. Er zeigt eine Vorschau und speichert
+die bestätigten Änderungen dauerhaft in EOS. Neue Hardware vorher in der
+Home-Assistant-Konfiguration der Integration hinzufügen. [Anleitung und Voraussetzungen](EOS_SETUP.md).
+
 Voraussetzung: Home Assistant **2026.11.0 oder neuer** und ein erreichbarer
 EOS-Server. Für die Installation über den Community Store wird zusätzlich HACS benötigt. Für die Installation über HACS muss das GitHub-Repository öffentlich
 erreichbar sein; die Änderungen müssen zuvor nach GitHub übertragen worden sein.
@@ -246,7 +252,13 @@ Home-Assistant-Spracheinstellungen; `language` steuert das eigene Panel.
 Wähle im Sensor-Dialog die tatsächlichen Entitäts-IDs deiner Installation. Bei
 einer Neuinstallation sind keine Sensoren vorbelegt; leere Felder werden, soweit
 möglich, von den eingerichteten Plugins versorgt. Die Entitäten in der Tabelle sind
-nur Beispiele:
+nur Beispiele. Beim Bezugspreis wird ohne Sensor oder Plugin automatisch der
+aktuelle EOS-Preis einschließlich der dort konfigurierten Aufschläge verwendet.
+Das Feld dafür leer lassen; ein ausdrücklich eingetragener, nicht verfügbarer
+Sensor wird nicht durch EOS ersetzt. EOS-Preise werden jede Minute aus den
+Preisprognosen gelesen, unabhängig davon, ob bereits ein Optimierungsplan vorliegt.
+Nur das aktuelle Preisintervall und höchstens zwei Minuten alte Abrufe gelten;
+Lücken, fehlende Preise und abgelaufene Intervalle bleiben unbewertet:
 
 | Feld / Schlüssel | Beispiel-Entität | Erwarteter Wert |
 |---|---|---|
@@ -254,7 +266,7 @@ nur Beispiele:
 | Gesamter Hausverbrauch / `house_entity` | `sensor.house_power` | Positive Leistung in W oder kW, einschließlich Auto und Wärmepumpe. |
 | Netzleistung / `grid_entity` | `sensor.grid_power` | W oder kW; positiv = Bezug, negativ = Einspeisung. |
 | Wärmepumpenleistung / `heat_entity` | `sensor.heat_pump_power` | Positive Leistung in W oder kW, einschließlich Standby-Verbrauch. |
-| Bezugspreis / `price_entity` | `sensor.electricity_price` | `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. |
+| Bezugspreis / `price_entity` | `sensor.electricity_price` | Optional. `EUR/kWh`, `€/kWh`, `ct/kWh` oder `c/kWh`. Ohne Sensor oder Plugin-Preis automatisch aus EOS. |
 | Fahrzeug-SoC / `car_soc_entity` | `sensor.ev_soc` | Numerischer Ladezustand, passend zur folgenden Einheit. |
 | Fahrzeug-SoC-Einheit / `car_soc_scale` | `factor` (Vorgabe) | `factor`: 0–1, beispielsweise `0.33`; `percent`: 0–100, beispielsweise `33`. |
 | Fahrzeugreichweite / `car_range_entity` | `sensor.ev_range` | Optional. Reichweite in `km` oder `mi` (wird in km umgerechnet). Nur für die Anzeige. Mit Fahrzeugliste gilt der Sensor am Fahrzeug (`range_entity`); ist dort keiner eingetragen, wird dieser bei genau einem Fahrzeug verwendet. |

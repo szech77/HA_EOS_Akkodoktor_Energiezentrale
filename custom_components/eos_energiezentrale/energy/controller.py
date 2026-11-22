@@ -19,11 +19,12 @@ from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
 from .vehicle_limits import charging_profile, optional_charger, vehicle_box, vehicle_phases
 from .eos_measurements import MeasurementSync, device_samples
-from .failures import connection_lost
+from .failures import BackendError, connection_lost
 from .status import failure_details
 from .pv_support import PVSupport
 from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
 from .eos_status import EOSRunStatus
+from .eos_prices import EOSPrices
 from .pv_availability import PVAvailability
 from .power_supply import checked_supply, configured_supply, requires_pause, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
@@ -48,6 +49,7 @@ SUPPLY_GRACE_S = 60
 class Controller:
     def __init__(self, ha, config):
         self.ha, self.config = ha, config
+        self.eos_prices = EOSPrices()
         self.input_options, _, self.source_configuration = resolve_sources(getattr(config, "options", {}), {},
             ((getattr(config, "battery", None), None), (getattr(config, "wallbox", None), None)), datetime.now(timezone.utc))
         self.history = History(config.directory / "history.sqlite3")
@@ -112,6 +114,7 @@ class Controller:
         self.pv_session = False
         self.last_minute = None
         self.last_plan_fetch = self.last_forecast_fetch = self.last_goal_attempt = -1000
+        self.last_price_fetch = -1000
         self.eos_was_calculating = False
         self.external_eos_polling = False
         self.external_battery_sync = False
@@ -549,6 +552,14 @@ class Controller:
         return order
 
     def update_eos(self, now, clock):
+        if self.needs_eos_prices() and clock - self.last_price_fetch >= 60:
+            self.last_price_fetch = clock
+            try:
+                rows = self.config.eos.electricity_prices(now)
+            except Exception as error:
+                self.apply_eos_prices(None, now, error)
+            else:
+                self.apply_eos_prices(rows, now)
         if clock - self.last_plan_fetch >= 15:
             self.last_plan_fetch = clock
             try:
@@ -577,6 +588,27 @@ class Controller:
                 self.apply_eos_forecast(None, now, error)
             else:
                 self.apply_eos_forecast(solution, now)
+
+    def needs_eos_prices(self):
+        if self.config.options.get('price_entity'):
+            return False
+        for driver in (getattr(self, 'battery_driver', self.config.battery), self.config.wallbox):
+            declared = getattr(driver, 'measurement_keys', ())
+            if isinstance(declared, tuple) and 'price' in declared:
+                return False
+        return True
+
+    def apply_eos_prices(self, rows, now, error=None):
+        try:
+            if error is not None:
+                raise error
+            self.eos_prices.update(rows, now)
+        except Exception as error:
+            self.eos_prices.clear()
+            self.record_failure('eos_price', error)
+        else:
+            self.errors.pop('eos_price', None)
+            self.error_details.pop('eos_price', None)
 
     def apply_eos_health(self, health, now):
         with self.lock:
@@ -610,6 +642,9 @@ class Controller:
                     or not isinstance(candidate.get("instructions"), list)):
                 raise ValueError("EOS plan is not ready")
             candidate = deepcopy(candidate)
+            boundary = getattr(self.config, 'eos_configured_at', None)
+            if boundary is not None and instant(candidate['generated_at']) < boundary:
+                raise BackendError('Waiting for a plan after EOS configuration', reason='setup_plan_pending')
             accepted = False
             incomplete = False
             for resource in resources:
@@ -876,7 +911,7 @@ class Controller:
                           self.config.wallbox, self.config.options)
         self.update_vehicle(box, now, clock)
         opts, states, self.source_configuration = resolve_sources(opts, states,
-            ((self.config.battery, battery), (self.config.wallbox, box)), now)
+            ((self.config.battery, battery), (self.config.wallbox, box)), now, eos_prices=self.eos_prices)
         self.input_options = opts
         self.pv_availability.observe(states, opts['pv_entity'], now)
         measured = self.update_soc(states, box, now)

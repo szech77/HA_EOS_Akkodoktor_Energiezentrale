@@ -76,7 +76,7 @@ def async_remove_panel(hass):
 
 @websocket_api.websocket_command({
     vol.Required("type"): DOMAIN + "/request",
-    vol.Required("action"): vol.In(["snapshot", "history", "language", "settings", "control", "accounting", "weather_forecast", "client_event"]),
+    vol.Required("action"): vol.In(["snapshot", "history", "language", "settings", "control", "accounting", "weather_forecast", "client_event", "eos_setup"]),
     vol.Optional("values", default={}): dict,
     vol.Optional("language"): str,
 })
@@ -104,6 +104,8 @@ async def websocket_request(hass, connection, msg):
             result = await coordinator.async_history()
         elif action == "weather_forecast":
             result = await coordinator.async_weather_forecast(values)
+        elif action == 'eos_setup':
+            result = await coordinator.async_eos_setup(values)
         elif action == "language":
             result = await hass.async_add_executor_job(partial(
                 load_language, coordinator.app.config.options["language"],
