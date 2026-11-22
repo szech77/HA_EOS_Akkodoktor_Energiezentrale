@@ -3,13 +3,14 @@ const {execFileSync}=require('node:child_process');
 const root=path.join(__dirname,'..');
 const python=[process.env.PYTHON,path.join(root,'.venv/Scripts/python.exe'),path.join(root,'.venv/bin/python')]
  .find(value=>value&&fs.existsSync(value))??'python';
-const workflow=JSON.parse(execFileSync(python,['-c',
- 'import json,yaml; from pathlib import Path; print(json.dumps(yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]))'],{cwd:root,encoding:'utf8'}));
+const config=JSON.parse(execFileSync(python,['-c',
+ 'import json,yaml; from pathlib import Path; data=yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8")); print(json.dumps({"triggers":data.get("on",data.get(True)),"jobs":data["jobs"]}))'],{cwd:root,encoding:'utf8'}));
+const workflow=config.jobs;
 
 // GitHub applies success() across the ancestor chain unless a status function
 // overrides it: https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions
 // The workflow's boolean/string comparisons use the same semantics in JS.
-function publish({ref='refs/heads/main',event='push',repository='szech77/HA_EOS_Akkodoktor_Energiezentrale',
+function releaseEligible({ref='refs/heads/main',event='push',repository='szech77/HA_EOS_Akkodoktor_Energiezentrale',
  required='success',cleanup='skipped',cancelled=false}={}){
  const ancestors=new Set();
  function visit(key){
@@ -28,20 +29,31 @@ function publish({ref='refs/heads/main',event='push',repository='szech77/HA_EOS_
  return (!explicitStatus&& !success())?false:vm.runInNewContext(expression,context);
 }
 
-test('main publishes after successful required checks even when branch cleanup is skipped',()=>{
- assert.equal(publish(),true);
+test('release jobs use the protected environment after required checks while automatic checks stay enabled',()=>{
+ assert.equal(workflow.publish.environment.name,'release');
+ assert.deepEqual([workflow.publish.needs].flat(),['required']);
+ assert.ok(config.triggers.push);
+ assert.ok(config.triggers.pull_request);
+ assert.ok(Object.hasOwn(config.triggers,'merge_group'));
 });
-test('working branches still publish betas after successful cleanup',()=>{
+test('main pushes reach release approval after successful checks even when cleanup is skipped',()=>{
+ assert.equal(releaseEligible(),true);
+});
+test('working-branch pushes reach beta approval after successful cleanup',()=>{
  for(const name of ['feature/backup-power','bug/fix','bugfix/main-release-skipped']){
-  assert.equal(publish({ref:'refs/heads/'+name,cleanup:'success'}),true);
+  assert.equal(releaseEligible({ref:'refs/heads/'+name,cleanup:'success'}),true);
  }
 });
 test('failed, skipped, pending or cancelled required checks never publish',()=>{
- for(const required of ['failure','skipped','cancelled','pending'])assert.equal(publish({required}),false);
- assert.equal(publish({cancelled:true}),false);
+ for(const required of ['failure','skipped','cancelled','pending'])assert.equal(releaseEligible({required}),false);
+ assert.equal(releaseEligible({cancelled:true}),false);
 });
-test('PRs, manual runs, other repositories, tags and unrelated branches never publish',()=>{
- for(const event of ['pull_request','workflow_dispatch','merge_group'])assert.equal(publish({event}),false);
- assert.equal(publish({repository:'someone/fork'}),false);
- for(const ref of ['refs/tags/v1.0.0','refs/heads/other'])assert.equal(publish({ref}),false);
+test('PRs, merge groups and manual or bot dispatches never request release approval',()=>{
+ for(const event of ['pull_request','merge_group','workflow_dispatch']){
+  for(const ref of ['refs/heads/main','refs/heads/feature/releases'])assert.equal(releaseEligible({event,ref}),false);
+ }
+});
+test('forks, tags and unrelated branches never request release approval',()=>{
+ assert.equal(releaseEligible({repository:'someone/fork'}),false);
+ for(const ref of ['refs/tags/v1.0.0','refs/heads/other'])assert.equal(releaseEligible({ref}),false);
 });

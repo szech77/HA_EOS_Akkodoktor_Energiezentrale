@@ -95,8 +95,8 @@ der Bot-Commit anschließend auch lokal übernommen.
 Da ein Push mit `GITHUB_TOKEN` keinen weiteren Push-Lauf startet, löst die CI
 ausdrücklich einen `workflow_dispatch` für den bereinigten Branch aus. Dieser
 prüft den neuen Commit vollständig, bereinigt aber nicht erneut und veröffentlicht
-keine zweite Beta. Die Beta des ursprünglichen Pushes bleibt an dessen geprüften
-Quellcommit gebunden. Die Sammelprüfung des Push-Laufs verlangt zusätzlich eine
+kein Release und fordert auch keine Release-Freigabe an.
+Die Sammelprüfung des Push-Laufs verlangt zusätzlich eine
 erfolgreiche Bereinigung beziehungsweise einen bestätigten unveränderten Entwurf.
 Fehler bei Branch-Update oder Folgeprüfung werden nicht als Erfolg gewertet.
 Die Dispatch-Ausnahme ist im [GitHub-Verhalten für GITHUB_TOKEN](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)
@@ -109,23 +109,53 @@ wird nicht umgangen: Verbietet eine Regel Bot-Updates auf dem Arbeitsbranch,
 schlägt die Bereinigung sichtbar fehl. `main`, Forks und Pull-Request-Läufe werden
 nicht automatisch beschrieben.
 
-Nach **allen** erfolgreichen Pflichtprüfungen gelten folgende Kanäle:
+Pushes und Merges starten weiterhin alle Pflichtprüfungen. Nach **allen**
+erfolgreichen Pflichtprüfungen hält derselbe Lauf vor dem Publish-Job an und
+wartet auf die manuelle Freigabe der geschützten GitHub-Umgebung `release`.
+Ohne Freigabe starten weder der Release-Build noch die Veröffentlichung.
+Nach Bestätigung gelten folgende Kanäle:
 
 | Auslöser im Originalrepository | Veröffentlichung |
 | --- | --- |
-| Push auf `feature/**`, `bug/**`, `bugfix/**` | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
-| Push/Merge nach `main` | `vX.Y.Z` als stabiles, neuestes Release |
-| Pull Request, Merge Queue, Fork, manueller Lauf | Nur Prüfungen, keine Veröffentlichung |
+| Push auf `feature/**`, `bug/**`, `bugfix/**`, danach Freigabe | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
+| Push/Merge nach `main`, danach Freigabe | `vX.Y.Z` als stabiles, neuestes Release |
+| Abgelehnte Freigabe | Kein Release; Publish-Job und Workflow werden als fehlgeschlagen markiert |
+| Pull Request, Merge Queue, Fork, manueller Lauf, Bot-Folgeprüfung | Nur Prüfungen, keine Freigabeanfrage und keine Veröffentlichung |
+
+Im betreffenden Lauf unter **Actions → CI** erscheint nach den Prüfungen
+**Review deployments**. Die Umgebung **release** auswählen:
+
+- **Ja:** **Approve and deploy** setzt denselben Lauf fort und veröffentlicht.
+- **Nein:** **Reject** beendet den Publish-Job ohne Release. Die bereits grünen
+  Pflichtprüfungen bleiben erfolgreich; der gesamte Workflow gilt wegen der
+  Ablehnung als fehlgeschlagen. Das ist GitHubs vorgesehene Darstellung.
+
+Die Freigabe gilt für den im Lauf angezeigten, geprüften Quellcommit. Ein neuer
+Push auf einen Arbeitsbranch kann einen älteren, noch wartenden Lauf entsprechend
+der bestehenden Concurrency-Regel abbrechen. Für weitere Teilfixes kann die Freigabe
+abgelehnt werden; der nächste Push startet wieder alle Prüfungen und fragt danach
+erneut. Der gewöhnliche Frontend-Build im Testjob bleibt Teil der Pflichtprüfungen.
+Siehe [GitHub: Deployments prüfen und freigeben](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments).
+
+Die Pause benötigt zusätzlich zur Workflow-Datei die Repository-Einstellung
+**Settings → Environments → release → Required reviewers** mit dem Freigeber
+`szech77`. **Prevent self-review** bleibt deaktiviert, damit derselbe Maintainer
+seine eigenen Push-Läufe freigeben kann. Eine Umgebung ohne Required reviewers
+würde automatisch fortfahren; die YAML-Datei allein erzwingt keine Pause.
+Die Umgebung muss deshalb vor Verwendung dieser Workflow-Version eingerichtet
+sein und bei einer Übernahme in ein anderes Repository erneut konfiguriert werden.
 
 Der Publish-Job prüft ausdrücklich `!cancelled()` und ein erfolgreiches
-`needs.required.result`. Das ist auch nach einem grünen Sammelstatus nötig:
+`needs.required.result` sowie das Push-Ereignis und die erlaubten Quellbranches.
+Das ist auch nach einem grünen Sammelstatus nötig:
 GitHubs implizites `success()` berücksichtigt übersprungene Vorgänger entlang
 der Abhängigkeitskette. Auf `main` ist die Branch-Changelog-Bereinigung absichtlich
-übersprungen; das darf die stabile Veröffentlichung nicht überspringen. Die
+übersprungen; das darf die Freigabeanfrage und die anschließende stabile
+Veröffentlichung nicht überspringen. Die
 explizite Statusfunktion hebt nur diese implizite Sperre auf. Fehlgeschlagene,
 übersprungene oder abgebrochene Pflichtprüfungen geben keinen Release frei.
 
-Jeder neue Branchlauf erhält eine eindeutige Beta-Nummer, etwa
+Jeder freigegebene Branchlauf erhält eine eindeutige Beta-Nummer, etwa
 `0.20.0b123456789`. Wiederholungen desselben Laufs verwenden dieselbe Version,
 denselben Tag und dieselben Release Notes; bestehende Tags werden nie verschoben.
 Betas verändern nicht das neueste stabile Release. Für Betas in HACS

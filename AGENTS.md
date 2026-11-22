@@ -38,8 +38,14 @@ Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
    Ein normales Versionsupdate nicht ohne Beleg als behobene Sicherheitslücke
    darstellen. Dokumentation gehört ebenfalls zum Änderungsumfang.
 
-Ein Push auf `feature/`, `bug/` oder `bugfix/` veröffentlicht nach erfolgreichen
-Pflichtprüfungen eine Beta; ein Merge nach `main` ein stabiles HACS-Release.
+Nach erfolgreichen Pflichtprüfungen pausiert der Push-/Merge-Lauf vor dem
+Publish-Job an der geschützten GitHub-Umgebung `release`. Erst **Review deployments
+→ Approve and deploy** veröffentlicht: auf `feature/`, `bug/` oder `bugfix/` eine
+Beta, auf `main` ein stabiles HACS-Release. **Reject** beendet ohne Release.
+Die Umgebung benötigt konfigurierte Required reviewers (siehe `CI.md`); die
+Workflow-Datei allein erzwingt keine Pause. Bot-Folgeprüfungen fragen keine
+Release-Freigabe an. Agents dürfen eine Freigabe nur im ausdrücklich beauftragten
+Rahmen erteilen; ein Auftrag zur Änderung der CI ist keine Release-Freigabe.
 Die Pipeline erzeugt einen Metadatencommit mit dem geprüften Quellcommit als
 direktem Elterncommit. Zusätzlich bereinigt sie `New Version` auf Arbeitsbranches
 nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen durch einen

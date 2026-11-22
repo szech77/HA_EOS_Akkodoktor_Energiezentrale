@@ -141,7 +141,7 @@ def test_workflow_dispatch_accepts_empty_success_response():
     assert github.request('/actions/workflows/ci.yml/dispatches', 'POST', {'ref':'feature/releases'}) is None
 
 
-def test_cleanup_workflow_checks_new_head_without_publishing_a_second_beta():
+def test_cleanup_workflow_checks_new_head_without_approving_a_release():
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1]/'.github/workflows/ci.yml').read_text())
     jobs = workflow['jobs']
     cleanup = jobs['clean_changelog']
@@ -155,3 +155,4 @@ def test_cleanup_workflow_checks_new_head_without_publishing_a_second_beta():
     assert 'test "$CLEANUP" = success' in enforce
     assert 'test "$CLEANUP" = skipped' in enforce
     assert "github.event_name == 'push'" in jobs['publish']['if']
+    assert jobs['publish']['environment']['name'] == 'release'

@@ -15,7 +15,10 @@ einschließlich der Nachbearbeitung von Dependabot-PRs.
 4. Im Changelog nur `## New Version` um Features, Bugfixes, Breaking Changes
    und Security ergänzen. Leere Kategorien mit `- Keine.` kennzeichnen.
    Die Manifest-Version bleibt im Quellbranch `0.0.0`; die CI vergibt Version
-   und Datum. Arbeitsbranches erhalten Betas, `main` stabile Releases.
+   und Datum. Nach allen Pflichtprüfungen pausiert der Push-/Merge-Lauf an der
+   geschützten GitHub-Umgebung `release`: **Review deployments → Approve and deploy**
+   veröffentlicht, **Reject** beendet ohne Release. Arbeitsbranches erhalten nach
+   Freigabe Betas, `main` stabile Releases. Details und Einrichtung stehen in `CI.md`.
 5. Pull Request nach `main`; alle Pflichtprüfungen müssen erfolgreich sein.
 
 Die CI erhöht bei neuen Breaking Changes Major, bei Features Minor, sonst Patch.

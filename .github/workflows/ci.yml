@@ -270,6 +270,9 @@ jobs:
       startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # Required reviewers must also be configured in the repository environment.
+    environment:
+      name: release
     permissions:
       contents: write
     concurrency:
