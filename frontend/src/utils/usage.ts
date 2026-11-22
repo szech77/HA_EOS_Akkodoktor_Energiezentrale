@@ -271,7 +271,7 @@ export function createUsageText(host: Host, zone: () => string | undefined, vehi
     if ((view.unknown_kwh ?? 0) > 0.0001) rows.push(row(t('usage.unknown_origin', { energy: energy(view.unknown_kwh ?? 0) }), '', '—'))
     if (key === 'total' && balance) rows.push(feed(balance), row(t('usage.net'), '', moneyOr(balance.net_eur, balance.cost_partial), true))
     else rows.push(row(t('billing.costs'), '', view.cost_available ? moneyOr(view.cost_eur, view.cost_partial) : '—', true))
-    return { heading: t('usage.grid_price', { price: price(view.grid_price_ct) }), rows, note: t('usage.price_note') + (key === 'total' ? '' : ` ${t('usage.base_note')}`) }
+    return { heading: averageCostLabel(entryOf(report, key)?.total), rows, note: t('usage.price_note') + (key === 'total' ? '' : ` ${t('usage.base_note')}`) }
   }
 
   function mix(key: string, report: Report | null): Mix {

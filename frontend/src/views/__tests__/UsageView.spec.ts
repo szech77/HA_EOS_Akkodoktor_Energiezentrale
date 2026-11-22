@@ -101,9 +101,47 @@ describe('report pages', () => {
     await flush()
     // 0.60 € is only the known part; the average of the priced energy is an estimate.
     expect(page.kpis()[2]?.[2]).toBe('Ø ≈ 30 ct/kWh')
+    expect(page.text('.usage-two > details:first-child summary .tag')).toBe('Ø ≈ 30 ct/kWh')
+    expect(page.text('.usage-two > details:first-child .ph')).toBe('Ø ≈ 30 ct/kWh')
     expect(page.kpis()[2]?.[1]).toContain(de['billing.known_portion'])
     expect(page.text('#usage-charts title')).toContain('Ø ≈ 30 ct/kWh')
     expect(page.text('#usage > details:last-of-type')).toContain(de['billing.estimated_average_note'])
+  })
+
+  it.each(['day', 'month', 'year'] as const)('show the weighted all-source price above the breakdown of each %s report', async period => {
+    const mixed = amount(4, 1.1)
+    mixed.sources['pv'] = { kwh: 1, cost_eur: 0.1, cost_unknown_kwh: 0 }
+    mixed.sources['battery'] = { kwh: 1, cost_eur: 0.2, cost_unknown_kwh: 0 }
+    mixed.sources['grid'] = { kwh: 2, cost_eur: 0.8, cost_unknown_kwh: 0 }
+    const data = report({
+      period, date: period === 'year' ? '2026-01-01' : '2026-02-01',
+      end: period === 'year' ? '2027-01-01' : period === 'day' ? '2026-02-02' : '2026-03-01',
+      base_days: 28, settings: { base_price_eur_month: 18.25 },
+      consumers: {
+        ...Object.fromEntries(['house', 'heat', 'car', 'car/one'].map(key => [key, { total: mixed, bins: [] }])),
+        export: { total: pvAmount(2, 0.16), bins: [] },
+        storage: { total: amount(100, 40), bins: [] },
+      },
+    })
+    for (const key of ['house', 'heat', 'car', 'car/one', 'total']) {
+      const page = open(() => data, { storage: memory({ 'eos-energiezentrale.billing-period': period }) })
+      page.page.show(key)
+      await flush()
+      // (0.10 EUR PV + 0.20 EUR battery + 0.80 EUR grid) / 4 kWh, rather than the 40 ct grid tariff.
+      expect(page.text('.usage-two > details:first-child summary .tag')).toBe('Ø 27,5 ct/kWh')
+      expect(page.text('.usage-two > details:first-child .ph')).toBe('Ø 27,5 ct/kWh')
+      expect(page.text('.usage-two > details:first-child')).toContain('40 ct/kWh')
+      reset()
+    }
+  })
+
+  it('leave the average price unavailable when the consumption has no known costs', async () => {
+    const data = report({ date: '2026-02-01', end: '2026-03-01', consumers: { house: { total: amount(4, 0, 4), bins: [] } } })
+    const page = open(() => data)
+    page.page.show('house')
+    await flush()
+    expect(page.text('.usage-two > details:first-child summary .tag')).toBe('Ø — ct/kWh')
+    expect(page.text('.usage-two > details:first-child .ph')).toBe('Ø — ct/kWh')
   })
 
   it('show grid import above and feed-in below, prices and where the PV energy went', async () => {
@@ -241,7 +279,7 @@ describe('report pages', () => {
     const view = { grid_kwh: 1, grid_price_ct: 30, grid_cost_eur: 0.3, self_kwh: 4, self_price_ct: 10, self_cost_eur: 0.4, cost_available: true, cost_eur: 0.7,
       self_origin: { pv_direct: part(2, 0.2, 10), battery_pv: part(1, 0.11, 11), battery_grid: part(1, 0.33, 33), battery_unknown: part(0, 0, null) } }
     const page = open(() => ({ date: '2026-11-01', end: '2026-12-01', consumers: {}, views: { house: view } }))
-    const prices = (data: object) => page.page.store.text.prices('house', data as Report).rows.map(row => row.label).join('|')
+    const prices = (data: object) => page.page.store.text.prices('house', { consumers: {}, ...data } as Report).rows.map(row => row.label).join('|')
     const labels = prices({ views: { house: view } })
     expect(labels).toMatch(new RegExp(`${de['usage.self_pv_direct']!.split('{')[0]}.*${de['usage.self_battery_pv']!.split('{')[0]}.*${de['usage.self_battery_grid']!.split('{')[0]}`))
     expect(labels).not.toContain(de['usage.self_power']!.split('{')[0])

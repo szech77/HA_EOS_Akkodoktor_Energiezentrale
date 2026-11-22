@@ -87,7 +87,9 @@ const legend = computed<LegendItem[]>(() => {
 })
 // Older days have no minute values left; their kW view shows hourly energy instead.
 const binHint = computed(() => bin.value ?? t(period.value === 'day' ? 'usage.bin_hint' : 'usage.bin_drill') + (shownUnit.value === 'kw' && !profile.value && report.value ? ` ${t('usage.profile_hourly')}` : ''))
-const priceTag = computed(() => text.price(key.value === 'grid' ? balance.value?.grid_import_price_ct : view.value?.grid_price_ct))
+const priceTag = computed(() => amount.value
+  ? text.averageCostLabel(amount.value)
+  : text.price(key.value === 'grid' ? balance.value?.grid_import_price_ct : undefined))
 const prices = computed(() => text.prices(key.value, report.value))
 const mix = computed(() => text.mix(key.value, report.value))
 const facts = computed(() => (view.value?.facts ?? []).map(fact => text.fact(fact)))
