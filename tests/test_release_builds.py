@@ -403,7 +403,46 @@ def test_frontend_package_updates_get_automatic_notes_and_majors_need_an_entry(p
 
 def test_npm_ranges_and_invalid_package_files_are_not_treated_as_pins():
     assert release._npm('{"dependencies":{"a":"^1.0.0","b":"1.2.3","c":"file:../c"}}') == {'b':'1.2.3'}
+    assert release._npm(json.dumps({'devDependencies': {
+        'ranged': 'npm:typescript@^7.0.2', 'tagged': 'npm:typescript@latest',
+        'scoped_range': 'npm:@typescript/typescript6@~6.0.2',
+        'missing_version': 'npm:@typescript/typescript6', 'invalid': 'npm:typescript@7.0.2/extra',
+    }})) == {}
     assert release._npm('not json') == {}
+
+
+@pytest.mark.parametrize('name,target,old,new', [
+    ('typescript', '@typescript/typescript6', '6.0.2', '6.0.3'),
+    ('@typescript/native', 'typescript', '7.0.2', '7.1.0'),
+])
+def test_exact_npm_alias_updates_get_automatic_release_notes(project, name, target, old, new):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github,
+                 json.dumps({'devDependencies': {name: f'npm:{target}@{old}'}}),
+                 json.dumps({'devDependencies': {name: f'npm:{target}@{new}'}}),
+                 release.FRONTEND_PACKAGE)
+    result = plan(project, github, 'stable')
+    assert result['version'] == '0.19.1'
+    assert f'`{name}` von {old} auf {new} aktualisiert (`frontend/package.json`)' in result['notes']
+
+
+@pytest.mark.parametrize('name,old,new', [
+    ('typescript', '5.9.3', 'npm:@typescript/typescript6@6.0.2'),
+    ('@typescript/native', 'npm:typescript@7.0.2', 'npm:typescript@8.0.0'),
+])
+def test_npm_alias_major_updates_need_an_own_entry(project, name, old, new):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github,
+                 json.dumps({'devDependencies': {name: old}}),
+                 json.dumps({'devDependencies': {name: new}}), release.FRONTEND_PACKAGE)
+    with pytest.raises(ValueError, match='needs its own changelog entry'):
+        plan(project, github)
+    text = (project/'CHANGELOG.md').read_text(encoding='utf-8').replace(
+        '### Bugfixes\n\n- Keine.', f'### Bugfixes\n\n- {name} auf die neue Hauptversion umgestellt.', 1)
+    (project/'CHANGELOG.md').write_text(text, encoding='utf-8')
+    assert 'neue Hauptversion' in plan(project, github)['notes']
 
 
 def built(root, files={'eos-vue.js':'globalThis.EosForecast={};'}):

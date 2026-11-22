@@ -69,6 +69,17 @@ Das Bundle ist nicht versioniert (`.gitignore`); die CI baut es für jedes Relea
 legt es in den Release-Commit. Für einen lokalen Test in Home Assistant nach dem Build
 den Ordner `custom_components/eos_energiezentrale` kopieren und HA neu starten.
 
+TypeScript 7.0.2 wird als `@typescript/native` installiert und stellt das native
+`tsc` bereit. Für `vue-tsc` 3.3.14 bleibt die JavaScript-Compiler-API nötig, die
+TypeScript 7.0 nicht mehr enthält. Daher verweist `typescript` über einen exakt
+gepinnten npm-Alias auf Microsofts `@typescript/typescript6` 6.0.2; das Lockfile
+fixiert dessen Compiler auf 6.0.3. `npm run typecheck`
+und die Typprüfung vor dem Build prüfen damit weiterhin TypeScript-Dateien und
+Vue-Komponenten einschließlich Templates über TypeScript 6. Die beiden Compiler
+folgen dem [offiziellen Parallelbetrieb von TypeScript 6 und 7](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/).
+Bei Updates die API-Kompatibilität von `vue-tsc` prüfen; ein direkter Austausch
+des `typescript`-Alias gegen Version 7 lässt die Vue-Typprüfung abbrechen.
+
 Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
 (`C:\...`, z. B. in PowerShell); mit `c:\...` findet Vitest seinen Runner nicht.
 

@@ -77,7 +77,7 @@ def _pins(text):
 
 
 def _npm(text):
-    """Exact npm versions of direct dependencies; ranges are not pins and are ignored."""
+    """Exact npm versions, including aliases; ranges are not pins and are ignored."""
     try:
         package = json.loads(text or '{}')
     except ValueError:
@@ -85,6 +85,9 @@ def _npm(text):
     result = {}
     for group in ('dependencies', 'devDependencies'):
         for name, version in (package.get(group) or {}).items():
+            if isinstance(version, str) and version.startswith('npm:'):
+                alias = re.fullmatch(r'npm:(?:@[^/@\s]+/)?[^/@\s]+@([0-9][0-9A-Za-z.+-]*)', version)
+                version = alias[1] if alias else None
             if isinstance(version, str) and re.fullmatch(r'[0-9][0-9A-Za-z.+-]*', version):
                 result[name] = version
     return result
