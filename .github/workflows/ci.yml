@@ -30,18 +30,29 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install test dependencies
         run: python -m pip install -r requirements-dev.txt -r requirements-test.txt
       - name: Behavioral and native Home Assistant tests
         run: python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --cov-report=term-missing
       - name: Browser syntax and authenticated panel bridge
         run: |
-          node --check custom_components/eos_energiezentrale/energy/web/accounting.js
-          node --check custom_components/eos_energiezentrale/energy/web/app.js
+          node --check custom_components/eos_energiezentrale/energy/web/loader.js
           node --check custom_components/eos_energiezentrale/energy/web/panel.js
-          node --check custom_components/eos_energiezentrale/energy/web/forecast.js
-          node --check custom_components/eos_energiezentrale/energy/web/status.js
           node --test tests/*.test.cjs
+      # Lifecycle scripts stay disabled; the lockfile pins the whole dependency tree.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+      - name: Frontend type check and component tests
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npm test
+      - name: Build the Vue bundle
+        working-directory: frontend
+        run: npm run build
 
   security:
     name: Source security
@@ -58,6 +69,9 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
       - name: Install security tools
         id: tools
         run: python -m pip install -r requirements-dev.txt
@@ -70,6 +84,11 @@ jobs:
         id: audit
         continue-on-error: true
         run: python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict --format json --output "$RUNNER_TEMP/pip-audit.json"
+      - name: Audit frontend dependencies
+        id: npm_audit
+        continue-on-error: true
+        working-directory: frontend
+        run: npm audit --audit-level=moderate
       - name: Install verified native Semgrep engine
         id: semgrep_tools
         continue-on-error: true
@@ -115,6 +134,7 @@ jobs:
         env:
           BANDIT: ${{ steps.bandit.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
+          NPM_AUDIT: ${{ steps.npm_audit.outcome }}
           SEMGREP_TOOLS: ${{ steps.semgrep_tools.outcome }}
           SEMGREP_RULES: ${{ steps.semgrep_rules.outcome }}
           SEMGREP: ${{ steps.semgrep.outcome }}
@@ -124,6 +144,7 @@ jobs:
         run: |
           test "$BANDIT" = success
           test "$AUDIT" = success
+          test "$NPM_AUDIT" = success
           test "$SEMGREP_TOOLS" = success
           test "$SEMGREP_RULES" = success
           test "$SEMGREP" = success
@@ -238,8 +259,8 @@ jobs:
             test "$CLEANUP" = skipped
           fi
 
-  publish:
-    name: Publish stable or beta HACS release
+  release_decision:
+    name: Decide whether to publish a release
     needs: required
     if: >-
       !cancelled() && needs.required.result == 'success' &&
@@ -248,7 +269,56 @@ jobs:
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') ||
       startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 65
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      approved: ${{ steps.decision.outputs.approved }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Create release decision issue
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: python tools/release_approval.py --repository "$REPOSITORY" --create-only
+      - name: Wait for yes or no from szech77
+        id: decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.request.outputs.issue_number }}
+        run: python tools/release_approval.py --repository "$REPOSITORY" --wait-for "$ISSUE_NUMBER"
+      - name: Close the decision issue
+        if: ${{ always() && steps.request.outputs.issue_number != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.request.outputs.issue_number }}
+        run: python tools/release_approval.py --repository "$REPOSITORY" --close "$ISSUE_NUMBER"
+
+  publish:
+    name: Publish stable or beta HACS release
+    needs: [required, release_decision]
+    if: >-
+      !cancelled() && needs.required.result == 'success' &&
+      needs.release_decision.result == 'success' && needs.release_decision.outputs.approved == 'true' &&
+      github.event_name == 'push' &&
+      github.repository == 'szech77/HA_EOS_Akkodoktor_Energiezentrale' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') ||
+      startsWith(github.ref, 'refs/heads/bug/') || startsWith(github.ref, 'refs/heads/bugfix/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
     concurrency:
@@ -261,6 +331,15 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      # HACS installs the release tag; release.py adds this build to the release commit.
+      - name: Build the Vue bundle from the checked source
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm run build
       - name: Publish generated version and immutable release snapshot
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

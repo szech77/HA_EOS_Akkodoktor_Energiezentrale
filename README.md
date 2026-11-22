@@ -41,7 +41,7 @@ Stunde tut (lädt mit PV-Überschuss, lädt aus dem Netz, deckt das Haus, hält 
 Ladestand); der EOS-Modus steht klein darunter. Folgen zwei Wechsel mit derselben
 Wirkung aufeinander, erscheint nur der erste. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
 
-![Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten Ereignissen und Heute-Kacheln](docs/screenshots/overview.png)
+![Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten Ereignissen und Heute-Kacheln](docs/screenshots/overview.jpg)
 
 ### Hausspeicher: Verlauf und EOS-Plan
 
@@ -49,7 +49,7 @@ Die farbige Zeitleiste zeigt vergangene und geplante Betriebsmodi. Darunter steh
 Lade-/Entladeleistung, PV-Produktion, Ladezustand und Strompreis. Durchgezogene
 Linien zeigen Messwerte, gestrichelte Linien die Prognose.
 
-![Hausspeicher mit EOS-Moduszeitleiste, Leistungs-, SoC- und Preisverlauf](docs/screenshots/battery.png)
+![Hausspeicher mit EOS-Moduszeitleiste, Leistungs-, SoC- und Preisverlauf](docs/screenshots/battery.jpg)
 
 <details>
 <summary><strong>E-Auto: Ladeleistung, Ladeziel und Prognose</strong></summary>
@@ -95,7 +95,7 @@ Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
 Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt
 dann beim aktuellen SoC und berücksichtigt verfügbare PV-Überschussprognosen.
 
-![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.png)
+![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.jpg)
 
 </details>
 
@@ -106,7 +106,7 @@ Aktuelle PV-Leistung und Wetter, stündliche Leiste mit Wetter über dem erwarte
 PV-Ertrag, Tageskarten für drei Tage und die Folgen für Speicher, Einspeisung und
 Auto. Der bisherige Leistungsverlauf ist über **Verlauf & Diagramme** erreichbar.
 
-![PV & Wetter mit stündlicher Prognose, Tageskarten und „Was EOS daraus macht“](docs/screenshots/pv.png)
+![PV & Wetter mit stündlicher Prognose, Tageskarten und „Was EOS daraus macht“](docs/screenshots/pv.jpg)
 
 </details>
 
@@ -115,8 +115,48 @@ Auto. Der bisherige Leistungsverlauf ist über **Verlauf & Diagramme** erreichba
 
 Jede Auswertung hat Tag/Monat/Jahr, eine Kernaussage, vier Kennzahlen, den Verlauf
 nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt“.
+Der Preis über der Kostenaufschlüsselung ist der energiegewichtete Mittelwert
+aus PV, Speicher und Netz für den gewählten Zeitraum. Die Quellen behalten ihre
+jeweiligen Preise. Die Monatsansicht im Beispiel enthält die bisher erfassten
+Werte vom 8. und 9. November.
 
-![Auswertung Hausverbrauch für einen Tag mit Kennzahlen, Verlauf nach Herkunft, Preisen und Auffälligkeiten](docs/screenshots/usage.png)
+![Monatsauswertung Hausverbrauch mit Durchschnittspreis aller Quellen und Aufschlüsselung der Speicherherkunft](docs/screenshots/usage.jpg)
+
+</details>
+
+<details>
+<summary><strong>Gesamtbilanz: Durchschnittspreis und Grundgebühr</strong></summary>
+
+Die Gesamtbilanz schlüsselt Netzbezug, direkten PV-Verbrauch und Speicherstrom
+nach Herkunft auf. Grundgebühr und Einspeisevergütung sind eigene Bilanzposten;
+sie sind nicht im Durchschnittspreis der verbrauchten Energie enthalten.
+Eine tägliche Grundgebühr erscheint mit bis zu sechs Nachkommastellen. Die
+Berechnung verwendet den eingegebenen Betrag ohne diese Anzeigerundung.
+
+![Gesamtbilanz mit mittlerem Energiepreis, täglicher Grundgebühr und Kosten nach Herkunft](docs/screenshots/costs.jpg)
+
+</details>
+
+<details>
+<summary><strong>Tarifeinstellungen: Monats- oder Tagesgebühr und fester kWh-Preis</strong></summary>
+
+Unter **Einstellungen → Kosten → Netztarif und Grundgebühr** erhält jeder
+Tarifwechsel einen Eintrag mit **Grundgebühr ab**. Als Betrag sind Monats- oder
+Tagesgebühren möglich, auch mit mehr als fünf Nachkommastellen. Je Eintrag wird
+zwischen dynamischem Preissensor und festem Brutto-Arbeitspreis in ct/kWh gewählt.
+Die Liste kann vergangene und zukünftige Änderungen enthalten.
+
+Rückwirkende Festpreise bewerten auch vorhandene und bereits entladene Netzanteile
+des Speichers anhand ihrer Ladetage und einschließlich der Speicherverluste neu.
+Aus älteren Stundenbuchungen rekonstruierte Ladeanteile bleiben als Schätzung
+gekennzeichnet. Ohne bekannten Ladetag wird kein später beginnender Tarif
+unterstellt; ein Eintrag ohne Beginn deckt auch diese Anteile ab.
+Der Tarif für die EOS-Planung wird weiterhin separat in EOS eingestellt.
+
+Die Aufnahme zeigt beispielhaft den Wechsel von Monats- zu Tagesgebühr und einen
+zukünftigen Festpreis. Die Beträge sind synthetische Beispiele.
+
+![Tarifliste mit Gültigkeitsdatum, Monats- und Tagesgebühr sowie festem Arbeitspreis](docs/screenshots/settings.jpg)
 
 </details>
 
@@ -126,7 +166,7 @@ nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt�
 Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
 Übersicht; Tagesbilanz und weitere Informationen folgen darunter beim Scrollen.
 
-<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit Statusband, Kennzahlen, Energiefluss und EOS-Plan">
+<img src="docs/screenshots/mobile.jpg" width="375" alt="Oberer Bereich der mobilen Übersicht mit Statusband, Kennzahlen und Energiefluss">
 
 </details>
 
@@ -147,8 +187,19 @@ erreichbar sein; die Änderungen müssen zuvor nach GitHub übertragen worden se
    steuerbaren Bereiche oder unter **Einstellungen → System → Gerätesteuerung** nur die
    Speichersteuerung bzw. die E-Auto-Ladesteuerung einschalten.
 
-Alternativ `custom_components/eos_energiezentrale` nach
-`/config/custom_components/eos_energiezentrale` kopieren und HA neu starten.
+Alternativ `custom_components/eos_energiezentrale` aus einem Release-Tag nach
+`/config/custom_components/eos_energiezentrale` kopieren und HA neu starten. Releases
+enthalten das gebaute Panel-Bundle `energy/web/vue/eos-vue.js`. Aus einem Quellbranch
+vorher das Frontend bauen (Node.js 24):
+
+```sh
+cd frontend
+npm ci
+npm run build
+```
+
+Der Build schreibt das Bundle nach `custom_components/eos_energiezentrale/energy/web/vue/`;
+danach den gesamten Ordner `custom_components/eos_energiezentrale` kopieren.
 Eine Aufnahme in den HACS-Standardkatalog ist dafür nicht erforderlich.
 
 ## Konfiguration
@@ -931,12 +982,19 @@ python -m venv .venv
 python -m pip install -r requirements-dev.txt -r requirements-test.txt
 python -m pytest --cov=custom_components.eos_energiezentrale --cov-branch
 node --test tests/*.test.cjs
+cd frontend && npm ci && npm run typecheck && npm test && npm run build
 ```
 
 Details zu Prüfungen, Releases und vorbereitetem Branchschutz: [CI.md](CI.md).
 
-Versionen vergibt die CI automatisch: erfolgreiche Arbeitsbranches liefern
-Beta-Versionen, ein Merge nach `main` ein stabiles Release. Für Betas in HACS
+Versionen vergibt die CI automatisch. Nach den erfolgreichen Prüfungen wartet der
+Push-/Merge-Lauf auf deine Antwort im automatisch angelegten GitHub-Issue; der Link
+steht in der Zusammenfassung des Jobs **Decide whether to publish a release**.
+`szech77` antwortet als eigenen Kommentar exakt **ja** zum Veröffentlichen oder
+**nein** zum erfolgreichen Beenden ohne Release. Schließen oder 60 Minuten ohne
+Antwort überspringen ebenfalls. Arbeitsbranches liefern nach Freigabe Betas,
+`main` stabile Releases. Technische Fehler bleiben Fehler. Details: [CI.md](CI.md).
+Für Betas in HACS
 **Beta-Versionen anzeigen** aktivieren; der Release-Titel nennt den Branch.
 Für Beiträge genügt der Abschnitt **New Version** im [Changelog](CHANGELOG.md).
 Die vollständige nummerierte Historie steht im Changelog des jeweiligen Release-Tags.
@@ -1169,7 +1227,7 @@ Alle Auswertungen sind gleich aufgebaut. Oben wechseln Chips zwischen PV-Erzeugu
 - **‹ ›** blättern; **Aktuell** springt zurück in den laufenden Zeitraum. Ein Tages- oder Monatsbalken öffnet die nächstfeinere Ansicht, ein Stundenbalken zeigt seine Werte.
 - **Kernaussage und vier Kennzahlen:** bei Verbrauchern Verbrauch, Eigenversorgung, Kosten und Ersparnis gegenüber reinem Netzbezug (Eigenstrommenge × Ø-Netzstrompreis des Zeitraums − Eigenstromkosten); in der Gesamtbilanz Verbrauch, Autarkie, Kosten inklusive Grundpreis und Netto; bei Netz & Einspeisung Einspeisung, Bezug, Eigenverbrauchsquote und Autarkie.
 - **Verlauf:** gestapelt nach PV, Akku, Netz und unbekannter Quelle; bei Netz & Einspeisung der Bezug nach oben und die Einspeisung nach unten. Die Tagesansicht bietet drei Darstellungen: **kW** zeigt die Leistung über die Uhrzeit als farbig gefüllte, übereinanderliegende Flächen; beim Überfahren mit der Maus (oder Antippen) erscheinen Uhrzeit, Gesamtleistung und die Anteile am Zeiger. Grundlage sind die minütlichen Messwerte des lokalen Verlaufs: Das Backend teilt jeden Messpunkt wie die Abrechnung anteilig auf PV, Akku und Netz auf (bei nicht aufgehender Bilanz auf Unbekannt) und fasst je 2 Minuten zusammen; Lücken über 10 Minuten bleiben Lücken. Der lokale Verlauf reicht etwa zwei Tage zurück; für ältere Tage zeigt kW die Stundenbalken. **kWh** und **€** zeigen Balken je Stunde, ein angeklickter Balken zeigt seine Details. Monat und Jahr bieten kWh und € als Balken je Tag bzw. Monat. Der Umschalter **kWh / €** zeigt statt der Energie die Kosten je Quelle (PV zum PV-Kostenansatz, Akku zum Speicherpreis, Netz zum Bezugspreis) bzw. bei Netz & Einspeisung die Bezugskosten nach oben und die Einspeisevergütung nach unten. Die Beträge je Zeitabschnitt berechnet das Backend; Kosten unbekannter Herkunft fehlen im Balken und sind im Tooltip als bekannter Anteil gekennzeichnet. Die Auswahl merkt sich der Browser.
-- **Preise & Kosten:** Ø-Netzstrompreis, Netzbezug, PV direkt (zum PV-Kostenansatz) sowie der Speicherstrom getrennt nach Herkunft seiner Ladung: PV-geladen (PV-Kostenansatz) und netzgeladen (Netzpreis beim Laden), jeweils einschließlich der Speicherverluste, und Summe. Der Speicher führt dafür mit, wie viel seines Inhalts aus PV bzw. dem Netz stammt, und gibt diese Anteile beim Entladen anteilig weiter. Speicherstrom ohne erfasste Herkunft, etwa aus der Zeit vor dieser Aufschlüsselung, steht als „Herkunft unbekannt“ mit dem Speicherpreis. Gesamtbilanz und Netz & Einspeisung enthalten zusätzlich den anteiligen Grundpreis und die Einspeisevergütung; Netz & Einspeisung zeigt den Saldo gegenüber dem Netz einschließlich Speicherladung aus dem Netz.
+- **Preise & Kosten:** Bei Verbrauchern und der Gesamtbilanz zeigen das Preisfeld im Kopf und die Überschrift über der Aufschlüsselung den energiegewichteten Durchschnittspreis aus allen Quellen (PV, Speicher und Netz) für den gewählten Zeitraum. Grundlage sind die bekannten Energiekosten geteilt durch die zugehörige bewertete Energiemenge; Schätzungen tragen `≈`, ohne Preisgrundlage steht `—`. Grundpreis und Einspeisevergütung gehören nicht zu diesem Energiepreis. Die Zeilen zeigen Netzbezug, PV direkt (zum PV-Kostenansatz) sowie den Speicherstrom getrennt nach Herkunft seiner Ladung: PV-geladen (PV-Kostenansatz) und netzgeladen (Netzpreis beim Laden), jeweils einschließlich der Speicherverluste, und Summe. Der Speicher führt dafür mit, wie viel seines Inhalts aus PV bzw. dem Netz stammt, und gibt diese Anteile beim Entladen anteilig weiter. Speicherstrom ohne erfasste Herkunft, etwa aus der Zeit vor dieser Aufschlüsselung, steht als „Herkunft unbekannt“ mit dem Speicherpreis. Gesamtbilanz und Netz & Einspeisung enthalten zusätzlich den anteiligen Grundpreis und die Einspeisevergütung; Netz & Einspeisung zeigt den Saldo gegenüber dem Netz einschließlich Speicherladung aus dem Netz.
 - **Woher kam der Strom?** bzw. bei Netz & Einspeisung **Wohin ging der PV-Strom?** (direkt verbraucht, in den Speicher, eingespeist).
 - **Was auffällt:** Das Backend wählt beste und schwächste Zeitabschnitte, höchste Einspeisung und höchsten Bezug, Tagesdurchschnitte, Ladetage und die Ersparnis aus; die Gesamtbilanz verlinkt hier die einzelnen Verbraucher.
 - Auf schmalen Bildschirmen sind Preise, Herkunft und „Was auffällt“ zunächst eingeklappt.
@@ -1211,8 +1269,12 @@ Anfangspreis eingeklappt unter **Wirkungsgrade und Anfangspreis**):
 | Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
-| Grundpreis gesamt | €/Monat brutto, Summe aller festen Monatsbeträge. Wird tageweise (Monatsbetrag × 12 / 365) ab Aufzeichnungsbeginn bis heute verteilt und nur in Gesamtbilanz und Netz & Einspeisung ausgewiesen. Standard 0. |
+| Grundgebühr Netzbezug | Liste mit „Grundgebühr ab“, Betrag in € brutto und Abrechnung pro Monat oder Tag. Tarifwechsel sind rückwirkend und für die Zukunft möglich; je Kalendertag gilt der letzte Eintrag ab seinem Datum. Ein leerer Beginn übernimmt bestehende Monatswerte ab Aufzeichnungsbeginn. Vor dem ersten datierten Eintrag bzw. bei leerer Liste fällt keine Grundgebühr an. Monatsbetrag × 12 / 365 bzw. Tagesbetrag, ohne Zwischenrundung, ab Aufzeichnungsbeginn bis heute; nur Gesamtbilanz und Netz & Einspeisung. Tarifabschnitte werden getrennt ausgewiesen. Standard 0. |
+| Stromtarif / Arbeitspreis | Je Eintrag wahlweise dynamischer Preissensor (Standard) oder fester Brutto-Arbeitspreis in ct/kWh, mit demselben Gültigkeitsbeginn wie die Grundgebühr. Direkter Netzbezug und Netzladung des Speichers verwenden den Festpreis; für diesen Zeitraum ist zur Kostenbewertung kein Preissensor erforderlich. Rückwirkende Änderungen bewerten sowohl den aktuellen netzgeladenen Akkuinhalt als auch bereits entladene Netzanteile in vergangenen Auswertungen nach dem jeweiligen Ladetag und einschließlich der Speicherverluste neu. PV-Anteile und Energiemengen bleiben erhalten. Neue Buchungen speichern die Ladetage mit; bei älteren Stundenbuchungen sind Reihenfolge innerhalb der Stunde und damalige Wirkungsgrade nicht vollständig rekonstruierbar, daher ist deren Neubewertung eine gekennzeichnete Schätzung. Ohne rekonstruierbaren Ladetag wird kein später beginnender Tarif unterstellt; ein Eintrag ohne Beginn deckt auch diese Anteile ab. Die Messhistorie wird nicht überschrieben. Die EOS-Planung hat ihre eigene Tarifkonfiguration in EOS. |
 | Anfangsbestand: Preis | Optionaler Preis je gespeicherter kWh bei der ersten Initialisierung. Leer: Schätzung als PV-Ladung zum aktuellen PV-Kostenansatz einschließlich Ladeverlusten. |
+
+Bei der Grundgebühr werden auch mehr als fünf Nachkommastellen akzeptiert. Die Tarifanzeige
+rundet auf höchstens sechs Nachkommastellen; gespeichert und berechnet wird ohne diese Anzeigerundung.
 
 Aus EOS werden `devices.batteries.<battery_resource>.capacity_wh`, `charging_efficiency`
 und `discharging_efficiency` gelesen. Dies verändert keine EOS-Konfiguration. Fehlen diese
@@ -1228,6 +1290,30 @@ pro Verbraucher ist mit den vorhandenen Zählern nicht möglich. Größere Wider
 in der Leistungsbilanz erscheinen als unbekannte Quelle. Die Berechnung setzt die
 Leistungen als Werte auf derselben AC-Bilanzgrenze voraus; abweichende DC-Speichermessungen
 führen zu zusätzlichen Modellabweichungen.
+
+Unbekannte Herkunft ergänzt die Auswertung nachträglich aus den bekannten
+Quellenanteilen davor und danach: Die Anteile von PV, Akku und Netz werden nach
+Zeitabstand linear interpoliert und auf den unveränderten unbekannten Verbrauch
+verteilt. Die beiden Stützpunkte dürfen höchstens sechs Stunden auseinanderliegen;
+ohne beidseitige Grundlage bleibt die Herkunft unbekannt. Bereits bekannte Anteile
+werden erhalten. Im kW-Diagramm erfolgt dies vor der Zwei-Minuten-Zusammenfassung
+an den vorhandenen Messpunkten; fehlende Messpunkte und Lücken werden nicht ergänzt.
+Geschätzte Quellenleistungen tragen im Tooltip **≈**. Die Stützpunkte dürfen auch
+vom angrenzenden Tag stammen, soweit der lokale Verlauf sie noch enthält.
+
+Die dauerhafte lokale Bilanz hat nur Stundenaggregate: Dort werden unbekannte
+Verbraucheranteile aus den bekannten Anteilen benachbarter Stunden desselben
+Verbrauchers geschätzt, bevor die Tages-, Monats- und Jahressummen entstehen.
+Auch teilweise bekannte Stunden können mit ihrem bekannten Anteil als Stützpunkt
+dienen. Liegt eine Störung innerhalb nur einer Stunde, ist die Ergänzung deshalb
+gröber als im Leistungsdiagramm; fehlen Nachbarstunden, bleibt sie offen.
+Kosten und Herkunft der Akkuenergie werden anteilig aus diesen Stützpunkten
+angenähert; dort fehlende Preise bleiben unbewertet. Die ergänzte Energie und ihre
+Kosten sind mit **≈** gekennzeichnet. Dies gilt auch für schon aufgezeichnete lokale
+Bilanzdaten. Die gespeicherten Rohaggregate und der laufende Akku-Kostenbestand
+werden dabei nicht verändert. Speicherladung und Einspeisung werden nicht auf
+diese Weise umverteilt; die Influx-Rekonstruktion bleibt beim oben beschriebenen
+Verfahren. Keine dieser Schätzungen fließt in die Gerätesteuerung ein.
 
 Einspeisung und Speicherladung werden je Stunde mitgeschrieben. Die Einspeisung wird
 mit dem PV-Kostenansatz (standardmäßig der EOS-Einspeisevergütung) des jeweiligen

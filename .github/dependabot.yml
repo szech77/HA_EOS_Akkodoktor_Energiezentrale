@@ -14,3 +14,13 @@ updates:
       cronjob: "0 8 * * *"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "cron"
+      cronjob: "0 8 * * *"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    # Updates must still pass the 14-day minimum age used for the initial pins.
+    cooldown:
+      default-days: 14

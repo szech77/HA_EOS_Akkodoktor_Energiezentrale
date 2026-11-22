@@ -7,6 +7,9 @@ Verpflichtender Sammelstatus: **Required checks**. Er hängt ab von:
 
 - Fachlichen Tests und HA-Schnittstellentests mit Python 3.14 / HA 2026.11.0.
 - JavaScript-Syntax und Tests der authentifizierten Panel-Kommunikation.
+- Frontend unter `frontend/`: `npm ci --ignore-scripts`, Typprüfung (`vue-tsc`),
+  Komponententests (Vitest) und Build des Vue-Bundles; `npm audit --audit-level=moderate`
+  im Sicherheitsjob.
 - Bandit, Semgrep CE für Python/JavaScript (Regeltests und Scan), pip-audit für
   Entwicklungs-/HA-Testabhängigkeiten und Trivy-Geheimnisscan.
 - Home-Assistant-hassfest und HACS-Validierung. Der Brands-Katalog ist für dieses
@@ -58,7 +61,8 @@ Einträge für das nächste stabile Release.
 
 Die Versionsplanung vergleicht außerdem die gepinnten Abhängigkeiten mit dem
 zuletzt stabil veröffentlichten Quellcommit: exakte Pins (`name==version`) in
-`requirements-dev.txt` und `requirements-test.txt` sowie Actions mit vollständigem
+`requirements-dev.txt` und `requirements-test.txt`, exakte Versionen in
+`dependencies`/`devDependencies` von `frontend/package.json` sowie Actions mit vollständigem
 Commit-SHA und Versionskommentar (`uses: owner/action@<sha> # vX.Y.Z`) in
 `.github/workflows/*.yml`. Für jedes geänderte Patch- oder Minor-Update, das in
 keinem neuen Stichpunkt namentlich genannt ist, ergänzt sie in den Release-Notes
@@ -91,8 +95,8 @@ der Bot-Commit anschließend auch lokal übernommen.
 Da ein Push mit `GITHUB_TOKEN` keinen weiteren Push-Lauf startet, löst die CI
 ausdrücklich einen `workflow_dispatch` für den bereinigten Branch aus. Dieser
 prüft den neuen Commit vollständig, bereinigt aber nicht erneut und veröffentlicht
-keine zweite Beta. Die Beta des ursprünglichen Pushes bleibt an dessen geprüften
-Quellcommit gebunden. Die Sammelprüfung des Push-Laufs verlangt zusätzlich eine
+kein Release und fordert auch keine Release-Freigabe an.
+Die Sammelprüfung des Push-Laufs verlangt zusätzlich eine
 erfolgreiche Bereinigung beziehungsweise einen bestätigten unveränderten Entwurf.
 Fehler bei Branch-Update oder Folgeprüfung werden nicht als Erfolg gewertet.
 Die Dispatch-Ausnahme ist im [GitHub-Verhalten für GITHUB_TOKEN](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)
@@ -105,23 +109,65 @@ wird nicht umgangen: Verbietet eine Regel Bot-Updates auf dem Arbeitsbranch,
 schlägt die Bereinigung sichtbar fehl. `main`, Forks und Pull-Request-Läufe werden
 nicht automatisch beschrieben.
 
-Nach **allen** erfolgreichen Pflichtprüfungen gelten folgende Kanäle:
+Pushes und Merges starten weiterhin alle Pflichtprüfungen. Nach **allen**
+erfolgreichen Pflichtprüfungen wartet derselbe Lauf im Job `release_decision`
+auf eine Ja/Nein-Antwort im automatisch angelegten GitHub-Issue. Ohne ausdrückliches
+Ja starten weder der Release-Build noch die Veröffentlichung. Nach der Entscheidung
+gelten folgende Kanäle:
 
 | Auslöser im Originalrepository | Veröffentlichung |
 | --- | --- |
-| Push auf `feature/**`, `bug/**`, `bugfix/**` | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
-| Push/Merge nach `main` | `vX.Y.Z` als stabiles, neuestes Release |
-| Pull Request, Merge Queue, Fork, manueller Lauf | Nur Prüfungen, keine Veröffentlichung |
+| Push auf `feature/**`, `bug/**`, `bugfix/**`, danach Freigabe | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
+| Push/Merge nach `main`, danach Freigabe | `vX.Y.Z` als stabiles, neuestes Release |
+| Nein, Schließen ohne Antwort oder 60 Minuten ohne Entscheidung | Kein Release; Entscheidung erfolgreich, Publish-Job übersprungen, Workflow grün |
+| Pull Request, Merge Queue, Fork, manueller Lauf, Bot-Folgeprüfung | Nur Prüfungen, keine Freigabeanfrage und keine Veröffentlichung |
 
-Der Publish-Job prüft ausdrücklich `!cancelled()` und ein erfolgreiches
-`needs.required.result`. Das ist auch nach einem grünen Sammelstatus nötig:
+Im betreffenden Lauf unter **Actions → CI → Decide whether to publish a release**
+steht der Issue-Link im Log und in der Job-Zusammenfassung. Das Issue nennt Branch,
+Kanal, vollständigen geprüften Quellcommit, Laufnummer und Versuch und wird
+`szech77` zugewiesen. Als **eigenen Kommentar** exakt antworten:
+
+- **`ja`** oder **`yes`**: Diesen geprüften Stand veröffentlichen.
+- **`nein`** oder **`no`**: Erfolgreich ohne Release abschließen.
+
+Groß-/Kleinschreibung und umgebende Leerzeichen sind egal. Nur die erste eindeutige
+Antwort des konfigurierten menschlichen Freigebers zählt. Andere Benutzer, Bots,
+Zitate und Sätze wie „ich sage ja“ geben nichts frei. Ohne gültige Antwort bedeutet
+auch das Schließen des Issues „kein Release“. Das Skript fragt alle 15 Sekunden ab;
+nach 60 Minuten ohne Antwort endet es ebenfalls erfolgreich ohne Release. Der Job
+hat 65 Minuten einschließlich Einrichtung und Aufräumen und belegt beim Warten
+einen Runner. Fehler beim API-Zugriff, ungültige API-Antworten oder fehlgeschlagenes
+Aufräumen schlagen den Entscheidungsschritt fehl; sie werden nicht als Nein gewertet.
+
+`tools/release_approval.py` verwendet nur Python-Standardbibliothek und den
+vorhandenen GitHub-Client. Der Entscheidungsjob hat `contents: read` und
+`issues: write`, aber keine Schreibrechte auf Quellcode oder Releases. Das Issue
+wird in einem `always()`-Schritt auch nach Fehlern oder Abbruch geschlossen, soweit
+der Runner und die GitHub-API dies noch ausführen können. Jeder neue Versuch legt
+eine neue Anfrage an und übernimmt keine frühere Freigabe. Ein neuer Push auf einen
+Arbeitsbranch kann einen älteren wartenden Lauf nach der bestehenden Concurrency-Regel
+abbrechen. Der gewöhnliche Frontend-Build im Testjob bleibt Teil der Pflichtprüfungen.
+
+Die bisherige geschützte Umgebung `release` wird vom Workflow nicht mehr verwendet;
+ihre Repository-Einstellungen müssen nicht geändert werden. Es erscheint kein
+**Review deployments** mehr. GitHubs native Ablehnung würde weiterhin den Lauf
+fehlschlagen lassen; stattdessen ist Nein hier ein reguläres Skriptergebnis.
+Referenzen: [GitHub: Issue-Kommentare](https://docs.github.com/en/rest/issues/comments),
+[GitHub: Deployment-Ablehnung](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments).
+
+Der Publish-Job prüft ausdrücklich `!cancelled()`, ein erfolgreiches
+`needs.required.result`, einen erfolgreichen Entscheidungsjob und dessen Ausgabe
+`approved == 'true'` sowie Push-Ereignis, Originalrepository und erlaubte Quellbranches.
+Ohne Ja wird der Publish-Job übersprungen; echte Veröffentlichungsfehler bleiben rot.
+Das ist auch nach einem grünen Sammelstatus nötig:
 GitHubs implizites `success()` berücksichtigt übersprungene Vorgänger entlang
 der Abhängigkeitskette. Auf `main` ist die Branch-Changelog-Bereinigung absichtlich
-übersprungen; das darf die stabile Veröffentlichung nicht überspringen. Die
+übersprungen; das darf die Issue-Anfrage und die anschließende stabile
+Veröffentlichung nicht überspringen. Die
 explizite Statusfunktion hebt nur diese implizite Sperre auf. Fehlgeschlagene,
 übersprungene oder abgebrochene Pflichtprüfungen geben keinen Release frei.
 
-Jeder neue Branchlauf erhält eine eindeutige Beta-Nummer, etwa
+Jeder freigegebene Branchlauf erhält eine eindeutige Beta-Nummer, etwa
 `0.20.0b123456789`. Wiederholungen desselben Laufs verwenden dieselbe Version,
 denselben Tag und dieselben Release Notes; bestehende Tags werden nie verschoben.
 Betas verändern nicht das neueste stabile Release. Für Betas in HACS
@@ -175,6 +221,16 @@ Die eingesetzten Scanner sind frei verfügbar. GitHub-Actions-Kosten richten sic
 nach Repository-Sichtbarkeit, Tarif und genutztem Kontingent. HACS benötigt ein
 erreichbares öffentliches Repository; das ist vor Veröffentlichung zu prüfen.
 
+
+## Gebautes Frontend im Release
+
+Das Vue-Bundle `custom_components/eos_energiezentrale/energy/web/vue/` ist nicht im
+Quellbaum versioniert. Der Publish-Job baut es aus dem geprüften Quellcommit
+(`npm ci --ignore-scripts`, `npm run build`, ohne npm-Cache im schreibberechtigten Job)
+und `tools/release.py publish` legt die gebauten `.js`/`.css`-Dateien zusammen mit
+Manifest, Changelog und `.release-source.json` in den Release-Commit. Ohne Bundle
+bricht die Veröffentlichung ab. `.release-source.json` enthält `bundle_sha256` über
+Pfade und Inhalte der ausgelieferten Bundle-Dateien. HACS installiert diesen Tag-Stand.
 
 ## HACS-Prüfungen für Repository-Metadaten
 

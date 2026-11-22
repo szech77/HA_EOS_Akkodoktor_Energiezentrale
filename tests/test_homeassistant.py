@@ -3,6 +3,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 from pathlib import Path
 from threading import RLock
 from types import MappingProxyType, SimpleNamespace
@@ -306,7 +307,9 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         app.config.zone = ZoneInfo("Europe/Berlin")
         app.config.influx.url = None
         app.controllers = []
+        coordinator.day_historical = {'old_tariff': True}
         await coordinator.async_accounting({"settings":{"pv_price_ct":8,"efficiency_source":"manual"}})
+        self.assertIsNone(coordinator.day_historical)
         report = await coordinator.async_accounting({"period":"month","date":"2026-11-09"})
         self.assertEqual(report["settings"]["pv_price_ct"],8)
         self.assertEqual(report["date"],"2026-11-01")
@@ -1042,6 +1045,22 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(register.call_args.kwargs['config']['asset_version'],'newbuild')
         self.assertEqual(register.call_args.kwargs['sidebar_icon'],'eos-energy:logo')
         add_icons.assert_called_once_with(self.hass,'/eos-energiezentrale-static/icons.js?v=newbuild')
+
+    async def test_frontend_registration_warns_once_about_a_missing_vue_bundle(self):
+        from custom_components.eos_energiezentrale.frontend import async_register_frontend
+        self.hass.http=Mock(async_register_static_paths=AsyncMock())
+        base='custom_components.eos_energiezentrale.frontend'
+        with patch(base+'.asset_version',return_value='build'),patch(base+'.panel_custom.async_register_panel',new_callable=AsyncMock),patch(base+'.websocket_api.async_register_command'),patch(base+'.frontend.add_extra_js_url'),patch(base+'.vue_bundle_present',return_value=False):
+            with self.assertLogs('custom_components.eos_energiezentrale.frontend','WARNING') as logs:
+                await async_register_frontend(self.hass)
+                await async_register_frontend(self.hass)
+                # Keep assertLogs satisfied when the repeated call is correctly silent.
+                logging.getLogger('custom_components.eos_energiezentrale.frontend').warning('marker')
+        self.assertEqual([line for line in logs.output if 'vue/eos-vue.js' in line],['WARNING:custom_components.eos_energiezentrale.frontend:Panel asset vue/eos-vue.js is missing; build the frontend with npm run build'])
+        with patch(base+'.asset_version',return_value='build'),patch(base+'.panel_custom.async_register_panel',new_callable=AsyncMock),patch(base+'.frontend.add_extra_js_url'),patch(base+'.vue_bundle_present',return_value=True):
+            with self.assertLogs('custom_components.eos_energiezentrale.frontend','INFO') as logs:
+                await async_register_frontend(self.hass)
+        self.assertIn('available again',logs.output[0])
 
     async def test_language_request_loads_translations_without_blocking_event_loop(self):
         self.controller()

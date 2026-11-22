@@ -38,8 +38,16 @@ Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
    Ein normales Versionsupdate nicht ohne Beleg als behobene Sicherheitslücke
    darstellen. Dokumentation gehört ebenfalls zum Änderungsumfang.
 
-Ein Push auf `feature/`, `bug/` oder `bugfix/` veröffentlicht nach erfolgreichen
-Pflichtprüfungen eine Beta; ein Merge nach `main` ein stabiles HACS-Release.
+Nach erfolgreichen Pflichtprüfungen wartet der Push-/Merge-Lauf im Job
+`release_decision` auf eine Antwort im automatisch angelegten GitHub-Issue.
+Nur ein eigener Kommentar mit exakt `ja`/`yes` vom konfigurierten Freigeber
+`szech77` veröffentlicht: auf `feature/`, `bug/` oder `bugfix/` eine Beta, auf
+`main` ein stabiles HACS-Release. `nein`/`no`, Schließen ohne Antwort oder 60 Minuten
+ohne Entscheidung überspringen das Release erfolgreich. API- und andere technische
+Fehler bleiben Fehler. Freigaben gelten nur für den angegebenen Quellcommit,
+Lauf und Versuch; Bot-Folgeprüfungen fragen keine Freigabe an. Agents dürfen eine
+Freigabe nur im ausdrücklich beauftragten Rahmen erteilen; ein Auftrag zur Änderung
+der CI ist keine Release-Freigabe. Details stehen in `CI.md`.
 Die Pipeline erzeugt einen Metadatencommit mit dem geprüften Quellcommit als
 direktem Elterncommit. Zusätzlich bereinigt sie `New Version` auf Arbeitsbranches
 nach erfolgreichen Tests, Sicherheits- und Integrationsprüfungen durch einen
@@ -63,6 +71,8 @@ Die folgenden Aufgaben übernimmt der Agent, der einen Dependabot-PR fertigstell
   müssen zur referenzierten Version passen; keine beweglichen Tags als Ersatz
   einführen. Weitere Verwendungen derselben Abhängigkeit im Repo prüfen und
   notwendige zusammenhängende Anpassungen einschließen.
+- Bei npm-Updates `frontend/package.json` und `package-lock.json` gemeinsam prüfen und
+  Typprüfung, Vitest, Build und `npm audit` ausführen.
 - Bei Python-Updates beide Requirements-Dateien, die Home-Assistant-Testversion
   und die verwendete Python-Version berücksichtigen. Keine zusätzlichen
   Laufzeitabhängigkeiten oder Lockdatei-Formate ohne konkreten Bedarf einführen.
@@ -100,6 +110,11 @@ Referenzen: [Dependabot-Konfiguration](https://docs.github.com/en/code-security/
   einen grünen Status zu erreichen. Begrenzte Workflow-Berechtigungen und
   `persist-credentials: false` erhalten. Fremden PR-Code nicht mit privilegierten
   Tokens über `pull_request_target` ausführen.
+- Das Panel ist die Vue-App in `frontend/` (Vue 3, TypeScript, Vite). `loader.js` lädt
+  nur das gebaute Bundle; `panel.js` bleibt die einzige Stelle mit HA-Authentifizierung.
+  Composition API mit `<script setup lang="ts">`, kein `v-html`, kein Laufzeit-
+  Templatecompiler. Das gebaute Bundle `energy/web/vue/` nicht committen; die CI baut es
+  für Releases. npm-Abhängigkeiten exakt pinnen, Lifecycle-Skripte bleiben deaktiviert.
 - Native HA-Übersetzungen liegen in `translations`, Panel-Texte in `energy/i18n`.
   Deutsch und Englisch pflegen; Englisch bleibt der Rückfall.
 - Fachliche Berechnungen, Statusbewertungen und Warnungen im Backend halten.
@@ -135,14 +150,21 @@ Bei Code-, Dependency- und Workflow-Änderungen die relevanten Prüfungen aus
 ```sh
 python -m pip install -r requirements-dev.txt -r requirements-test.txt
 python -m pytest -q --cov=custom_components.eos_energiezentrale --cov-branch --cov-report=term-missing
-node --check custom_components/eos_energiezentrale/energy/web/accounting.js
-node --check custom_components/eos_energiezentrale/energy/web/app.js
+node --check custom_components/eos_energiezentrale/energy/web/loader.js
 node --check custom_components/eos_energiezentrale/energy/web/panel.js
-node --check custom_components/eos_energiezentrale/energy/web/status.js
 node --test tests/*.test.cjs
 python -m bandit -r custom_components tools -ll
 python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
+cd frontend
+npm ci
+npm run typecheck
+npm test
+npm run build
+npm audit --audit-level=moderate
 ```
+
+Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
+(`C:\...`); mit `c:\...` findet Vitest seinen Runner nicht.
 
 Neue Verhaltenstests bei fachlichen Änderungen und Regressionen ergänzen.
 Für reine Dokumentations- oder Versionsänderungen keine künstlichen Tests bauen.

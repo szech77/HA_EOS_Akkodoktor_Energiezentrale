@@ -2,12 +2,14 @@
 
 Each sample is split onto its sources exactly like the accounting splits energy: in
 proportion to PV, grid import and battery discharge, provided the AC balance closes;
-otherwise the power counts as unknown. Display only; never a control input.
+otherwise unknown shares are estimated between known neighbors when possible.
+Display only; never a control input.
 """
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from .domain import energy_balance, instant, number
+from .source_estimates import brackets
 
 SOURCES = ('pv', 'battery', 'grid', 'unknown')
 CONSUMERS = ('house', 'heat', 'car')
@@ -89,13 +91,22 @@ def power_profile(samples, day, zone, consumers=CONSUMERS, origin=None):
     cover the day."""
     start, end = day_bounds(day, zone)
     buckets = {}
-    for sample in samples:
-        stamp = instant(sample.get('time'))
-        if stamp is None or not start <= stamp < end:
+    prepared = sorted(((instant(sample.get('time')), sample, _split(sample)) for sample in samples
+                       if instant(sample.get('time')) is not None), key=lambda item:item[0])
+    estimates = {}
+    for index, left, right, fraction in brackets([item[0] for item in prepared],
+            [not item[2][0].get('unknown') for item in prepared]):
+        if prepared[index][2][0].get('unknown'):
+            estimates[index] = {key:prepared[left][2][0].get(key,0.) * (1-fraction)
+                                    + prepared[right][2][0].get(key,0.) * fraction for key in SOURCES}
+    for index, (stamp, sample, split) in enumerate(prepared):
+        if not start <= stamp < end:
             continue
-        shares, values, total, grid = _split(sample)
+        shares, values, total, grid = split
+        shares = estimates.get(index, shares)
         slot = buckets.setdefault(int((stamp - start).total_seconds()) // STEP_S,
-                                  {'count': 0, 'rows': [], 'solar': [], 'flows': []})
+                                  {'count': 0, 'rows': [], 'solar': [], 'flows': [], 'estimated': False})
+        slot['estimated'] |= index in estimates
         slot['count'] += 1
         slot['rows'].append((shares, values, total, grid))
         hour = stamp.replace(minute=0, second=0, microsecond=0).isoformat()
@@ -106,6 +117,8 @@ def power_profile(samples, day, zone, consumers=CONSUMERS, origin=None):
     for index in sorted(buckets):
         rows = buckets[index]['rows']
         point = {'time': (start + timedelta(seconds=index * STEP_S)).isoformat()}
+        if buckets[index]['estimated']:
+            point['source_estimated'] = True
         for key in (*consumers, 'total'):
             parts = dict.fromkeys(SOURCES, 0.)
             known = 0

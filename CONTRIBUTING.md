@@ -15,7 +15,11 @@ einschließlich der Nachbearbeitung von Dependabot-PRs.
 4. Im Changelog nur `## New Version` um Features, Bugfixes, Breaking Changes
    und Security ergänzen. Leere Kategorien mit `- Keine.` kennzeichnen.
    Die Manifest-Version bleibt im Quellbranch `0.0.0`; die CI vergibt Version
-   und Datum. Arbeitsbranches erhalten Betas, `main` stabile Releases.
+   und Datum. Nach allen Pflichtprüfungen wartet der Push-/Merge-Lauf auf eine
+   Antwort im automatisch angelegten Issue: `szech77` antwortet exakt `ja` zum
+   Veröffentlichen oder `nein` zum erfolgreichen Überspringen. Schließen oder
+   60 Minuten ohne Antwort überspringen ebenfalls; technische Fehler bleiben Fehler.
+   Arbeitsbranches erhalten nach Freigabe Betas, `main` stabile Releases. Siehe `CI.md`.
 5. Pull Request nach `main`; alle Pflichtprüfungen müssen erfolgreich sein.
 
 Die CI erhöht bei neuen Breaking Changes Major, bei Features Minor, sonst Patch.
@@ -43,6 +47,69 @@ python -m bandit -r custom_components tools -ll
 python -m pip_audit -r requirements-dev.txt -r requirements-test.txt --strict
 python tools/release.py validate
 ```
+
+### Frontend (Vue.js)
+
+Die Panel-Oberfläche ist eine Vue-App in `frontend/` (Vue 3, TypeScript, Vite). Im
+Integrationsordner `energy/web` liegen daneben nur `index.html` (Einhängepunkt und
+Startmeldung), `loader.js` (lädt Stylesheet und Bundle mit der Build-Version),
+`panel.js` (HA-Panel mit der authentifizierten WebSocket-Brücke), `icons.js` und
+`style.css`. Lokal bauen und prüfen:
+
+```sh
+cd frontend
+npm ci            # installiert exakt den Lockfile-Stand, ohne Lifecycle-Skripte (.npmrc)
+npm run typecheck # vue-tsc
+npm test          # Vitest mit jsdom und den echten Sprachpaketen aus energy/i18n
+npm run build     # schreibt energy/web/vue/eos-vue.js
+npm audit --audit-level=moderate
+```
+
+Das Bundle ist nicht versioniert (`.gitignore`); die CI baut es für jedes Release und
+legt es in den Release-Commit. Für einen lokalen Test in Home Assistant nach dem Build
+den Ordner `custom_components/eos_energiezentrale` kopieren und HA neu starten.
+
+Unter Windows Vitest aus einem Pfad mit großem Laufwerksbuchstaben starten
+(`C:\...`, z. B. in PowerShell); mit `c:\...` findet Vitest seinen Runner nicht.
+
+Struktur (`frontend/src`):
+
+```text
+App.vue         Titelleiste, Statusband und die Seite der Adresse; stellt alle Stores bereit
+main.ts         Einstieg des Bundles; hängt die App in #app ein
+router/         Hash-Routen (#overview, #battery, #car/<id>, #usage/<bericht>, #settings, …)
+views/          Seiten, je eine pro Route (Overview, Device/Car, PvWeather, Usage, Notices, Settings)
+  __tests__/    Komponententests der Seiten (Vitest)
+components/     UI-Bausteine, nach Bereich gruppiert (app/, car/, device/, overview/, settings/, status/, usage/, weather/)
+composables/    Wiederverwendbare Composition-API-Logik (useGoalDraft, usePvForecast, useViewport, …)
+layouts/        Seitenrahmen (DeviceLayout: Zurück, Titel, Einstellungen)
+stores/         Zustand per provide/inject: app (Verbindung, Sprache, Aktualisierung) und je Bereich
+utils/          Framework-unabhängige Hilfen: Brücke, Formatierung, Texte, Diagrammmodelle
+types/          TypeScript-Typen des Backend-Vertrags und der Host-Schnittstelle
+test/           Test-Host, Einhänge-Hilfen, Backend-Brücke und Testdaten (fixtures/)
+__tests__/      Tests der App: Start, Brücke und Routen
+```
+
+- Der App-Store (`stores/app.ts`) lädt das Sprachpaket (mit Wiederholung, solange die
+  Integration startet), fragt den Snapshot alle 5 s und den Verlauf jede Minute ab und
+  hält die Browser-Hinweise (Verbindung, Seitenfehler). Alle Bereichs-Stores lesen
+  dieselben Refs; keine Seite fragt die Momentwerte selbst ab.
+- Anfragen gehen per `postMessage` an `panel.js`, das die HA-WebSocket-API aufruft
+  (nur Administratoren). Antworten werden nur vom übergeordneten Panel desselben
+  Ursprungs und für diesen Client angenommen; Fehler enthalten nur freigegebene Codes,
+  Gründe und Feldnamen. Kein Token gelangt in den iframe.
+- Stores sind schlanke Fabriken mit `provide`/`inject`; Pinia wird erst eingeführt,
+  wenn ein konkreter Bedarf über diese Fabriken hinausgeht.
+- Zeitraum und Einheit der Auswertungen merkt sich der Browser (`localStorage`); bei
+  gesperrtem Speicher gilt die Auswahl nur bis zum Neuladen.
+- Testdaten mit Backendbezug erzeugt `src/test/backend.ts` über das Python-Backend
+  (`tests/backend.cjs`), damit Tests den echten Vertrag nutzen.
+- Composition API mit `<script setup lang="ts">`, `provide`/`inject` mit typisierten
+  Schlüsseln; keine Options API, kein `v-html`, kein Laufzeit-Templatecompiler
+  (CSP ohne `eval`). Backendtexte bleiben Text.
+- Fachliche Werte kommen weiter aus dem Backend; Vue übersetzt, formatiert und zeichnet.
+- Neue npm-Abhängigkeiten nur mit konkretem Bedarf, mit exakter Version und
+  mindestens 14 Tage alt; `npm audit` muss ohne Befund bleiben.
 
 VS Code nutzt weiterhin die Projekt-`.venv` und die zentrale `pytest.ini`.
 Nach dem Architekturwechsel die vorhandene Umgebung mit Python 3.14 neu anlegen

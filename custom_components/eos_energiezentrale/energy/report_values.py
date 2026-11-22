@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from .accounting import add, empty
+from .base_prices import base_price_values
 from .domain import number
 
 
@@ -142,7 +143,8 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
     settings = report.get('settings') or {}
     base_month = number(settings.get('base_price_eur_month')) or 0.
     base_days = report.get('base_days') or 0
-    base = base_month * 12 / 365 * base_days
+    base_values = base_price_values(report)
+    base = base_values['base_eur']
     savings = self_kwh * grid_price / 100 - self_cost if grid_price is not None else None
     bins = {}
     for key, field in ((EXPORT, 'export_kwh'), (STORAGE, 'storage_kwh'), *((key, 'consumption_kwh') for key in consumers)):
@@ -189,7 +191,7 @@ def balance_values(report, consumers=('house', 'heat', 'car')):
         'pv_flow': flow_total, 'pv_gap': gap_total,
         'grid_import_price_ct': _ratio(import_cost, import_known),
         'grid_balance_eur': import_cost + base - export['cost_eur'], 'total_cost_eur': used['cost_eur'] + base,
-        'base_days': base_days, 'base_price_eur_month': base_month, 'base_eur': base,
+        'base_days': base_days, 'base_price_eur_month': base_month, **base_values,
         'cost_eur': used['cost_eur'], 'savings_eur': savings, 'net_eur': used['cost_eur'] + base - export['cost_eur'],
         'cost_partial': unknown > .0001, 'estimated': used.get('estimated_kwh', 0) + export.get('estimated_kwh', 0) > 0,
         'bins': [bins[key] for key in sorted(bins)],

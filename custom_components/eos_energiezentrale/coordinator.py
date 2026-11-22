@@ -1,7 +1,7 @@
 """Serialize all controller work outside Home Assistant's event loop."""
 import asyncio
 from copy import copy, deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import partial
 import logging
 import sqlite3
@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .energy.history import influx_series
 from .energy.accounting import Accounting
 from .energy.accounting_history import reconstruct, merge_reconstruction
+from .energy.accounting_estimates import MAX_GAP_SECONDS
 from .energy.clients import ENTITY
 from .energy.controller import Controller
 from .energy.domain import instant, next_departure
@@ -517,13 +518,15 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         raise ValueError("Unexpected settings fields")
                     ledger.configure(values["settings"])
                     self.accounting_revision += 1
+                    self.day_historical = None
                     return {"ok":True}
                 report = ledger.report(values, datetime.now(timezone.utc))
                 if report.get('period') == 'day':
                     # The power profile of the day from the local minute history (about two days).
                     zone = self.app.config.options['timezone']
                     start, end = day_bounds(report['date'], zone)
-                    report['power_profile'] = power_profile(self.app.history.read_range(start, end), report['date'], zone,
+                    margin = timedelta(seconds=MAX_GAP_SECONDS)
+                    report['power_profile'] = power_profile(self.app.history.read_range(start-margin, end+margin), report['date'], zone,
                                                             origin=battery_origin(report))
                 if report.get('period') in {'day', 'month', 'year'}:
                     # The PV report's forecast for the rest of the period, from the current EOS forecast.
@@ -555,7 +558,8 @@ class EnergyCoordinator(DataUpdateCoordinator):
         return self._accounting_result(merge_reconstruction(result,deepcopy(historical)))
 
     def _accounting_result(self, result):
-        if result['period'] == 'day' and result['date'] == datetime.now(self.app.config.zone).date().isoformat():
+        if (result['period'] == 'day' and result['date'] == datetime.now(self.app.config.zone).date().isoformat()
+                and (self.accounting is None or result['settings'] == self.accounting.settings)):
             self.day_historical = deepcopy(result)
         options = self.app.config.options
         consumers = ['house'] + (['heat'] if options.get('heat_entity') else []) + (['car'] if options.get('wallbox_type') != 'none' else [])
