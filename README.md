@@ -41,7 +41,7 @@ Stunde tut (lädt mit PV-Überschuss, lädt aus dem Netz, deckt das Haus, hält 
 Ladestand); der EOS-Modus steht klein darunter. Folgen zwei Wechsel mit derselben
 Wirkung aufeinander, erscheint nur der erste. Darunter stehen Tagesverbrauch und Kosten nach Verbrauchern.
 
-![Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten Ereignissen und Heute-Kacheln](docs/screenshots/overview.png)
+![Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten Ereignissen und Heute-Kacheln](docs/screenshots/overview.jpg)
 
 ### Hausspeicher: Verlauf und EOS-Plan
 
@@ -49,7 +49,7 @@ Die farbige Zeitleiste zeigt vergangene und geplante Betriebsmodi. Darunter steh
 Lade-/Entladeleistung, PV-Produktion, Ladezustand und Strompreis. Durchgezogene
 Linien zeigen Messwerte, gestrichelte Linien die Prognose.
 
-![Hausspeicher mit EOS-Moduszeitleiste, Leistungs-, SoC- und Preisverlauf](docs/screenshots/battery.png)
+![Hausspeicher mit EOS-Moduszeitleiste, Leistungs-, SoC- und Preisverlauf](docs/screenshots/battery.jpg)
 
 <details>
 <summary><strong>E-Auto: Ladeleistung, Ladeziel und Prognose</strong></summary>
@@ -95,7 +95,7 @@ Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
 Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt
 dann beim aktuellen SoC und berücksichtigt verfügbare PV-Überschussprognosen.
 
-![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.png)
+![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.jpg)
 
 </details>
 
@@ -106,7 +106,7 @@ Aktuelle PV-Leistung und Wetter, stündliche Leiste mit Wetter über dem erwarte
 PV-Ertrag, Tageskarten für drei Tage und die Folgen für Speicher, Einspeisung und
 Auto. Der bisherige Leistungsverlauf ist über **Verlauf & Diagramme** erreichbar.
 
-![PV & Wetter mit stündlicher Prognose, Tageskarten und „Was EOS daraus macht“](docs/screenshots/pv.png)
+![PV & Wetter mit stündlicher Prognose, Tageskarten und „Was EOS daraus macht“](docs/screenshots/pv.jpg)
 
 </details>
 
@@ -115,8 +115,48 @@ Auto. Der bisherige Leistungsverlauf ist über **Verlauf & Diagramme** erreichba
 
 Jede Auswertung hat Tag/Monat/Jahr, eine Kernaussage, vier Kennzahlen, den Verlauf
 nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt“.
+Der Preis über der Kostenaufschlüsselung ist der energiegewichtete Mittelwert
+aus PV, Speicher und Netz für den gewählten Zeitraum. Die Quellen behalten ihre
+jeweiligen Preise. Die Monatsansicht im Beispiel enthält die bisher erfassten
+Werte vom 8. und 9. November.
 
-![Auswertung Hausverbrauch für einen Tag mit Kennzahlen, Verlauf nach Herkunft, Preisen und Auffälligkeiten](docs/screenshots/usage.png)
+![Monatsauswertung Hausverbrauch mit Durchschnittspreis aller Quellen und Aufschlüsselung der Speicherherkunft](docs/screenshots/usage.jpg)
+
+</details>
+
+<details>
+<summary><strong>Gesamtbilanz: Durchschnittspreis und Grundgebühr</strong></summary>
+
+Die Gesamtbilanz schlüsselt Netzbezug, direkten PV-Verbrauch und Speicherstrom
+nach Herkunft auf. Grundgebühr und Einspeisevergütung sind eigene Bilanzposten;
+sie sind nicht im Durchschnittspreis der verbrauchten Energie enthalten.
+Eine tägliche Grundgebühr erscheint mit bis zu sechs Nachkommastellen. Die
+Berechnung verwendet den eingegebenen Betrag ohne diese Anzeigerundung.
+
+![Gesamtbilanz mit mittlerem Energiepreis, täglicher Grundgebühr und Kosten nach Herkunft](docs/screenshots/costs.jpg)
+
+</details>
+
+<details>
+<summary><strong>Tarifeinstellungen: Monats- oder Tagesgebühr und fester kWh-Preis</strong></summary>
+
+Unter **Einstellungen → Kosten → Netztarif und Grundgebühr** erhält jeder
+Tarifwechsel einen Eintrag mit **Grundgebühr ab**. Als Betrag sind Monats- oder
+Tagesgebühren möglich, auch mit mehr als fünf Nachkommastellen. Je Eintrag wird
+zwischen dynamischem Preissensor und festem Brutto-Arbeitspreis in ct/kWh gewählt.
+Die Liste kann vergangene und zukünftige Änderungen enthalten.
+
+Rückwirkende Festpreise bewerten auch vorhandene und bereits entladene Netzanteile
+des Speichers anhand ihrer Ladetage und einschließlich der Speicherverluste neu.
+Aus älteren Stundenbuchungen rekonstruierte Ladeanteile bleiben als Schätzung
+gekennzeichnet. Ohne bekannten Ladetag wird kein später beginnender Tarif
+unterstellt; ein Eintrag ohne Beginn deckt auch diese Anteile ab.
+Der Tarif für die EOS-Planung wird weiterhin separat in EOS eingestellt.
+
+Die Aufnahme zeigt beispielhaft den Wechsel von Monats- zu Tagesgebühr und einen
+zukünftigen Festpreis. Die Beträge sind synthetische Beispiele.
+
+![Tarifliste mit Gültigkeitsdatum, Monats- und Tagesgebühr sowie festem Arbeitspreis](docs/screenshots/settings.jpg)
 
 </details>
 
@@ -126,7 +166,7 @@ nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt�
 Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
 Übersicht; Tagesbilanz und weitere Informationen folgen darunter beim Scrollen.
 
-<img src="docs/screenshots/mobile.png" width="390" alt="Mobile Übersicht mit Statusband, Kennzahlen, Energiefluss und EOS-Plan">
+<img src="docs/screenshots/mobile.jpg" width="375" alt="Oberer Bereich der mobilen Übersicht mit Statusband, Kennzahlen und Energiefluss">
 
 </details>
 

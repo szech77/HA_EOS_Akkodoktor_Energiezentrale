@@ -3,19 +3,26 @@
 Echte Browseraufnahmen des integrierten Panels, erstellt mit synthetischen
 Beispieldaten und deutschem Sprachpaket. Es werden keine privaten Messwerte,
 Serveradressen oder Zugangsdaten gezeigt. Die Screenshots bilden den Stand der
-Oberfläche nach dem Redesign (Stand 18. November 2026) und sind keine Entwurfsgrafiken.
+Oberfläche vom 22. November 2026 ab und sind keine Entwurfsgrafiken. Die Aufnahmen
+entstanden in Chrome; die Desktop-Ansichten sind 1210 Pixel breit. Die JPEGs sind
+direkte Browseraufnahmen ohne Browser- oder Home-Assistant-Seitenleiste.
 
-- `overview.png`: Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten
+- `overview.jpg`: Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten
   Ereignissen und Heute-Kacheln.
-- `battery.png`: Speicherverlauf, EOS-Modi und Prognosen.
-- `vehicle.png`: Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan und Ladezielen.
-- `pv.png`: PV & Wetter mit stündlicher Prognose, Tageskarten und Planfolgen.
-- `usage.png`: Tagesauswertung Hausverbrauch.
-- `mobile.png`: oberer Bereich der Übersicht bei 390 Pixeln Breite.
+- `battery.jpg`: Speicherverlauf, EOS-Modi und Prognosen.
+- `vehicle.jpg`: Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan und Ladezielen.
+- `pv.jpg`: PV & Wetter mit stündlicher Prognose, Tageskarten und Planfolgen.
+- `usage.jpg`: Monatsauswertung Hausverbrauch mit Durchschnittspreis aller Quellen
+  und Speicherherkunft.
+- `costs.jpg`: monatliche Gesamtbilanz mit täglicher Grundgebühr und Kostenanteilen.
+- `settings.jpg`: Tarifliste mit Monats- und Tagesgebühr sowie festem kWh-Preis.
+- `mobile.jpg`: oberer Bereich der Übersicht als Ausschnitt mit 375 × 844 Pixeln
+  bei einer Browserbreite von 390 Pixeln einschließlich Scrollleiste.
 
 Abgeleitete Anzeigewerte (Statusband, Zeitstrahl, nächste Ereignisse, Ladeplan,
-PV-Stunden und -Tage, „Was EOS daraus macht“ und der Tagesbericht) entstehen aus
-denselben Beispieldaten über die Backend-Funktionen der Integration. Das stündliche
+PV-Stunden und -Tage, „Was EOS daraus macht“ und die Energieberichte) entstehen aus
+denselben Beispieldaten über die Backend-Funktionen der Integration. Die Berichte
+verwenden die lokale Bilanzierung mit Speicherbestand und Ladeanteilen. Das stündliche
 Wetter ist ein zur Sonneneinstrahlung des Modells passendes Beispiel.
 
 Bei Änderungen am Layout oder an sichtbaren Funktionen die betroffenen Aufnahmen
@@ -49,7 +56,9 @@ zusätzliche Verbraucher im AC-Bus doppelt gezählt. Das geparkte Fahrzeug hat i
 diesem Beispiel keinen Fahrverbrauch und erreicht sein 70-%-Ziel vor der Abfahrt.
 
 Die Tagesbilanzen werden ab lokaler Mitternacht bis zum Aufnahmezeitpunkt aus
-denselben Leistungen integriert. Kosten nutzen den zeitabhängigen Netzpreis,
+denselben Leistungen integriert. Für die Monats- und Jahresbilanz sind Daten vom
+8. November, 12:00 Uhr, bis 9. November, 12:00 Uhr vorhanden; die übrigen Tage sind
+keine als null angenommenen Messwerte. Kosten nutzen den zeitabhängigen Netzpreis,
 0,082 €/kWh PV-Opportunitätskosten und einen gewichteten Kostenbestand des Speichers
 einschließlich Umwandlungsverlusten. Gleichzeitige Quellen werden proportional
 auf Verbraucher verteilt; dies ist eine Modellannahme, keine gemessene Zuordnung.
@@ -67,3 +76,17 @@ Der vor dem gezeigten Verlauf vorhandene Akkuinhalt wird als Netzladung zu
 24 ct/kWh AC-Eingangspreis angesetzt. Seine gespeicherte Energie enthält bereits
 die Ladekosten einschließlich 95 % Ladewirkungsgrad; bei Abgabe kommen die
 Entladeverluste hinzu. Ein willkürlicher Startpreis von 14 ct/kWh wird nicht verwendet.
+
+## Tarifbeispiele
+
+Die Einstellungen zeigen drei aufeinanderfolgende Einträge, jeweils brutto:
+
+- Ab 1. Oktober: 17,57 € pro Monat und dynamischer Netzpreis.
+- Ab 1. November: 0,585616438356 € pro Tag und dynamischer Netzpreis.
+- Ab 1. Dezember: 0,6001234567 € pro Tag und fester Netzpreis von 29,99 ct/kWh.
+
+Der Dezembertarif liegt nach dem simulierten Aufnahmezeitpunkt und beeinflusst
+die Novemberbilanz nicht. Dort werden zwei erfasste Kalendertage mit der
+Novembergebühr berechnet; die Tarifanzeige rundet auf 0,585616 €/Tag. Im Eingabefeld
+bleiben die zusätzlichen Nachkommastellen sichtbar. Die Beispiele sind keine
+Preisangaben eines Anbieters.

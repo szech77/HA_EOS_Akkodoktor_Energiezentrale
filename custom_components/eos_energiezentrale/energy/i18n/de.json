@@ -277,7 +277,7 @@
     "billing.initial_price": "Anfangsbestand: Preis (ct/kWh; leer = PV-Schätzung)",
     "billing.effective": "Verwendet: Lade- / Entladewirkungsgrad · Kapazität",
     "billing.efficiency_missing": "EOS-Speicherdaten fehlen: Akkukosten bleiben unbekannt. Bei Bedarf manuelle Einstellungen wählen.",
-    "billing.settings_note": "Änderungen gelten für künftige Intervalle. Der Anfangspreis gilt nur bei der ersten Initialisierung. Ohne Vorgabe wird unbekannter Anfangsbestand einschließlich Ladeverlusten einmalig zum PV-Kostenansatz bewertet; ebenso unbekannter Restbestand beim Update. Bekannte Kosten bleiben erhalten. Manuelle Wirkungsgrade/Kapazität gelten nur im manuellen Modus. Der PV-Ansatz entspricht standardmäßig der EOS-Einspeisevergütung. Negative Kosten sind möglich.",
+    "billing.settings_note": "Änderungen am PV-Kostenansatz und an manuellen Speicherparametern gelten für künftige Intervalle. Für Netztarif und Grundgebühr gilt das Datum des jeweiligen Eintrags, auch rückwirkend. Der Anfangspreis gilt nur bei der ersten Initialisierung. Ohne Vorgabe wird unbekannter Anfangsbestand einschließlich Ladeverlusten einmalig zum PV-Kostenansatz bewertet; ebenso unbekannter Restbestand beim Update. Manuelle Wirkungsgrade/Kapazität gelten nur im manuellen Modus. Der PV-Ansatz entspricht standardmäßig der EOS-Einspeisevergütung. Negative Kosten sind möglich.",
     "billing.reconstructed": "Ältere Influx-Messwerte werden aus Fünf-Minuten-Mittelwerten rekonstruiert. Messlücken bis 6 Stunden und anfängliche Akkukosten werden als Näherung geschätzt.",
     "billing.history_error": "Influx-Verlauf nicht verfügbar; angezeigt wird nur die lokale Bilanz.",
     "billing.pv_price_source": "Quelle für PV-Kostenansatz",
