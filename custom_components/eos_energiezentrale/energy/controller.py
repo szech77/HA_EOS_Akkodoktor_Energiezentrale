@@ -17,14 +17,15 @@ from .presentation import daily_pv_forecast, heat_utilization, power_references,
 from .plugin_registry import describe
 from .alignment import ChargeTransitionDisplay, report_times
 from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
-from .vehicle_limits import charging_profile, optional_charger
+from .vehicle_limits import charging_profile, optional_charger, vehicle_box, vehicle_phases
 from .eos_measurements import MeasurementSync, device_samples
+from .failures import connection_lost
 from .status import failure_details
 from .pv_support import PVSupport
 from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
 from .eos_status import EOSRunStatus
 from .pv_availability import PVAvailability
-from .power_supply import configured_supply, requires_pause, supply_view
+from .power_supply import checked_supply, configured_supply, requires_pause, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
 
 # Independently enabled control areas: the storage and the vehicle charging.
@@ -33,6 +34,15 @@ DOMAINS = ('battery', 'vehicle')
 
 # Longest EOS computation during which the last finished forecast stays on display.
 EOS_RUN_HOLD_S = 900
+
+
+# A device outage while control is active pauses control instead of switching it off:
+# control is taken back every CONNECTION_RETRY_S, at most for CONNECTION_GIVE_UP_S.
+CONNECTION_RETRY_S = 60
+CONNECTION_GIVE_UP_S = 1800
+# A storage device that briefly cannot be read keeps its last confirmed grid report
+# this long; a real backup report or a longer outage pauses control as before.
+SUPPLY_GRACE_S = 60
 
 
 class Controller:
@@ -52,8 +62,12 @@ class Controller:
         # A remembered intent may follow an unclean stop: devices can still hold
         # the last commands, so explicit OFF or a failed restore must release them.
         self.owned = self.armed
+        # Set while control is paused for an unreachable device: the areas to take back,
+        # since when and the next attempt ({'scope', 'since', 'retry'}).
+        self.connection_pause = None
         self.live = {}
         self.power_supply = None
+        self.confirmed_grid = None
         self.backup_paused = False
         self.backup_pause_applied = False
         self.display = {}
@@ -188,6 +202,7 @@ class Controller:
                     raise ValueError("Explicit boolean required for control setting")
                 if value and not self.controllable(domain):
                     raise ValueError("No controllable device for " + domain)
+            self.connection_pause = None
             scope = {domain: bool(self.scope.get(domain) if value is None else value) and self.controllable(domain)
                      for domain, value in requested.items()}
             if not any(scope.values()):
@@ -259,6 +274,8 @@ class Controller:
         with self.lock:
             if type(enabled) is not bool:
                 raise ValueError("Explicit boolean required for control setting")
+            # An explicit decision replaces an automatic resume after a device outage.
+            self.connection_pause = None
             if enabled:
                 if not any(self.controllable(domain) for domain in DOMAINS):
                     raise ValueError("No controllable device")
@@ -361,6 +378,28 @@ class Controller:
         switch = not enable or states.get(enable, {}).get("state") in {"on", "off"}
         return battery_ready, switch and box.status not in {"", "unknown", "unavailable"}, switch
 
+    def device_supply(self, reading, now):
+        """Power supply of the storage read, bridging a single failed read.
+
+        A failed or incomplete read reports an unknown status without a sample. While
+        control is not paused, the last confirmed grid report (with its own sample time)
+        stands in for up to SUPPLY_GRACE_S. An explicit report (backup, or an unknown
+        source with a sample) always counts, and a pause still needs a fresh grid report.
+        """
+        if reading is None:
+            return None
+        checked = checked_supply(reading, now)
+        if checked.mode == 'grid':
+            self.confirmed_grid = checked
+            return reading
+        failed_read = reading.mode == 'unknown' and reading.sample is None
+        last = self.confirmed_grid
+        if (failed_read and not self.backup_paused and last is not None
+                and 0 <= (now - last.sample).total_seconds() < SUPPLY_GRACE_S):
+            return last
+        self.confirmed_grid = None
+        return reading
+
     def pause_for_backup(self, states, now, box):
         """Retain user intent until fresh grid status and confirmed cleanup."""
         mode = supply_view(self.power_supply, now)['state']
@@ -423,11 +462,16 @@ class Controller:
         while not self.stop_event.is_set():
             started = monotonic()
             with self.lock:
+                self.resume_after_connection(started)
                 try:
                     self.tick(datetime.now(timezone.utc), started)
                     self.errors.pop("runtime", None)
+                    if self.connection_restored():
+                        self.errors.pop("control_resume", None)
                 except Exception as error:
-                    self.record_failure("runtime", error)
+                    paused = self.pause_for_connection(error, started)
+                    self.errors.pop("control_resume" if not paused else "runtime", None)
+                    self.record_failure("control_resume" if paused else "runtime", error)
                     if self.armed and self.owned:
                         try:
                             self.release(self.ha.states(), datetime.now(timezone.utc))
@@ -435,10 +479,11 @@ class Controller:
                             self.errors["release"] = "Gerätefreigabe nicht bestätigt"
                     self.armed = False
                     self.restore_pending = False
-                    try:
-                        self.remember_control(False)
-                    except Exception:
-                        pass  # Persistence failure is exposed in errors.
+                    if not paused:
+                        try:
+                            self.remember_control(False)
+                        except Exception:
+                            pass  # Persistence failure is exposed in errors.
             self.stop_event.wait(max(0.1, 5 - (monotonic() - started)))
 
     def battery_group_capacity(self):
@@ -822,12 +867,13 @@ class Controller:
             self.backup_paused = True
         battery = self.read_control_input(self.config.battery, states, now, 'battery_read')
         if not opts.get('backup_mode_entity') and battery.power_supply is not None:
-            self.power_supply = battery.power_supply
+            self.power_supply = self.device_supply(battery.power_supply, now)
         # Latch before other reads: a later missing status can never imply grid
         # recovery after backup or an unknown status has been observed.
         if requires_pause(self.power_supply, now, opts, states):
             self.backup_paused = True
-        box = self.read_control_input(self.config.wallbox, states, now, 'wallbox_read')
+        box = vehicle_box(self.read_control_input(self.config.wallbox, states, now, 'wallbox_read'),
+                          self.config.wallbox, self.config.options)
         self.update_vehicle(box, now, clock)
         opts, states, self.source_configuration = resolve_sources(opts, states,
             ((self.config.battery, battery), (self.config.wallbox, box)), now)
@@ -1080,6 +1126,9 @@ class Controller:
                 phase = 1
             elif phase == 1 and desired >= 3 * minimum_power + 150 and (not solar_only or box.amps >= maximum - 0.05):
                 phase = 3
+        if vehicle_phases(opts) == 1:
+            # A single-phase vehicle never gains from three phases; keep the wallbox on one.
+            phase = 1
         amps = current_for_power(desired, phase, box.step, maximum, nearest and phase == box.phases, hard, voltage)
         transition = (phase, amps is not None)
         if (not supported and not box.enabled and pv and planned == 0 and desired < (minimum_power * phase + 150)
@@ -1127,6 +1176,46 @@ class Controller:
         return replace(command, min_soc=self.config.daily['battery_min_soc'] if minimum is None else minimum,
                        max_soc=self.config.daily['battery_max_soc'], net_demand_w=demand,
                        required_discharge_w=required)
+
+    def pause_for_connection(self, error, clock):
+        """Pause instead of switching control off when a device is only unreachable.
+
+        True while control was active and the outage is short enough to resume on its own;
+        False for any other failure, which keeps switching control off as before.
+        """
+        pause = self.connection_pause
+        if not connection_lost(error) or (pause is None and not self.armed):
+            self.connection_pause = None
+            return False
+        if pause is None:
+            # Only the areas that were controlled are taken back.
+            pause = self.connection_pause = {'scope': dict(self.scope), 'since': clock}
+        elif clock - pause['since'] >= CONNECTION_GIVE_UP_S:
+            self.connection_pause = None
+            return False
+        pause['retry'] = clock + CONNECTION_RETRY_S
+        return True
+
+    def resume_after_connection(self, clock):
+        """Take control back after a paused outage. Like a manual takeover, the restart
+        waits for valid readings and an EOS plan; a still unreachable device pauses again."""
+        pause = self.connection_pause
+        if pause is None or self.armed or clock < pause.get('retry', clock):
+            return False
+        scope = {domain: bool(pause['scope'].get(domain)) and self.controllable(domain) for domain in DOMAINS}
+        if not any(scope.values()):
+            self.connection_pause = None
+            return False
+        self.scope = scope
+        self.restore_pending = True
+        return True
+
+    def connection_restored(self):
+        """A control cycle after a resume succeeded: the outage is over."""
+        if self.connection_pause is None or not self.armed:
+            return False
+        self.connection_pause = None
+        return True
 
     def record_failure(self, area, error):
         self.errors[area] = type(error).__name__
@@ -1177,8 +1266,10 @@ class Controller:
             charge_limits = None
             if vehicle_resource:
                 phases = self.live.get('phases')
-                auto = (self.config.daily['phase_auto'] and
+                auto = (self.config.daily['phase_auto'] and vehicle_phases(self.config.options) == 3 and
                         getattr(getattr(self.config.wallbox, 'features', None), 'phase_switching', False) is True)
+                if vehicle_phases(self.config.options) == 1 and phases in (1, 3):
+                    phases = 1
                 maximum = self.vehicle_profile[0] if self.vehicle_profile else (
                     self.config.options.get('max_current_a', 0) * 230 * phases if phases in (1, 3) else 0)
                 minimum = self.vehicle_profile[1] if self.vehicle_profile else 6 * 230 * (1 if auto else phases or 0)

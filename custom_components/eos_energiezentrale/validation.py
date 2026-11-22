@@ -52,6 +52,9 @@ def validate_options(options):
         value = number(options[key])
         if type(options[key]) is bool or value is None or not low <= value <= high:
             raise ValueError("Invalid technical limit")
+    # 1 for a vehicle with a single-phase on-board charger, otherwise 3.
+    if type(options.get("max_phases", 3)) is not int or options.get("max_phases", 3) not in (1, 3):
+        raise ValueError("Invalid technical limit")
     from .energy.devices import battery_driver
     battery_driver(options,None)
     for kind, registry in (("wallbox", WALLBOX_DRIVERS),):

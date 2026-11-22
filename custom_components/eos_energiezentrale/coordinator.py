@@ -73,16 +73,26 @@ class EnergyCoordinator(DataUpdateCoordinator):
 
     def _tick(self):
         with self.app.lock:
+            clock = monotonic()
+            controller = isinstance(self.app, Controller)
+            if controller and not self.closing:
+                self.app.resume_after_connection(clock)
+            paused = False
             try:
-                self.app.tick(datetime.now(timezone.utc), monotonic())
+                self.app.tick(datetime.now(timezone.utc), clock)
                 self.app.errors.pop("device_pending", None)
                 if self.app.armed:
                     self.app.errors.pop("runtime", None)
+                if controller and self.app.connection_restored():
+                    self.app.errors.pop("control_resume", None)
             except DeviceNotReady as error:
                 self.app.errors["device_pending"] = error.entity
             except Exception as error:
                 self.app.errors.pop("device_pending", None)
-                self._sync_failure(self.app, "runtime", error)
+                # An unreachable device pauses control; it resumes on its own (Issue #33).
+                paused = controller and not self.closing and self.app.pause_for_connection(error, clock)
+                self.app.errors.pop("runtime" if paused else "control_resume", None)
+                self._sync_failure(self.app, "control_resume" if paused else "runtime", error)
                 entity = getattr(error, "entity", None)
                 self.app.last_failure = {
                     "type": type(error).__name__,
@@ -91,7 +101,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
                     "entity": entity if isinstance(entity, str) and ENTITY.fullmatch(entity) else None}
                 self.app.armed = False
                 self.app.restore_pending = False
-                if not self.closing:
+                if not self.closing and not paused:
                     try:
                         self.app.remember_control(False)
                     except Exception:

@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from custom_components.eos_energiezentrale.energy.contracts import BatteryReading, PowerSupplyReading
+from custom_components.eos_energiezentrale.energy.controller import SUPPLY_GRACE_S
 from custom_components.eos_energiezentrale.energy.status import view_state
 from test_energy import NOW
 import test_requirements as requirements
@@ -182,11 +183,15 @@ def test_all_fleet_wallboxes_and_shared_battery_pause_and_resume_after_long_back
 
 def test_unknown_status_after_grid_operation_pauses_and_releases_until_fresh_grid(control):
     assert poll(control, 0, 'grid')['control_status'] == 'active'
+    charging = requirements.wallbox(watts=2000, status='charging', enabled=True)
+    # A single failed status read keeps the confirmed grid operation for up to a minute.
+    result = poll(control, 5, 'unknown', car=charging)
+    assert result['control_status'] == 'active' and not result['control_paused']
+    assert not any(row['code'] == 'backup_power_unknown' for row in result['notices'])
     control.battery.apply.reset_mock()
     control.box.charge.reset_mock()
     control.box.pause.reset_mock()
-    charging = requirements.wallbox(watts=2000, status='charging', enabled=True)
-    for seconds in (5, 600):
+    for seconds in (SUPPLY_GRACE_S, 600):
         result = poll(control, seconds, 'unknown', car=charging)
         assert result['control_status'] == 'power_supply_waiting'
         assert result['armed'] and result['control_paused']
@@ -199,6 +204,21 @@ def test_unknown_status_after_grid_operation_pauses_and_releases_until_fresh_gri
     result = poll(control, 640, 'grid')
     assert result['control_status'] == 'active' and not result['control_paused']
     control.battery.apply.assert_called_once()
+
+
+def test_reported_backup_or_status_pauses_at_once_and_a_retained_grid_never_ends_a_pause(control):
+    assert poll(control, 0, 'grid')['control_status'] == 'active'
+    assert poll(control, 5, 'backup')['control_status'] == 'backup'
+    # The grid report before the backup is no longer retained for a failed read.
+    assert poll(control, 10, 'unknown')['control_paused']
+    assert poll(control, 20, 'grid')['control_status'] == 'active'
+    # An unknown source reported with a sample (e.g. generator) is a real status.
+    now = NOW + timedelta(seconds=25)
+    control.battery.read.return_value = BatteryReading(50, 0, 0, now, now, now, power_supply=PowerSupplyReading('unknown', now))
+    control.app.tick(now, 25)
+    assert view_state(control.app.snapshot(now), now)['control_paused']
+    # While paused, a failed read never stands in for the grid report recovery needs.
+    assert poll(control, 30, 'unknown')['control_paused']
 
 
 def test_startup_with_unknown_status_never_passes_the_readiness_gate(control):

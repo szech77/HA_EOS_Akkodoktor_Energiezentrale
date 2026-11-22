@@ -211,7 +211,8 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
                    "soc_entity":values["car_soc_entity"],"soc_scale":values["car_soc_scale"],
                    "range_entity":values.get("car_range_entity",""),
                    "capacity_wh":values["capacity_wh"],"charging_efficiency":values["charging_efficiency"],
-                   "max_current_a":values["max_current_a"],"wallbox_type":values["wallbox_type"],
+                   "max_current_a":values["max_current_a"],"max_phases":values.get("max_phases",3),
+                   "wallbox_type":values["wallbox_type"],
                    "wallbox_parameters":json.loads(values["wallbox_parameters"])}]
         return rows
 
@@ -289,7 +290,8 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         defaults={"id":identity or f"vehicle{index}","name":old.get("name","E-Auto"),
                   "resource":old.get("resource",f"ev{index}"),"soc_entity":old.get("soc_entity",""),
                   "soc_scale":old.get("soc_scale","factor"),"range_entity":old.get("range_entity",""),"capacity_wh":old.get("capacity_wh",77000),
-                  "charging_efficiency":old.get("charging_efficiency",.9),"max_current_a":old.get("max_current_a",16)}
+                  "charging_efficiency":old.get("charging_efficiency",.9),"max_current_a":old.get("max_current_a",16),
+                  "max_phases":old.get("max_phases",3)}
         plugin_id = getattr(self,"_vehicle_plugin",old.get("wallbox_type","nrgkick"))
         factory = WALLBOX_DRIVERS[plugin_id]
         old_parameters = old.get("wallbox_parameters",{}) if old.get("wallbox_type",plugin_id)==plugin_id else {}
@@ -297,6 +299,8 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
         errors={}
         if user_input is not None:
             row={key:user_input.get(key,"") for key in ("id","name","resource","soc_entity","soc_scale","range_entity","capacity_wh","charging_efficiency","max_current_a")}
+            # Forms of older versions do not send the phases; keep the vehicle's value.
+            row["max_phases"]=user_input.get("max_phases",defaults["max_phases"])
             if identity is not None and row["id"]!=identity:
                 configuration_failure(self, 'vehicle_parameters', ValueError('Vehicle identity changed'), plugin_id)
                 errors={"base":"invalid_config"}
@@ -325,6 +329,8 @@ class OptionsFlow(DeviceFormMixin, PluginFormMixin, config_entries.OptionsFlow):
             elif key=="soc_scale":
                 field=selector.SelectSelector(selector.SelectSelectorConfig(options=["factor","percent"]))
             elif key in {"capacity_wh","max_current_a"}:
+                field=vol.Coerce(int)
+            elif key=="max_phases":
                 field=vol.Coerce(int)
             elif key=="charging_efficiency":
                 field=vol.Coerce(float)

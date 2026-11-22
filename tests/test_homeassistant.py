@@ -839,6 +839,12 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored[0]['wallbox_type'],'nrgkick')
         self.assertEqual(stored[1]['wallbox_type'],'generic')
         self.assertEqual(stored[1]['range_entity'],'sensor.ev2_range')
+        # Without a submitted value the vehicle charges on up to three phases.
+        self.assertEqual([row['max_phases'] for row in stored],[3,3])
+        result=await flow.async_step_vehicle_parameters({'id':'third','name':'Single-phase EV','resource':'ev3','soc_entity':'sensor.ev3_soc',
+            'soc_scale':'factor','capacity_wh':40000,'charging_efficiency':.9,'max_current_a':16,'max_phases':1,'wallbox_parameters':params})
+        self.assertEqual(result['type'],'create_entry')
+        self.assertEqual(json.loads(result['data']['vehicles'])[-1]['max_phases'],1)
 
     async def test_generic_helpers_use_only_the_matching_home_assistant_services(self):
         seen=[]
@@ -2013,6 +2019,108 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["armed"])
         app.release.assert_called_once()
         self.assertFalse(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)
+
+    async def test_an_unreachable_device_pauses_control_and_it_resumes_on_its_own(self):
+        from custom_components.eos_energiezentrale.energy.controller import CONNECTION_RETRY_S
+        ha = Mock()
+        config = Configuration(dict(DEFAULTS),ha,self.directory)
+        app = Controller(ha,config)
+        app.set_armed(True)
+        app.owned = True
+        outage = TimeoutError("timed out")
+        app.tick = Mock(side_effect=outage)
+        app.release = Mock(side_effect=TimeoutError("timed out"))
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        clock = Mock(return_value=1000.0)
+        with patch("custom_components.eos_energiezentrale.coordinator.monotonic", clock):
+            result = await coordinator._async_update_data()
+            # Released as far as possible and shown as a pause, never stored as switched off.
+            self.assertFalse(result["armed"])
+            app.release.assert_called_once()
+            self.assertIn("control_resume", app.errors)
+            self.assertNotIn("runtime", app.errors)
+            self.assertTrue(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)
+            # Within the retry interval nothing is commanded.
+            clock.return_value = 1000.0 + CONNECTION_RETRY_S - 1
+            app.tick.side_effect = None
+            await coordinator._async_update_data()
+            self.assertFalse(app.armed)
+            # Then control is taken back like a manual takeover: it waits for valid readings.
+            clock.return_value = 1000.0 + CONNECTION_RETRY_S
+            result = await coordinator._async_update_data()
+            self.assertTrue(result["armed"])
+            self.assertTrue(app.restore_pending)
+            self.assertIsNone(app.connection_pause)
+            self.assertNotIn("control_resume", app.errors)
+
+    async def test_a_long_outage_or_a_refused_command_still_switches_control_off(self):
+        from custom_components.eos_energiezentrale.energy._modbus_tcp import ModbusError
+        from custom_components.eos_energiezentrale.energy.controller import CONNECTION_GIVE_UP_S, CONNECTION_RETRY_S
+        ha = Mock()
+        app = Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory))
+        app.set_armed(True)
+        app.release = Mock()
+        app.tick = Mock(side_effect=TimeoutError("timed out"))
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        clock = Mock(return_value=0.0)
+        with patch("custom_components.eos_energiezentrale.coordinator.monotonic", clock):
+            await coordinator._async_update_data()
+            for second in range(CONNECTION_RETRY_S, CONNECTION_GIVE_UP_S + CONNECTION_RETRY_S, CONNECTION_RETRY_S):
+                clock.return_value = float(second)
+                await coordinator._async_update_data()
+            self.assertIsNone(app.connection_pause)
+            self.assertIn("runtime", app.errors)
+            self.assertNotIn("control_resume", app.errors)
+            self.assertFalse(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)
+            # A device that answered with a wrong confirmation is no outage, even after a timeout.
+            app.set_armed(True)
+            try:
+                try:
+                    raise TimeoutError("first read")
+                except TimeoutError:
+                    raise ModbusError("readback", reason="readback_mismatch")
+            except ModbusError as error:
+                refused = error
+            app.tick.side_effect = refused
+            await coordinator._async_update_data()
+            self.assertIsNone(app.connection_pause)
+            self.assertFalse(Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory)).armed)
+
+    async def test_a_resume_takes_back_only_the_areas_that_were_controlled(self):
+        from custom_components.eos_energiezentrale.energy.controller import CONNECTION_RETRY_S
+        ha = Mock()
+        app = Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory))
+        app.set_armed(True)
+        app.set_control(battery=True, vehicle=False)
+        app.release = Mock()
+        app.tick = Mock(side_effect=TimeoutError())
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        clock = Mock(return_value=0.0)
+        with patch("custom_components.eos_energiezentrale.coordinator.monotonic", clock):
+            await coordinator._async_update_data()
+            self.assertEqual(app.control_domains(), set())
+            app.tick.side_effect = None
+            clock.return_value = float(CONNECTION_RETRY_S)
+            await coordinator._async_update_data()
+            self.assertEqual(app.control_domains(), {"battery"})
+
+    async def test_switching_control_off_cancels_an_automatic_resume(self):
+        from custom_components.eos_energiezentrale.energy.controller import CONNECTION_RETRY_S
+        ha = Mock()
+        app = Controller(ha,Configuration(dict(DEFAULTS),ha,self.directory))
+        app.set_armed(True)
+        app.release = Mock()
+        app.tick = Mock(side_effect=ConnectionRefusedError())
+        coordinator = EnergyCoordinator(self.hass,self.entry,app)
+        clock = Mock(return_value=0.0)
+        with patch("custom_components.eos_energiezentrale.coordinator.monotonic", clock):
+            await coordinator._async_update_data()
+            self.assertIsNotNone(app.connection_pause)
+            app.set_armed(False)
+            app.tick.side_effect = None
+            clock.return_value = float(CONNECTION_RETRY_S * 2)
+            await coordinator._async_update_data()
+            self.assertFalse(app.armed)
 
     async def test_restart_waits_for_real_inputs_then_resumes_without_manual_enable(self):
         from datetime import timedelta

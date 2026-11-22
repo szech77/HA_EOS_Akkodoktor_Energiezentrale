@@ -154,6 +154,8 @@ class Configuration:
             value = number(options[key])
             if value is None or not low <= value <= high:
                 raise ValueError("Ungültiger technischer Parameter")
+        if options.get("max_phases", 3) not in (1, 3):
+            raise ValueError("Ungültiger technischer Parameter")
         if options["battery_type"] not in BATTERY_DRIVERS or options["wallbox_type"] not in WALLBOX_DRIVERS:
             raise ValueError("Unbekannter Hardwaretyp")
         from .devices import battery_driver

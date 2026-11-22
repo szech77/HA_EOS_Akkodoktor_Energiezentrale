@@ -389,6 +389,7 @@ Diese Werte stehen im Bereich **Technische Grenzen** der Integration:
 | `battery_discharge_w` | `4760` | 0–50000 W; Entladebasis des Speichers. |
 | `allow_battery_export` | `false` | Erlaubnis für erzwungene Speicherentladung ins Netz; benötigt eine passende `grid_discharge`-Entität. |
 | `max_current_a` | `16` | 6–32 A; zusätzliche Obergrenze für den Wallbox-Ladestrom. |
+| `max_phases` | `3` | 1 oder 3; Ladephasen des Fahrzeugs. `1` für ein Auto mit einphasigem Ladegerät, auch je Fahrzeug in der Fahrzeugliste. |
 | `phase_wait_s` | `60` | 10–600 s; Stabilitätswartezeit für die PV-Phasenumschaltung. |
 | `regulation_interval_s` | `20` | 5–120 s; Startvorgabe für das Regelintervall, im Alltag separat einstellbar. |
 
@@ -448,12 +449,13 @@ an Mindest- und Maximal-SoC, wenn der Mindestwert nicht kleiner ist). Die
 | Schnellladen | Lädt bis zum Ziel-SoC; wird nach Neustart nicht wieder eingeschaltet. |
 | Einspeisereserve | 0–500 W; bei 0 W regelt die PV-Ladung möglichst nahe an Null-Netzleistung. |
 | Regelintervall | 5–120 s; Mindestabstand zwischen Stromanpassungen, zusätzlich ist eine neue Netzmessung erforderlich. |
-| Phasenautomatik | Automatischer Wechsel zwischen ein- und dreiphasigem Laden. |
+| Phasenautomatik | Automatischer Wechsel zwischen ein- und dreiphasigem Laden. Bei einem Fahrzeug mit `max_phases` = 1 bleibt die Wallbox einphasig. |
 | Speicherunterstützung | Kann während tatsächlicher Auto-PV-Ladung die EOS-Entladesperre unter Beachtung der SoC-Grenzen aufheben. |
 | Speichergestützter PV-Ladestart | Eigener Schalter, standardmäßig aus; ermöglicht den Start bei kleinem Überschuss unterhalb der Fahrzeug-Mindestleistung. Benötigt zusätzlich Speicherunterstützung und aktives PV-Laden. |
 | Hausspeicher-Mindest-SoC für unterstützte PV-Ladestarts | Standard 50 %, einstellbar 0–98 %. Wirksam ist die höhere Grenze aus diesem Wert und dem allgemeinen Speicher-Mindest-SoC. Start ab zwei Prozentpunkten darüber, Ende der Unterstützung an der Grenze. |
 | Überschusswartezeit | Standard 60 s, einstellbar 10–600 s. Unterbrechungen, fehlende Messwerte oder zu niedriger SoC starten die Wartezeit neu. |
 | PV-Überschuss- und Defizitschwelle | Standard 150 W, einstellbar 1–5.000 W. Mindestens dieser Überschuss wird zum Start benötigt. Nach dem Start beendet ein durchgängiges PV-Defizit ab dieser Schwelle über 60 s die Unterstützung. |
+| Einphasiges Fahrzeug | Unter **Konfigurieren → Grenzen** bzw. je Fahrzeug in der Fahrzeugliste **Ladephasen des Fahrzeugs** auf `1` setzen. Eine Wallbox mit Phasenumschaltung wird dann fest einphasig geregelt; bei einer Wallbox ohne Umschaltung rechnet die Energiezentrale Leistung und Strom für die eine genutzte Phase. Das Ladeprofil für EOS enthält nur einphasige Leistungen, sodass EOS mit der tatsächlich möglichen Ladeleistung plant. |
 | Ladeziele unter Auto | Bis zu 32 aktivierbare Ziele mit eigenem SoC, einmaliger Abfahrt oder wiederkehrend mit Wochentagen und zusätzlichen Feiertagen. |
 
 Beispiel: Bei 500 W PV-Überschuss und einphasiger Mindestladung von 1.380 W
@@ -758,7 +760,23 @@ in jedem Zyklus, bis die Geräte sie bestätigen.
 
 Ein bewusst ausgeschalteter Schalter bleibt aus. Ein Regelfehler deaktiviert die
 Steuerung ebenfalls dauerhaft; zur Wiederaufnahme muss sie ausdrücklich aktiviert
-werden. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
+werden. Ausgenommen ist ein bloßer Verbindungsausfall: Ist ein Gerät nicht
+erreichbar (Zeitüberschreitung, abgewiesene oder abgebrochene Verbindung, oder ein
+Modbus-Gateway wie der Victron GX meldet sein Zielgerät als nicht erreichbar), gibt die
+Energiezentrale die Geräte so weit wie möglich frei und pausiert die Steuerung
+(Hinweis `control_resume`). Jede Minute übernimmt sie die zuvor gesteuerten Bereiche
+wieder, und wie nach einem manuellen Einschalten erst mit gültigen Messwerten und
+EOS-Plan. Hält der Ausfall länger als 30 Minuten an, schaltet sie die Steuerung wie
+bei jedem anderen Regelfehler dauerhaft aus. Antwortet ein Gerät dagegen mit einer
+Ablehnung oder einer falschen Bestätigung, bleibt es beim sofortigen Ausschalten.
+Ein manuelles Ein- oder Ausschalten beendet die automatische Wiederaufnahme.
+
+Meldet der Speicher (etwa ein Victron GX) den Netzstatus selbst, pausiert ein einzelner
+fehlgeschlagener Abruf die Steuerung nicht mehr sofort als möglichen Notstrom: Der
+zuletzt bestätigte Netzbetrieb gilt bis zu 60 Sekunden weiter. Meldet das Gerät
+Notstrom oder einen anderen ausdrücklichen Status, oder ist es länger nicht lesbar,
+pausiert die Steuerung wie bisher. Eine bereits laufende Pause endet weiterhin nur
+mit einer frischen Meldung des Netzbetriebs. Fehler beim Speichern werden angezeigt. Schnellladen bleibt nach einem
 Neustart aus, die übrigen alltäglichen Einstellungen bleiben erhalten.
 
 Beim ersten Update auf diese Funktion die Steuerung einmal aktivieren, damit die
@@ -1379,8 +1397,9 @@ In den Fahrzeugkarten gilt dieselbe Darstellung für jedes Auto einzeln.
 - **Akku:** Bezug auf die maximale Lade- bzw. Entladeleistung der Integration, je nach
   aktueller Flussrichtung. Der Ring stellt Leistung und nicht den Ladezustand dar.
 - **E-Auto:** maximal mögliche Ladeleistung aus dem eingestellten Maximalstrom,
-  höchstens 11 kW. Bei fester Phasenanzahl wird diese berücksichtigt; bei mehreren
-  Fahrzeugen werden deren Bezugsleistungen addiert.
+  höchstens 11 kW. Bei fester Phasenanzahl wird diese berücksichtigt, bei einem
+  einphasigen Fahrzeug (`max_phases` = 1) eine Phase; bei mehreren Fahrzeugen werden
+  deren Bezugsleistungen addiert.
 - **Wärmepumpe:** optional unter **Konfigurieren → Sensoren** eine Entität für die
   Leistungsauslastung (`heat_load_entity`) und die Skalierung (`heat_load_scale`:
   `percent` für 0–100, `factor` für 0–1) auswählen. Ohne Entität bleibt der bisherige

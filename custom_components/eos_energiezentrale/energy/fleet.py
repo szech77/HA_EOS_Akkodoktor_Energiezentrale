@@ -34,7 +34,7 @@ def vehicle_options(options):
     controls=set()
     devices=set()
     allowed={"id","name","resource","soc_entity","soc_scale","range_entity","capacity_wh",
-             "charging_efficiency","max_current_a","wallbox_type","wallbox_parameters"}
+             "charging_efficiency","max_current_a","max_phases","wallbox_type","wallbox_parameters"}
     for row in rows:
         if not isinstance(row,dict) or row.keys()-allowed:
             raise ValueError("Invalid vehicle definition")
@@ -49,7 +49,7 @@ def vehicle_options(options):
                 "car_range_entity":row.get("range_entity") or (options.get("car_range_entity","") if len(rows)==1 else ""),
                 "wallbox_type":row.get("wallbox_type","nrgkick"),
                 "wallbox_parameters":json.dumps(row.get("wallbox_parameters",{}))}
-        for key in ("capacity_wh","charging_efficiency","max_current_a"):
+        for key in ("capacity_wh","charging_efficiency","max_current_a","max_phases"):
             if key in row:
                 values[key]=row[key]
         if values["vehicle_resource"] in resources:
@@ -215,7 +215,7 @@ class FleetController(Controller):
             self.backup_paused=True
         battery=self.read_control_input(self.battery_driver,rows,now,'battery_read')
         if not opts.get('backup_mode_entity'):
-            supply=battery.power_supply
+            supply=self.device_supply(battery.power_supply,now)
         if requires_pause(supply,now,opts,rows):
             self.backup_paused=True
         for _,app,_ in self.controllers:

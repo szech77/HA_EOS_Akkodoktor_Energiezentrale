@@ -319,6 +319,7 @@
     "notice.eos": "EOS-Plan nicht verfügbar; Bereitschaft von EOS und die Verbindung prüfen.",
     "notice.eos_cached": "EOS vorübergehend nicht verfügbar; der letzte gültige Plan wird bis zu fünf Minuten weiterverwendet.",
     "notice.accounting": "Verbrauchs- und Kostenbilanz vorübergehend nicht verfügbar.",
+    "notice.control_resume": "Ein Gerät ist nicht erreichbar. Die Steuerung ist pausiert und übernimmt nach der Verbindung automatisch wieder; das Gerät läuft bis dahin selbstständig.",
     "notice.runtime": "Ein Gerätebefehl ist fehlgeschlagen; Integrationsdiagnosen und Protokoll prüfen.",
     "action.interface": "UI-Dateien",
     "weather.clear-night": "Klare Nacht",
