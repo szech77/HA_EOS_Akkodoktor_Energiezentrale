@@ -15,10 +15,11 @@ einschließlich der Nachbearbeitung von Dependabot-PRs.
 4. Im Changelog nur `## New Version` um Features, Bugfixes, Breaking Changes
    und Security ergänzen. Leere Kategorien mit `- Keine.` kennzeichnen.
    Die Manifest-Version bleibt im Quellbranch `0.0.0`; die CI vergibt Version
-   und Datum. Nach allen Pflichtprüfungen wartet der Push-/Merge-Lauf auf eine
-   Antwort im automatisch angelegten Issue: `szech77` antwortet exakt `ja` zum
-   Veröffentlichen oder `nein` zum erfolgreichen Überspringen. Schließen oder
-   60 Minuten ohne Antwort überspringen ebenfalls; technische Fehler bleiben Fehler.
+   und Datum. Nach allen Pflichtprüfungen wartet der Publish-Job am geschützten
+   GitHub-Environment `release`. Ein dort eingetragener Required reviewer bestätigt
+   unter **Review deployments → Approve and deploy** die Veröffentlichung.
+   Ohne Freigabe startet der Job nicht; **Reject** lässt ihn fehlschlagen.
+   Release-Issues und Kommentarfreigaben entfallen.
    Arbeitsbranches erhalten nach Freigabe Betas, `main` stabile Releases. Siehe `CI.md`.
 5. Pull Request nach `main`; alle Pflichtprüfungen müssen erfolgreich sein.
 

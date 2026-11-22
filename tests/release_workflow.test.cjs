@@ -11,7 +11,7 @@ const workflow=config.jobs;
 // overrides it: https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions
 // The workflow's boolean/string comparisons use the same semantics in JS.
 function releaseEligible({ref='refs/heads/main',event='push',repository='szech77/HA_EOS_Akkodoktor_Energiezentrale',
- required='success',cleanup='skipped',cancelled=false,job='publish',approval='true',decisionResult='success'}={}){
+ required='success',cleanup='skipped',cancelled=false,job='publish'}={}){
  const ancestors=new Set();
  function visit(key){
   for(const name of [workflow[key].needs??[]].flat()){
@@ -19,43 +19,36 @@ function releaseEligible({ref='refs/heads/main',event='push',repository='szech77
   }
  }
  visit(job);
- const results={required,clean_changelog:cleanup,release_decision:decisionResult};
+ const results={required,clean_changelog:cleanup};
  const success=()=>[...ancestors].every(name=>(results[name]??'success')==='success');
  const expression=workflow[job].if.trim().replace(/^\$\{\{\s*|\s*\}\}$/g,'');
  const explicitStatus=/\b(?:always|success|failure|cancelled)\s*\(/.test(expression);
- const context={github:{ref,event_name:event,repository},needs:{required:{result:required},
-  release_decision:{result:decisionResult,outputs:{approved:approval}}},
+ const context={github:{ref,event_name:event,repository},needs:{required:{result:required}},
   success,cancelled:()=>cancelled,always:()=>true,failure:()=>required==='failure',
   startsWith:(value,prefix)=>value.startsWith(prefix)};
  return (!explicitStatus&& !success())?false:vm.runInNewContext(expression,context);
 }
 
-test('issue decisions wait for required checks and publish requires both success and approval',()=>{
- assert.deepEqual([workflow.release_decision.needs].flat(),['required']);
- assert.deepEqual(workflow.publish.needs,['required','release_decision']);
- assert.deepEqual(workflow.release_decision.permissions,{contents:'read',issues:'write'});
+test('the entire publish job waits at the release environment after required checks',()=>{
+ assert.deepEqual([workflow.publish.needs].flat(),['required']);
+ assert.equal(workflow.publish.environment,'release');
  assert.deepEqual(workflow.publish.permissions,{contents:'write'});
- assert.equal(workflow.publish.environment,undefined);
- assert.equal(workflow.release_decision['continue-on-error'],undefined);
  assert.equal(workflow.publish['continue-on-error'],undefined);
+ assert.ok(workflow.publish.steps.some(step=>step.name==='Build the Vue bundle from the checked source'));
+ assert.ok(workflow.publish.steps.some(step=>step.run?.includes('tools/release.py publish')));
  assert.ok(config.triggers.push);
  assert.ok(config.triggers.pull_request);
  assert.ok(Object.hasOwn(config.triggers,'merge_group'));
 });
-test('a successful no, closed request or timeout skips publication without an error job',()=>{
- for(const approval of ['false','','TRUE','approved'])assert.equal(releaseEligible({approval}),false);
- assert.equal(releaseEligible({job:'release_decision',approval:'false'}),true);
-});
-test('failed decisions and cleanup cannot publish even when an approval output exists',()=>{
- for(const decisionResult of ['failure','skipped','cancelled','pending']){
-  assert.equal(releaseEligible({decisionResult,approval:'true'}),false);
+test('release approval uses no issue job, issue writes or comment-polling runner',()=>{
+ assert.equal(workflow.release_decision,undefined);
+ for(const job of Object.values(workflow)){
+  assert.equal(job.permissions?.issues,undefined);
+  assert.ok(!JSON.stringify(job).includes('release_approval.py'));
  }
-});
-test('decision issues are closed even after errors or cancellation',()=>{
- const cleanup=workflow.release_decision.steps.find(step=>step.name==='Close the decision issue');
- assert.match(cleanup.if,/always\(\)/);
- assert.match(cleanup.if,/issue_number != ''/);
- assert.match(cleanup.run,/--close "\$ISSUE_NUMBER"/);
+ // GitHub enforces the environment review before executing any of these steps;
+ // this expression only decides which runs reach that review.
+ assert.equal(releaseEligible(),true);
 });
 test('main pushes reach release approval after successful checks even when cleanup is skipped',()=>{
  assert.equal(releaseEligible(),true);
@@ -66,21 +59,15 @@ test('working-branch pushes reach beta approval after successful cleanup',()=>{
  }
 });
 test('failed, skipped, pending or cancelled required checks never publish',()=>{
- for(const job of ['release_decision','publish']){
-  for(const required of ['failure','skipped','cancelled','pending'])assert.equal(releaseEligible({required,job}),false);
- }
+ for(const required of ['failure','skipped','cancelled','pending'])assert.equal(releaseEligible({required}),false);
  assert.equal(releaseEligible({cancelled:true}),false);
 });
 test('PRs, merge groups and manual or bot dispatches never request release approval',()=>{
  for(const event of ['pull_request','merge_group','workflow_dispatch']){
-  for(const job of ['release_decision','publish']){
-   for(const ref of ['refs/heads/main','refs/heads/feature/releases'])assert.equal(releaseEligible({event,ref,job}),false);
-  }
+  for(const ref of ['refs/heads/main','refs/heads/feature/releases'])assert.equal(releaseEligible({event,ref}),false);
  }
 });
 test('forks, tags and unrelated branches never request release approval',()=>{
- for(const job of ['release_decision','publish']){
-  assert.equal(releaseEligible({repository:'someone/fork',job}),false);
-  for(const ref of ['refs/tags/v1.0.0','refs/heads/other'])assert.equal(releaseEligible({ref,job}),false);
- }
+ assert.equal(releaseEligible({repository:'someone/fork'}),false);
+ for(const ref of ['refs/tags/v1.0.0','refs/heads/other'])assert.equal(releaseEligible({ref}),false);
 });

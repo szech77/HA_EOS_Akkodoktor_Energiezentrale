@@ -155,6 +155,6 @@ def test_cleanup_workflow_checks_new_head_without_approving_a_release():
     assert 'test "$CLEANUP" = success' in enforce
     assert 'test "$CLEANUP" = skipped' in enforce
     assert "github.event_name == 'push'" in jobs['publish']['if']
-    assert "github.event_name == 'push'" in jobs['release_decision']['if']
-    assert 'environment' not in jobs['publish']
-    assert "needs.release_decision.outputs.approved == 'true'" in jobs['publish']['if']
+    assert jobs['publish']['environment'] == 'release'
+    assert jobs['publish']['needs'] == 'required'
+    assert 'release_decision' not in jobs
