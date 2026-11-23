@@ -5,7 +5,9 @@ REASONS = frozenset({'unknown_fields', 'invalid_type', 'out_of_range', 'battery_
     'invalid_schedule', 'invalid_departure', 'invalid_departure_time', 'invalid_weekdays',
     'profile_invalid', 'profile_nonpositive_power', 'settings_unconfirmed',
     'effective_limits_unavailable', 'effective_limits_differ', 'goal_unconfirmed', 'resource_missing',
-    'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region'})
+    'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region',
+    'setup_unsupported', 'setup_preview_expired', 'setup_conflict', 'setup_control_active',
+    'setup_save_failed', 'setup_plan_pending', 'price_unavailable'})
 # Fixed causes of a failed Modbus request (_modbus_tcp.ModbusError.reason).
 TRANSPORT_REASONS = frozenset({'rejected', 'not_acknowledged', 'readback_mismatch', 'invalid_response', 'connection_closed'})
 FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_interval_s',
@@ -16,7 +18,10 @@ FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_inte
     'min_soc_deadline_datetime', 'min_soc_max_duration_h', 'charge_rates', 'profile_adjustment', 'password_env',
     'charge_plans', 'holiday_state', 'holiday_locality', 'holiday_catholic',
     'pv_price_ct', 'pv_price_source', 'efficiency_source', 'charge_efficiency', 'discharge_efficiency',
-    'initial_price_ct', 'base_price_eur_month', 'base_price_history'})
+    'initial_price_ct', 'base_price_eur_month', 'base_price_history',
+    'latitude', 'longitude', 'timezone', 'resource', 'planes', 'pv_provider', 'weather_provider',
+    'price_provider', 'load_provider', 'price_ct', 'fee_ct', 'vat_percent', 'bidding_zone',
+    'feedin_ct', 'annual_kwh', 'inverter_power_w', 'horizon_hours', 'prediction_hours', 'interval_seconds'})
 
 
 class BackendError(ValueError):

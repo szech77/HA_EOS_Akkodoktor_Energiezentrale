@@ -1272,7 +1272,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
 
     async def test_websocket_rejects_non_admin_before_accessing_controller(self):
         connection = Mock(user=SimpleNamespace(is_admin=False))
-        for action in ('control', 'client_event'):
+        for action in ('control', 'client_event', 'eos_setup'):
             with self.assertRaises(Unauthorized):
                 websocket_request(self.hass, connection, {"id": 1, "action": action, "values": {"enabled": True}})
 
@@ -1291,6 +1291,27 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
             connection = await self.invoke({"action": "control", "values": values})
             connection.send_error.assert_called_once()
         app.set_armed.assert_not_called()
+
+    async def test_setup_requires_released_control_and_only_runs_in_executor(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        self.entry.runtime_data = coordinator
+        coordinator.eos_setup = Mock()
+        coordinator.eos_setup.load.return_value = {'draft': {}}
+        app.armed = True
+        connection = await self.invoke({'action': 'eos_setup', 'values': {'operation': 'load'}})
+        connection.send_error.assert_called_once()
+        coordinator.eos_setup.load.assert_not_called()
+        app.armed = False
+        connection = await self.invoke({'action': 'eos_setup', 'values': {'operation': 'load'}})
+        connection.send_result.assert_called_once_with(1, {'draft': {}})
+        hardware, location = coordinator.eos_setup.load.call_args.args
+        self.assertEqual(hardware[0]['resource'], DEFAULTS['battery_resource'])
+        self.assertEqual(location['latitude'], self.hass.config.latitude)
+        for values in ({'operation': []}, {'operation': 'apply', 'token': 'x', 'confirm': False}):
+            connection = await self.invoke({'action': 'eos_setup', 'values': values})
+            connection.send_error.assert_called_once()
+        coordinator.eos_setup.apply.assert_not_called()
 
     async def test_websocket_control_switches_single_areas_and_rejects_unknown_ones(self):
         coordinator, app = self.controller()
@@ -1608,6 +1629,36 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(json.loads(result["data"]["vehicles"]),[])
         self.assertEqual(result["data"]["wallbox_type"],"none")
         self.assertEqual(result['data']['vehicle_resource'],'')
+
+    async def test_eos_price_poll_runs_in_executor_independently_of_optimization_and_recovers(self):
+        from threading import get_ident
+        from custom_components.eos_energiezentrale.energy.clients import reading
+        from custom_components.eos_energiezentrale.energy.measurement_sources import resolve_sources
+        options = {**DEFAULTS, 'price_entity': ''}
+        app = Controller(Mock(), Configuration(options, Mock(), self.directory))
+        app.config.eos = Mock()
+        event_thread = get_ident()
+        def prices(now):
+            assert get_ident() != event_thread
+            return [{'time': now.isoformat(), 'end': (now + timedelta(minutes=15)).isoformat(), 'price_ct': 31.25}]
+        app.config.eos.electricity_prices.side_effect = TimeoutError()
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        await coordinator._async_poll_eos('prices')
+        assert 'eos_price' in app.errors
+        assert app.eos_prices.current(datetime.now(timezone.utc)).value is None
+        app.config.eos.electricity_prices.side_effect = prices
+        await coordinator._async_poll_eos('prices')
+        now = datetime.now(timezone.utc)
+        opts, states, report = resolve_sources(options, {}, (), now, eos_prices=app.eos_prices)
+        assert reading(states, opts['price_entity'], now, 'price', 3600) == 31.25
+        assert 'eos_price' not in app.errors and 'price' not in report['unavailable']
+        app.config.eos.plan.assert_not_called()
+        app.config.eos.solution.assert_not_called()
+        # An in-flight response from before a wizard change cannot restore old prices.
+        app.config.eos_configured_at = now + timedelta(hours=1)
+        app.eos_prices.clear()
+        await coordinator._async_poll_eos('prices')
+        assert app.eos_prices.current(now).value is None
 
     async def test_background_forecast_poll_uses_warning_grace_and_clears_on_recovery(self):
         from datetime import timedelta

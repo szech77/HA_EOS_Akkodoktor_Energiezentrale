@@ -5,6 +5,7 @@ import Connections from '@/components/settings/Connections.vue'
 import ControlAreas from '@/components/settings/ControlAreas.vue'
 import SettingField from '@/components/settings/SettingField.vue'
 import SourceDiagnostics from '@/components/settings/SourceDiagnostics.vue'
+import EOSSetupWizard from '@/components/settings/EOSSetupWizard.vue'
 import { catholicAllowed, localityAllowed, useSettingsStore, type Section, type SettingsSnapshot } from '@/stores/settings'
 import type { BatteryGroup } from '@/utils/batteryGroup'
 import { createFormat, isNumber } from '@/utils/format'
@@ -30,6 +31,7 @@ const root = ref<HTMLElement | null>(null)
 
 const car = computed(() => props.snapshot.features?.car !== false)
 const sections = computed(() => [
+  { key: 'wizard' as const, shown: true },
   { key: 'battery' as const, shown: true },
   { key: 'car' as const, shown: car.value },
   { key: 'calendar' as const, shown: car.value },
@@ -96,6 +98,7 @@ const STATES = [['BW', 'Baden-Württemberg'], ['BY', 'Bayern'], ['BE', 'Berlin']
         </template>
       </nav>
       <div class="settings-body plan-panel">
+        <EOSSetupWizard v-if="section === 'wizard'" :control-active="snapshot.armed === true || snapshot.release_pending === true" />
         <form id="daily" novalidate @submit.prevent="store.save(readable)">
           <section v-show="section === 'battery'" data-settings-section="battery">
             <h2>{{ t('device.battery') }}</h2>

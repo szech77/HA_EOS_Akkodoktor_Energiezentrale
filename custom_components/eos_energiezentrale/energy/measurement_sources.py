@@ -10,6 +10,7 @@ from .contracts import BatteryReading, Measurement, PluginContractError
 from .clients import reading, measurement_max_age
 from .sanitiser import bounded
 from .domain import instant, number
+from .eos_prices import EOSPrices, PRICE_MAX_AGE_S
 
 # Unchanged vehicle values may legitimately keep their timestamp for a day;
 # an older report is no basis for charging decisions or diagnostics.
@@ -51,7 +52,7 @@ def checked_measurements(values, declared, now):
     return result
 
 
-def resolve_sources(options, states, providers, now, keys=None):
+def resolve_sources(options, states, providers, now, keys=None, eos_prices=None):
     """Sensor first; then battery plugin, then wallbox plugin. Never fail over a
     configured-but-unavailable sensor. Preserve fleet-adjusted internal rows.
     Confirmed backup replaces grid-based house totals with fresh inverter AC.
@@ -69,6 +70,8 @@ def resolve_sources(options, states, providers, now, keys=None):
         if keys is not None and key not in keys:
             continue
         entity = options.get(option, "")
+        if key == 'price' and entity == '@eos:price':
+            entity = ''
         opts.setdefault(option, entity)
         source = {"type": "sensor", "name": entity} if entity else None
         if key == 'house_total' and backup:
@@ -106,6 +109,14 @@ def resolve_sources(options, states, providers, now, keys=None):
                 if key == "heat_load": opts["heat_load_scale"] = "percent"
                 source = {"type": "plugin", "name": driver.info.name}
                 break
+        if key == 'price' and not entity and options.get('eos_url'):
+            entity = '@eos:price'
+            opts[option] = entity
+            item = eos_prices.current(now) if isinstance(eos_prices, EOSPrices) else Measurement(None, None)
+            rows[entity] = {'state': item.value, 'last_reported': item.sample.isoformat() if item.sample else None,
+                            'attributes': {'unit_of_measurement': unit}}
+            source = {'type': 'eos', 'name': 'Akkudoktor EOS'}
+            age = PRICE_MAX_AGE_S
         raw = rows.get(entity, {})
         age = measurement_max_age(kind, raw.get('state'), age, raw.get('attributes', {}).get('unit_of_measurement'))
         available = bool(source and reading(rows, entity, now, kind, age) is not None)
@@ -115,6 +126,10 @@ def resolve_sources(options, states, providers, now, keys=None):
             'state_unavailable' if number(row.get('state')) is None else
             'sample_missing' if stamp is None else 'future_sample' if now < stamp else
             'stale' if (now-stamp).total_seconds() >= age else 'unit_invalid')
+        if source and source['type'] == 'eos' and not available:
+            if stamp and (now - stamp).total_seconds() >= age:
+                reason = 'stale'
+            rows[entity]['state'] = None  # Live/control/history also reject expired cached prices.
         sources[key] = {"source": source, "available": available, 'reason':reason, 'max_age_s':age,
                         'sample': stamp.isoformat() if source and stamp else None}
     required = {"solar", "grid", "house_total", "price"}

@@ -166,6 +166,7 @@ class FleetController(Controller):
             # Children follow the fleet's remembered intent, including the
             # assumption that devices may still hold commands after a crash.
             controller.scope = dict(self.scope)
+            controller.eos_prices = self.eos_prices
             controller.owned = self.armed
             self.controllers.append((identity,controller,proxy))
         self.fleet_resources={self.config.options["battery_resource"],*(app.config.options["vehicle_resource"] for _,app,_ in self.controllers)}
@@ -224,7 +225,7 @@ class FleetController(Controller):
         primary_box=self.read_control_input(self.config.wallbox,rows,now,'wallbox_read')
         shared_keys=("solar","grid","house_total","heat","price","heat_load")
         opts,rows,shared_sources=resolve_sources(opts,rows,
-            ((self.battery_driver,battery),(self.config.wallbox,primary_box)),now,keys=shared_keys)
+            ((self.battery_driver,battery),(self.config.wallbox,primary_box)),now,keys=shared_keys,eos_prices=self.eos_prices)
         grid=reading(rows,opts["grid_entity"],now,"power",45)
         actual={key:app.read_control_input(app.config.wallbox,rows,now,'wallbox_read').watts
                 for key,app,_ in self.controllers}

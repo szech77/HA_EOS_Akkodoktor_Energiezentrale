@@ -127,59 +127,73 @@ schlägt die Bereinigung sichtbar fehl. `main`, Forks und Pull-Request-Läufe we
 nicht automatisch beschrieben.
 
 Pushes und Merges starten weiterhin alle Pflichtprüfungen. Nach **allen**
-erfolgreichen Pflichtprüfungen wartet derselbe Lauf im Job `release_decision`
-auf eine Ja/Nein-Antwort im automatisch angelegten GitHub-Issue. Ohne ausdrückliches
-Ja starten weder der Release-Build noch die Veröffentlichung. Nach der Entscheidung
-gelten folgende Kanäle:
+erfolgreichen Pflichtprüfungen wartet der Job **Publish stable or beta HACS release**
+am geschützten GitHub-Environment `release`. Ohne ausdrückliche Freigabe starten
+weder der Release-Build noch die Veröffentlichung. Es werden keine Release-Issues
+mehr angelegt oder Kommentare abgefragt. Nach der Freigabe gelten folgende Kanäle:
 
 | Auslöser im Originalrepository | Veröffentlichung |
 | --- | --- |
 | Push auf `feature/**`, `bug/**`, `bugfix/**`, danach Freigabe | `vX.Y.Zb<GitHub-Run-ID>` als GitHub-Prerelease |
 | Push/Merge nach `main`, danach Freigabe | `vX.Y.Z` als stabiles, neuestes Release |
-| Nein, Schließen ohne Antwort oder 60 Minuten ohne Entscheidung | Kein Release; Entscheidung erfolgreich, Publish-Job übersprungen, Workflow grün |
+| Noch keine Environment-Freigabe | Publish-Job wartet; kein Release-Build, kein Release |
+| **Reject** oder keine Freigabe innerhalb GitHubs Wartefrist von 30 Tagen | Kein Release; Job schlägt fehl |
 | Pull Request, Merge Queue, Fork, manueller Lauf, Bot-Folgeprüfung | Nur Prüfungen, keine Freigabeanfrage und keine Veröffentlichung |
 
-Im betreffenden Lauf unter **Actions → CI → Decide whether to publish a release**
-steht der Issue-Link im Log und in der Job-Zusammenfassung. Das Issue nennt Branch,
-Kanal, vollständigen geprüften Quellcommit, Laufnummer und Versuch und wird
-`szech77` zugewiesen. Als **eigenen Kommentar** exakt antworten:
+Im betreffenden Lauf unter **Actions → CI → Review deployments** das Environment
+**release** auswählen, Branch und Commit prüfen und **Approve and deploy** drücken.
+Eine Freigabe durch einen eingetragenen Required reviewer genügt. Die Freigabe gilt
+für den wartenden Job dieses Laufs und seinen geprüften Quellcommit, nicht für
+zukünftige Pushes. Neue Versuche können erneut auf eine Environment-Freigabe warten.
+Ein neuer Push auf einen Arbeitsbranch kann einen älteren wartenden Lauf nach der
+bestehenden Concurrency-Regel abbrechen. Auf `main` werden Releases nicht durch einen
+neuen Push abgebrochen. Der gewöhnliche Frontend-Build im Testjob bleibt Teil der
+Pflichtprüfungen; der zusätzliche Release-Build beginnt erst nach Freigabe.
 
-- **`ja`** oder **`yes`**: Diesen geprüften Stand veröffentlichen.
-- **`nein`** oder **`no`**: Erfolgreich ohne Release abschließen.
+### Geschütztes Environment einrichten
 
-Groß-/Kleinschreibung und umgebende Leerzeichen sind egal. Nur die erste eindeutige
-Antwort des konfigurierten menschlichen Freigebers zählt. Andere Benutzer, Bots,
-Zitate und Sätze wie „ich sage ja“ geben nichts frei. Ohne gültige Antwort bedeutet
-auch das Schließen des Issues „kein Release“. Das Skript fragt alle 15 Sekunden ab;
-nach 60 Minuten ohne Antwort endet es ebenfalls erfolgreich ohne Release. Der Job
-hat 65 Minuten einschließlich Einrichtung und Aufräumen und belegt beim Warten
-einen Runner. Fehler beim API-Zugriff, ungültige API-Antworten oder fehlgeschlagenes
-Aufräumen schlagen den Entscheidungsschritt fehl; sie werden nicht als Nein gewertet.
+Ein Repository-Administrator richtet unter **Settings → Environments → release**
+die folgenden Regeln ein. Das Environment existiert in diesem Repository bereits.
+Die YAML-Zeile `environment: release` allein fordert keine Freigabe an: Wenn die
+Umgebung fehlt, legt GitHub sie ohne Schutzregeln an. Deshalb die Regeln vor dem
+ersten Push des geänderten Workflows prüfen und bei einer Neuerstellung wieder setzen.
 
-`tools/release_approval.py` verwendet nur Python-Standardbibliothek und den
-vorhandenen GitHub-Client. Der Entscheidungsjob hat `contents: read` und
-`issues: write`, aber keine Schreibrechte auf Quellcode oder Releases. Das Issue
-wird in einem `always()`-Schritt auch nach Fehlern oder Abbruch geschlossen, soweit
-der Runner und die GitHub-API dies noch ausführen können. Jeder neue Versuch legt
-eine neue Anfrage an und übernimmt keine frühere Freigabe. Ein neuer Push auf einen
-Arbeitsbranch kann einen älteren wartenden Lauf nach der bestehenden Concurrency-Regel
-abbrechen. Der gewöhnliche Frontend-Build im Testjob bleibt Teil der Pflichtprüfungen.
+1. **Required reviewers** aktivieren und berechtigte Benutzer oder Teams eintragen;
+   aktuell ist `szech77` als Freigeber eingerichtet. GitHub erlaubt höchstens sechs
+   Benutzer oder Teams. Eine Repository-Berechtigung allein macht jemanden noch
+   nicht zum Freigeber; die Person muss auch hier eingetragen sein oder einem
+   eingetragenen Team angehören. Weitere Maintainer werden hier ergänzt, nicht im
+   Workflow. Organisationen können dafür ein gemeinsames Release-Team verwenden.
+2. **Prevent self-review** ausgeschaltet lassen, damit ein eingetragener Freigeber
+   auch seinen eigenen Push freigeben kann. Bei einem verpflichtenden Vier-Augen-
+   Verfahren erst einen weiteren Freigeber eintragen und dann diese Option aktivieren.
+3. **Allow administrators to bypass configured protection rules** ausschalten.
+   Auch Administratoren sollen regulär über **Approve and deploy** freigeben.
+4. Schutzregeln speichern. Die Regeln gelten für Beta- und stabile Releases;
+   die Workflow-Bedingung begrenzt Veröffentlichungen weiterhin auf die erlaubten
+   Push-Branches im Originalrepository.
 
-Die bisherige geschützte Umgebung `release` wird vom Workflow nicht mehr verwendet;
-ihre Repository-Einstellungen müssen nicht geändert werden. Es erscheint kein
-**Review deployments** mehr. GitHubs native Ablehnung würde weiterhin den Lauf
-fehlschlagen lassen; stattdessen ist Nein hier ein reguläres Skriptergebnis.
-Referenzen: [GitHub: Issue-Kommentare](https://docs.github.com/en/rest/issues/comments),
-[GitHub: Deployment-Ablehnung](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments).
+Wartende Environment-Jobs belegen noch keinen Runner. Der Publish-Job erhält
+weiterhin ausschließlich `contents: write`; Issue-Schreibrechte entfallen vollständig.
+Die zehn Minuten Job-Laufzeit gelten nach dem Start, nicht als bisherige einstündige
+Entscheidungsfrist. GitHub lässt einen Job ohne Freigabe nach 30 Tagen fehlschlagen.
+**Reject** ist ebenfalls ein fehlgeschlagener Job. Das bisherige erfolgreiche
+„Nein“ oder automatische erfolgreiche Überspringen gibt es bei dieser nativen
+Freigabe nicht. **Cancel workflow** beendet den Lauf als abgebrochen ohne Release.
+Pflichtprüfungen bleiben bei einer Ablehnung weiterhin separat sichtbar.
+
+Referenzen: [GitHub: Environments einrichten](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments),
+[GitHub: Review deployments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments),
+[GitHub: Warteverhalten](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments).
 
 Der Publish-Job prüft ausdrücklich `!cancelled()`, ein erfolgreiches
-`needs.required.result`, einen erfolgreichen Entscheidungsjob und dessen Ausgabe
-`approved == 'true'` sowie Push-Ereignis, Originalrepository und erlaubte Quellbranches.
-Ohne Ja wird der Publish-Job übersprungen; echte Veröffentlichungsfehler bleiben rot.
+`needs.required.result` sowie Push-Ereignis, Originalrepository und erlaubte
+Quellbranches. Danach setzt GitHub die Environment-Freigabe durch. Vorher wird kein
+Schritt des Publish-Jobs ausgeführt; echte Veröffentlichungsfehler bleiben rot.
 Das ist auch nach einem grünen Sammelstatus nötig:
 GitHubs implizites `success()` berücksichtigt übersprungene Vorgänger entlang
 der Abhängigkeitskette. Auf `main` ist die Branch-Changelog-Bereinigung absichtlich
-übersprungen; das darf die Issue-Anfrage und die anschließende stabile
+übersprungen; das darf die Environment-Freigabe und die anschließende stabile
 Veröffentlichung nicht überspringen. Die
 explizite Statusfunktion hebt nur diese implizite Sperre auf. Fehlgeschlagene,
 übersprungene oder abgebrochene Pflichtprüfungen geben keinen Release frei.

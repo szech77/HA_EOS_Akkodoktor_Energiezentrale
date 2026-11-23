@@ -165,6 +165,10 @@ class Configuration:
         self.influx = Influx(options["influx_url"], options["influx_database"],
                              options["influx_user"], influx_credential(options))
         self.directory = Path(directory)
+        setup_file = self.directory / 'eos_setup.json'
+        self.eos_configured_at = instant(json.loads(setup_file.read_text(encoding='utf-8')).get('at')) if setup_file.exists() else None
+        if setup_file.exists() and self.eos_configured_at is None:
+            raise ValueError('Invalid EOS configuration plan boundary')
         self.control_file = self.directory / "control.json"
         control = json.loads(self.control_file.read_text(encoding="utf-8")) if self.control_file.exists() else {"enabled": False}
         if (not isinstance(control, dict) or control.keys() != {"enabled"}

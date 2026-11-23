@@ -79,6 +79,27 @@ class FleetRequirements(unittest.TestCase):
         self.assertEqual(sorted(sent),sorted(keys))
         self.assertEqual(len(writes),len(keys))
 
+    def test_eos_price_is_shared_by_all_vehicles_and_their_persisted_history(self):
+        app, _, _, _ = self.setup_fleet()
+        for _, child, _ in app.controllers:
+            child.config.options['price_entity'] = ''
+        app.external_eos_polling = True
+        app.apply_eos_prices([{'time': NOW.isoformat(), 'end': (NOW + timedelta(hours=1)).isoformat(), 'price_ct': 31.25}], NOW)
+        app.tick(NOW, 0)
+        assert app.live['price'] == 31.25
+        assert app.history.read(NOW)[-1]['price'] == 31.25
+        for snapshot in app.vehicle_snapshots:
+            assert snapshot['live']['price'] == 31.25
+            assert snapshot['source_configuration']['sources']['price']['available']
+            assert snapshot['source_configuration']['sources']['price']['source']['type'] == 'eos'
+        for _, child, _ in app.controllers:
+            if child is not app:
+                assert child.history.read(NOW)[-1]['price'] == 31.25
+        app.config.eos.electricity_prices.assert_not_called()
+        app.eos_prices.clear()
+        app.tick(NOW + timedelta(seconds=5), 5)
+        assert all(row['live']['price'] is None for row in app.vehicle_snapshots)
+
     def test_duplicate_wallbox_or_eos_resource_is_rejected(self):
         for key in ("resource","wallbox_parameters"):
             rows=definitions()

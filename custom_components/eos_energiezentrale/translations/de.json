@@ -20,7 +20,7 @@
           "house_entity": "Gesamter Hausverbrauch einschließlich Auto und Wärmepumpe",
           "grid_entity": "Netzleistung (positiv = Bezug)",
           "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
-          "price_entity": "Bezugspreis",
+          "price_entity": "Bezugspreis (optional; leer = Plugin oder EOS)",
           "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
           "car_range_entity": "E-Auto-Reichweite (optional)",
@@ -31,7 +31,7 @@
           "backup_active_state": "Zustand für Notstrombetrieb",
           "backup_inactive_state": "Zustand für Netzbetrieb"
         },
-        "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Ohne beide Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
+        "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Beim Bezugspreis wird ohne Sensor oder Plugin automatisch der aktuelle EOS-Preis einschließlich konfigurierter Aufschläge gelesen. Für andere fehlende Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
       },
       "hardware": {
         "title": "Hardware-Treiber",
@@ -188,7 +188,7 @@
           "house_entity": "Gesamter Hausverbrauch einschließlich Auto und Wärmepumpe",
           "grid_entity": "Netzleistung (positiv = Bezug)",
           "heat_entity": "Wärmepumpe (optional; leer = nicht vorhanden)",
-          "price_entity": "Bezugspreis",
+          "price_entity": "Bezugspreis (optional; leer = Plugin oder EOS)",
           "car_soc_entity": "E-Auto-SoC (optional)",
           "car_soc_scale": "Fahrzeug-SoC-Einheit",
           "car_range_entity": "E-Auto-Reichweite (optional)",
@@ -199,7 +199,7 @@
           "backup_active_state": "Zustand für Notstrombetrieb",
           "backup_inactive_state": "Zustand für Netzbetrieb"
         },
-        "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Ohne beide Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
+        "description": "Sensoren haben Vorrang. Leere Felder werden durch Messwerte eines eingerichteten Plugins versorgt, sofern dieses sie anbietet. Beim Bezugspreis wird ohne Sensor oder Plugin automatisch der aktuelle EOS-Preis einschließlich konfigurierter Aufschläge gelesen. Für andere fehlende Quellen zeigt das Panel einen Konfigurationshinweis. Wärmepumpe und Fahrzeug bleiben optional."
       },
       "hardware": {
         "title": "Hardware-Treiber",

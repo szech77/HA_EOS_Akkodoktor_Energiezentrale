@@ -14,6 +14,23 @@ keine browserseitige Ladefreigabe oder Ersatzberechnung bei fehlenden Backendwer
 
 ## Warnungen und Fehler
 
+Ohne Strompreis-Sensor oder Plugin-Preis wird der EOS-Preis als Quelle `eos`
+ausgewiesen. Fehlgeschlagene oder unvollständige Preisabrufe verwenden die Kennung
+`system/eos_price` mit festen Fehlerdetails, unabhängig von Browserabrufen.
+HTTP-Debugmeldungen verwenden `eos_prediction_series`, ohne URL, Rohantwort oder
+Preiswerte zu protokollieren. Erfolgreiche Folgeabrufe beheben die Meldung.
+Nicht mehr aktuelle Preisintervalle und mindestens zwei Minuten alte Abrufe
+werden für Livewerte, Steuerung und neue Bilanzbuchungen verworfen.
+
+Der EOS-Einrichtungsassistent verwendet die Kennung `api/eos_setup` für Anzeige,
+Backend-Log und Diagnose. Ungültige Eingaben, abgelaufene Vorschauen,
+Konfigurationskonflikte sowie fehlende Schreib-/Speicherbestätigungen werden dort
+mit festen Ursachenkennungen erfasst und dedupliziert. Koordinaten, vollständige
+Konfigurationen, Vorschauwerte, Tokens und Anbieterzugangsdaten werden nicht
+protokolliert. Ein Smartphone-Ortungsfehler bleibt ausschließlich im Browser.
+Die Plansperre nach einer Änderung wird als `setup_plan_pending` im bestehenden
+EOS-Planfehler erfasst und mit einem neuen gültigen Plan behoben.
+
 Bestätigter Notstrombetrieb erscheint als normale Information (`INFO`)
 `backup_power_active`, ein nicht
 bestätigter zuvor unterstützter oder konfigurierter Status als

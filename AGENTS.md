@@ -38,14 +38,15 @@ Abhängigkeitsupdates, ergänzt `CHANGELOG.md`:
    Ein normales Versionsupdate nicht ohne Beleg als behobene Sicherheitslücke
    darstellen. Dokumentation gehört ebenfalls zum Änderungsumfang.
 
-Nach erfolgreichen Pflichtprüfungen wartet der Push-/Merge-Lauf im Job
-`release_decision` auf eine Antwort im automatisch angelegten GitHub-Issue.
-Nur ein eigener Kommentar mit exakt `ja`/`yes` vom konfigurierten Freigeber
-`szech77` veröffentlicht: auf `feature/`, `bug/` oder `bugfix/` eine Beta, auf
-`main` ein stabiles HACS-Release. `nein`/`no`, Schließen ohne Antwort oder 60 Minuten
-ohne Entscheidung überspringen das Release erfolgreich. API- und andere technische
-Fehler bleiben Fehler. Freigaben gelten nur für den angegebenen Quellcommit,
-Lauf und Versuch; Bot-Folgeprüfungen fragen keine Freigabe an. Agents dürfen eine
+Nach erfolgreichen Pflichtprüfungen wartet der Publish-Job des Push-/Merge-Laufs
+am geschützten GitHub-Environment `release`. Ein dort eingetragener Required
+reviewer gibt unter **Review deployments → Approve and deploy** den Release frei:
+auf `feature/`, `bug/` oder `bugfix/` eine Beta, auf `main` ein stabiles HACS-Release.
+Ohne Freigabe startet der Veröffentlichungsjob nicht. GitHubs **Reject** lässt
+den Job fehlschlagen; es gibt kein erfolgreiches Nein über ein Issue mehr.
+Required reviewers müssen in den Repository-Einstellungen gesetzt sein;
+`environment: release` allein schützt eine neu angelegte Umgebung nicht.
+Bot-Folgeprüfungen fragen keine Freigabe an. Agents dürfen eine
 Freigabe nur im ausdrücklich beauftragten Rahmen erteilen; ein Auftrag zur Änderung
 der CI ist keine Release-Freigabe. Details stehen in `CI.md`.
 Die Pipeline erzeugt einen Metadatencommit mit dem geprüften Quellcommit als

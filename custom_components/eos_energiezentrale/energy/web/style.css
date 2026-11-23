@@ -563,3 +563,13 @@
 }
 #eos-energy-design .pv-head h1 {margin:0;}
 #eos-energy-design .pv-head p {margin:4px 0 0;}
+#eos-energy-design .eos-wizard fieldset {border:0;padding:0;min-width:0;}
+#eos-energy-design .eos-wizard legend {font-weight:700;margin:16px 0;}
+#eos-energy-design .wizard-progress {display:flex;flex-wrap:wrap;gap:8px 24px;padding-left:20px;color:var(--dim);}
+#eos-energy-design .wizard-progress .current {color:var(--ink);font-weight:700;}
+#eos-energy-design .wizard-actions {display:flex;flex-wrap:wrap;gap:12px;margin:18px 0;}
+#eos-energy-design .eos-wizard .wizard-device {border:1px solid var(--edge);border-radius:12px;padding:16px;margin:16px 0;}
+#eos-energy-design .wizard-review {overflow-x:auto;}
+#eos-energy-design .wizard-review table {width:100%;border-collapse:collapse;font-size:.9rem;}
+#eos-energy-design .wizard-review th, #eos-energy-design .wizard-review td {text-align:left;padding:10px 8px;border-bottom:1px solid var(--edge);overflow-wrap:anywhere;min-width:100px;}
+#eos-energy-design .wizard-warning, #eos-energy-design .wizard-success {padding:16px;border:1px solid var(--edge);border-radius:12px;margin:16px 0;}

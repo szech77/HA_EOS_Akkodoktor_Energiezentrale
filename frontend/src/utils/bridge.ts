@@ -66,7 +66,7 @@ export function createBridge(view: BridgeWindow, message: ErrorText, clientId: s
         const timer = setTimeout(() => {
           pending.delete(id)
           reject(error('timeout', action))
-        }, TIMEOUT_MS)
+        }, action === 'eos_setup' ? 150_000 : TIMEOUT_MS)
         pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer, action })
         view.parent.postMessage({ channel: 'eos-energy-request', id, client: clientId, action, values }, view.location.origin)
       })

@@ -1,0 +1,874 @@
+{
+  "_source": "https://github.com/Akkudoktor-EOS/EOS/blob/main/openapi.json",
+  "_note": "Input-schema subset used by the setup wizard; retrieved 2026-11-22. Descriptions omitted.",
+  "paths": {
+    "/v1/config": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsEOS"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config/file": {
+      "put": {}
+    }
+  },
+  "components": {
+    "schemas": {
+      "SettingsEOS": {
+        "properties": {
+          "general": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeneralSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ems": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyManagementCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "devices": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DevicesCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "optimization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prediction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictionCommonSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elecfee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElecFeeCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elecprice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElecPriceCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedintariff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedInTariffCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "load": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoadCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pvforecast": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PVForecastCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeatherCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "adapter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdapterCommonSettings-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "GeneralSettings-Input": {
+        "properties": {
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 52.52
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 180.0,
+                "minimum": -180.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 13.405
+          },
+          "timezone_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "EnergyManagementCommonSettings-Input": {
+        "properties": {
+          "startup_delay": {
+            "type": "number",
+            "minimum": 1.0,
+            "default": 5
+          },
+          "interval": {
+            "type": "number",
+            "minimum": 60.0,
+            "default": 300.0
+          },
+          "mode": {
+            "$ref": "#/components/schemas/EnergyManagementMode"
+          },
+          "notify_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "EnergyManagementMode": {
+        "type": "string",
+        "enum": [
+          "DISABLED",
+          "PREDICTION",
+          "OPTIMIZATION"
+        ]
+      },
+      "DevicesCommonSettings-Input": {
+        "properties": {
+          "batteries": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/BatteriesCommonSettings-Input"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "electric_vehicles": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/BatteriesCommonSettings-Input"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inverters": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/InverterCommonSettings-Input"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "BatteriesCommonSettings-Input": {
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "battery_profile": {
+            "type": "string",
+            "minLength": 1,
+            "default": "generic-lfp"
+          },
+          "profile_adjustment": {
+            "$ref": "#/components/schemas/BatteryProfileAdjustment"
+          },
+          "charge_rates": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": [
+              0.0,
+              0.1,
+              0.2,
+              0.3,
+              0.4,
+              0.5,
+              0.6,
+              0.7,
+              0.8,
+              0.9,
+              1.0
+            ]
+          },
+          "min_soc_percentage": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "default": 0
+          },
+          "max_soc_percentage": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "default": 100
+          }
+        },
+        "type": "object"
+      },
+      "BatteryProfileAdjustment": {
+        "properties": {
+          "nominal_capacity_wh": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_charge_power_w": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_discharge_power_w": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "InverterCommonSettings-Input": {
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "inverter_profile": {
+            "type": "string",
+            "minLength": 1,
+            "default": "generic-hybrid"
+          },
+          "profile_adjustment": {
+            "$ref": "#/components/schemas/InverterProfileAdjustment"
+          },
+          "battery_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "InverterProfileAdjustment": {
+        "properties": {
+          "nominal_power_w": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "OptimizationCommonSettings-Input": {
+        "properties": {
+          "algorithm": {
+            "$ref": "#/components/schemas/OptimizationAlgorithm"
+          },
+          "genetic": {
+            "$ref": "#/components/schemas/GeneticCommonSettings-Input"
+          }
+        },
+        "type": "object"
+      },
+      "OptimizationAlgorithm": {
+        "type": "string",
+        "enum": [
+          "GENETIC",
+          "GENETIC0"
+        ]
+      },
+      "GeneticCommonSettings-Input": {
+        "properties": {
+          "horizon_hours": {
+            "type": "integer",
+            "minimum": 0.0,
+            "default": 24
+          }
+        },
+        "type": "object"
+      },
+      "PredictionCommonSettings": {
+        "properties": {
+          "hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 48
+          },
+          "historic_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 48
+          }
+        },
+        "type": "object"
+      },
+      "ElecFeeCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elecfeefixed": {
+            "$ref": "#/components/schemas/ElecFeeFixedCommonSettings-Input"
+          }
+        },
+        "type": "object"
+      },
+      "ElecFeeFixedCommonSettings-Input": {
+        "properties": {
+          "consumption_amt_kwh": {
+            "$ref": "#/components/schemas/ValueTimeWindowSequence-Input"
+          },
+          "consumption_percent_amt": {
+            "$ref": "#/components/schemas/ValueTimeWindowSequence-Input"
+          },
+          "feedin_amt_kwh": {
+            "$ref": "#/components/schemas/ValueTimeWindowSequence-Input"
+          },
+          "feedin_percent_amt": {
+            "$ref": "#/components/schemas/ValueTimeWindowSequence-Input"
+          }
+        },
+        "type": "object"
+      },
+      "ValueTimeWindowSequence-Input": {
+        "properties": {
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/ValueTimeWindow-Input"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ValueTimeWindow-Input": {
+        "properties": {
+          "start_time": {},
+          "duration": {
+            "type": "string",
+            "format": "duration",
+            "default": "P0D"
+          },
+          "end_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "day_of_week": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "month": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 12.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_time"
+        ]
+      },
+      "ElecPriceCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elecpricefixed": {
+            "$ref": "#/components/schemas/ElecPriceFixedCommonSettings-Input"
+          },
+          "energycharts": {
+            "$ref": "#/components/schemas/ElecPriceEnergyChartsCommonSettings"
+          }
+        },
+        "type": "object"
+      },
+      "ElecPriceFixedCommonSettings-Input": {
+        "properties": {
+          "elecprice_marketprice_amt_kwh": {
+            "$ref": "#/components/schemas/ValueTimeWindowSequence-Input"
+          }
+        },
+        "type": "object"
+      },
+      "ElecPriceEnergyChartsCommonSettings": {
+        "properties": {
+          "bidding_zone": {
+            "$ref": "#/components/schemas/EnergyChartsBiddingZones",
+            "default": "DE-LU"
+          }
+        },
+        "type": "object"
+      },
+      "EnergyChartsBiddingZones": {
+        "type": "string",
+        "enum": [
+          "AT",
+          "BE",
+          "CH",
+          "CZ",
+          "DE-LU",
+          "DE-AT-LU",
+          "DK1",
+          "DK2",
+          "FR",
+          "HU",
+          "IT-NORTH",
+          "NL",
+          "NO2",
+          "PL",
+          "SE4",
+          "SI"
+        ]
+      },
+      "FeedInTariffCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedintarifffixed": {
+            "$ref": "#/components/schemas/FeedInTariffFixedCommonSettings-Input"
+          }
+        },
+        "type": "object"
+      },
+      "FeedInTariffFixedCommonSettings-Input": {
+        "properties": {
+          "feed_in_tariff_amt_kwh": {
+            "$ref": "#/components/schemas/ValueTimeWindowSequence-Input"
+          }
+        },
+        "type": "object"
+      },
+      "LoadCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "loadakkudoktor": {
+            "$ref": "#/components/schemas/LoadAkkudoktorCommonSettings"
+          }
+        },
+        "type": "object"
+      },
+      "LoadAkkudoktorCommonSettings": {
+        "properties": {
+          "loadakkudoktor_year_energy_kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PVForecastCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "planes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PVForecastPlaneSetting"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_planes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0
+          }
+        },
+        "type": "object"
+      },
+      "PVForecastPlaneSetting": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measurement_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "learning_guard_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "surface_tilt": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 30.0
+          },
+          "surface_azimuth": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 360.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 180.0
+          },
+          "peakpower": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 14.0
+          },
+          "inverter_paco": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "WeatherCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "AdapterCommonSettings-Input": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      }
+    }
+  }
+}
