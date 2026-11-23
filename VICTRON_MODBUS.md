@@ -122,7 +122,10 @@ Der Modbus-Dienst des GX bedient oft weitere Programme (z. B. eine HA-Victron-In
 oder eigene Modbus-Sensoren). Das Plugin hält deshalb **eine** TCP-Verbindung offen,
 statt für jede Abfrage eine neue aufzubauen. Schließt der GX eine ruhende Verbindung,
 wird die Anfrage einmal über eine neue Verbindung gesendet; nach einem Timeout oder
-einer unverständlichen Antwort wird die Verbindung verworfen. Ein Lesezyklus braucht
+einer unverständlichen Antwort wird die Verbindung verworfen. Eine Leseanfrage, deren
+Antwort nicht rechtzeitig kommt, wird einmal über eine neue Verbindung wiederholt, bevor
+der Timeout als Fehler gilt; Schreibbefehle werden nach einem Timeout nicht wiederholt.
+Nach der neuen Verbindung prüft das Plugin die GX-Kennung erneut. Ein Lesezyklus braucht
 drei Abfragen: Akku, PV (je Quelle) und einen Block mit Verbrauch, Netz und aktivem
 AC-Eingang (817–826). Kennung und Firmware werden beim Verbindungsaufbau, nach jedem
 Fehler und sonst alle fünf Minuten geprüft, ESS-Modus und Dynamic ESS vor der Steuerung
