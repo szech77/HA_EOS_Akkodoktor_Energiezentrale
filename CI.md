@@ -64,8 +64,9 @@ zuletzt stabil veröffentlichten Quellcommit: exakte Pins (`name==version`) in
 `requirements-dev.txt` und `requirements-test.txt`, exakte Versionen in
 `dependencies`/`devDependencies` von `frontend/package.json` (auch npm-Aliase mit
 exakter Zielversion wie `npm:@typescript/typescript6@6.0.2`) sowie Actions mit vollständigem
-Commit-SHA und Versionskommentar (`uses: owner/action@<sha> # vX.Y.Z`) in
-`.github/workflows/*.yml`. Für jedes geänderte Patch- oder Minor-Update, das in
+Commit-SHA in `.github/workflows/*.yml` und `*.yaml`. Versionskommentare
+(`uses: owner/action@<sha> # vX.Y.Z`) werden zusätzlich ausgewertet. Für jedes
+geänderte Patch- oder Minor-Update, das in
 keinem neuen Stichpunkt namentlich genannt ist, ergänzt sie in den Release-Notes
 einen `Bugfixes`-Eintrag, zum Beispiel:
 
@@ -79,7 +80,20 @@ Release-Notes; `CHANGELOG.md` im Quellbranch bleibt unverändert, und kein Workf
 schreibt in den Pull Request. Ein eigener Stichpunkt, der die Abhängigkeit nennt,
 ersetzt den automatischen Eintrag.
 
-Major-Updates (geänderte erste Versionsstelle, bei Kalenderversionen wie
+Auch reine Commit-Updates von Actions ohne Versionskommentar, beispielsweise
+`home-assistant/actions/hassfest`, erzeugen automatisch einen `Bugfixes`-Eintrag
+mit beiden vollständigen Commit-SHAs. Die Planung behauptet dafür weder eine
+Patch-/Minor-Version der Action noch API-Kompatibilität oder eine Sicherheitskorrektur.
+Ohne andere Änderungen ergibt das ein Patch-Release dieser Integration.
+Ein Wechsel zwischen Commit-Pins und Versionskommentaren sowie ein geänderter
+Commit bei gleich gebliebenem Versionskommentar werden ebenfalls erfasst.
+Eine bloße Kommentaränderung bei unverändertem Commit zählt nicht als Update;
+bewegliche Tags, Branchreferenzen und verkürzte Hashes bleiben ausgeschlossen.
+Mehrfach verwendete identische Updates erscheinen nur einmal in den Release-Notes.
+Ein eigener Stichpunkt mit dem Action-Namen ersetzt auch den automatischen
+Commit-Eintrag. Kompatibilitätsprüfung und alle Pflichtchecks bleiben erforderlich.
+
+Erkennbare Major-Updates (geänderte erste Versionsstelle, bei Kalenderversionen wie
 `2026.11.x` geändertes Jahr oder geänderter Monat) und nicht lesbare Versionen
 stoppen die Versionsplanung, bis ein eigener Stichpunkt die Abhängigkeit nennt
 und die geprüfte Auswirkung beschreibt. Neu hinzugefügte oder entfernte
