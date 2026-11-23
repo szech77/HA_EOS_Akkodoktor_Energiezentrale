@@ -165,7 +165,7 @@ jobs:
           python-version: "3.14"
       - name: Validate checkout license and repository metadata
         run: python tools/validate_hacs_metadata.py
-      - uses: home-assistant/actions/hassfest@07f46fd2e19967768b5fd3000f91f857452b767c
+      - uses: home-assistant/actions/hassfest@07f46fd2e19967768b5fd3000f91f857452b767c # 2026.11.0
       - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
           category: integration

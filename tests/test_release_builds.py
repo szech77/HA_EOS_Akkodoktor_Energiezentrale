@@ -350,6 +350,94 @@ def test_own_entry_wins_and_minor_updates_and_actions_are_covered_once(project):
     assert 'Bandit 1.10.0 meldet' in notes and '`bandit` von' not in notes
 
 
+@pytest.mark.parametrize('suffix', ['yml', 'yaml'])
+def test_sha_only_dependabot_action_update_gets_a_patch_without_a_written_entry(project, suffix):
+    github = Repository()
+    only_released_draft(project)
+    old = '86d4564712fa02543c808e3a693dd04f9d3f8361'
+    new = '07f46fd2e19967768b5fd3000f91f857452b767c'
+    for name in ('ci', 'other'):
+        dependencies(project, github, f'steps:\n  - uses: home-assistant/actions/hassfest@{old}\n',
+                     f'steps:\n  - uses: home-assistant/actions/hassfest@{new}\n',
+                     f'.github/workflows/{name}.{suffix}')
+    result = plan(project, github, 'stable')
+    assert result['version'] == '0.19.1'
+    entry = f'- GitHub Action `home-assistant/actions/hassfest` von Commit `{old}` auf Commit `{new}` aktualisiert (CI); automatisch erfasst.'
+    assert result['notes'].count(entry) == 1
+    assert not github.writes  # The PR check calculates notes; it never edits the PR or publishes.
+    original = (project/'CHANGELOG.md').read_text(encoding='utf-8')
+    github.files[(SOURCE, 'CHANGELOG.md')] = original
+    published = plan(project, github, 'stable')
+    release.publish_build(github, published)
+    assert entry in github.releases[-1]['body']
+    assert (project/'CHANGELOG.md').read_text(encoding='utf-8') == original
+    assert published['origin']['source_changelog_sha256'] == release.hashlib.sha256(original.encode()).hexdigest()
+
+
+@pytest.mark.parametrize('old_comment,new_comment', [('', ' # 2026.11.0'),
+                                                       (' # master', ' # master'),
+                                                       (' # v7.0.1', ' # v7.0.1')])
+def test_action_commit_updates_are_not_lost_when_a_version_comment_is_absent_or_unchanged(project, old_comment, new_comment):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, 'steps:\n  - uses: owner/action@'+'1'*40+old_comment+'\n',
+                 'steps:\n  - uses: owner/action@'+'2'*40+new_comment+'\n', '.github/workflows/ci.yml')
+    assert 'von Commit `'+ '1'*40+'` auf Commit `'+ '2'*40+'`' in plan(project, github)['notes']
+
+
+def test_action_pin_parsing_ignores_comments_floating_refs_and_short_hashes():
+    text = '\n'.join(['# - uses: owner/disabled@'+'1'*40,
+                       '- uses: owner/floating@master', '- uses: owner/short@1234567',
+                       '- uses: owner/too_long@'+'1'*41,
+                       '- uses: "owner/action@'+'A'*40+'" # v7.0.1',
+                       '- uses: \'owner/action@'+'b'*40+'\''])
+    assert release._actions(text) == {'owner/action': (('a'*40, '7.0.1'), ('b'*40, ''))}
+
+
+def test_an_action_comment_edit_without_a_commit_change_is_not_a_dependency_update():
+    path = '.github/workflows/ci.yml'
+    pin = '- uses: owner/action@'+'1'*40
+    assert release.dependency_changes({path: pin+' # v1.2.3\n'}, {path: pin+'\n'}) == []
+
+
+@pytest.mark.parametrize('new_version', ['7.0.2', '8.0.0'])
+def test_repeated_commit_updates_merge_version_information_without_hiding_majors(project, new_version):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, '- uses: actions/checkout@'+'1'*40+'\n',
+                 '- uses: actions/checkout@'+'2'*40+'\n', '.github/workflows/a.yml')
+    dependencies(project, github, WORKFLOW.format(sha='1'*40, version='7.0.1'),
+                 WORKFLOW.format(sha='2'*40, version=new_version), '.github/workflows/b.yml')
+    if new_version.startswith('8'):
+        with pytest.raises(ValueError, match='actions/checkout.*needs its own changelog entry'):
+            plan(project, github)
+    else:
+        notes = plan(project, github)['notes']
+        assert notes.count('GitHub Action `actions/checkout`') == 1
+        assert notes.count('1'*40) == 1 and notes.count('2'*40) == 1
+
+
+def test_versioned_action_major_changes_still_require_an_own_entry(project):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, WORKFLOW.format(sha='1'*40, version='7.0.1'),
+                 WORKFLOW.format(sha='2'*40, version='8.0.0'), '.github/workflows/ci.yml')
+    with pytest.raises(ValueError, match='actions/checkout.*needs its own changelog entry'):
+        plan(project, github)
+
+
+def test_a_reviewed_entry_overrides_the_automatic_commit_note(project):
+    github = Repository()
+    only_released_draft(project)
+    dependencies(project, github, '- uses: owner/action@'+'1'*40+'\n',
+                 '- uses: owner/action@'+'2'*40+'\n', '.github/workflows/ci.yml')
+    text = (project/'CHANGELOG.md').read_text(encoding='utf-8').replace(
+        '### Bugfixes\n\n- Keine.', '### Bugfixes\n\n- owner/action: reviewed compatibility adjustment.', 1)
+    (project/'CHANGELOG.md').write_text(text, encoding='utf-8')
+    notes = plan(project, github)['notes']
+    assert 'reviewed compatibility adjustment' in notes and 'von Commit' not in notes
+
+
 @pytest.mark.parametrize('old,new', [('homeassistant==2026.11.2', 'homeassistant==2026.12.0'),
                                      ('pytest==9.2.0', 'pytest==10.0.0'), ('pytest==9.2.0', 'pytest==main')])
 def test_major_or_unreadable_dependency_updates_need_an_own_entry(project, old, new):
