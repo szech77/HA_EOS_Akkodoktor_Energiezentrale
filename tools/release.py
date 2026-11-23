@@ -20,7 +20,7 @@ VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z
 BUILD_VERSION = re.compile(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:b[1-9][0-9]*)?\Z')
 MANIFEST = 'custom_components/eos_energiezentrale/manifest.json'
 ORIGIN = '.release-source.json'
-# Pinned dependencies whose patch and minor updates get an automatic changelog entry.
+# Pinned dependencies whose patch/minor or unversioned commit updates get release notes.
 REQUIREMENTS = ('requirements-dev.txt', 'requirements-test.txt')
 FRONTEND_PACKAGE = 'frontend/package.json'
 # Built panel assets (npm run build in frontend/); not in the source tree, added to the release commit.
@@ -29,7 +29,7 @@ BUNDLE_ENTRY = BUNDLE_DIR + '/eos-vue.js'
 BUNDLE_SUFFIXES = ('.js', '.css')
 WORKFLOWS = '.github/workflows'
 PIN = re.compile(r'^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*==\s*([^\s;#]+)', re.MULTILINE)
-ACTION = re.compile(r'uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)@[0-9a-f]{40}\s*#\s*v?([0-9][^\s]*)')
+ACTION = re.compile(r'''^[ \t]*(?:-[ \t]+)?uses:[ \t]*["']?([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)@([0-9a-fA-F]{40})["']?[ \t]*(?:#[ \t]*(.*))?$''', re.MULTILINE)
 
 
 def draft_sections(text):
@@ -95,9 +95,10 @@ def _npm(text):
 
 def _actions(text):
     result = {}
-    for name, version in ACTION.findall(text or ''):
-        result.setdefault(name, set()).add(version)
-    return {name: ', '.join(sorted(versions)) for name, versions in result.items()}
+    for name, commit, comment in ACTION.findall(text or ''):
+        version = re.match(r'v?([0-9][^\s]*)', comment)
+        result.setdefault(name, set()).add((commit.lower(), version[1] if version else ''))
+    return {name: tuple(sorted(pins)) for name, pins in result.items()}
 
 
 def _major(version):
@@ -116,17 +117,29 @@ def dependency_changes(current, previous):
         kind = 'action' if path.startswith(WORKFLOWS) else 'package'
         old, new = parse(previous[path]), parse(current[path])
         for name in sorted(set(old) & set(new)):
+            if kind == 'action' and {pin[0] for pin in old[name]} == {pin[0] for pin in new[name]}:
+                continue  # A comment edit is not a different checked-out action.
             if old[name] != new[name]:
                 changes.append((kind, name, old[name], new[name], path))
     # One action used in several workflows is one update.
     unique = {}
     for change in changes:
-        unique.setdefault(change[:4], change)
+        kind, name, old, new, path = change
+        if kind == 'action':
+            key = (kind, name, *(tuple(sorted({pin[0] for pin in pins})) for pins in (old, new)))
+            previous_change = unique.get(key)
+            if previous_change:
+                old = tuple(sorted(set(old) | set(previous_change[2])))
+                new = tuple(sorted(set(new) | set(previous_change[3])))
+                path = previous_change[4]
+            unique[key] = kind, name, old, new, path
+        else:
+            unique.setdefault(change[:4], change)
     return list(unique.values())
 
 
 def dependency_notes(changes, sections):
-    """Changelog entries for patch and minor dependency updates without an own entry.
+    """Notes for patch/minor versions and SHA-only action updates without an own entry.
 
     A major update (or an unreadable version) without an entry that names the dependency
     stops the release: it needs a reviewed description, not a generated one."""
@@ -135,11 +148,23 @@ def dependency_notes(changes, sections):
     for kind, name, old, new, path in changes:
         if name.lower() in written:
             continue
+        if kind == 'action':
+            versions = [version for _, version in (*old, *new) if version]
+            majors = {_major(version) for version in versions}
+            if None in majors or len(majors) > 1:
+                raise ValueError(f'Major dependency update {name} needs its own changelog entry')
+            old_versions, new_versions = ({version for _, version in pins} for pins in (old, new))
+            if '' not in old_versions | new_versions and old_versions != new_versions:
+                before, after = (', '.join(sorted(values)) for values in (old_versions, new_versions))
+                detail = f'von {before} auf {after}'
+            else:
+                before, after = (', '.join(f'`{commit}`' for commit in sorted({pin[0] for pin in pins})) for pins in (old, new))
+                detail = f'von Commit {before} auf Commit {after}'
+            notes.append(f'- GitHub Action `{name}` {detail} aktualisiert (CI); automatisch erfasst.')
+            continue
         if _major(old) is None or _major(old) != _major(new):
             raise ValueError(f'Major dependency update {name} {old} -> {new} needs its own changelog entry')
-        place = 'CI' if kind == 'action' else f'`{path}`'
-        label = 'GitHub Action' if kind == 'action' else 'Abhängigkeit'
-        notes.append(f'- {label} `{name}` von {old} auf {new} aktualisiert ({place}); automatisch erfasst.')
+        notes.append(f'- Abhängigkeit `{name}` von {old} auf {new} aktualisiert (`{path}`); automatisch erfasst.')
     return notes
 
 
@@ -336,7 +361,8 @@ def build_plan(root, github, source, channel, beta_number=None, branch='main', t
         def local(path):
             if path.endswith('/'):
                 folder = root/path
-                return [f'{path}{item.name}' for item in sorted(folder.glob('*.yml'))] if folder.is_dir() else []
+                return [f'{path}{item.name}' for item in sorted(folder.iterdir())
+                        if item.is_file() and item.suffix in ('.yml', '.yaml')] if folder.is_dir() else []
             target = root/path
             return target.read_text(encoding='utf-8') if target.is_file() else None
         def stable(path):

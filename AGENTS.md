@@ -80,7 +80,10 @@ Die folgenden Aufgaben übernimmt der Agent, der einen Dependabot-PR fertigstell
   den Abschnitt `New Version` im selben PR ergänzen. Unterschiedliche Updates nicht
   beiläufig bündeln. Für ein reines Patch- oder Minor-Update gepinnter
   Requirements oder Actions ergänzt die Versionsplanung automatisch einen
-  `Bugfixes`-Eintrag (siehe `CI.md`); einen eigenen Stichpunkt nur schreiben, wenn
+  `Bugfixes`-Eintrag (siehe `CI.md`). Für unversionierte Action-Pins ohne
+  Versionskommentar erfasst sie stattdessen die alten und neuen vollständigen
+  Commit-SHAs, ohne einen Versionssprung oder Kompatibilität zu behaupten.
+  Die Kompatibilität und Pflichtprüfungen trotzdem prüfen; einen eigenen Stichpunkt nur schreiben, wenn
   sich Verhalten, Konfiguration oder Kompatibilität ändern. Major-Updates brauchen
   immer einen eigenen Stichpunkt, der die Abhängigkeit nennt.
 - Ein Major-Update gezielt auf Migrationen prüfen. Bei Inkompatibilität Ursache
