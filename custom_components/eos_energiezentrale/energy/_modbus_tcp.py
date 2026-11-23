@@ -36,6 +36,9 @@ def checked_host(host):
 class ModbusTCP:
     """One kept connection per device; it is opened again after any transport failure.
 
+    A read that times out is sent once more on a new connection before the timeout is
+    reported; a write is never repeated after a timeout.
+
     Opening a connection for every request burdens small servers such as the Victron GX,
     whose Modbus service also serves other clients.
     """
@@ -125,7 +128,15 @@ class ModbusTCP:
     def read(self, address, count):
         if not 1 <= count <= 125 or not 0 <= address <= 65536 - count:
             raise ValueError("Invalid Modbus read range")
-        response = self._request(3, struct.pack(">HH", address, count))
+        payload = struct.pack(">HH", address, count)
+        try:
+            response = self._request(3, payload)
+        except TimeoutError:
+            # A busy server (e.g. a Victron GX shared with other clients) sometimes misses
+            # one deadline. A read has no effect, so it is sent once more on a new
+            # connection; the timed-out one is already closed, so a late answer to it can
+            # never be taken for this one. Writes are not repeated.
+            response = self._request(3, payload)
         if len(response) != 1 + count * 2 or response[0] != count * 2:
             raise ModbusError("Invalid Modbus register response", reason="invalid_response")
         return list(struct.unpack(">" + "H" * count, response[1:]))
