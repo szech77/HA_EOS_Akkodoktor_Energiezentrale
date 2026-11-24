@@ -345,6 +345,15 @@ Es werden keine Python-Pakete installiert; Home-Assistant-Laufzeit- und
 Testabhängigkeiten bleiben unverändert. `PyYAML` ist eine explizite
 Entwicklungsabhängigkeit für den versionierten Regelkatalog.
 
+Home Assistant pinnt `PyYAML` exakt. Da CI und `pip-audit` `requirements-dev.txt`
+und `requirements-test.txt` gemeinsam installieren, muss `PyYAML` in
+`requirements-dev.txt` genau der Version entsprechen, die die gepinnte
+`homeassistant`-Version verlangt. Dependabot schlägt `PyYAML` deshalb nicht einzeln
+vor (`ignore` in `.github/dependabot.yml`). Ändert ein `homeassistant`-Update den
+PyYAML-Pin, schlägt dessen Installation fehl, bis `PyYAML` im selben PR auf die neue
+HA-Version angehoben ist; die verlangte Version steht in den Paketmetadaten unter
+`https://pypi.org/pypi/homeassistant/<version>/json` (`requires_dist`).
+
 Dependabot und pip-audit erfassen `.semgrep/tool.json` nicht. Ein Semgrep-Update
 erfolgt manuell in einem eigenen PR: Release Notes lesen, `version` sowie `url`,
 `sha256` und `size` beider Wheels aus `https://pypi.org/pypi/semgrep/<version>/json`

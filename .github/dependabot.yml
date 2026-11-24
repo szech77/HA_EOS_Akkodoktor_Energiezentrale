@@ -14,6 +14,11 @@ updates:
       cronjob: "0 8 * * *"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
+    ignore:
+      # Home Assistant pins PyYAML exactly; requirements-dev.txt must use the same
+      # version or both files cannot be installed together. PyYAML is raised in the
+      # PR that updates homeassistant in requirements-test.txt (see CI.md).
+      - dependency-name: "pyyaml"
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
