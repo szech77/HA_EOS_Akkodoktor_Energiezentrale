@@ -11,7 +11,6 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- Modbus-TCP: Eine Leseanfrage, deren Antwort nicht rechtzeitig kommt, einmal über eine neue Verbindung wiederholen, bevor der Timeout als Fehler gilt. Einzelne verpasste Antworten eines ausgelasteten Geräts, etwa eines von mehreren Programmen abgefragten Victron GX, führen so nicht mehr zu Quellenwarnungen, einer Steuerpause und einer fehlgeschlagenen Gerätefreigabe. Schreibbefehle werden nach einem Timeout nicht wiederholt; die Rückbestätigung geschriebener Werte profitiert jedoch mit. Nach der neuen Verbindung prüft das Victron-Plugin die GX-Kennung erneut. Bleibt das Gerät länger stumm, pausiert die Steuerung wie bisher und übernimmt danach automatisch wieder (Issue #33). Gilt für alle Modbus-Plugins (Victron, Fronius, Deye).
 - Dependabot schlägt `PyYAML` nicht mehr einzeln vor. Home Assistant 2026.11.2 (wie auch 2026.11.3) pinnt `PyYAML==6.0.3`; ein eigenständiges Update der Entwicklungsabhängigkeit auf 6.0.4 war deshalb neben `homeassistant` nicht installierbar, und die Pflichtprüfungen `tests` und `security` schlugen fehl. `PyYAML` bleibt auf 6.0.3 und wird künftig im selben PR wie ein `homeassistant`-Update an dessen Pin angepasst; Vorgehen in `CI.md` beschrieben.
 
 ### Breaking Changes
