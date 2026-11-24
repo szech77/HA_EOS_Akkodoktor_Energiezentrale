@@ -14,11 +14,11 @@ Energiezentrale direkt in Home Assistant. Der EOS-Server bleibt ein separater Di
 
 ## Einblick in die Oberfläche
 
-Die folgenden Screenshots zeigen die aktuelle Oberfläche mit **synthetischen
-Beispieldaten**, nicht die Messwerte einer echten Anlage. Sichtbare Geräte und
-Prognosen hängen von der eigenen Konfiguration und den verfügbaren Daten ab.
-Die Beispieldaten verwenden eine geprüfte Leistungsbilanz; Ladezustände und
-Tagesenergien werden aus den Leistungen berechnet. [Modellannahmen](docs/screenshots/README.md#plausibilität-der-beispieldaten).
+Die Screenshots von Übersicht, Diagrammen und Auswertungen sind Aufnahmen einer
+**echten Anlage** (Stand 24. November 2026). Einstellungen und EOS-Assistent zeigen
+weiterhin **synthetische Beispieldaten**. Sichtbare Geräte und Prognosen hängen von
+der eigenen Konfiguration und den verfügbaren Daten ab.
+[Details zu den Aufnahmen](docs/screenshots/README.md).
 
 ### Übersicht: Energiefluss, Wetter und Tagesbilanz
 
@@ -95,7 +95,7 @@ Eine dauerhaft mit 0 % belegte EOS-Kurve wird bei bekanntem positivem
 Fahrzeug-SoC als unplausibler Platzhalter behandelt. Der Ersatzverlauf beginnt
 dann beim aktuellen SoC und berücksichtigt verfügbare PV-Überschussprognosen.
 
-![E-Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan samt Kostenvergleich und kompakten Ladezielen](docs/screenshots/vehicle.jpg)
+![E-Auto-Ansicht mit Ladezustand, Ladeschaltern, Ladeplan, Ladezielen sowie Lademodi, Wallbox-Leistung, SoC und Strompreis](docs/screenshots/vehicle.jpg)
 
 </details>
 
@@ -117,8 +117,8 @@ Jede Auswertung hat Tag/Monat/Jahr, eine Kernaussage, vier Kennzahlen, den Verla
 nach Herkunft, Preise & Kosten, „Woher kam der Strom?“ und „Was auffällt“.
 Der Preis über der Kostenaufschlüsselung ist der energiegewichtete Mittelwert
 aus PV, Speicher und Netz für den gewählten Zeitraum. Die Quellen behalten ihre
-jeweiligen Preise. Die Monatsansicht im Beispiel enthält die bisher erfassten
-Werte vom 8. und 9. November.
+jeweiligen Preise. Die gezeigte Monatsansicht enthält die seit dem 9. November
+erfassten Werte.
 
 ![Monatsauswertung Hausverbrauch mit Durchschnittspreis aller Quellen und Aufschlüsselung der Speicherherkunft](docs/screenshots/usage.jpg)
 
@@ -166,7 +166,7 @@ zukünftigen Festpreis. Die Beträge sind synthetische Beispiele.
 Die Oberfläche passt sich schmalen Bildschirmen an. Hier der obere Bereich der
 Übersicht; Tagesbilanz und weitere Informationen folgen darunter beim Scrollen.
 
-<img src="docs/screenshots/mobile.jpg" width="375" alt="Oberer Bereich der mobilen Übersicht mit Statusband, Kennzahlen und Energiefluss">
+<img src="docs/screenshots/mobile.jpg" width="390" alt="Oberer Bereich der mobilen Übersicht mit Kennzahlen, Energiefluss und Navigationsleiste">
 
 </details>
 

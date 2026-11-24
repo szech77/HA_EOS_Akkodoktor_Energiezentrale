@@ -1,16 +1,23 @@
 # UI-Screenshots
 
-Echte Browseraufnahmen des integrierten Panels, erstellt mit synthetischen
-Beispieldaten und deutschem Sprachpaket. Es werden keine privaten Messwerte,
-Serveradressen oder Zugangsdaten gezeigt. Die Screenshots bilden den Stand der
-Oberfläche vom 22. November 2026 ab und sind keine Entwurfsgrafiken. Die Aufnahmen
-entstanden in Chrome; die Desktop-Ansichten sind 1210 Pixel breit. Die JPEGs sind
-direkte Browseraufnahmen ohne Browser- oder Home-Assistant-Seitenleiste.
+Echte Browseraufnahmen des integrierten Panels mit deutschem Sprachpaket; keine
+Entwurfsgrafiken. Die Desktop-Ansichten sind 1210 Pixel breit. Die JPEGs sind
+direkte Browseraufnahmen ohne Browser- oder Home-Assistant-Seitenleiste. Es werden
+keine Serveradressen, Standortkoordinaten oder Zugangsdaten gezeigt.
+
+**Echte Anlage** (Stand 24. November 2026, Microsoft Edge): `overview.jpg`,
+`mobile.jpg`, `battery.jpg`, `vehicle.jpg`, `pv.jpg`, `usage.jpg` und `costs.jpg`
+zeigen die Messwerte, Prognosen, Pläne und Kosten einer laufenden Installation des
+Projektautors. Die Werte sind nicht nachbearbeitet.
+
+**Beispieldaten** (Stand 22. November 2026, Chrome): `settings.jpg`, `wizard.jpg`
+und `wizard-mobile.jpg` verwenden synthetische Daten aus `tools/demo-data.cjs`.
 
 - `overview.jpg`: Desktop-Übersicht mit Statusband, Energiefluss, EOS-Plan, nächsten
   Ereignissen und Heute-Kacheln.
 - `battery.jpg`: Speicherverlauf, EOS-Modi und Prognosen.
-- `vehicle.jpg`: Auto-Ansicht mit Ladeziel, Schaltern, EOS-Ladeplan und Ladezielen.
+- `vehicle.jpg`: Auto-Ansicht mit Ladezustand, Ladeschaltern, Ladeplan, Ladezielen
+  sowie Lademodi, Wallbox-Leistung, SoC und Strompreis.
 - `pv.jpg`: PV & Wetter mit stündlicher Prognose, Tageskarten und Planfolgen.
 - `usage.jpg`: Monatsauswertung Hausverbrauch mit Durchschnittspreis aller Quellen
   und Speicherherkunft.
@@ -21,21 +28,20 @@ direkte Browseraufnahmen ohne Browser- oder Home-Assistant-Seitenleiste.
 - `wizard-mobile.jpg`: mobiler Ausschnitt des Standortschritts; der vollständige
   Formularbereich ist sichtbar. Die GPS-Abfrage wurde für die Aufnahmen nicht
   verwendet; Koordinaten und EOS-Konfiguration sind synthetische Testdaten.
-- `mobile.jpg`: oberer Bereich der Übersicht als Ausschnitt mit 375 × 844 Pixeln
-  bei einer Browserbreite von 390 Pixeln einschließlich Scrollleiste.
-
-Abgeleitete Anzeigewerte (Statusband, Zeitstrahl, nächste Ereignisse, Ladeplan,
-PV-Stunden und -Tage, „Was EOS daraus macht“ und die Energieberichte) entstehen aus
-denselben Beispieldaten über die Backend-Funktionen der Integration. Die Berichte
-verwenden die lokale Bilanzierung mit Speicherbestand und Ladeanteilen. Das stündliche
-Wetter ist ein zur Sonneneinstrahlung des Modells passendes Beispiel.
+- `mobile.jpg`: oberer Bereich der Übersicht mit 390 × 844 Pixeln einschließlich
+  der unteren Navigationsleiste.
 
 Bei Änderungen am Layout oder an sichtbaren Funktionen die betroffenen Aufnahmen
-aktualisieren. Weiterhin ausschließlich Beispieldaten verwenden und die deutsche
-Sprache sowie die Aufnahme ohne Browser- oder Home-Assistant-Seitenleiste beibehalten.
+aktualisieren. Einstellungen und Assistent weiterhin nur mit Beispieldaten aufnehmen,
+damit keine Konfiguration, Standortdaten oder Zugangsdaten sichtbar werden. Die
+deutsche Sprache sowie die Aufnahme ohne Browser- oder Home-Assistant-Seitenleiste
+beibehalten.
 
 
 ## Plausibilität der Beispieldaten
+
+Dieser Abschnitt gilt für die Aufnahmen mit Beispieldaten und das Modell, mit dem
+sie erzeugt werden.
 
 Die Daten stammen aus `tools/demo-data.cjs`, einem deterministischen, vereinfachten
 AC-Bus-Modell ausschließlich für die Dokumentation. Es ist keine EOS-Optimierung
