@@ -12,6 +12,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Bugfixes
 
 - Dependabot schlägt `PyYAML` nicht mehr einzeln vor. Home Assistant 2026.11.2 (wie auch 2026.11.3) pinnt `PyYAML==6.0.3`; ein eigenständiges Update der Entwicklungsabhängigkeit auf 6.0.4 war deshalb neben `homeassistant` nicht installierbar, und die Pflichtprüfungen `tests` und `security` schlugen fehl. `PyYAML` bleibt auf 6.0.3 und wird künftig im selben PR wie ein `homeassistant`-Update an dessen Pin angepasst; Vorgehen in `CI.md` beschrieben.
+- Dokumentation: Die Screenshots von Übersicht (Desktop und mobil), Hausspeicher, E-Auto, PV & Wetter, Hausverbrauch und Gesamtbilanz durch aktuelle Aufnahmen einer echten Anlage ersetzen. Einstellungen und EOS-Assistent zeigen weiterhin Beispieldaten. README und Screenshot-Beschreibung nennen die Herkunft je Bild; Bildbeschreibungen von E-Auto- und Handyansicht an den tatsächlichen Inhalt angepasst.
 
 ### Breaking Changes
 
