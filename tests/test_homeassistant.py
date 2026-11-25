@@ -1207,7 +1207,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Auto first',control.config['fields']['first']['label'])
         self.assertEqual(control.config['fields']['second']['default'],'ev2')
         threads=[]
-        def config_request(*args):
+        def config_request(*args, **kwargs):
             threads.append(get_ident())
             return {}
         with patch('custom_components.eos_energiezentrale.config_flow.request',side_effect=config_request) as request:
@@ -1217,7 +1217,7 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         expected=[{**row,'resource':{'first':'ev2','second':'ev1'}[row['id']]} for row in rows]
         self.assertEqual(json.loads(result['data']['vehicles']),expected)
         self.assertNotIn('vehicle_resources',result['data'])
-        request.assert_called_once_with(DEFAULTS['eos_url']+'/v1/config')
+        request.assert_called_once_with(DEFAULTS['eos_url']+'/v1/config', timeout=10.0)
         self.assertNotEqual(threads[0],get_ident())
         self.hass.config_entries.async_update_entry(self.entry,options=result['data'])
         self.assertEqual(flow._vehicle_rows(),expected)
@@ -1344,15 +1344,34 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         from urllib.error import HTTPError
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
         app.config.eos = Mock()
-        app.config.eos.plan.side_effect = HTTPError('http://private-host',503,'test-secret',{},None)
+        # A permanent HTTP error is not a short EOS outage: no grace period.
+        app.config.eos.plan.side_effect = HTTPError('http://private-host',404,'test-secret',{},None)
         coordinator = EnergyCoordinator(self.hass, self.entry, app)
         with self.assertLogs('custom_components.eos_energiezentrale.coordinator',level='WARNING') as logs:
             await coordinator._async_poll_eos('plan')
         self.assertEqual(coordinator.data['notices'][0]['code'],'eos')
-        self.assertIn('503', logs.output[0])
+        self.assertIn('404', logs.output[0])
         self.assertIn('HTTPError', logs.output[0])
         self.assertNotIn('private-host','\n'.join(logs.output))
         self.assertNotIn('test-secret','\n'.join(logs.output))
+
+    async def test_accounting_holds_back_a_short_eos_timeout_but_shows_other_errors_at_once(self):
+        from custom_components.eos_energiezentrale.energy.status import EOS_ISSUE_GRACE_S
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        ledger = SimpleNamespace(settings={}, refresh_eos=Mock(), last_eos_attempt=None, eos_battery=None,
+            eos_error='unavailable', eos_failure_details={'exception':'TimeoutError'},
+            last_pv_attempt=None, pv_tariff=None, pv_error='unavailable',
+            pv_failure_details={'exception':'HTTPError','http_status':404})
+        coordinator.accounting = ledger
+        async def refresh():
+            await coordinator._async_refresh_accounting(ledger, ledger, {}, coordinator.accounting_revision)
+            return {item['code'] for item in coordinator.issue_log.diagnostics()['active']}
+        self.assertEqual(await refresh(), {'pv_error'})
+        coordinator.accounting_grace.since['eos_error'] -= timedelta(seconds=EOS_ISSUE_GRACE_S)
+        self.assertEqual(await refresh(), {'pv_error','eos_error'})
+        ledger.eos_error = ledger.pv_error = None
+        self.assertEqual(await refresh(), set())
 
     async def test_eos_status_is_polled_and_busy_window_is_visible_without_eos_warning(self):
         from datetime import timedelta
@@ -2250,7 +2269,8 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
                 result = await coordinator._async_update_data()
                 self.assertTrue(result["armed"])
                 self.assertTrue(result["control_waiting"])
-                self.assertIn("eos",result["errors"])
+                # Short EOS failures are held back as notices; control still sees them.
+                self.assertIn("eos",app.errors)
                 self.assertNotIn("runtime",result["errors"])
                 self.assertTrue(Configuration(dict(DEFAULTS),adapter,self.directory).control_enabled)
             apply.assert_not_called()

@@ -6,6 +6,7 @@
         "title": "EOS connection",
         "data": {
           "eos_url": "EOS API base URL",
+          "eos_timeout_s": "EOS response timeout (seconds, 3–60)",
           "language": "Panel language",
           "battery_resource": "EOS battery resource",
           "vehicle_resource": "EOS vehicle resource (required only with an EV)",
@@ -174,6 +175,7 @@
         "title": "EOS connection",
         "data": {
           "eos_url": "EOS API base URL",
+          "eos_timeout_s": "EOS response timeout (seconds, 3–60)",
           "language": "Panel language",
           "battery_resource": "EOS battery resource",
           "vehicle_resource": "EOS vehicle resource (required only with an EV)",

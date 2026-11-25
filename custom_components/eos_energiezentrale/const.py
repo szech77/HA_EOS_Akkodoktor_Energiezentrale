@@ -2,6 +2,7 @@
 DOMAIN = "eos_energiezentrale"
 DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settle_s': 60, 'display_hold_s': 900, 'vehicles': '[]', 'language': 'auto',
  'eos_url': 'http://homeassistant.local:8503',
+ 'eos_timeout_s': 10,
  'timezone': 'Europe/Berlin',
  'battery_resource': 'battery1',
  'vehicle_resource': 'ev1',
@@ -44,7 +45,7 @@ DEFAULTS = {'display_transition_s': 30, 'sensor_alignment_s': 10, 'command_settl
  'influx_user': '',
  'influx_password': '',
  'influx_password_env': ''}
-GROUPS = {'connection': ['eos_url', 'language', 'battery_resource', 'vehicle_resource'],
+GROUPS = {'connection': ['eos_url', 'eos_timeout_s', 'language', 'battery_resource', 'vehicle_resource'],
  'sensors': ['weather_entity', 'pv_entity',
              'backup_mode_entity', 'backup_active_state', 'backup_inactive_state',
              'house_entity',

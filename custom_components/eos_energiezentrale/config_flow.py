@@ -1,4 +1,5 @@
 """Guided setup and separate commissioning options."""
+from functools import partial
 import json
 import probatio as vol
 
@@ -7,7 +8,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import DEFAULTS, DOMAIN, GROUPS
-from .energy.clients import request
+from .energy.clients import EOS_TIMEOUT_S, eos_timeout, request
 from .validation import validate_options
 from .configuration_logging import configuration_failure, configuration_success
 from .plugin_forms import PluginFormMixin, plugin_choices, async_plugin_object, configured, plugin_configuration_error
@@ -88,7 +89,8 @@ async def check(hass, values, connection=False, stage='validation'):
     try:
         validate_options(values)
         if connection:
-            await hass.async_add_executor_job(request, values["eos_url"].rstrip("/") + "/v1/config")
+            await hass.async_add_executor_job(partial(request, values["eos_url"].rstrip("/") + "/v1/config",
+                                                       timeout=eos_timeout(values.get("eos_timeout_s", EOS_TIMEOUT_S))))
     except (ValueError, TypeError, KeyError) as error:
         configuration_failure(hass, stage, error)
         return plugin_configuration_error(getattr(error,'plugin_identifier',None),error)

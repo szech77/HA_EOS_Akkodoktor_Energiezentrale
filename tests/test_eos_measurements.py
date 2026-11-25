@@ -10,7 +10,7 @@ from custom_components.eos_energiezentrale.energy.clients import EOS
 from custom_components.eos_energiezentrale.energy.contracts import BatteryReading
 from custom_components.eos_energiezentrale.energy.eos_measurements import (
     KEYS_INTERVAL_S, SYNC_INTERVAL_S, MeasurementSync, Sample, device_samples)
-from custom_components.eos_energiezentrale.energy.status import view_state
+from custom_components.eos_energiezentrale.energy.status import EOS_ISSUE_GRACE_S, view_state
 from test_energy import NOW
 from test_http_boundaries import FixtureHandler, transport
 import test_requirements as requirements
@@ -163,11 +163,14 @@ def test_a_missing_battery_soc_is_not_sent_and_a_failure_is_a_notice(control):
     control.eos.fail = TimeoutError('slow')
     snapshot = tick(control, SYNC_INTERVAL_S)
     assert control.app.errors['eos_measurements'] == 'TimeoutError'
+    # A short timeout (EOS busy optimizing) is held back; a lasting one becomes a notice.
+    assert not [row for row in view_state(snapshot, NOW)['notices'] if row['code'] == 'eos_measurements']
+    snapshot = tick(control, SYNC_INTERVAL_S + EOS_ISSUE_GRACE_S)
     notices = view_state(snapshot, NOW)['notices']
     assert [(row['code'], row['severity'], row['message']) for row in notices if row['code'] == 'eos_measurements'] == [
         ('eos_measurements', 'warning', 'notice.eos_measurements')]
     control.eos.fail = None
-    tick(control, 2 * SYNC_INTERVAL_S)
+    tick(control, 2 * SYNC_INTERVAL_S + EOS_ISSUE_GRACE_S)
     assert 'eos_measurements' not in control.app.errors
 
 

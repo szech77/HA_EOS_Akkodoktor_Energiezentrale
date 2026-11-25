@@ -19,6 +19,11 @@ ERROR_MESSAGES = {key: 'notice.' + key for key in (
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
 CONTROL_STATUSES = ('waiting', 'read_only', 'backup', 'power_supply_waiting', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
 BATTERY_LIMIT_STATUSES = ('failed', 'confirmed', 'pending', 'unmanaged')
+# Short EOS communication failures (e.g. EOS busy optimizing) are shown only once they last.
+EOS_ISSUE_GRACE_S = 120
+TRANSIENT_HTTP_STATUSES = frozenset({408, 409, 423, 429, 500, 502, 503, 504})
+TRANSIENT_EXCEPTIONS = frozenset({'TimeoutError', 'URLError', 'ConnectionError', 'ConnectionRefusedError',
+    'ConnectionResetError', 'ConnectionAbortedError', 'BrokenPipeError', 'RemoteDisconnected', 'IncompleteRead'})
 CONNECTION_STATUSES = ('fetch_failed', 'plan_available', 'no_plan', 'local_history', 'history_available', 'no_samples', 'connecting', 'calculating', 'updating')
 
 
@@ -49,6 +54,52 @@ def failure_details(error):
         result['trace'] = [{'module':Path(frame.f_code.co_filename).stem, 'function':frame.f_code.co_name, 'line':line}
                            for frame, line in list(walk_tb(error.__traceback__))[-8:]]
     return result
+
+
+def transient_failure(details):
+    """A timeout, a refused or dropped connection or a temporary HTTP status."""
+    if not isinstance(details, dict):
+        return False
+    return (details.get('http_status') in TRANSIENT_HTTP_STATUSES
+            or details.get('exception') in TRANSIENT_EXCEPTIONS or details.get('cause') in TRANSIENT_EXCEPTIONS)
+
+
+class TransientGrace:
+    """Hold back a short communication failure until it lasts ``seconds``.
+
+    Any other failure is visible at once. A visible failure stays visible until it
+    ends, also when its cause becomes transient, so a notice does not flap.
+    """
+
+    def __init__(self, seconds=EOS_ISSUE_GRACE_S):
+        self.seconds = seconds
+        self.since = {}
+        self.shown = set()
+
+    def visible(self, key, details, now):
+        if key in self.shown:
+            return True
+        if not transient_failure(details):
+            self.since.pop(key, None)
+            self.shown.add(key)
+            return True
+        since = self.since.setdefault(key, now)
+        if now < since:
+            self.since[key] = since = now
+        if (now - since).total_seconds() >= self.seconds:
+            self.since.pop(key, None)
+            self.shown.add(key)
+            return True
+        return False
+
+    def clear(self, key):
+        self.since.pop(key, None)
+        self.shown.discard(key)
+
+    def retain(self, keys):
+        """Forget every failure that is no longer present."""
+        for key in (set(self.since) | self.shown) - set(keys):
+            self.clear(key)
 
 
 def safe_kind(value):

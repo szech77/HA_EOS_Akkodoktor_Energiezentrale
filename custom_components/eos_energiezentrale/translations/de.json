@@ -6,6 +6,7 @@
         "title": "EOS-Verbindung",
         "data": {
           "eos_url": "EOS-API-Basisadresse",
+          "eos_timeout_s": "Wartezeit auf EOS-Antworten (Sekunden, 3–60)",
           "language": "Panel-Sprache",
           "battery_resource": "EOS-Speicherressource",
           "vehicle_resource": "EOS-Fahrzeugressource (nur mit E-Auto erforderlich)",
@@ -174,6 +175,7 @@
         "title": "EOS-Verbindung",
         "data": {
           "eos_url": "EOS-API-Basisadresse",
+          "eos_timeout_s": "Wartezeit auf EOS-Antworten (Sekunden, 3–60)",
           "language": "Panel-Sprache",
           "battery_resource": "EOS-Speicherressource",
           "vehicle_resource": "EOS-Fahrzeugressource (nur mit E-Auto erforderlich)",
