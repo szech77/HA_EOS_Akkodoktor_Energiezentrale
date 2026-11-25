@@ -7,7 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- go-e Charger (lokale HTTP-API v2): Die Energiezentrale liest bei jeder Abfrage auch die eigene Ladeentscheidung der Wallbox mit (Fahrzeugzustand, erzwungener Zustand, Freigabe, Begründung `modelStatus`, Zugangskontrolle, Logikmodus, Fehlercode, Firmware). Jede Änderung steht als INFO-Eintrag `go-e charger status` im Log, der letzte Stand in den Diagnosedaten unter `wallbox_status`. Damit lässt sich ohne manuelle API-Abfrage klären, warum ein freigegebenes Fahrzeug nicht lädt. Ladeleistung, Ladestrom und Adressen werden nicht protokolliert.
 
 ### Bugfixes
 

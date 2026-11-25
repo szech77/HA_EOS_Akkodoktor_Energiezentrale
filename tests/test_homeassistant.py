@@ -1354,6 +1354,18 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('private-host','\n'.join(logs.output))
         self.assertNotIn('test-secret','\n'.join(logs.output))
 
+    async def test_diagnostics_contain_the_chargers_own_decision_without_addresses(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.wallbox = SimpleNamespace(charger_status={'car':{'code':3,'name':'WaitCar'},
+            'reason':{'code':3,'name':'ChargingBecauseForceStateOn'}})
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        self.entry.runtime_data = coordinator
+        diagnostic = await async_get_config_entry_diagnostics(self.hass, self.entry)
+        self.assertEqual(diagnostic['wallbox_status'], [{'vehicle':1,'car':{'code':3,'name':'WaitCar'},
+            'reason':{'code':3,'name':'ChargingBecauseForceStateOn'}}])
+        app.config.wallbox = SimpleNamespace()
+        self.assertEqual((await async_get_config_entry_diagnostics(self.hass, self.entry))['wallbox_status'], [])
+
     async def test_eos_status_is_polled_and_busy_window_is_visible_without_eos_warning(self):
         from datetime import timedelta
         from test_energy import NOW

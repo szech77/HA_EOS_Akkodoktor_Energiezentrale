@@ -26,6 +26,17 @@ def device_diagnostics(data):
     return result
 
 
+def wallbox_diagnostics(coordinator):
+    """Each charger's own last reported charging decision (plugins exposing ``charger_status``)."""
+    apps = coordinator._vehicle_controllers() or (coordinator.app,)
+    result = []
+    for index, app in enumerate(apps, 1):
+        status = getattr(getattr(app.config, 'wallbox', None), 'charger_status', None)
+        if isinstance(status, dict):
+            result.append({'vehicle': index, **status})
+    return result
+
+
 async def async_get_config_entry_diagnostics(hass, entry):
     coordinator = entry.runtime_data
     data = coordinator.data or {}
@@ -40,5 +51,6 @@ async def async_get_config_entry_diagnostics(hass, entry):
             "eos_cache": data.get("eos_cache", {}),
             "eos_measurements": data.get("eos_measurements", {}),
             "errors": data.get("errors", {}), "last_failure": data.get("last_failure"), "plan_available": bool(data.get("plan_end")),
+            "wallbox_status": wallbox_diagnostics(coordinator),
             "battery_type": coordinator.app.config.options["battery_type"],
             "wallbox_type": coordinator.app.config.options["wallbox_type"]}

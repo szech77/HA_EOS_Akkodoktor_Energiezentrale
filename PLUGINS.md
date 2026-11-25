@@ -549,6 +549,12 @@ keine Internet-Portweiterleitung einrichten. Das Plugin verändert keine WLAN-,
 RFID-, Cloud- oder Sicherheitskonfiguration und umgeht keine elektrischen
 Schutzfunktionen der Wallbox.
 
+Lädt ein freigegebenes Fahrzeug nicht, zeigt die eigene Begründung der Wallbox
+(`modelStatus`) den Grund, etwa Zugangskontrolle, Lastmanagement oder ein anderer
+Regler. Das Plugin protokolliert jede Änderung dieser Werte als INFO-Eintrag
+`go-e charger status` und legt den letzten Stand in den Diagnosedaten unter
+`wallbox_status` ab (siehe [LOGGING.md](LOGGING.md)).
+
 Getestet mit lokalem HTTP-Geräteemulator und den nativen HA-Konfigurationsformularen.
 Ein Test mit realem go-e Charger und konkreter Firmware steht aus.
 

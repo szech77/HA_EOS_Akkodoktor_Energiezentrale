@@ -294,3 +294,34 @@ def test_invalid_parameters_are_rejected_without_network_access(params):
     with patch('socket.create_connection') as connect,pytest.raises(ValueError):
         WALLBOX_DRIVERS['goe_http_v2'](None,params)
     connect.assert_not_called()
+
+
+def test_the_chargers_own_decision_is_logged_on_each_change_and_kept_for_diagnostics(caplog):
+    with api() as (driver,server):
+        server.data.update(modelStatus=4,acs=0,lmo=3,sua=False,fwv='60.3')
+        caplog.set_level('INFO','custom_components.eos_energiezentrale.energy.plugins.goe_http_v2')
+        driver.read({},NOW)
+        driver.read({},NOW)
+        assert driver.charger_status=={'car':{'code':3,'name':'WaitCar'},'force':{'code':1,'name':'Off'},
+            'allowed':False,'reason':{'code':4,'name':'NotChargingBecauseForceStateOff'},
+            'access_control':{'code':0,'name':'Open'},'logic_mode':{'code':3,'name':'Default'},
+            'error':0,'simulate_unplugging_always':False,'firmware':'60.3'}
+        # The charger allows charging, but the vehicle does not take current: one new entry with the reason.
+        server.data.update(frc=2,alw=True,modelStatus=3)
+        server.data['nrg'][11]=1234.5
+        driver.read({},NOW)
+        server.data['amp']=10
+        driver.read({},NOW)
+        entries=[record.getMessage() for record in caplog.records if 'go-e charger status' in record.getMessage()]
+        assert len(entries)==2 and 'ChargingBecauseForceStateOn' in entries[1] and '"WaitCar"' in entries[1]
+        # Neither measurements, currents nor addresses are logged.
+        assert not any(text in '\n'.join(entries) for text in ('1234','127.0.0.1','"amp"'))
+
+
+def test_an_older_firmware_without_reason_codes_still_controls_normally():
+    with api() as (driver,server):
+        assert driver.read({},NOW).status=='connected'
+        assert driver.charger_status['reason'] is None and driver.charger_status['firmware'] is None
+        server.data['fwv']='<script>'
+        driver.read({},NOW)
+        assert driver.charger_status['firmware'] is None
