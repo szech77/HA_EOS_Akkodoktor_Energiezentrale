@@ -544,19 +544,38 @@ als vollständige Ladequelle behandelt. Bei deaktivierter automatischer Umschalt
 einen passenden festen Phasenmodus in der go-e-App einstellen.
 
 Manche Fahrzeuge beenden ihren Ladevorgang, sobald die Wallbox pausiert, melden
-danach „fertig“ (`car=4`) und laden erst nach erneutem Einstecken wieder, obwohl die
-Wallbox freigibt. Mit `simulate_unplugging` erkennt das Plugin diesen Zustand: Die
-Energiezentrale will laden, die Freigabe ist bestätigt (`frc=2`, `alw`), der go-e
-meldet `car=4` und höchstens 30 W, und das hält 60 Sekunden ohne Unterbrechung an.
-Dann schaltet es einmal die go-e-Einstellung „Ausstecken immer simulieren“ (`sua`)
-ein, falls sie noch aus ist, und startet den Ladevorgang mit bestätigter Pause und
-Freigabe neu (`frc=1`, `frc=2`). Dabei simuliert der go-e das Aus- und Einstecken.
-Die Einstellung bleibt danach eingeschaltet. Je Fahrzeugsitzung erfolgt höchstens
-ein Versuch; erst wenn der go-e wieder Laden, ein abgestecktes oder ein anderes
-Fahrzeug meldet, ist ein neuer Versuch möglich. Ein fehlgeschlagener Versuch endet
-wie jede fehlgeschlagene Vorgabe mit einem bestätigten Pauseversuch. Jeder Versuch
-steht als INFO-Eintrag `go-e simulated unplugging` im Log. Ein tatsächlich volles
-Fahrzeug meldet nach dem Neustart erneut „fertig“; weitere Versuche folgen nicht.
+danach „fertig“ (`car=4`) oder warten ohne Stromanforderung (`car=3`) und laden erst
+nach erneutem Einstecken wieder, obwohl die Wallbox freigibt. Mit
+`simulate_unplugging` erkennt das Plugin diesen Zustand: Die Energiezentrale will
+laden, die Freigabe ist bestätigt (`frc=2`, `alw`), der go-e meldet `car=3` oder
+`car=4` und höchstens 30 W, und das hält 60 Sekunden ohne Unterbrechung an. Dann
+schaltet es die go-e-Einstellung „Ausstecken immer simulieren“ (`sua`) ein, falls sie
+noch aus ist, und startet den Ladevorgang mit bestätigter Pause und Freigabe neu
+(`frc=1`, `frc=2`). Dabei simuliert der go-e das Aus- und Einstecken. Die Einstellung
+bleibt danach eingeschaltet. Je Fahrzeugsitzung erfolgen höchstens zwei Versuche,
+jeweils nach einer weiteren Minute ohne Leistung; erst wenn der go-e wieder Laden,
+ein abgestecktes oder ein anderes Fahrzeug meldet, beginnt die Zählung neu. Wie bei
+evcc hängen manche Fahrzeuge nach einer Phasenumschaltung; nach einer bestätigten
+Umschaltung ist deshalb ein weiterer Versuch möglich. Ein fehlgeschlagener Versuch
+endet wie jede fehlgeschlagene Vorgabe mit einem bestätigten Pauseversuch. Jeder
+Versuch steht als INFO-Eintrag `go-e simulated unplugging` mit Versuchsnummer und
+Fahrzeugzustand im Log. Ein tatsächlich volles Fahrzeug meldet nach den Neustarts
+weiter „fertig“; weitere Versuche folgen nicht.
+Nach einer Freigabe (`frc=2`) kann der go-e das Laden aus eigenem, zeitlich
+begrenztem Grund noch zurückhalten und antwortet dabei mitunter langsam
+(`modelStatus` 22 Ausstecken simulieren, 23 Phasenumschaltung, 24 Mindestpause
+`mcpd`, 29 Wiederzuschaltverzögerung). Eine Freigabe gilt in diesen Zuständen als
+bestätigt; die Bestätigung einer Freigabe wartet bis zu 10 Sekunden und wiederholt
+dabei langsame Statusabfragen. Wartet der go-e auf eine Zugangskontrolle
+(`modelStatus` 2), bleibt die Freigabe unbestätigt. Ein Stopp (`frc=1`) wird durch
+keinen dieser Zustände bestätigt.
+
+Lädt ein freigegebenes Fahrzeug nicht, liefert das Plugin über `idle_reason()` die
+Begründung des go-e als feste Ursache für den Hinweis „Fahrzeug lädt trotz Freigabe
+nicht“, etwa `access_control`, `load_management`, `min_pause`, `vehicle_complete`
+oder `vehicle_waiting`. Die Simulation wirkt über das Steuersignal des Ladesteckers. Ein Gerät,
+das dieses Signal nicht auswertet, etwa ein eigenes Ladegerät an einem Adapter,
+erkennt dadurch kein Ab- und Anstecken.
 
 Die Energiezentrale verwendet eine erzwungene Freigabe (`frc=2`), die native
 Ladezeitpläne übersteuern kann. Für denselben Ladepunkt nur einen schreibenden
@@ -816,6 +835,11 @@ Optional ist `_hold(self, amps, state)`: Die Regelung ruft es auf, wenn eine bes
 Ladefreigabe mit unverändertem Strom weiterläuft und deshalb kein `_charge` folgt.
 Standardmäßig sendet es nichts; ein Plugin kann damit etwa ein Fahrzeug neu starten,
 das trotz Freigabe von selbst aufgehört hat (siehe go-e `simulate_unplugging`).
+Ebenfalls optional ist `idle_reason(self)` ohne Geräteabfrage: Es erklärt, warum ein
+freigegebenes, angeschlossenes Fahrzeug keinen Strom aufnimmt, mit einer festen Ursache
+aus `energy/vehicle_idle.py` (`IDLE_REASONS`) oder `None`. Die Energiezentrale nutzt
+sie nur für den Hinweis „Fahrzeug lädt trotz Freigabe nicht“; Fehler darin ändern die
+Regelung nicht.
 Die öffentlichen Methoden `read`, `apply`, `release`, `pause`, `phase`, `charge`, `hold`
 bleiben dem Vertrag vorbehalten und dürfen nicht überschrieben werden. Sie führen
 die zentrale Prüfung aus. `_phase` liefert ausschließlich `bool`, die anderen

@@ -12,10 +12,12 @@ from urllib.error import HTTPError, URLError
 from .domain import instant, number
 from .measurement_sources import MEASUREMENT_KEYS
 from .failures import BackendError, PluginParameterError, HardwareAPIError, REASONS, FIELDS, TRANSPORT_REASONS
+from .vehicle_idle import IDLE_REASONS
 
 ERROR_MESSAGES = {key: 'notice.' + key for key in (
     'eos', 'eos_price', 'accounting', 'device_pending', 'goal', 'runtime', 'forecast', 'release',
-    'battery_limits', 'vehicle_limits', 'eos_measurements', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection', 'control_resume')}
+    'battery_limits', 'vehicle_limits', 'eos_measurements', 'wallbox', 'wallbox_stop', 'battery_read', 'wallbox_read', 'control_persistence', 'connection', 'control_resume',
+    'vehicle_idle')}
 CRITICAL = {'runtime', 'release', 'wallbox_stop', 'control_persistence'}
 CONTROL_STATUSES = ('waiting', 'read_only', 'backup', 'power_supply_waiting', 'cached_eos', 'syncing_vehicle', 'planning_vehicle', 'active')
 BATTERY_LIMIT_STATUSES = ('failed', 'confirmed', 'pending', 'unmanaged')
@@ -127,12 +129,16 @@ def view_state(data, now):
         for index, vehicle in enumerate(vehicles[1:], 2)]
     for source, scope, name in scopes:
         for area, value in source.get('errors', {}).items():
-            if scope != 'system' and area not in {'goal', 'vehicle_limits', 'wallbox', 'wallbox_stop'}:
+            if scope != 'system' and area not in {'goal', 'vehicle_limits', 'wallbox', 'wallbox_stop', 'vehicle_idle'}:
                 continue
             code = 'eos_cached' if area == 'eos' and source.get('eos_cache') else area
             message = 'notice.eos_cached' if code == 'eos_cached' else ERROR_MESSAGES.get(area, 'notice.unknown')
             details = {'exception': safe_kind(value)}
             details.update(source.get('error_details', {}).get(area, {}))
+            if area == 'vehicle_idle':
+                # The wallbox's own cause selects a fixed text; unknown causes keep the generic one.
+                reason = details.get('reason')
+                message = 'notice.vehicle_idle_' + (reason if reason in IDLE_REASONS else 'unknown')
             notices.append({'id': f'{scope}/{area}', 'code': code, 'message': message,
                 'severity': 'error' if area in CRITICAL else 'warning', 'scope': scope,
                 'vehicle_name': name, 'details': details})
@@ -211,7 +217,7 @@ class IssueLog:
             if details.get('reason') in REASONS:
                 safe['details']['reason'] = details['reason']
                 safe['details']['fields'] = sorted(key for key in details.get('fields', []) if key in FIELDS)
-            elif details.get('reason') in TRANSPORT_REASONS:
+            elif details.get('reason') in TRANSPORT_REASONS or details.get('reason') in IDLE_REASONS:
                 safe['details']['reason'] = details['reason']
             if details.get('trace'):
                 safe['details']['trace'] = [{'module':safe_kind(frame.get('module')),

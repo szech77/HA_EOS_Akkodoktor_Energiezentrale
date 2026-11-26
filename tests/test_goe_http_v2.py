@@ -26,6 +26,10 @@ class API(ThreadingHTTPServer):
                    'pha':[True,True,True,False,False,False]}
         self.requests=[];self.writes=[]
         self.reject=set();self.ignore=set();self.pending={};self.delay=0
+        # Status reads that keep alw=false (modelStatus 22) after a release with sua on.
+        self.simulate=0
+        # Next status reads answered with an error, as a slow charger would.
+        self.fail_status=0;self.fail_after_write=0
         self.redirect=self.bad_json=self.meter_down=self.down=False
 
 
@@ -38,6 +42,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(302);self.send_header('Location','/trap');self.end_headers();return
         if self.server.down or self.server.meter_down and 'nrg' in query.get('filter',[''])[0]:
             self.send_error(503);return
+        if target.path=='/api/status' and self.server.fail_status:
+            self.server.fail_status-=1
+            self.send_error(503);return
         if target.path=='/api/status':
             for key,(value,count) in tuple(self.server.pending.items()):
                 if count==0:
@@ -48,6 +55,7 @@ class Handler(BaseHTTPRequestHandler):
             body={key:self.server.data[key] for key in keys if key in self.server.data}
         elif target.path=='/api/set':
             changes={key:json.loads(value[0]) for key,value in query.items()}
+            self.server.fail_status,self.server.fail_after_write=self.server.fail_status+self.server.fail_after_write,0
             self.server.writes.append(changes)
             body={key:'denied' if key in self.server.reject else True for key in changes}
             for key,value in changes.items():
@@ -57,6 +65,10 @@ class Handler(BaseHTTPRequestHandler):
                 if key=='frc':
                     self.server.data['alw']=value==2
                     if value==1 and self.server.data['car']==2: self.server.data['car']=3
+                    if value==2 and self.server.data.get('sua') is True and self.server.simulate:
+                        # The charger first simulates unplugging, then allows charging.
+                        self.server.data.update(alw=False,modelStatus=22)
+                        self.server.pending.update(alw=(True,self.server.simulate),modelStatus=(3,self.server.simulate))
         else:
             self.send_error(404);return
         raw=b'invalid' if self.server.bad_json else json.dumps(body).encode()
@@ -343,7 +355,7 @@ def charge_at(driver, clock, seconds):
     driver.charge(16, driver.read({}, NOW))
 
 
-def test_a_released_vehicle_that_reports_complete_is_restarted_once_by_simulated_unplugging(caplog):
+def test_a_released_vehicle_that_reports_complete_is_restarted_at_most_twice_by_simulated_unplugging(caplog):
     caplog.set_level('INFO', 'custom_components.eos_energiezentrale.energy.plugins.goe_http_v2')
     with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
         for seconds in (0, 30, 59):
@@ -355,17 +367,20 @@ def test_a_released_vehicle_that_reports_complete_is_restarted_once_by_simulated
         assert server.data['sua'] is True and server.data['alw']
         assert any('go-e simulated unplugging' in record.getMessage() and 'enabled' in record.getMessage()
                    for record in caplog.records)
-        # Still not charging: no repeated restarts in the same vehicle session.
-        for seconds in (120, 600, 3600):
-            charge_at(driver, clock, seconds)
+        assert any('attempt 1 of 2' in record.getMessage() and 'Complete' in record.getMessage() for record in caplog.records)
+        # Still not charging: one more restart after another full minute, then no more in this session.
+        charge_at(driver, clock, 120)
         assert len(server.writes) == 3
-        # After charging or unplugging, a new stall gets one new attempt; the setting is already on.
+        for seconds in (180, 600, 3600):
+            charge_at(driver, clock, seconds)
+        assert server.writes[3:] == [{'frc': 1}, {'frc': 2}]
+        # After charging or unplugging, a new stall gets new attempts; the setting is already on.
         server.data['car'] = 2
         driver.read({}, NOW)
         server.data['car'] = 4
         charge_at(driver, clock, 4000)
         charge_at(driver, clock, 4060)
-        assert server.writes[3:] == [{'frc': 1}, {'frc': 2}]
+        assert server.writes[5:] == [{'frc': 1}, {'frc': 2}]
 
 
 def test_simulated_unplugging_is_opt_in():
@@ -376,8 +391,8 @@ def test_simulated_unplugging_is_opt_in():
         assert not server.writes
 
 
-@pytest.mark.parametrize('change', [{'car': 2}, {'car': 3}, {'nrg': [230, 231, 229, 0, 0., 0., 0., 0., 0., 0., 0., 1500.]}])
-def test_a_charging_or_waiting_vehicle_is_never_unplugged(change):
+@pytest.mark.parametrize('change', [{'car': 2}, {'nrg': [230, 231, 229, 0, 0., 0., 0., 0., 0., 0., 0., 1500.]}])
+def test_a_charging_unplugged_or_power_drawing_vehicle_is_never_unplugged(change):
     with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
         server.data.update(change)
         for seconds in (0, 60, 3600):
@@ -468,3 +483,124 @@ def test_plugins_cannot_bypass_the_hold_contract():
         with pytest.raises(PluginContractError):
             validate_class(plugin)
     assert validate_class(GoEHTTPv2) is GoEHTTPv2
+
+
+def test_a_release_during_the_chargers_simulated_unplugging_is_confirmed_without_pausing():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.simulate = 6
+        charge_at(driver, clock, 0)
+        charge_at(driver, clock, 60)
+        # The restart is accepted although charging is not yet allowed during the simulation.
+        assert server.writes == [{'sua': True}, {'frc': 1}, {'frc': 2}]
+        assert server.data['frc'] == 2
+        # With sua on, every later release passes the simulation as well, without a pause.
+        server.data.update(frc=1, alw=False)
+        driver.charge(16, driver.read({}, NOW))
+        assert server.writes[-1] == {'frc': 2} and {'frc': 1} not in server.writes[3:]
+
+
+def test_a_slow_status_answer_while_confirming_is_retried():
+    with api() as (driver, server), patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+        state = driver.read({}, NOW)
+        server.fail_after_write = 2
+        driver.charge(16, state)
+        assert server.writes == [{'amp': 16}, {'frc': 2}] and server.data['alw']
+
+
+def test_a_release_that_stays_disallowed_without_simulation_is_still_a_failure():
+    with api() as (driver, server):
+        server.ignore.add('frc')
+        ticks = iter(index * .5 for index in range(200))
+        with patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.monotonic', side_effect=lambda: next(ticks)), \
+                patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+            with pytest.raises(GoEAPIError):
+                driver.charge(16, driver.read({}, NOW))
+        assert server.writes[-1] == {'frc': 1}
+
+
+def test_a_stop_is_never_confirmed_by_a_simulated_unplugging():
+    with api() as (driver, server):
+        server.data.update(frc=2, alw=True, modelStatus=22)
+        server.ignore.add('frc')
+        ticks = iter(index * .5 for index in range(200))
+        with patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.monotonic', side_effect=lambda: next(ticks)), \
+                patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+            with pytest.raises(GoEAPIError):
+                driver.pause(driver.read({}, NOW))
+
+
+def test_a_simulated_unplugging_longer_than_a_normal_confirmation_does_not_fail_the_release():
+    with api() as (driver, server):
+        server.data.update(sua=True, modelStatus=4)
+        server.simulate = 1000  # Still simulating when the confirmation ends.
+        ticks = iter(index * .5 for index in range(400))
+        with patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.monotonic', side_effect=lambda: next(ticks)), \
+                patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+            driver.charge(16, driver.read({}, NOW))
+        assert server.writes == [{'amp': 16}, {'frc': 2}]
+        assert server.data['frc'] == 2 and server.data['modelStatus'] == 22
+
+
+def test_a_released_vehicle_waiting_without_power_is_restarted_like_a_finished_one():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.data['car'] = 3
+        charge_at(driver, clock, 0)
+        charge_at(driver, clock, 60)
+        assert server.writes == [{'sua': True}, {'frc': 1}, {'frc': 2}]
+
+
+def test_a_completed_phase_switch_allows_one_more_restart():
+    with stalled_vehicle(simulate_unplugging=True, phase_switching=True) as (driver, server, clock):
+        driver.unplug_attempts = 2
+        driver.phase_requested = (1, 0.)
+        server.data.update(frc=1, alw=False, psm=1, pnp=1, fsp=True)
+        with patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.datetime') as now:
+            now.now.return_value = NOW
+            assert driver.phase(1, driver.read({}, NOW))
+        assert driver.unplug_attempts == 1 and driver.stalled_since is None
+
+
+@pytest.mark.parametrize('model,car,error,reason', [
+    (2, 3, 0, 'access_control'), (27, 3, 0, 'load_management'), (24, 4, 0, 'min_pause'), (5, 3, 0, 'charger_logic'),
+    (3, 4, 0, 'vehicle_complete'), (3, 3, 0, 'vehicle_waiting'), (3, 3, 7, 'charger_error'), (None, 3, 0, 'vehicle_waiting'),
+    (3, 2, 0, None),
+])
+def test_the_chargers_own_reason_explains_an_idle_release(model, car, error, reason):
+    with api() as (driver, server):
+        server.data.update(car=car, err=error, frc=2, alw=True)
+        if model is not None:
+            server.data['modelStatus'] = model
+        driver.read({}, NOW)
+        assert driver.idle_reason() == reason
+
+
+@pytest.mark.parametrize('model', [23, 24, 29])
+def test_a_release_held_by_the_chargers_own_timed_reason_is_confirmed(model):
+    with api() as (driver, server):
+        ticks = iter(index * .5 for index in range(400))
+        with patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.monotonic', side_effect=lambda: next(ticks)), \
+                patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+            # Not the simulation: the charger holds the accepted release for another timed reason.
+            server.ignore.add('frc')
+            server.data.update(frc=2, alw=False, modelStatus=model)
+            driver._set(frc=2)
+        assert server.writes[-1] == {'frc': 2}
+
+
+def test_access_control_never_confirms_a_release():
+    with api() as (driver, server):
+        server.ignore.add('frc')
+        server.data.update(frc=2, alw=False, modelStatus=2)
+        ticks = iter(index * .5 for index in range(400))
+        with patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.monotonic', side_effect=lambda: next(ticks)), \
+                patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+            with pytest.raises(GoEAPIError):
+                driver._set(frc=2)
+
+
+def test_an_unplugged_vehicle_is_never_unplugged():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.data['car'] = 1
+        for seconds in (0, 60, 3600):
+            hold_at(driver, clock, seconds)
+        assert not server.writes

@@ -7,11 +7,13 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Kostenbilanz: Mit Wirkungsgrad-Quelle EOS gelten jetzt leistungsabhängige Wirkungsgrade aus den EOS-Profilen. Die Energiezentrale liest die Kurven des Batterieprofils (über der C-Rate) und des dem Speicher zugeordneten Wechselrichters (über der Auslastung) und verrechnet jede Lade- und Entladeleistung mit Wechselrichter- × Akkuwirkungsgrad bei der gemessenen Wechselstromleistung, ausgewertet wie in EOS. Kleine Leistungen verlieren damit mehr Energie als mittlere. Ohne Profil oder Profil-API bleiben die bisherigen festen EOS-Werte, ohne zugeordneten Wechselrichter gilt die Akkukurve allein; der Grund steht in den Kosteneinstellungen und einmalig im Log. Die Einstellungen zeigen den verwendeten Bereich, z. B. 83,9–94,1 % beim Laden. Bereits gebuchte Akkuinhalte bleiben unverändert.
+- Neuer Hinweis „Fahrzeug lädt trotz Freigabe nicht“: Gibt die Wallbox seit drei Minuten bestätigt frei, will die Energiezentrale laden und nimmt das angeschlossene Fahrzeug höchstens 30 W auf, erscheint eine Warnung mit eigener Kennung (`vehicle_idle`) im Panel, im Log und in den Diagnosedaten. Wallbox-Plugins können die Ursache über die neue optionale Methode `idle_reason()` angeben; der go-e nennt seine eigene Begründung, etwa Zugangskontrolle, Lastmanagement, Mindestpause, „Fahrzeug meldet fertig“ oder „Fahrzeug fordert keinen Strom an“. Die Regelung bleibt unverändert.
+- Fahrzeugplanung: Plant EOS nach geänderten Fahrzeugvorgaben neu, läuft eine bereits laufende planbasierte Ladung bis zu 15 Minuten mit der letzten Planentscheidung weiter, statt bis zum neuen Plan zu pausieren. Fahrzeuge, die nach einer Ladepause nicht weiterladen, bleiben so in Betrieb. Eine pausierte Wallbox startet dadurch nicht, das Ende einer Schnellladung wird nie überbrückt.
+- go-e Charger (lokale HTTP-API v2): `simulate_unplugging` erkennt neben „fertig“ (`car=4`) auch ein freigegebenes Fahrzeug, das ohne Stromanforderung wartet (`car=3`), versucht je Fahrzeugsitzung bis zu zwei Neustarts und erlaubt nach einer bestätigten Phasenumschaltung einen weiteren. Eine Freigabe gilt außer beim simulierten Ausstecken auch während Phasenumschaltung, Mindestpause und Wiederzuschaltverzögerung des go-e als bestätigt.
 
 ### Bugfixes
 
-- Keine.
+- go-e Charger (lokale HTTP-API v2): Mit eingeschalteter go-e-Einstellung „Ausstecken immer simulieren“ (`sua`) scheiterte fast jede neue Ladefreigabe. Während der go-e das Ausstecken simuliert, meldet er die Freigabe als noch nicht erlaubt (`modelStatus` 22) und antwortet mitunter langsam; die Energiezentrale wartete nur 4 Sekunden, meldete einen Wallbox-Fehler und pausierte die Wallbox wieder. Eine Freigabe gilt in diesem Zustand jetzt als bestätigt, die Bestätigung wartet bis zu 10 Sekunden und wiederholt langsame Statusabfragen. Stopps werden weiterhin nur mit zurückgelesener Sperre bestätigt.
 
 ### Breaking Changes
 

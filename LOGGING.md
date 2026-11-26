@@ -162,10 +162,25 @@ der letzte Stand steht in den Diagnosedaten unter `wallbox_status`. Ladeleistung
 Ladestrom, Kartennummern und Adressen werden dabei nicht protokolliert. So lässt
 sich klären, warum ein freigegebenes Fahrzeug keinen Strom aufnimmt, ohne die
 Wallbox-API von Hand abzufragen. Ist im Plugin `simulate_unplugging` aktiviert und
-meldet ein freigegebenes Fahrzeug 60 Sekunden lang „fertig“ ohne Leistung, steht der
-einmalige Neustart mit simuliertem Ausstecken als INFO-Eintrag
-`go-e simulated unplugging` im Log, einschließlich, ob die go-e-Einstellung `sua`
-dafür eingeschaltet wurde.
+nimmt ein freigegebenes Fahrzeug 60 Sekunden lang keine Leistung auf, steht jeder
+Neustart mit simuliertem Ausstecken (höchstens zwei je Fahrzeugsitzung) als INFO-Eintrag
+`go-e simulated unplugging` mit Versuchsnummer und Fahrzeugzustand im Log,
+einschließlich, ob die go-e-Einstellung `sua` dafür eingeschaltet wurde.
+
+Gibt die Wallbox seit drei Minuten bestätigt frei, will die Energiezentrale laden und
+nimmt das angeschlossene Fahrzeug höchstens 30 W auf, erscheint der Hinweis
+`vehicle_idle` („Fahrzeug lädt trotz Freigabe nicht“, Kennung `system/vehicle_idle`
+bzw. `vehicle/<n>/vehicle_idle`) als Warnung im Log und in den Diagnosedaten. Die feste
+Ursache aus dem Wallbox-Plugin steht unter `details.reason`, etwa `vehicle_complete`,
+`vehicle_waiting`, `access_control` oder `load_management`; ohne Angabe `unknown`.
+Ein Ursachenwechsel wird als Änderung, Laden oder das Ende der Freigabe als Behebung
+protokolliert. Der Hinweis beeinflusst die Regelung nicht.
+
+Plant EOS nach geänderten Fahrzeugvorgaben neu, läuft eine bereits laufende planbasierte
+Ladung mit der letzten Planentscheidung weiter, statt bis zum neuen Plan zu pausieren:
+INFO `Vehicle charging continues with the previous EOS plan while EOS replans` und
+`Vehicle plan hold ended: <grund>` (`plan_ready`, `ended`, `timeout` nach höchstens
+15 Minuten). Das Ende einer Schnellladung wird nie überbrückt.
 
 Deye-Modbus protokolliert für Speicher und PV-Wechselrichter den fehlgeschlagenen
 Leseabschnitt, die konfigurierte Unit-ID, Registeradresse, Anzahl und gegebenenfalls
@@ -266,10 +281,25 @@ poll: vehicle state (`car`), force state (`frc`), permission (`alw`), reason
 (`sua`) and firmware version. Each change is logged at INFO as
 `go-e charger status`; the latest state is in the diagnostics under
 `wallbox_status`. Power, current, card numbers and addresses are not logged.
-With `simulate_unplugging` enabled, the one-time restart of a released vehicle that
-reports "complete" without power for 60 seconds is logged at INFO as
-`go-e simulated unplugging`, including whether the charger setting `sua` was
-switched on for it.
+With `simulate_unplugging` enabled, each restart of a released vehicle that takes no
+power for 60 seconds (at most two per vehicle session) is logged at INFO as
+`go-e simulated unplugging` with attempt number and vehicle state, including whether
+the charger setting `sua` was switched on for it.
+
+If the wallbox has confirmed the release for three minutes, the Energiezentrale wants
+to charge and the connected vehicle takes at most 30 W, the warning notice
+`vehicle_idle` ("vehicle not charging despite release", ID `system/vehicle_idle` or
+`vehicle/<n>/vehicle_idle`) appears in the log and diagnostics. The wallbox plugin's
+fixed cause is in `details.reason`, e.g. `vehicle_complete`, `vehicle_waiting`,
+`access_control` or `load_management`, otherwise `unknown`. A changed cause is logged
+as a change; charging or the end of the release as resolved. The notice never affects
+control.
+
+While EOS replans after changed vehicle inputs, a running plan-based charge keeps its
+last plan decision instead of pausing until the new plan: INFO `Vehicle charging
+continues with the previous EOS plan while EOS replans` and `Vehicle plan hold ended:
+<reason>` (`plan_ready`, `ended`, `timeout` after at most 15 minutes). Ending fast
+charging is never held.
 
 All three Victron plugins (`victron_modbus`, `victron_ha`, `victron_gx`) also log
 power-limit, ESS command and release failures as `plugin_operation_failed`, with
