@@ -5,6 +5,7 @@ trace of electrons. Missing inputs never become free energy or zero consumption.
 """
 import calendar
 import json
+import logging
 import sqlite3
 from copy import deepcopy
 from contextlib import closing
@@ -16,6 +17,13 @@ from .accounting_estimates import FIELDS, MAX_GAP_SECONDS, interpolate, repair, 
 from .source_estimates import estimate_sources
 from .base_prices import checked_history, fixed_grid_price, reprice_grid
 from . import grid_inventory
+from .efficiency_curves import CurveError, checked_curves, efficiency, summary
+
+_LOGGER = logging.getLogger(__name__)
+# Why the accounting uses constant EOS efficiencies or the battery curve without inverter.
+CURVE_REASONS = frozenset({'no_battery_profile', 'profile_api_missing', 'battery_profile_unavailable',
+                           'battery_profile_invalid', 'inverter_unassigned', 'inverter_profile_unavailable',
+                           'inverter_profile_invalid', 'curves_invalid'})
 
 DEFAULTS = {"pv_price_ct": 0.0, "pv_price_source": "eos", "efficiency_source": "eos",
             "charge_efficiency": .95, "discharge_efficiency": .95,
@@ -52,6 +60,16 @@ def checked_settings(values):
     return result
 
 
+def stored_effective(value):
+    """Effective values persisted by this or an older version; unusable curves are dropped."""
+    if not isinstance(value, dict) or 'curves' not in value:
+        return value
+    try:
+        return {**value, 'curves': checked_curves(value['curves'])}
+    except CurveError:
+        return {key: item for key, item in value.items() if key != 'curves'}
+
+
 def empty():
     result = {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0., "seconds": 0., "estimated_seconds":0.,
               "sources": {key: {"kwh": 0., "cost_eur": 0., "cost_unknown_kwh": 0., "estimated_kwh":0.} for key in SOURCES}}
@@ -83,6 +101,7 @@ class Accounting:
         self.previous = None
         self.last_eos_attempt = None
         self.eos_battery = None
+        self.curves_reason = None
         self.capacity_override = None
         self.eos_error = None
         self.eos_failure_details = {}
@@ -114,7 +133,7 @@ class Accounting:
             self.previous=(instant(saved['at']),saved['row'])
         self.restored=self.previous is not None
         self.last_rate=json.loads(rows.get('last_rate','null'))
-        self.cached_effective=json.loads(rows.get('effective','null'))
+        self.cached_effective=stored_effective(json.loads(rows.get('effective','null')))
 
     def connect(self):
         return sqlite3.connect(self.path)
@@ -174,16 +193,39 @@ class Accounting:
         self.last_eos_attempt = now
         try:
             values = eos.battery_accounting(resource)
-            if not isinstance(values, dict) or values.keys() != {"capacity_wh", "charge_efficiency", "discharge_efficiency"}:
+            if not isinstance(values, dict) or values.keys() - {"curves", "curves_reason"} != {"capacity_wh", "charge_efficiency", "discharge_efficiency"}:
                 raise ValueError("Incomplete EOS battery data")
+            curves, reason = values.pop("curves", None), values.pop("curves_reason", None)
             validated = checked_settings({**self.settings, **values})
-            self.eos_battery = {key: validated[key] for key in
-                                ("capacity_wh", "charge_efficiency", "discharge_efficiency")}
+            battery = {key: validated[key] for key in ("capacity_wh", "charge_efficiency", "discharge_efficiency")}
+            if curves is not None:
+                try:
+                    battery["curves"] = checked_curves(curves)
+                except CurveError:
+                    reason = "curves_invalid"
+                else:
+                    if battery["curves"]["inverter"] is None and reason is None:
+                        reason = "inverter_unassigned"
+            self.record_curves(battery.get("curves"), reason if reason in CURVE_REASONS else None)
+            self.eos_battery = battery
             self.eos_error = None
         except (ValueError, OSError, TimeoutError, KeyError, TypeError) as error:
             self.eos_error = "unavailable"
             from .status import failure_details
             self.eos_failure_details = failure_details(error)
+
+    def record_curves(self, curves, reason):
+        """Log which efficiency model the accounting uses, once per change."""
+        model = 'constant' if curves is None else 'battery_inverter' if curves['inverter'] else 'battery'
+        previous = getattr(self, '_curve_state', None)
+        self.curves_reason = reason
+        if previous == (model, reason):
+            return
+        self._curve_state = (model, reason)
+        if reason in (None, 'no_battery_profile'):
+            _LOGGER.info('EOS efficiency model for accounting: %s', model)
+        else:
+            _LOGGER.warning('EOS efficiency curves incomplete for accounting: model=%s reason=%s', model, reason)
 
     def refresh_tariff(self, eos, now):
         if self.settings["pv_price_source"] != "eos":
@@ -224,6 +266,9 @@ class Accounting:
         if values is not None and self.capacity_override is not None:
             return {**values,'capacity_wh':self.capacity_override}
         return values
+
+    def curves_reason_view(self):
+        return self.curves_reason if self.settings['efficiency_source'] == 'eos' else None
 
     def fallback_rate(self,row,effective):
         # Preserve the established initial-stock convention when migrating old data.
@@ -370,8 +415,10 @@ class Accounting:
         # Per delivered kWh: the share from PV-/grid-charged stock and its cost.
         origin = dict.fromkeys(ORIGIN_FIELDS, 0.)
         grid_charges = {}
+        discharge_efficiency = efficiency(effective, 'discharge', discharge) if effective is not None else None
+        charge_efficiency = efficiency(effective, 'charge', charge) if effective is not None else None
         if discharge is not None and discharge > 0 and effective is not None and self.stock is not None:
-            needed = discharge*hours_per_thousand/effective["discharge_efficiency"]
+            needed = discharge*hours_per_thousand/discharge_efficiency
             available = min(needed, self.stock["kwh"])
             fraction = available/self.stock["kwh"] if self.stock["kwh"] > 0 else 0
             delivered = discharge*hours_per_thousand
@@ -389,7 +436,7 @@ class Accounting:
             battery_rate = cost/(discharge*hours_per_thousand)
             battery_unknown = min(1., unknown/needed)
             battery_estimated=min(1.,estimated/needed)
-            grid_charges = grid_inventory.withdrawals(self.stock, fraction, effective['discharge_efficiency'], delivered)
+            grid_charges = grid_inventory.withdrawals(self.stock, fraction, discharge_efficiency, delivered)
             grid_inventory.scale(self.stock, 1-fraction)
             for key in ("kwh", "cost", "unknown", "estimated", *STOCK_ORIGIN):
                 self.stock[key] = self.stock.get(key,0)*(1-fraction)
@@ -400,7 +447,7 @@ class Accounting:
         elif discharge>0 and effective is not None:
             rate=self.fallback_rate(row,effective)
             if rate is not None:
-                battery_rate=rate/effective['discharge_efficiency']
+                battery_rate=rate/discharge_efficiency
                 battery_unknown,battery_estimated=0.,1.
         price = self.grid_price(row)  # configured fixed tariff or live ct/kWh
         pv_price = self.pv_price(row.get("time"))
@@ -464,17 +511,17 @@ class Accounting:
             # A charging battery cannot be its own energy source.
             pv_ratio, grid_ratio = ratios.get("pv",0), ratios.get("grid",0)
             known_ratio = pv_ratio+grid_ratio
-            self.stock["kwh"] += energy*effective["charge_efficiency"]
+            self.stock["kwh"] += energy*charge_efficiency
             self.stock["cost"] += energy*(pv_ratio*rates["pv"]+grid_ratio*rates["grid"])
             for kind, share in (("pv", pv_ratio), ("grid", grid_ratio)):
-                self.stock[kind+"_kwh"] = self.stock.get(kind+"_kwh",0) + energy*effective["charge_efficiency"]*share
+                self.stock[kind+"_kwh"] = self.stock.get(kind+"_kwh",0) + energy*charge_efficiency*share
                 self.stock[kind+"_cost"] = self.stock.get(kind+"_cost",0) + energy*share*rates[kind]
             stamp = instant(row.get('time'))
             day = stamp.astimezone(self.zone).date().isoformat() if stamp else ''
             grid_inventory.merge(self.stock.setdefault('grid_lots', {}), grid_inventory.charging_lot(
-                day, energy*grid_ratio, effective['charge_efficiency'], price))
-            self.stock["unknown"] += energy*effective["charge_efficiency"]*min(1.,1-known_ratio+grid_ratio*unknowns["grid"]+pv_ratio*unknowns["pv"])
-            if row.get('estimated'): self.stock['estimated']=min(self.stock['kwh'],self.stock.get('estimated',0)+energy*effective['charge_efficiency'])
+                day, energy*grid_ratio, charge_efficiency, price))
+            self.stock["unknown"] += energy*charge_efficiency*min(1.,1-known_ratio+grid_ratio*unknowns["grid"]+pv_ratio*unknowns["pv"])
+            if row.get('estimated'): self.stock['estimated']=min(self.stock['kwh'],self.stock.get('estimated',0)+energy*charge_efficiency)
             self.value_unknown(row,effective)
         return outputs
 
@@ -554,4 +601,5 @@ class Accounting:
         return {"period":period,"date":start.isoformat(),"end":end.isoformat(),"hours":hours,"consumers":consumers,
                 "base_days":base_days,"base_start":first.isoformat(),
                 "started":self.started,"settings":self.settings,"effective":self.effective(),
+                "efficiency_curves":summary(self.effective()),"efficiency_curves_reason":self.curves_reason_view(),
                 "eos_error":self.eos_error,"pv_tariff":self.pv_tariff,"pv_price_ct":self.pv_price(now.isoformat()),"pv_error":self.pv_error,"stock":self.stock,"method":"proportional"}

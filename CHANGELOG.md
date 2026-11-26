@@ -7,13 +7,11 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- Kostenbilanz: Mit Wirkungsgrad-Quelle EOS gelten jetzt leistungsabhängige Wirkungsgrade aus den EOS-Profilen. Die Energiezentrale liest die Kurven des Batterieprofils (über der C-Rate) und des dem Speicher zugeordneten Wechselrichters (über der Auslastung) und verrechnet jede Lade- und Entladeleistung mit Wechselrichter- × Akkuwirkungsgrad bei der gemessenen Wechselstromleistung, ausgewertet wie in EOS. Kleine Leistungen verlieren damit mehr Energie als mittlere. Ohne Profil oder Profil-API bleiben die bisherigen festen EOS-Werte, ohne zugeordneten Wechselrichter gilt die Akkukurve allein; der Grund steht in den Kosteneinstellungen und einmalig im Log. Die Einstellungen zeigen den verwendeten Bereich, z. B. 83,9–94,1 % beim Laden. Bereits gebuchte Akkuinhalte bleiben unverändert.
 
 ### Bugfixes
 
-- EOS-Assistent, Schritt „Tarif & Verbrauch“: Nutzt EOS bereits einen festen Tarif (`ElecPriceFixed`) mit lesbaren Preiszonen und ohne zusätzliche Aufschläge, ist er beim Laden vorausgewählt und zeigt seine Zonen. Bisher stand der Anbieter auf „Beibehalten“, und die Preiszonen blieben verborgen, bis `ElecPriceFixed` ausdrücklich gewählt wurde. Unverändert übernommen erscheint der Tarif nicht als Änderung in der Vorschau. Feste Tarife mit Aufschlägen oder nicht als Zonen lesbaren Zeitfenstern bleiben auf „Beibehalten“.
-- EOS-Assistent: Ganztägige Aufschläge, Umsatzsteuer und feste Einspeisevergütung werden nach dem Speichern wieder mit ihren Werten angezeigt. EOS liefert Startzeiten als `00:00:00.000000`; der Assistent erkannte diese Schreibweise nicht und zeigte stattdessen Vorgabewerte (0 ct, 19 %, 8,2 ct).
-- Kosten → Stromtarif: Die Auswahl „Dynamisch (Preissensor)“ heißt jetzt „Zeitabhängig (Sensor, Plugin oder EOS)“, der Hinweis nennt die Preisquelle: Sensor „Bezugspreis“, sonst Plugin, sonst EOS, ohne Sensor also auch ein Tarif mit Preiszonen aus dem EOS-Assistenten. Das Verhalten ist unverändert; README angepasst.
+- Keine.
 
 ### Breaking Changes
 

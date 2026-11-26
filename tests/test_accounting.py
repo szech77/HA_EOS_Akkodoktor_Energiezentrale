@@ -293,7 +293,9 @@ class EnergyAccountingRequirements(TestCase):
         from unittest.mock import patch
         with patch('custom_components.eos_energiezentrale.energy.clients.request',return_value={"devices":{"batteries":{"battery1":{"capacity_wh":11059,"charging_efficiency":.95,"discharging_efficiency":.96}}}}) as request:
             values=EOS('http://eos:8503').battery_accounting('battery1')
-        self.assertEqual(values,{"capacity_wh":11059,"charge_efficiency":.95,"discharge_efficiency":.96})
+        # Without a battery profile there are no curves; the constant values stay in use.
+        self.assertEqual(values,{"capacity_wh":11059,"charge_efficiency":.95,"discharge_efficiency":.96,
+                                 "curves":None,"curves_reason":"no_battery_profile"})
         request.assert_called_once_with('http://eos:8503/v1/config')
 
 

@@ -188,6 +188,14 @@ HA-Konfigurationsdialogen werden ebenfalls im Backend erfasst. Bei einem ungült
 Plugin-Parameter wird dessen Feldname statt seines Inhalts protokolliert. Aktive
 Plugin-Leseprobleme und Konfigurationsereignisse stehen zusätzlich in den Diagnosen.
 
+Die Kostenbilanz protokolliert bei Wirkungsgrad-Quelle EOS, welches Modell gilt:
+`EOS efficiency model for accounting: battery_inverter`, `battery` oder `constant`
+(INFO, nur bei einem Wechsel). Fehlen Kurven aus einem anderen Grund als einem
+Speicher ohne Batterieprofil, erscheint einmalig eine Warnung
+`EOS efficiency curves incomplete for accounting` mit festem Grund, etwa
+`profile_api_missing`, `battery_profile_invalid`, `inverter_unassigned` oder
+`inverter_profile_unavailable`. Derselbe Grund steht in den Kosteneinstellungen.
+
 ## Browser- und Verbindungsfehler
 
 Ladefehler von UI-Dateien, Darstellungsfehler und fehlgeschlagene Verbindungen sind
@@ -205,6 +213,13 @@ HA-Core bzw. zur betroffenen Integration und werden nicht als EOS-Fehler ausgege
 Device control, EOS requests, confirmations, measurement freshness, deadlines and
 all domain calculations run in the backend. This includes PV energy/forecast
 totals, merged accounting totals, weighted prices and plan/gap classification.
+
+With the EOS efficiency source, the accounting logs its efficiency model once per
+change: `EOS efficiency model for accounting: battery_inverter`, `battery` or
+`constant` (INFO). Curves missing for another reason than a battery without profile
+log one warning `EOS efficiency curves incomplete for accounting` with a fixed reason
+such as `profile_api_missing`, `battery_profile_invalid`, `inverter_unassigned` or
+`inverter_profile_unavailable`; the cost settings show the same reason.
 Local departure input uses the installation timezone. The frontend handles input,
 translation, formatting and drawing, and consumes backend notices/statuses directly.
 

@@ -181,6 +181,27 @@ describe('settings', () => {
     expect(calls.filter(([action, values]) => action === 'accounting' && values['period'] === 'day')).toHaveLength(2)
   })
 
+  it.each(['de', 'en'] as const)('show power-dependent EOS efficiencies and why the inverter is missing in %s', async code => {
+    let curves: object = { efficiency_curves: { inverter: true, charge: [0.8385, 0.9409], discharge: [0.858, 0.9409] }, efficiency_curves_reason: null }
+    const request = (action: string, values: Record<string, unknown>) => (action === 'accounting' && values['period'] ? { ...costs, ...curves } : {})
+    const first = open({}, { code, request })
+    await flush()
+    await first.click('[data-section="costs"]')
+    const decimal = code === 'de' ? ',' : '.'
+    expect(first.text('[data-settings-section="costs"]')).toContain(
+      `${first.messages['billing.effective_curves']}: 83${decimal}9–94${decimal}1 % / 85${decimal}8–94${decimal}1 % · 11${decimal}06 kWh`)
+    first.page.unmount()
+    reset()
+    curves = { efficiency_curves: { inverter: false, charge: [0.94, 0.975], discharge: [0.96, 0.975] }, efficiency_curves_reason: 'inverter_unassigned' }
+    const second = open({}, { code, request })
+    await flush()
+    await second.click('[data-section="costs"]')
+    const costsText = second.text('[data-settings-section="costs"]')
+    expect(costsText).toContain(second.messages['billing.effective_curves_battery'])
+    expect(costsText).toContain(second.messages['billing.curves_reason_inverter_unassigned'])
+    expect(costsText).not.toMatch(/billing\.curves_reason/)
+  })
+
   it.each(['de', 'en'] as const)('edit dated monthly and daily fees, reload and discard in %s', async code => {
     let saved: Record<string, unknown> = { ...costs.settings }
     const { input, set, click, calls, text, messages, $ } = open({}, { code, request: (action, values) => {
