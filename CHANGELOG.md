@@ -7,12 +7,13 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- EOS-Assistent, Schritt „Tarif & Verbrauch“: Ein fester Netzpreis kann jetzt aus bis zu 12 täglichen Preiszonen bestehen, z. B. für Tarife mit günstigem Nachtstrom wie Octopus Go. Jede Zone gilt ab ihrer Uhrzeit bis zur nächsten, die letzte über Mitternacht. Der Assistent schreibt die Zonen als EOS-Zeitfenster (`ElecPriceFixed`), ohne dass ein Fenster über Mitternacht läuft, und zeigt sie in der Vorschau mit Uhrzeiten. Beim Laden erkennt er vorhandene Zeitfenster wieder als Zonen; bisher erkannte er einen Tarif mit mehreren Fenstern nicht und ersetzte ihn, wenn `ElecPriceFixed` gewählt war, beim Speichern durch einen einzigen Tagespreis. Feste Tarife mit einer Zone verhalten sich wie bisher. Ohne eigenen Preissensor übernimmt die Kostenbilanz den jeweils gültigen Zonenpreis aus den EOS-Preisprognosen.
-- go-e Charger (lokale HTTP-API v2): Neue Plugin-Option `simulate_unplugging` (Vorgabe aus) für Fahrzeuge, die ihren Ladevorgang bei einer Ladepause beenden und danach trotz Freigabe nicht weiterladen. Meldet der go-e bei bestätigter Freigabe 60 Sekunden lang „fertig“ (`car=4`) ohne Leistung, schaltet die Energiezentrale einmal die go-e-Einstellung „Ausstecken immer simulieren“ (`sua`) ein und startet den Ladevorgang mit bestätigter Pause und Freigabe neu. Höchstens ein Versuch je Fahrzeugsitzung; jeder Versuch steht als INFO-Eintrag `go-e simulated unplugging` im Log. Dafür ruft die Regelung bei unverändert weiterlaufender Ladefreigabe die neue optionale Wallbox-Plugin-Methode `_hold(self, amps, state)` auf; vorhandene Plugins senden dabei weiterhin nichts.
+- Keine.
 
 ### Bugfixes
 
-- Keine.
+- EOS-Assistent, Schritt „Tarif & Verbrauch“: Nutzt EOS bereits einen festen Tarif (`ElecPriceFixed`) mit lesbaren Preiszonen und ohne zusätzliche Aufschläge, ist er beim Laden vorausgewählt und zeigt seine Zonen. Bisher stand der Anbieter auf „Beibehalten“, und die Preiszonen blieben verborgen, bis `ElecPriceFixed` ausdrücklich gewählt wurde. Unverändert übernommen erscheint der Tarif nicht als Änderung in der Vorschau. Feste Tarife mit Aufschlägen oder nicht als Zonen lesbaren Zeitfenstern bleiben auf „Beibehalten“.
+- EOS-Assistent: Ganztägige Aufschläge, Umsatzsteuer und feste Einspeisevergütung werden nach dem Speichern wieder mit ihren Werten angezeigt. EOS liefert Startzeiten als `00:00:00.000000`; der Assistent erkannte diese Schreibweise nicht und zeigte stattdessen Vorgabewerte (0 ct, 19 %, 8,2 ct).
+- Kosten → Stromtarif: Die Auswahl „Dynamisch (Preissensor)“ heißt jetzt „Zeitabhängig (Sensor, Plugin oder EOS)“, der Hinweis nennt die Preisquelle: Sensor „Bezugspreis“, sonst Plugin, sonst EOS, ohne Sensor also auch ein Tarif mit Preiszonen aus dem EOS-Assistenten. Das Verhalten ist unverändert; README angepasst.
 
 ### Breaking Changes
 

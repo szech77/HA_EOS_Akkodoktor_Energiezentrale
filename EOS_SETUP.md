@@ -43,7 +43,8 @@ Er steht wie das übrige Panel nur Home-Assistant-Administratoren zur Verfügung
    Octopus Go also eine Zone ab 00:30 mit dem Nachtpreis und eine ab 05:30 mit dem
    Tagespreis. EOS erhält daraus Zeitfenster, die nicht über Mitternacht laufen; ein
    vorhandener Tarif aus solchen Zeitfenstern wird beim Laden wieder als Zonen
-   angezeigt. Tarife mit Wochentagen, Monaten oder Datumsangaben kann der Assistent
+   angezeigt; ohne zusätzliche Aufschläge ist `ElecPriceFixed` dann vorausgewählt.
+   Tarife mit Wochentagen, Monaten oder Datumsangaben kann der Assistent
    nicht abbilden; dafür „Beibehalten“ wählen. Einspeisevergütung und Jahresverbrauch ohne
    separat optimierte Fahrzeugladung ergänzen. Bestehende andere Anbieter können
    einschließlich ihrer Zugangsdaten beibehalten werden. Neu auswählbar sind

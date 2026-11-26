@@ -393,3 +393,40 @@ def test_plan_barrier_survives_restart_and_rejects_old_plans():
         assert app.error_details['eos']['reason'] == 'setup_plan_pending'
         app.apply_eos_plan({'generated_at': NOW.isoformat(), 'instructions': [instruction(NOW, 'NON_EXPORT')]}, NOW)
         assert 'battery1' in app.resource_plans
+
+
+def test_an_existing_fixed_tariff_opens_with_its_zones_and_unchanged_applies_nothing_new(setup_backend):
+    setup, backend = setup_backend
+    values = draft(setup)
+    values.update(price_provider='ElecPriceFixed', price_zones=OCTOPUS_GO)
+    setup.apply(setup.preview(values, HARDWARE)['token'], HARDWARE)
+    loaded = draft(setup)
+    assert loaded['price_provider'] == 'ElecPriceFixed' and loaded['price_zones'] == OCTOPUS_GO
+    changes = setup.preview(loaded, HARDWARE)['changes']
+    assert not any(row['path'].startswith(('elecprice', 'elecfee')) for row in changes)
+
+
+@pytest.mark.parametrize('fees', [
+    {'provider': 'ElecFeeFixed', 'elecfeefixed': {'consumption_amt_kwh': {'windows': [{'start_time': '00:00', 'duration': 'P1D', 'value': .05}]},
+                                                  'consumption_percent_amt': {'windows': [{'start_time': '00:00', 'duration': 'P1D', 'value': 0}]}}},
+    {'provider': 'ElecFeeFixed', 'elecfeefixed': {}},
+    {},
+])
+def test_a_fixed_tariff_with_other_fees_keeps_the_current_configuration(setup_backend, fees):
+    setup, backend = setup_backend
+    backend.current['elecprice'] = {'provider': 'ElecPriceFixed', 'elecpricefixed': {'elecprice_marketprice_amt_kwh': {
+        'windows': [{'start_time': '00:00', 'duration': 'P1D', 'value': .3}]}}}
+    backend.current['elecfee'] = fees
+    loaded = draft(setup)
+    # Selecting the fixed tariff would reset the fees to 0; the user decides that explicitly.
+    assert loaded['price_provider'] == 'keep' and loaded['price_zones'] == [{'start': '00:00', 'price_ct': 30}]
+
+
+def test_saved_fees_and_feed_in_are_shown_again_in_the_eos_notation(setup_backend):
+    setup, backend = setup_backend
+    values = draft(setup)
+    values.update(price_provider='ElecPriceEnergyCharts', fee_ct=15, vat_percent=7, feedin_provider='FeedInTariffFixed', feedin_ct=6.5)
+    setup.apply(setup.preview(values, HARDWARE)['token'], HARDWARE)
+    assert backend.request('http://eos/v1/config')['elecfee']['elecfeefixed']['consumption_amt_kwh']['windows'][0]['start_time'] == '00:00:00.000000'
+    loaded = draft(setup)
+    assert (round(loaded['fee_ct'], 6), loaded['vat_percent'], round(loaded['feedin_ct'], 6)) == (15, 7, 6.5)
