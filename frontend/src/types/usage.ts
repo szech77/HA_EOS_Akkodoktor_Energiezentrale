@@ -169,4 +169,8 @@ export interface CostSettings {
   readonly settings: Readonly<Record<string, string | number | readonly BasePrice[] | null | undefined>>
   readonly pv_price_ct?: Num
   readonly effective?: { readonly charge_efficiency: number; readonly discharge_efficiency: number; readonly capacity_wh: number } | null
+  /** Lowest/highest power-dependent AC-side efficiency from the EOS profiles; null without curves. */
+  readonly efficiency_curves?: { readonly inverter: boolean; readonly charge: readonly [number, number]; readonly discharge: readonly [number, number] } | null
+  /** Fixed reason why curves are missing or lack the inverter. */
+  readonly efficiency_curves_reason?: string | null
 }

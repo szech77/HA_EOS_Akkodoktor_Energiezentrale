@@ -98,7 +98,10 @@ def test_profile_accounting_uses_resolved_values_and_never_fabricates_missing_ef
     api=ProfileAPI()
     with patch('custom_components.eos_energiezentrale.energy.clients.request',side_effect=api.request):
         client=EOS('http://eos')
-        assert client.battery_accounting('bat')=={'capacity_wh':10000,'charge_efficiency':.95,'discharge_efficiency':.94}
+        values=client.battery_accounting('bat')
+        assert {key:values[key] for key in ('capacity_wh','charge_efficiency','discharge_efficiency')}=={'capacity_wh':10000,'charge_efficiency':.95,'discharge_efficiency':.94}
+        # This fake has no profile endpoint: the resolved constants stay without curves.
+        assert values['curves'] is None and values['curves_reason']=='battery_profile_invalid'
         api.resolved=False
         with pytest.raises(ValueError):client.battery_accounting('bat')
 

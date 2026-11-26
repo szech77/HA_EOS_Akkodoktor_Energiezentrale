@@ -59,9 +59,16 @@ const pvEffective = computed(() => {
 })
 const costEffective = computed(() => {
   const effective = costInfo.value?.effective
-  return effective
-    ? `${t('billing.effective')}: ${format.percentText(effective.charge_efficiency * 100)} / ${format.percentText(effective.discharge_efficiency * 100)} · ${host.decimal(effective.capacity_wh / 1000, 2)} kWh`
-    : t('billing.efficiency_missing')
+  if (!effective) return t('billing.efficiency_missing')
+  const capacity = `${host.decimal(effective.capacity_wh / 1000, 2)} kWh`
+  const curves = costInfo.value?.efficiency_curves
+  const span = (values: readonly [number, number]) => `${host.decimal(values[0] * 100, 1)}–${format.percentText(values[1] * 100)}`
+  const text = curves
+    ? `${t(curves.inverter ? 'billing.effective_curves' : 'billing.effective_curves_battery')}: ${span(curves.charge)} / ${span(curves.discharge)} · ${capacity}`
+    : `${t('billing.effective')}: ${format.percentText(effective.charge_efficiency * 100)} / ${format.percentText(effective.discharge_efficiency * 100)} · ${capacity}`
+  const reason = costInfo.value?.efficiency_curves_reason
+  const note = reason ? host.lookup(`billing.curves_reason_${reason}`) : null
+  return note ? `${text}. ${note}` : text
 })
 const changes = computed(() => (dirty.value.length === 1 ? t('settings.one_change') : t('settings.changes', { count: dirty.value.length })))
 

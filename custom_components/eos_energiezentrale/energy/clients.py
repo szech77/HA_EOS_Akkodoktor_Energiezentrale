@@ -15,6 +15,7 @@ from weakref import WeakValueDictionary
 from .domain import instant, number
 from ._eos_battery import accounting_values,confirmed,limits_patch,matches,profiled,updated_collection
 from .failures import BackendError
+from .efficiency_curves import CurveError, battery_curves, inverter_curves
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -225,6 +226,9 @@ def report_time(states, entity):
     return instant(state.get("last_reported") or state.get("last_updated"))
 
 
+# EOS profile names as written by the setup wizard (eos_setup.NAME).
+PROFILE_NAME = re.compile(r'[A-Za-z0-9_.-]{1,64}\Z')
+
 class EOS:
     def __init__(self, url, timeout=None):
         """``timeout`` applies to every request to this EOS peer; validation passes none."""
@@ -290,7 +294,43 @@ class EOS:
         battery = configuration.get("devices", {}).get("batteries", {}).get(resource)
         if not isinstance(battery, dict):
             raise ValueError("Stationary battery configuration missing")
-        return accounting_values(battery)
+        values = accounting_values(battery)
+        values["curves"], values["curves_reason"] = self.efficiency_curves(configuration, resource, battery)
+        return values
+
+    def profile(self, kind, name):
+        if not isinstance(name, str) or not PROFILE_NAME.fullmatch(name):
+            raise CurveError("Invalid profile name")
+        return request(self.url + "/v1/profile/" + kind + "/" + quote(name, safe=""))
+
+    def efficiency_curves(self, configuration, resource, battery):
+        """Battery and assigned inverter efficiency curves, or None and a fixed reason.
+
+        Without curves the accounting keeps the constant effective efficiencies.
+        """
+        if not profiled(battery) or not isinstance(battery.get("battery_profile"), str):
+            return None, "no_battery_profile"
+        try:
+            curves = {"battery": battery_curves(self.profile("battery", battery["battery_profile"])), "inverter": None}
+        except HTTPError as error:
+            return None, "profile_api_missing" if error.code == 404 else "battery_profile_unavailable"
+        except CurveError:
+            return None, "battery_profile_invalid"
+        inverters = configuration.get("devices", {}).get("inverters") or {}
+        inverter = next((row for row in inverters.values() if isinstance(row, dict) and row.get("battery_id") == resource), None)
+        if inverter is None or not isinstance(inverter.get("inverter_profile"), str):
+            return curves, "inverter_unassigned"
+        try:
+            profile = self.profile("inverter", inverter["inverter_profile"])
+            nominal = inverter.get("effective_nominal_power_w")
+            if nominal is None and isinstance(profile, dict):
+                nominal = profile.get("nominal_power_w")
+            curves["inverter"] = inverter_curves(profile, nominal)
+        except HTTPError:
+            return curves, "inverter_profile_unavailable"
+        except CurveError:
+            return curves, "inverter_profile_invalid"
+        return curves, None
 
     def measurement_keys(self):
         """Keys the EOS measurement store accepts; None for an EOS without measurement API."""
