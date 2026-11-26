@@ -9,7 +9,7 @@ import { RequestError } from '@/utils/bridge'
 
 const response: SetupLoad = {
   draft: { latitude: 48, longitude: 11, timezone: 'Europe/Berlin', devices: [], planes: [], pv_provider: 'keep',
-    weather_provider: 'keep', price_provider: 'keep', price_ct: 30, fee_ct: 0, vat_percent: 19, bidding_zone: 'DE-LU',
+    weather_provider: 'keep', price_provider: 'keep', price_zones: [{ start: '00:00', price_ct: 30 }], fee_ct: 0, vat_percent: 19, bidding_zone: 'DE-LU',
     feedin_provider: 'keep', feedin_ct: 8.2, load_provider: 'keep', annual_kwh: 5000, inverter_id: 'inverter1',
     inverter_profile: 'generic-hybrid', inverter_power_w: 10000, horizon_hours: 24, prediction_hours: 72, interval_seconds: 300 },
   providers: { pvforecast: ['PVForecastAkkudoktor'], weather: ['WeatherBrightSky'], elecprice: ['ElecPriceFixed'], load: ['LoadAkkudoktor'] },
@@ -127,6 +127,35 @@ describe('EOS setup wizard', () => {
     expect(root.textContent).not.toContain(host.t('wizard.success'))
     expect(root.querySelector('input[type="checkbox"]')).toBeNull()
     expect(request.mock.calls.filter(call => call[1]?.['operation'] === 'apply')).toHaveLength(1)
+  })
+
+  it('edits daily price zones of a fixed tariff and shows the reviewed time windows', async () => {
+    mount()
+    await click(host.t('wizard.start'))
+    for (let index = 0; index < 3; index++) await submit()
+    const provider = root.querySelector<HTMLSelectElement>('select')!
+    provider.value = 'ElecPriceFixed'; provider.dispatchEvent(new Event('change')); await flush()
+    expect(root.querySelectorAll('[data-price-zone]')).toHaveLength(1)
+    expect(root.textContent).not.toContain(host.t('wizard.remove_price_zone'))
+    await click(host.t('wizard.add_price_zone'))
+    const input = (name: string) => root.querySelector<HTMLInputElement>(`[name="${name}"]`)!
+    expect(input('zone_start_1').value).toBe('01:00')
+    for (const [name, value] of [['zone_start_0', '00:30'], ['zone_price_0', '8.5'], ['zone_start_1', '05:30'], ['zone_price_1', '28']]) {
+      input(name!).value = value!; input(name!).dispatchEvent(new Event('input')); await flush()
+    }
+    request.mockImplementation(async (_action: string, values: Record<string, unknown> = {}) => values['operation'] === 'preview'
+      ? { token: 'review-token', expires_seconds: 600, changes: [{ path: 'elecprice/elecpricefixed/elecprice_marketprice_amt_kwh/windows',
+        before: [{ start: '00:00', end: '24:00', value: .3 }],
+        after: [{ start: '00:00', end: '00:30', value: .28 }, { start: '00:30', end: '05:30', value: .085 }, { start: '05:30', end: '24:00', value: .28 }] }] }
+      : structuredClone(response))
+    await submit(); await submit()
+    const sent = request.mock.calls.find(call => call[1]?.['operation'] === 'preview')![1]['draft']
+    expect(sent['price_provider']).toBe('ElecPriceFixed')
+    expect(sent['price_zones']).toEqual([{ start: '00:30', price_ct: 8.5 }, { start: '05:30', price_ct: 28 }])
+    const row = root.querySelector('.wizard-review tbody tr')!.textContent!
+    expect(row).toContain(`0,3 ${host.t('wizard.all_day')}`)
+    expect(row).toContain('00:30–05:30: 0,085')
+    expect(row).toContain('05:30–24:00: 0,28')
   })
 
   it('renders the same guided steps in English', async () => {

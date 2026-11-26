@@ -24,10 +24,16 @@ export interface Plane {
   inverter_paco: number
   loss: number
 }
+/** A fixed gross price from `start` (HH:MM) until the next zone; the last one runs past midnight. */
+export interface PriceZone {
+  start: string
+  price_ct: number
+}
 export interface SetupDraft {
   [key: string]: unknown
   devices: SetupDevice[]
   planes: Plane[]
+  price_zones: PriceZone[]
 }
 export interface SetupLoad {
   draft: SetupDraft

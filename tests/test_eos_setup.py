@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from custom_components.eos_energiezentrale.energy.clients import EOS
-from custom_components.eos_energiezentrale.energy.eos_setup import EOSSetup, TTL
+from custom_components.eos_energiezentrale.energy.eos_setup import EOSSetup, TTL, duration_seconds
 from custom_components.eos_energiezentrale.energy.failures import BackendError
 from custom_components.eos_energiezentrale.energy.settings import Configuration, save
 from custom_components.eos_energiezentrale.energy.controller import Controller
@@ -72,13 +72,14 @@ class Backend:
             self.saved = True
         if path in ('/v1/config', '/v1/config/file'):
             response = deepcopy(self.current)
-            # Real EOS serializes the supplied time windows with additional defaults.
+            # Real EOS serializes the supplied time windows with additional defaults,
+            # times with microseconds and durations in words.
             def defaults(node):
                 if isinstance(node, dict):
                     if 'windows' in node:
                         for row in node['windows']:
-                            row.update(end_time=None, locale=None)
-                            row['duration'] = 'PT24H'
+                            row.update(end_time=None, locale=None, start_time=eos_time(row['start_time']),
+                                       duration=eos_duration(row['duration']))
                     for value in node.values():
                         defaults(value)
                 elif isinstance(node, list):
@@ -87,6 +88,20 @@ class Backend:
             defaults(response)
             return response
         raise AssertionError((method, path))
+
+
+def eos_time(value):
+    if ':' not in value:
+        return value
+    hour, minute, *rest = value.split(':')
+    return f'{hour}:{minute}:{(rest or ["00"])[0].split(".")[0]}.000000'
+
+
+def eos_duration(value):
+    seconds = duration_seconds(value)
+    days, rest = divmod(seconds, 86400)
+    parts = [(days, 'day'), (rest // 3600, 'hour'), (rest // 60 % 60, 'minute')]
+    return ' '.join(f'{amount} {unit}' + ('s' if amount != 1 else '') for amount, unit in parts if amount)
 
 
 @pytest.fixture
@@ -113,7 +128,7 @@ def test_load_is_read_only_exposes_no_credentials_and_maps_all_local_devices(set
 def test_review_then_apply_merges_only_wizard_fields_and_saves_permanently(setup_backend):
     setup, backend = setup_backend
     values = draft(setup)
-    values.update(latitude=48.1, longitude=11.5, price_provider='ElecPriceFixed', price_ct=29.99,
+    values.update(latitude=48.1, longitude=11.5, price_provider='ElecPriceFixed', price_zones=[{'start': '00:00', 'price_ct': 29.99}],
                   feedin_provider='FeedInTariffFixed', feedin_ct=8.2, load_provider='LoadAkkudoktor', annual_kwh=5500)
     preview = setup.preview(values, HARDWARE)
     assert not any(method == 'PUT' for method, _, _ in backend.calls)
@@ -144,6 +159,85 @@ def test_dynamic_fees_are_separate_and_existing_secrets_stay_out_of_patch(setup_
     assert 'tibber' not in submitted['elecprice']
     assert submitted['elecfee']['elecfeefixed']['consumption_amt_kwh']['windows'][0]['value'] == .15
     assert submitted['elecfee']['elecfeefixed']['consumption_percent_amt']['windows'][0]['value'] == 19
+
+
+OCTOPUS_GO = [{'start': '00:30', 'price_ct': 8.5}, {'start': '05:30', 'price_ct': 28}]
+
+
+def fixed_windows(backend):
+    """The windows as EOS returns them."""
+    return backend.request('http://eos/v1/config')['elecprice']['elecpricefixed']['elecprice_marketprice_amt_kwh']['windows']
+
+
+def test_a_fixed_tariff_with_daily_price_zones_is_written_without_windows_across_midnight(setup_backend):
+    setup, backend = setup_backend
+    values = draft(setup)
+    values.update(price_provider='ElecPriceFixed', price_zones=list(reversed(OCTOPUS_GO)))
+    preview = setup.preview(values, HARDWARE)
+    change = next(row for row in preview['changes'] if row['path'].endswith('elecprice_marketprice_amt_kwh/windows'))
+    assert change['after'] == [{'start': '00:00', 'end': '00:30', 'value': .28},
+                               {'start': '00:30', 'end': '05:30', 'value': .085},
+                               {'start': '05:30', 'end': '24:00', 'value': .28}]
+    assert setup.apply(preview['token'], HARDWARE)['ok'] and backend.saved
+    submitted = next(payload for method, path, payload in backend.calls if method == 'PUT')
+    assert submitted['elecprice']['elecpricefixed']['elecprice_marketprice_amt_kwh']['windows'] == [
+        {'start_time': '00:00:00', 'duration': 'PT30M', 'value': .28},
+        {'start_time': '00:30:00', 'duration': 'PT5H', 'value': .085},
+        {'start_time': '05:30:00', 'duration': 'PT18H30M', 'value': .28}]
+    # The gross zone prices get no additional fees in EOS.
+    assert submitted['elecfee']['elecfeefixed']['consumption_amt_kwh']['windows'][0]['value'] == 0
+    # EOS returns the windows in its own notation; the wizard shows the same zones again.
+    assert fixed_windows(backend)[2]['duration'] == '18 hours 30 minutes'
+    assert draft(setup)['price_zones'] == OCTOPUS_GO
+    values = draft(setup)
+    values['price_provider'] = 'ElecPriceFixed'
+    assert not any('elecprice_marketprice' in row['path'] for row in setup.preview(values, HARDWARE)['changes'])
+
+
+def test_zones_starting_at_midnight_and_a_single_zone_keep_one_window_per_zone(setup_backend):
+    setup, backend = setup_backend
+    zones = [{'start': '00:00', 'price_ct': 21}, {'start': '05:00', 'price_ct': 31}]
+    values = draft(setup)
+    values.update(price_provider='ElecPriceFixed', price_zones=zones)
+    setup.apply(setup.preview(values, HARDWARE)['token'], HARDWARE)
+    assert [(row['start_time'], row['duration']) for row in fixed_windows(backend)] == [
+        ('00:00:00.000000', '5 hours'), ('05:00:00.000000', '19 hours')]
+    assert draft(setup)['price_zones'] == zones
+    values = draft(setup)
+    values.update(price_provider='ElecPriceFixed', price_zones=[{'start': '07:00', 'price_ct': 30}])
+    setup.apply(setup.preview(values, HARDWARE)['token'], HARDWARE)
+    assert [(row['start_time'], row['duration'], row['value']) for row in fixed_windows(backend)] == [
+        ('00:00:00.000000', '1 day', .3)]
+
+
+@pytest.mark.parametrize('windows', [
+    [{'start_time': '00:00', 'duration': 'PT5H', 'value': .2}],
+    [{'start_time': '00:00', 'duration': 'P1D', 'value': .2, 'day_of_week': 1}],
+    [{'start_time': '00:00', 'duration': 'PT6H', 'value': .2}, {'start_time': '05:00', 'duration': 'PT19H', 'value': .3}],
+    [{'start_time': 'noon', 'duration': 'P1D', 'value': .2}],
+])
+def test_tariff_windows_that_are_not_daily_zones_are_not_shown_as_zones(setup_backend, windows):
+    setup, backend = setup_backend
+    backend.current['elecprice'] = {'provider': 'ElecPriceFixed',
+                                    'elecpricefixed': {'elecprice_marketprice_amt_kwh': {'windows': windows}}}
+    result = setup.load(HARDWARE, LOCATION)
+    assert result['draft']['price_provider'] == 'keep'
+    assert result['draft']['price_zones'] == [{'start': '00:00', 'price_ct': 30}]
+
+
+@pytest.mark.parametrize('zones', [
+    [], [{'start': '24:00', 'price_ct': 20}], [{'start': '5:00', 'price_ct': 20}],
+    [{'start': '01:00', 'price_ct': 20}, {'start': '01:00', 'price_ct': 30}],
+    [{'start': '01:00', 'price_ct': -1}], [{'start': '01:00', 'price_ct': 20, 'end': '02:00'}],
+    [{'start': f'{hour:02d}:00', 'price_ct': 20} for hour in range(13)], 'cheap'])
+def test_invalid_price_zones_never_write_configuration(setup_backend, zones):
+    setup, backend = setup_backend
+    values = draft(setup)
+    values.update(price_provider='ElecPriceFixed', price_zones=zones)
+    with pytest.raises(BackendError) as error:
+        setup.preview(values, HARDWARE)
+    assert error.value.fields == ['price_zones']
+    assert all(method == 'GET' for method, _, _ in backend.calls)
 
 
 @pytest.mark.parametrize('field,value', [('latitude', True), ('longitude', float('nan')), ('price_provider', 'untrusted'),

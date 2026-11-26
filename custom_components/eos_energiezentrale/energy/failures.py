@@ -20,7 +20,7 @@ FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_inte
     'pv_price_ct', 'pv_price_source', 'efficiency_source', 'charge_efficiency', 'discharge_efficiency',
     'initial_price_ct', 'base_price_eur_month', 'base_price_history',
     'latitude', 'longitude', 'timezone', 'resource', 'planes', 'pv_provider', 'weather_provider',
-    'price_provider', 'load_provider', 'price_ct', 'fee_ct', 'vat_percent', 'bidding_zone',
+    'price_provider', 'load_provider', 'price_ct', 'price_zones', 'fee_ct', 'vat_percent', 'bidding_zone',
     'feedin_ct', 'annual_kwh', 'inverter_power_w', 'horizon_hours', 'prediction_hours', 'interval_seconds'})
 
 
