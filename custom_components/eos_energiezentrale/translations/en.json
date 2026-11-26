@@ -994,6 +994,9 @@
         },
         "nominal_voltage": {
           "name": "Nominal phase-to-neutral voltage (V)"
+        },
+        "simulate_unplugging": {
+          "name": "Simulate unplugging when a released vehicle does not resume charging"
         }
       }
     },

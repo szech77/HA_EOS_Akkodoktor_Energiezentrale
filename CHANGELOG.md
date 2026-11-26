@@ -8,6 +8,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Features
 
 - go-e Charger (lokale HTTP-API v2): Die Energiezentrale liest bei jeder Abfrage auch die eigene Ladeentscheidung der Wallbox mit (Fahrzeugzustand, erzwungener Zustand, Freigabe, Begründung `modelStatus`, Zugangskontrolle, Logikmodus, Fehlercode, Firmware). Jede Änderung steht als INFO-Eintrag `go-e charger status` im Log, der letzte Stand in den Diagnosedaten unter `wallbox_status`. Damit lässt sich ohne manuelle API-Abfrage klären, warum ein freigegebenes Fahrzeug nicht lädt. Ladeleistung, Ladestrom und Adressen werden nicht protokolliert.
+- go-e Charger (lokale HTTP-API v2): Neue Plugin-Option `simulate_unplugging` (Vorgabe aus) für Fahrzeuge, die ihren Ladevorgang bei einer Ladepause beenden und danach trotz Freigabe nicht weiterladen. Meldet der go-e bei bestätigter Freigabe 60 Sekunden lang „fertig“ (`car=4`) ohne Leistung, schaltet die Energiezentrale einmal die go-e-Einstellung „Ausstecken immer simulieren“ (`sua`) ein und startet den Ladevorgang mit bestätigter Pause und Freigabe neu. Höchstens ein Versuch je Fahrzeugsitzung; jeder Versuch steht als INFO-Eintrag `go-e simulated unplugging` im Log. Dafür ruft die Regelung bei unverändert weiterlaufender Ladefreigabe die neue optionale Wallbox-Plugin-Methode `_hold(self, amps, state)` auf; vorhandene Plugins senden dabei weiterhin nichts.
 
 ### Bugfixes
 

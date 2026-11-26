@@ -994,6 +994,9 @@
         },
         "nominal_voltage": {
           "name": "Nennspannung zwischen Phase und Neutralleiter (V)"
+        },
+        "simulate_unplugging": {
+          "name": "Ausstecken simulieren, wenn ein freigegebenes Fahrzeug nicht weiterlädt"
         }
       }
     },

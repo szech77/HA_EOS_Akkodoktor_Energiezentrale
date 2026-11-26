@@ -1204,6 +1204,9 @@ class Controller:
             driver.charge(amps, box)
             self.commanded_car_w = amps*phase*voltage
             self.last_write = now
+        elif callable(getattr(driver, "hold", None)):
+            # The release stays unchanged; a driver may restart a vehicle that stopped by itself.
+            driver.hold(amps, box)
         self.pv_session = solar_only
         live["car_control"] = 'pv_battery' if supported else "pv_only" if solar_only else "eos_pv" if pv else "grid_charge"
 
