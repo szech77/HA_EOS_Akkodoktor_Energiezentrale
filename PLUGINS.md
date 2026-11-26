@@ -557,6 +557,14 @@ Fahrzeug meldet, ist ein neuer Versuch möglich. Ein fehlgeschlagener Versuch en
 wie jede fehlgeschlagene Vorgabe mit einem bestätigten Pauseversuch. Jeder Versuch
 steht als INFO-Eintrag `go-e simulated unplugging` im Log. Ein tatsächlich volles
 Fahrzeug meldet nach dem Neustart erneut „fertig“; weitere Versuche folgen nicht.
+Während der go-e das Ausstecken simuliert, meldet er die Freigabe als noch nicht
+erlaubt (`modelStatus` 22, „NotChargingBecauseSimulateUnplugging“) und antwortet
+mitunter langsam. Eine Freigabe (`frc=2`) gilt in diesem Zustand als bestätigt;
+die Bestätigung einer Freigabe wartet bis zu 10 Sekunden und wiederholt dabei
+langsame Statusabfragen. Ein Stopp (`frc=1`) wird durch diesen Zustand nie
+bestätigt. Die Simulation wirkt über das Steuersignal des Ladesteckers. Ein Gerät,
+das dieses Signal nicht auswertet, etwa ein eigenes Ladegerät an einem Adapter,
+erkennt dadurch kein Ab- und Anstecken.
 
 Die Energiezentrale verwendet eine erzwungene Freigabe (`frc=2`), die native
 Ladezeitpläne übersteuern kann. Für denselben Ladepunkt nur einen schreibenden

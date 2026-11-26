@@ -22,6 +22,12 @@ REQUEST_GRACE_S=2  # Total exchange deadline beyond the socket inactivity timeou
 # although charging is allowed again. They only start after being unplugged.
 STALLED_RESTART_S=60  # Released, "complete" and without power for this long.
 STALLED_IDLE_W=30
+# While the charger simulates unplugging (modelStatus 22) a new release is accepted
+# (frc=2) but charging stays disallowed for the configured duration (sumd). The
+# charger may also answer slowly meanwhile.
+SIMULATING_UNPLUG=22
+RELEASE_CONFIRM_S=10
+CONFIRM_S=4
 # modelStatus, acs, lmo, sua and fwv only explain the charger's own decision (diagnostics).
 STATUS_KEYS=('car','err','frc','alw','amp','ama','adi','cbl','var','nrg','psm','pnp','pha','fsp','mca',
              'modelStatus','acs','lmo','sua','fwv')
@@ -128,15 +134,24 @@ class GoEHTTPv2(WallboxDriver):
         result=self._request('/api/set?'+urlencode({key:json.dumps(value) for key,value in values.items()}))
         if any(result.get(key) is not True for key in values):
             raise GoEAPIError('go-e rejected requested setting')
-        keys=tuple(values)+(('alw',) if 'frc' in values else ())
-        deadline=monotonic()+4
+        release=values.get('frc')==2
+        keys=tuple(values)+(('alw','modelStatus') if 'frc' in values else ())
+        deadline=monotonic()+(RELEASE_CONFIRM_S if release else CONFIRM_S)
         while True:
             remaining=deadline-monotonic()
             if remaining<=0: raise GoEAPIError('go-e did not confirm requested setting')
-            actual=self._status(keys,min(3,remaining))
+            try: actual=self._status(keys,min(3,remaining))
+            except GoEAPIError:
+                # A slow answer during the charger's own transition is retried within the deadline.
+                if deadline-monotonic()<=.25: raise
+                sleep(.25)
+                continue
             matches=all(type(actual.get(key)) is type(value) and actual[key]==value for key,value in values.items())
             if 'frc' in values:
-                matches=matches and type(actual.get('alw')) is bool and actual['alw']==(values['frc']==2)
+                allowed=type(actual.get('alw')) is bool and actual['alw']==release
+                # The release is accepted; the simulated unplugging ends by itself.
+                simulating=release and actual.get('modelStatus')==SIMULATING_UNPLUG
+                matches=matches and (allowed or simulating)
             if matches: return actual
             if deadline-monotonic()<=.25: raise GoEAPIError('go-e did not confirm requested setting')
             sleep(.25)  # The charger recalculates permission once per second.
