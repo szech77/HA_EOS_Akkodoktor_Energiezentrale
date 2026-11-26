@@ -1280,7 +1280,7 @@ Anfangspreis eingeklappt unter **Wirkungsgrade und Anfangspreis**):
 | --- | --- |
 | Quelle für PV-Kostenansatz | Standard EOS-Einspeisevergütung, zur Laufzeit per REST gelesen; alternativ manuell. |
 | PV-Kostenansatz | ct/kWh; im EOS-Modus wird der verwendete Wert angezeigt. Manuelle Vorgabe nur im manuellen Modus. |
-| Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. |
+| Quelle für Speicherwirkungsgrad | Standard EOS; alternativ manuelle Parameter. Mit EOS-Profilen leistungsabhängig, siehe unten. |
 | Lade-/Entladewirkungsgrad | Jeweils Faktor 0,1 bis 1; nur im manuellen Modus. |
 | Speicherkapazität | Wh; im manuellen Modus die eigene nutzbare Kapazität eintragen. |
 | Grundgebühr Netzbezug | Liste mit „Grundgebühr ab“, Betrag in € brutto und Abrechnung pro Monat oder Tag. Tarifwechsel sind rückwirkend und für die Zukunft möglich; je Kalendertag gilt der letzte Eintrag ab seinem Datum. Ein leerer Beginn übernimmt bestehende Monatswerte ab Aufzeichnungsbeginn. Vor dem ersten datierten Eintrag bzw. bei leerer Liste fällt keine Grundgebühr an. Monatsbetrag × 12 / 365 bzw. Tagesbetrag, ohne Zwischenrundung, ab Aufzeichnungsbeginn bis heute; nur Gesamtbilanz und Netz & Einspeisung. Tarifabschnitte werden getrennt ausgewiesen. Standard 0. |
@@ -1358,6 +1358,21 @@ der PV-Kostenansatz einschließlich Ladeverlusten verwendet. Auch eine rechneris
 Bestandsunterschreitung bei gemessener Entladung wird mit diesem Preis geschätzt,
 statt Strom kostenlos zu behandeln. Es werden keine Grundgebühren
 oder Einspeiseerlöse des übrigen Hauses verrechnet. Negative Arbeitspreise sind zulässig.
+
+Mit der Wirkungsgrad-Quelle EOS und einem Speicher mit Batterieprofil gelten
+leistungsabhängige Wirkungsgrade. Die Energiezentrale liest dafür aus EOS die
+Wirkungsgradkurven des Batterieprofils über der C-Rate (`/v1/profile/battery/<profil>`)
+und des Wechselrichters, der dem Speicher in EOS zugeordnet ist, über seiner Auslastung
+(`/v1/profile/inverter/<profil>`, AC-Leistung im Verhältnis zur wirksamen Nennleistung).
+Die Kostenbilanz bucht Wechselstrommengen; jede Lade- und Entladeleistung wird deshalb
+mit Wechselrichter- × Akkuwirkungsgrad bei der gemessenen Leistung verrechnet. Kleine
+Leistungen verlieren so mehr Energie als mittlere, wie in der EOS-Planung. Die Kurven
+werden wie in EOS ausgewertet: linear oder nächster Stützpunkt, außerhalb des
+Bereichs der Randwert. Fehlt das Profil oder die Profil-API, gelten die bisherigen
+festen EOS-Werte; fehlt nur der zugeordnete Wechselrichter, gilt die Akkukurve allein.
+Die Einstellungen zeigen den verwendeten Bereich und gegebenenfalls den Grund. Bereits
+gebuchte Akkuinhalte behalten ihren damaligen Wirkungsgrad; Preis- und
+Bestandsschätzungen ohne Messleistung verwenden die festen EOS-Werte.
 
 Ohne ausdrücklich angegebenen Anfangspreis wird der anfängliche Akkuinhalt als
 PV-Ladung geschätzt: gespeicherte kWh geteilt durch den Ladewirkungsgrad, bewertet

@@ -7,7 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- Kostenbilanz: Mit Wirkungsgrad-Quelle EOS gelten jetzt leistungsabhängige Wirkungsgrade aus den EOS-Profilen. Die Energiezentrale liest die Kurven des Batterieprofils (über der C-Rate) und des dem Speicher zugeordneten Wechselrichters (über der Auslastung) und verrechnet jede Lade- und Entladeleistung mit Wechselrichter- × Akkuwirkungsgrad bei der gemessenen Wechselstromleistung, ausgewertet wie in EOS. Kleine Leistungen verlieren damit mehr Energie als mittlere. Ohne Profil oder Profil-API bleiben die bisherigen festen EOS-Werte, ohne zugeordneten Wechselrichter gilt die Akkukurve allein; der Grund steht in den Kosteneinstellungen und einmalig im Log. Die Einstellungen zeigen den verwendeten Bereich, z. B. 83,9–94,1 % beim Laden. Bereits gebuchte Akkuinhalte bleiben unverändert.
 
 ### Bugfixes
 

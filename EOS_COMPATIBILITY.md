@@ -14,6 +14,7 @@ die vorhandene Serialisierung von Konfigurationsänderungen bleibt erhalten.
 | Kapazität für Kosten lesen | `capacity_wh` | `effective_nominal_capacity_wh` |
 | Ladewirkungsgrad lesen | `charging_efficiency` | `effective_charging_efficiency` |
 | Entladewirkungsgrad lesen | `discharging_efficiency` | `effective_discharging_efficiency` |
+| Leistungsabhängige Wirkungsgrade für Kosten lesen | – | `GET /v1/profile/battery/<battery_profile>` (`charge_efficiency`, `discharge_efficiency` über `c_rate`) und `GET /v1/profile/inverter/<inverter_profile>` des Wechselrichters mit passender `battery_id` (`ac_to_dc_efficiency`, `dc_to_ac_efficiency` über `load_fraction`, Nennleistung `effective_nominal_power_w`) |
 
 SoC-Ziele, Ladefaktoren (`charge_rates`) und Mindestladeleistung bleiben auf der
 bisherigen Ebene. Ausgewählte Batterieprofile und zusätzliche Einstellungen
