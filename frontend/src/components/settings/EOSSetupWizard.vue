@@ -35,6 +35,14 @@ function addPlane() {
   draft.value?.planes.push({ source: '', name: `PV ${(draft.value?.planes.length ?? 0) + 1}`, peakpower: 5,
     surface_tilt: 30, surface_azimuth: 180, inverter_paco: 5000, loss: 14 })
 }
+const MAX_PRICE_ZONES = 12
+function addPriceZone() {
+  const zones = draft.value?.price_zones
+  if (!zones || zones.length >= MAX_PRICE_ZONES) return
+  const last = zones.at(-1)
+  const hour = last ? (Number(last.start.slice(0, 2)) + 1) % 24 : 0
+  zones.push({ start: `${String(hour).padStart(2, '0')}:00`, price_ct: last?.price_ct ?? 30 })
+}
 function label(path: string) {
   const parts = path.split('/')
   const last = parts.at(-1) ?? ''
@@ -48,7 +56,10 @@ function display(value: unknown): string {
   if (typeof value === 'string') return value
   if (typeof value === 'boolean') return t(value ? 'wizard.yes' : 'wizard.no')
   if (Array.isArray(value)) return value.length ? value.map(item => {
-    if (typeof item === 'object' && item !== null && 'value' in item) return `${display(item.value)} ${t('wizard.all_day')}`
+    if (typeof item === 'object' && item !== null && 'start' in item && 'end' in item && 'value' in item) {
+      return item.start === '00:00' && item.end === '24:00' ? `${display(item.value)} ${t('wizard.all_day')}` : `${String(item.start)}–${String(item.end)}: ${display(item.value)}`
+    }
+    if (typeof item === 'object' && item !== null && 'value' in item) return display(item.value)
     if (typeof item === 'object' && item !== null && 'peakpower' in item) return `${'name' in item ? String(item.name) : 'PV'}: ${display(item.peakpower)} kWp · ${'surface_azimuth' in item ? display(item.surface_azimuth) : '—'}° · ${'surface_tilt' in item ? display(item.surface_tilt) : '—'}°`
     return display(item)
   }).join('; ') : t('wizard.none')
@@ -124,12 +135,25 @@ function display(value: unknown): string {
             <p class="footnote">{{ t('wizard.prices_note') }}</p>
             <div class="fields">
               <label>{{ t('wizard.field_price_provider') }}<select v-model="draft['price_provider']"><option value="keep">{{ keep('elecprice') }}</option><option v-for="provider in providerOptions('elecprice')" :key="provider" :value="provider">{{ provider }}</option></select></label>
-              <label v-if="draft['price_provider'] === 'ElecPriceFixed'">{{ t('wizard.field_price_ct') }}<input name="price_ct" :value="draft['price_ct']" type="number" min="0" max="1000" step="any" required @input="set('price_ct', $event)"></label>
-              <template v-else-if="draft['price_provider'] !== 'keep'">
+              <template v-if="draft['price_provider'] !== 'keep' && draft['price_provider'] !== 'ElecPriceFixed'">
                 <label>{{ t('wizard.field_fee_ct') }}<input :value="draft['fee_ct']" type="number" min="0" max="1000" step="any" required @input="set('fee_ct', $event)"></label>
                 <label>{{ t('wizard.field_vat_percent') }}<input :value="draft['vat_percent']" type="number" min="0" max="100" step="any" required @input="set('vat_percent', $event)"></label>
                 <label v-if="draft['price_provider'] === 'ElecPriceEnergyCharts'">{{ t('wizard.field_bidding_zone') }}<select v-model="draft['bidding_zone']"><option v-for="zone in ['DE-LU', 'AT', 'CH', 'FR', 'NL', 'BE', 'DK1', 'DK2', 'PL', 'CZ']" :key="zone">{{ zone }}</option></select></label>
               </template>
+            </div>
+            <template v-if="draft['price_provider'] === 'ElecPriceFixed'">
+              <p class="footnote">{{ t('wizard.price_zones_note') }}</p>
+              <fieldset v-for="(zone, index) in draft.price_zones" :key="index" class="wizard-device" data-price-zone>
+                <legend>{{ t('wizard.price_zone', { number: index + 1 }) }}</legend>
+                <div class="fields">
+                  <label>{{ t('wizard.field_zone_start') }}<input v-model="zone.start" :name="`zone_start_${index}`" type="time" step="60" required></label>
+                  <label>{{ t('wizard.field_price_ct') }}<input v-model.number="zone.price_ct" :name="`zone_price_${index}`" type="number" min="0" max="1000" step="any" required></label>
+                </div>
+                <button v-if="draft.price_zones.length > 1" type="button" class="btn ghost" @click="draft.price_zones.splice(index, 1)">{{ t('wizard.remove_price_zone') }}</button>
+              </fieldset>
+              <button type="button" class="btn ghost" :disabled="draft.price_zones.length >= MAX_PRICE_ZONES" @click="addPriceZone">{{ t('wizard.add_price_zone') }}</button>
+            </template>
+            <div class="fields">
               <label>{{ t('wizard.field_feedin_ct') }}<select v-model="draft['feedin_provider']"><option value="keep">{{ keep('feedintariff') }}</option><option value="FeedInTariffFixed">{{ t('wizard.fixed_feedin') }}</option></select></label>
               <label v-if="draft['feedin_provider'] === 'FeedInTariffFixed'">{{ t('wizard.field_feedin_ct') }}<input :value="draft['feedin_ct']" type="number" min="0" max="1000" step="any" required @input="set('feedin_ct', $event)"></label>
               <label>{{ t('wizard.field_load_provider') }}<select v-model="draft['load_provider']"><option value="keep">{{ keep('load') }}</option><option v-for="provider in providerOptions('load')" :key="provider" :value="provider">{{ provider }}</option></select></label>

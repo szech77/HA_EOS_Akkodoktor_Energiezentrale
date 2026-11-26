@@ -27,6 +27,14 @@ PROVIDERS = {
     'load': ('LoadAkkudoktor',),
 }
 PLANE_FIELDS = ('name', 'peakpower', 'surface_tilt', 'surface_azimuth', 'inverter_paco', 'loss')
+MAX_PRICE_ZONES = 12
+DAY_S = 86400
+ZONE_START = re.compile(r'([01][0-9]|2[0-3]):[0-5][0-9]\Z')
+# EOS returns times as HH:MM:SS.ffffff and durations in words ("5 hours 30 minutes").
+CLOCK = re.compile(r'([0-9]{1,2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?\Z')
+ISO_DURATION = re.compile(r'P(?:([0-9]+)D)?(?:T(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?)?\Z')
+DURATION_UNITS = {'week': 604800, 'day': DAY_S, 'hour': 3600, 'minute': 60, 'second': 1}
+WINDOW_FILTERS = ('date', 'month', 'day_of_week', 'locale', 'end_time')
 
 
 def rejected(reason, *fields):
@@ -48,6 +56,112 @@ def identifier(value):
 
 def window(value):
     return {'windows': [{'start_time': '00:00:00', 'duration': 'P1D', 'value': value}]}
+
+
+def time_of_day(value):
+    """Seconds after midnight of an EOS window start, or None."""
+    match = CLOCK.fullmatch(value) if isinstance(value, str) else None
+    if not match:
+        return None
+    hour, minute, second = int(match[1]), int(match[2]), int(match[3] or 0)
+    return hour * 3600 + minute * 60 + second if hour < 24 and minute < 60 and second < 60 else None
+
+
+def duration_seconds(value):
+    """Seconds of an ISO 8601 or EOS word duration, or None."""
+    if not isinstance(value, str):
+        return None
+    match = ISO_DURATION.fullmatch(value)
+    if match and value not in ('P', 'PT') and not value.endswith('T'):
+        days, hours, minutes, seconds = (int(part or 0) for part in match.groups())
+        return days * DAY_S + hours * 3600 + minutes * 60 + seconds
+    words = value.split()
+    if not words or len(words) % 2:
+        return None
+    total = 0
+    for amount, unit in zip(words[::2], words[1::2]):
+        unit = unit.removesuffix('s')
+        if not amount.isdigit() or unit not in DURATION_UNITS:
+            return None
+        total += int(amount) * DURATION_UNITS[unit]
+    return total
+
+
+def clock(seconds):
+    return '24:00' if seconds == DAY_S else f'{seconds // 3600 % 24:02d}:{seconds // 60 % 60:02d}'
+
+
+def iso_duration(seconds):
+    hours, minutes = divmod(seconds // 60, 60)
+    return 'PT' + (f'{hours}H' if hours else '') + (f'{minutes}M' if minutes else '')
+
+
+def price_zones(value):
+    """Daily price zones of a fixed EOS tariff that repeats every day, or None.
+
+    Each zone applies from its start until the next one; the last continues past midnight.
+    """
+    if type(value) in (int, float):
+        return [{'start': '00:00', 'price_ct': value * 100}]
+    rows = value.get('windows') if isinstance(value, dict) else None
+    if not isinstance(rows, list) or not rows or len(rows) > MAX_PRICE_ZONES + 1:
+        return None
+    spans = []
+    for row in rows:
+        if not isinstance(row, dict) or any(row.get(key) is not None for key in WINDOW_FILTERS):
+            return None
+        start, length, price = time_of_day(row.get('start_time')), duration_seconds(row.get('duration')), number(row.get('value'))
+        if start is None or not length or price is None or start % 60 or length % 60:
+            return None
+        spans.append((start, start + length, price))
+    spans.sort()
+    if spans[0][0] or spans[-1][1] != DAY_S or any(left[1] != right[0] for left, right in zip(spans, spans[1:])):
+        return None
+    zones = []
+    for start, _, price in spans:
+        if not zones or zones[-1][1] != price:
+            zones.append((start, price))
+    if len(zones) > 1 and zones[0][1] == zones[-1][1]:
+        zones.pop(0)  # The window before the first start belongs to the zone running past midnight.
+    if len(zones) > MAX_PRICE_ZONES:
+        return None
+    return [{'start': clock(start), 'price_ct': round(price * 100, 6)} for start, price in zones]
+
+
+def price_windows(zones):
+    """EOS time windows for daily price zones; windows never cross midnight."""
+    if not isinstance(zones, list) or not 1 <= len(zones) <= MAX_PRICE_ZONES:
+        rejected('out_of_range', 'price_zones')
+    parsed = []
+    for zone in zones:
+        if (not isinstance(zone, dict) or zone.keys() != {'start', 'price_ct'}
+                or not isinstance(zone['start'], str) or not ZONE_START.fullmatch(zone['start'])):
+            rejected('invalid_type', 'price_zones')
+        hour, minute = zone['start'].split(':')
+        parsed.append((int(hour) * 3600 + int(minute) * 60, numeric(zone['price_ct'], 0, 1000, 'price_zones') / 100))
+    parsed.sort()
+    if len({start for start, _ in parsed}) != len(parsed):
+        rejected('out_of_range', 'price_zones')
+    if len(parsed) == 1:
+        return window(parsed[0][1])
+    spans = [(0, parsed[0][0], parsed[-1][1])] if parsed[0][0] else []
+    spans += [(start, end, price) for (start, price), (end, _) in zip(parsed, parsed[1:] + [(DAY_S, None)])]
+    return {'windows': [{'start_time': f'{start // 3600:02d}:{start // 60 % 60:02d}:00',
+                         'duration': iso_duration(end - start), 'value': price} for start, end, price in spans]}
+
+
+def window_rows(rows):
+    """Comparable start, end and value of time windows for the review."""
+    result = []
+    for row in rows if isinstance(rows, list) else []:
+        row = row if isinstance(row, dict) else {}
+        start, length = time_of_day(row.get('start_time')), duration_seconds(row.get('duration'))
+        if (start is None or length is None or start + length > DAY_S
+                or any(row.get(key) is not None for key in WINDOW_FILTERS)):
+            result.append({key: row.get(key) for key in ('start_time', 'duration', 'value')})
+        else:
+            result.append({'start': clock(start), 'end': clock(start + length), 'value': row.get('value')})
+    return result
 
 
 def constant(value):
@@ -102,10 +216,10 @@ def contains(actual, expected):
         return all(contains(actual.get(key), value) for key, value in expected.items())
     if isinstance(expected, list):
         return isinstance(actual, list) and len(actual) == len(expected) and all(contains(a, b) for a, b in zip(actual, expected))
-    if expected == 'P1D':
-        return actual in ('P1D', 'PT24H', '1 day', '24 hours')
-    if expected == '00:00:00':
-        return actual in ('00:00', '00:00:00', '00:00:00.000000')
+    if isinstance(expected, str) and CLOCK.fullmatch(expected):
+        return time_of_day(expected) is not None and time_of_day(actual) == time_of_day(expected)
+    if isinstance(expected, str) and expected.startswith('P') and duration_seconds(expected) is not None:
+        return duration_seconds(actual) == duration_seconds(expected)
     return actual == expected
 
 
@@ -176,7 +290,7 @@ class EOSSetup:
             pv = current.get('pvforecast', {})
             planes = [{**{key: row.get(key) for key in PLANE_FIELDS}, 'source': digest(row)} for row in pv.get('planes') or []]
             tariff = current.get('elecprice', {})
-            fixed = constant(tariff.get('elecpricefixed', {}).get('elecprice_marketprice_amt_kwh'))
+            zones = price_zones(tariff.get('elecpricefixed', {}).get('elecprice_marketprice_amt_kwh'))
             feedin = current.get('feedintariff', {})
             feedprice = constant(feedin.get('feedintarifffixed', {}).get('feed_in_tariff_amt_kwh'))
             fees = current.get('elecfee', {}).get('elecfeefixed', {})
@@ -197,7 +311,7 @@ class EOSSetup:
                 'planes': planes,
                 'weather_provider': 'keep' if current.get('weather', {}).get('provider') else (options['weather'][:1] or ['keep'])[0],
                 'price_provider': 'keep' if tariff.get('provider') else (options['elecprice'][:1] or ['keep'])[0],
-                'price_ct': fixed * 100 if fixed is not None else 30,
+                'price_zones': zones or [{'start': '00:00', 'price_ct': 30}],
                 'fee_ct': fee * 100 if fee is not None else 0,
                 'vat_percent': percent if percent is not None else 19,
                 'bidding_zone': tariff.get('energycharts', {}).get('bidding_zone') or 'DE-LU',
@@ -220,7 +334,7 @@ class EOSSetup:
 
     def build(self, draft, current, hardware):
         fields = {'latitude', 'longitude', 'timezone', 'pv_provider', 'planes', 'weather_provider', 'price_provider',
-                  'price_ct', 'fee_ct', 'vat_percent', 'bidding_zone', 'feedin_provider', 'feedin_ct',
+                  'price_zones', 'fee_ct', 'vat_percent', 'bidding_zone', 'feedin_provider', 'feedin_ct',
                   'load_provider', 'annual_kwh', 'devices', 'inverter_id', 'inverter_profile', 'inverter_power_w',
                   'horizon_hours', 'prediction_hours', 'interval_seconds'}
         if not isinstance(draft, dict) or draft.keys() != fields:
@@ -280,7 +394,7 @@ class EOSSetup:
             rejected('out_of_range', 'planes')
         if 'elecprice' in patch:
             if d['price_provider'] == 'ElecPriceFixed':
-                patch['elecprice']['elecpricefixed'] = {'elecprice_marketprice_amt_kwh': window(numeric(d['price_ct'], 0, 1000, 'price_ct') / 100)}
+                patch['elecprice']['elecpricefixed'] = {'elecprice_marketprice_amt_kwh': price_windows(d['price_zones'])}
                 fee, vat = 0, 0  # The entered fixed price is already gross.
             else:
                 fee, vat = numeric(d['fee_ct'], 0, 1000, 'fee_ct') / 100, numeric(d['vat_percent'], 0, 100, 'vat_percent')
@@ -359,12 +473,14 @@ class EOSSetup:
                     name = path + '/' + key if path else key
                     if isinstance(desired, dict):
                         collect(desired, before, name)
+                    elif key == 'windows' and contains(before, desired):
+                        continue
                     elif before != desired:
                         if key == 'planes':
                             before = [{field: plane.get(field) for field in PLANE_FIELDS} for plane in before or []]
                             desired = [{field: plane.get(field) for field in PLANE_FIELDS} for plane in desired]
                         elif key == 'windows':
-                            before = [{field: row.get(field) for field in ('start_time', 'duration', 'value')} for row in before or []]
+                            before, desired = window_rows(before), window_rows(desired)
                         changes.append({'path': name, 'before': before, 'after': desired})
 
             collect(patch, current)
