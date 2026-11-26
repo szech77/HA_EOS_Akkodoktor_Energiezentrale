@@ -1,0 +1,10 @@
+{
+  "branch": "main",
+  "bundle_sha256": "e3791534fde83ca5724f2c9037be06df098f1ed59668cb703fae9aa9aceab2fa",
+  "channel": "stable",
+  "date": "2026-11-26",
+  "notes_sha256": "1e9c37ec179742de1a6a245f7cf6de9af61d15935e272e19c50ba89a20a053c5",
+  "source_changelog_sha256": "115f9c24bc8d8aba30e6b6539033b106470b2ab19e571271d96df75d357d9a19",
+  "source_commit": "81eedc02aa1f959883fc2edc8ed4b5bc2cae2e9e",
+  "version": "0.30.0"
+}
