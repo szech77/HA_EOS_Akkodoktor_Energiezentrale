@@ -11,9 +11,6 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Bugfixes
 
-- EOS-Assistent, Schritt „Tarif & Verbrauch“: Nutzt EOS bereits einen festen Tarif (`ElecPriceFixed`) mit lesbaren Preiszonen und ohne zusätzliche Aufschläge, ist er beim Laden vorausgewählt und zeigt seine Zonen. Bisher stand der Anbieter auf „Beibehalten“, und die Preiszonen blieben verborgen, bis `ElecPriceFixed` ausdrücklich gewählt wurde. Unverändert übernommen erscheint der Tarif nicht als Änderung in der Vorschau. Feste Tarife mit Aufschlägen oder nicht als Zonen lesbaren Zeitfenstern bleiben auf „Beibehalten“.
-- EOS-Assistent: Ganztägige Aufschläge, Umsatzsteuer und feste Einspeisevergütung werden nach dem Speichern wieder mit ihren Werten angezeigt. EOS liefert Startzeiten als `00:00:00.000000`; der Assistent erkannte diese Schreibweise nicht und zeigte stattdessen Vorgabewerte (0 ct, 19 %, 8,2 ct).
-- Kosten → Stromtarif: Die Auswahl „Dynamisch (Preissensor)“ heißt jetzt „Zeitabhängig (Sensor, Plugin oder EOS)“, der Hinweis nennt die Preisquelle: Sensor „Bezugspreis“, sonst Plugin, sonst EOS, ohne Sensor also auch ein Tarif mit Preiszonen aus dem EOS-Assistenten. Das Verhalten ist unverändert; README angepasst.
 - go-e Charger (lokale HTTP-API v2): Mit eingeschalteter go-e-Einstellung „Ausstecken immer simulieren“ (`sua`) scheiterte fast jede neue Ladefreigabe. Während der go-e das Ausstecken simuliert, meldet er die Freigabe als noch nicht erlaubt (`modelStatus` 22) und antwortet mitunter langsam; die Energiezentrale wartete nur 4 Sekunden, meldete einen Wallbox-Fehler und pausierte die Wallbox wieder. Eine Freigabe gilt in diesem Zustand jetzt als bestätigt, die Bestätigung wartet bis zu 10 Sekunden und wiederholt langsame Statusabfragen. Stopps werden weiterhin nur mit zurückgelesener Sperre bestätigt.
 
 ### Breaking Changes
