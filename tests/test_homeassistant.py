@@ -1355,6 +1355,17 @@ class HomeAssistantRequirements(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('private-host','\n'.join(logs.output))
         self.assertNotIn('test-secret','\n'.join(logs.output))
 
+    async def test_diagnostics_contain_the_chargers_own_decision_without_addresses(self):
+        app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))
+        app.config.wallbox = SimpleNamespace(charger_status={'car':{'code':3,'name':'WaitCar'},
+            'reason':{'code':3,'name':'ChargingBecauseForceStateOn'}})
+        coordinator = EnergyCoordinator(self.hass, self.entry, app)
+        self.entry.runtime_data = coordinator
+        diagnostic = await async_get_config_entry_diagnostics(self.hass, self.entry)
+        self.assertEqual(diagnostic['wallbox_status'], [{'vehicle':1,'car':{'code':3,'name':'WaitCar'},
+            'reason':{'code':3,'name':'ChargingBecauseForceStateOn'}}])
+        app.config.wallbox = SimpleNamespace()
+        self.assertEqual((await async_get_config_entry_diagnostics(self.hass, self.entry))['wallbox_status'], [])
     async def test_accounting_holds_back_a_short_eos_timeout_but_shows_other_errors_at_once(self):
         from custom_components.eos_energiezentrale.energy.status import EOS_ISSUE_GRACE_S
         app = Controller(Mock(), Configuration(dict(DEFAULTS), Mock(), self.directory))

@@ -7,12 +7,11 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- EOS-Verbindung: Neue Option „Wartezeit auf EOS-Antworten“ (`eos_timeout_s`, 3–60 Sekunden, Standard 10 statt bisher fest 5 Sekunden). EOS antwortet während der Optimierung auf ausgelasteten Home-Assistant-Hosts oft verzögert. InfluxDB und Fronius Solar API behalten 5 Sekunden.
-- Hinweise: Kurze Kommunikationsfehler mit EOS (Zeitüberschreitung, abgewiesene oder abgebrochene Verbindung, vorübergehende HTTP-Fehler wie 503) erscheinen erst als Hinweis und Log-Warnung, wenn sie zwei Minuten anhalten. Das gilt für Plan, Preise, Messwertübertragung, Ladeziel, Speicher- und Fahrzeuggrenzen sowie EOS-Werte der Kostenrechnung. Die Regelung reagiert weiterhin sofort; andere Fehler wie HTTP 404 erscheinen ohne Verzögerung.
+- go-e Charger (lokale HTTP-API v2): Die Energiezentrale liest bei jeder Abfrage auch die eigene Ladeentscheidung der Wallbox mit (Fahrzeugzustand, erzwungener Zustand, Freigabe, Begründung `modelStatus`, Zugangskontrolle, Logikmodus, Fehlercode, Firmware). Jede Änderung steht als INFO-Eintrag `go-e charger status` im Log, der letzte Stand in den Diagnosedaten unter `wallbox_status`. Damit lässt sich ohne manuelle API-Abfrage klären, warum ein freigegebenes Fahrzeug nicht lädt. Ladeleistung, Ladestrom und Adressen werden nicht protokolliert.
 
 ### Bugfixes
 
-- Dokumentation: Die Screenshots von Übersicht (Desktop und mobil), Hausspeicher, E-Auto, PV & Wetter, Hausverbrauch und Gesamtbilanz durch aktuelle Aufnahmen einer echten Anlage ersetzen. Einstellungen und EOS-Assistent zeigen weiterhin Beispieldaten. README und Screenshot-Beschreibung nennen die Herkunft je Bild; Bildbeschreibungen von E-Auto- und Handyansicht an den tatsächlichen Inhalt angepasst.
+- Keine.
 
 ### Breaking Changes
 

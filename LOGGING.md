@@ -152,6 +152,17 @@ unterschiedliche Ursachen erkennbar. Ein erfolgreicher Leseabruf bestätigt kein
 fehlgeschlagenen Steuerbefehl; erst der erfolgreiche jeweilige Vorgang behebt ihn.
 Diese Prüfung nutzt simulierte GX-/HA-Antworten und ersetzt keinen Hardwaretest.
 
+Das go-e-Plugin (`goe_http_v2`) liest bei jeder Abfrage auch die eigene
+Ladeentscheidung der Wallbox mit: Fahrzeugzustand (`car`), erzwungener Zustand
+(`frc`), Ladefreigabe (`alw`), Begründung (`modelStatus`, z. B.
+`NotChargingBecauseAccessControlWait`), Zugangskontrolle (`acs`), Logikmodus
+(`lmo`), Fehlercode (`err`), „Ausstecken immer simulieren“ (`sua`) und die
+Firmware-Version. Jede Änderung erscheint als INFO-Eintrag `go-e charger status`;
+der letzte Stand steht in den Diagnosedaten unter `wallbox_status`. Ladeleistung,
+Ladestrom, Kartennummern und Adressen werden dabei nicht protokolliert. So lässt
+sich klären, warum ein freigegebenes Fahrzeug keinen Strom aufnimmt, ohne die
+Wallbox-API von Hand abzufragen.
+
 Deye-Modbus protokolliert für Speicher und PV-Wechselrichter den fehlgeschlagenen
 Leseabschnitt, die konfigurierte Unit-ID, Registeradresse, Anzahl und gegebenenfalls
 den Modbus-Ausnahme-Code. Ungültige Teilwerte behalten ihre Feldadresse; gültige
@@ -228,6 +239,14 @@ charger controls are logged per instance, with plugin ID, ordinal scope and safe
 protocol context. Valid zero readings and disabled optional sources remain valid.
 Native configuration forms, plugin registration and integration setup log rejected
 configurations with parameter names, never parameter values.
+
+The go-e plugin (`goe_http_v2`) also reads the charger's own decision on every
+poll: vehicle state (`car`), force state (`frc`), permission (`alw`), reason
+(`modelStatus`, e.g. `NotChargingBecauseAccessControlWait`), access control
+(`acs`), logic mode (`lmo`), error code (`err`), "always simulate unplugging"
+(`sua`) and firmware version. Each change is logged at INFO as
+`go-e charger status`; the latest state is in the diagnostics under
+`wallbox_status`. Power, current, card numbers and addresses are not logged.
 
 All three Victron plugins (`victron_modbus`, `victron_ha`, `victron_gx`) also log
 power-limit, ESS command and release failures as `plugin_operation_failed`, with

@@ -5,6 +5,8 @@ https://github.com/goecharger/go-eCharger-API-v2/blob/main/http-en.md
 from datetime import datetime, timezone
 from http.client import HTTPException
 import json
+import logging
+import re
 from time import monotonic, sleep
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, ProxyHandler, build_opener
@@ -16,7 +18,43 @@ from ..sanitiser import bounded
 from ..failures import HardwareAPIError
 
 REQUEST_GRACE_S=2  # Total exchange deadline beyond the socket inactivity timeout.
-STATUS_KEYS=('car','err','frc','alw','amp','ama','adi','cbl','var','nrg','psm','pnp','pha','fsp','mca')
+# modelStatus, acs, lmo, sua and fwv only explain the charger's own decision (diagnostics).
+STATUS_KEYS=('car','err','frc','alw','amp','ama','adi','cbl','var','nrg','psm','pnp','pha','fsp','mca',
+             'modelStatus','acs','lmo','sua','fwv')
+_LOGGER=logging.getLogger(__name__)
+# Names from the go-e API v2 key reference (API_KEYS_FIRMWARE/apikeys-en.md).
+CAR_STATES={0:'Unknown',1:'Idle',2:'Charging',3:'WaitCar',4:'Complete',5:'Error'}
+FORCE_STATES={0:'Neutral',1:'Off',2:'On'}
+ACCESS_CONTROL={0:'Open',1:'Wait'}
+LOGIC_MODES={3:'Default',4:'Awattar',5:'AutomaticStop'}
+MODEL_STATUS={0:'NotChargingBecauseNoChargeCtrlData',1:'NotChargingBecauseOvertemperature',
+    2:'NotChargingBecauseAccessControlWait',3:'ChargingBecauseForceStateOn',4:'NotChargingBecauseForceStateOff',
+    5:'NotChargingBecauseScheduler',6:'NotChargingBecauseEnergyLimit',7:'ChargingBecauseAwattarPriceLow',
+    8:'ChargingBecauseAutomaticStopTestLadung',9:'ChargingBecauseAutomaticStopNotEnoughTime',
+    10:'ChargingBecauseAutomaticStop',11:'ChargingBecauseAutomaticStopNoClock',12:'ChargingBecausePvSurplus',
+    13:'ChargingBecauseFallbackGoEDefault',14:'ChargingBecauseFallbackGoEScheduler',15:'ChargingBecauseFallbackDefault',
+    16:'NotChargingBecauseFallbackGoEAwattar',17:'NotChargingBecauseFallbackAwattar',
+    18:'NotChargingBecauseFallbackAutomaticStop',19:'ChargingBecauseCarCompatibilityKeepAlive',
+    20:'ChargingBecauseChargePauseNotAllowed',22:'NotChargingBecauseSimulateUnplugging',
+    23:'NotChargingBecausePhaseSwitch',24:'NotChargingBecauseMinPauseDuration',26:'NotChargingBecauseError',
+    27:'NotChargingBecauseLoadManagementDoesntWant',28:'NotChargingBecauseOcppDoesntWant',
+    29:'NotChargingBecauseReconnectDelay',30:'NotChargingBecauseAdapterBlocking',
+    31:'NotChargingBecauseUnderfrequencyControl',32:'NotChargingBecauseUnbalancedLoad',
+    33:'ChargingBecauseDischargingPvBattery',34:'NotChargingBecauseGridMonitoring',35:'NotChargingBecauseOcppFallback'}
+
+
+def charger_status(data):
+    """The charger's own charging decision as fixed codes, without measurements or settings values."""
+    def code(key,names,maximum=255):
+        value=integer(data.get(key),0,maximum)
+        return None if value is None else {'code':value,'name':names.get(value,'unknown')}
+    firmware=data.get('fwv')
+    return {'car':code('car',CAR_STATES),'force':code('frc',FORCE_STATES),
+            'allowed':data.get('alw') if type(data.get('alw')) is bool else None,
+            'reason':code('modelStatus',MODEL_STATUS),'access_control':code('acs',ACCESS_CONTROL),
+            'logic_mode':code('lmo',LOGIC_MODES),'error':integer(data.get('err'),0,255),
+            'simulate_unplugging_always':data.get('sua') if type(data.get('sua')) is bool else None,
+            'firmware':firmware if isinstance(firmware,str) and re.fullmatch(r'[0-9A-Za-z._-]{1,32}',firmware) else None}
 
 
 class GoEAPIError(HardwareAPIError):
@@ -49,6 +87,8 @@ class GoEHTTPv2(WallboxDriver):
         self.opener=None  # Certificate loading belongs to the first executor request.
         self.deadline=RequestDeadline('eos-goe-request')
         self.zero_after=self.zero_sample=self.phase_requested=None
+        # Last charger decision for diagnostics; each change is logged at INFO.
+        self.charger_status=None
 
     def _request(self,path,timeout=3):
         def exchange():
@@ -91,6 +131,7 @@ class GoEHTTPv2(WallboxDriver):
 
     def _observe(self,now):
         data=self._status()
+        self._record_status(data)
         if (integer(data.get('frc'),0,2) is None or type(data.get('alw')) is not bool
                 or type(data.get('adi')) is not bool or integer(data.get('amp'),0,32) is None):
             raise GoEAPIError('Incomplete go-e control response')
@@ -135,6 +176,12 @@ class GoEHTTPv2(WallboxDriver):
         zero=watts is not None and watts<=30 and all(
             bounded(value,0,.2) is not None for value in nrg[4:7])
         return sample,data,reported,zero
+
+    def _record_status(self,data):
+        status=charger_status(data)
+        if status!=self.charger_status:
+            _LOGGER.info('go-e charger status: %s',json.dumps(status,sort_keys=True))
+            self.charger_status=status
 
     def _read(self,states,now):
         try: return self._observe(now)[0]
