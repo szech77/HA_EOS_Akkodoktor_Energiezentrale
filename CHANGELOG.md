@@ -8,6 +8,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 ### Features
 
 - go-e Charger (lokale HTTP-API v2): Die Energiezentrale liest bei jeder Abfrage auch die eigene Ladeentscheidung der Wallbox mit (Fahrzeugzustand, erzwungener Zustand, Freigabe, Begründung `modelStatus`, Zugangskontrolle, Logikmodus, Fehlercode, Firmware). Jede Änderung steht als INFO-Eintrag `go-e charger status` im Log, der letzte Stand in den Diagnosedaten unter `wallbox_status`. Damit lässt sich ohne manuelle API-Abfrage klären, warum ein freigegebenes Fahrzeug nicht lädt. Ladeleistung, Ladestrom und Adressen werden nicht protokolliert.
+- EOS-Assistent, Schritt „Tarif & Verbrauch“: Ein fester Netzpreis kann jetzt aus bis zu 12 täglichen Preiszonen bestehen, z. B. für Tarife mit günstigem Nachtstrom wie Octopus Go. Jede Zone gilt ab ihrer Uhrzeit bis zur nächsten, die letzte über Mitternacht. Der Assistent schreibt die Zonen als EOS-Zeitfenster (`ElecPriceFixed`), ohne dass ein Fenster über Mitternacht läuft, und zeigt sie in der Vorschau mit Uhrzeiten. Beim Laden erkennt er vorhandene Zeitfenster wieder als Zonen; bisher erkannte er einen Tarif mit mehreren Fenstern nicht und ersetzte ihn, wenn `ElecPriceFixed` gewählt war, beim Speichern durch einen einzigen Tagespreis. Feste Tarife mit einer Zone verhalten sich wie bisher. Ohne eigenen Preissensor übernimmt die Kostenbilanz den jeweils gültigen Zonenpreis aus den EOS-Preisprognosen.
 
 ### Bugfixes
 

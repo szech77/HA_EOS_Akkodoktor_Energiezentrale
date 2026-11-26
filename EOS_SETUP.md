@@ -37,7 +37,14 @@ Er steht wie das übrige Panel nur Home-Assistant-Administratoren zur Verfügung
 5. **Tarif & Verbrauch:** einen Festpreis oder einen verfügbaren dynamischen
    Anbieter wählen. Dynamische Preise verwenden einen Netto-Aufschlag und eine
    prozentuale Steuer. Ein fester Netzpreis wird brutto eingegeben und erhält keine
-   zusätzlichen Bezugsaufschläge. Einspeisevergütung und Jahresverbrauch ohne
+   zusätzlichen Bezugsaufschläge. Für Tarife mit Tageszeiten (z. B. Octopus Go mit
+   günstigem Nachtstrom) bis zu 12 Preiszonen anlegen: Jede Zone gilt ab ihrer Uhrzeit
+   bis zur nächsten, die letzte über Mitternacht bis zur ersten, an jedem Tag. Für
+   Octopus Go also eine Zone ab 00:30 mit dem Nachtpreis und eine ab 05:30 mit dem
+   Tagespreis. EOS erhält daraus Zeitfenster, die nicht über Mitternacht laufen; ein
+   vorhandener Tarif aus solchen Zeitfenstern wird beim Laden wieder als Zonen
+   angezeigt. Tarife mit Wochentagen, Monaten oder Datumsangaben kann der Assistent
+   nicht abbilden; dafür „Beibehalten“ wählen. Einspeisevergütung und Jahresverbrauch ohne
    separat optimierte Fahrzeugladung ergänzen. Bestehende andere Anbieter können
    einschließlich ihrer Zugangsdaten beibehalten werden. Neu auswählbar sind
    Anbieter ohne zusätzliche Zugangsdaten: Akkudoktor/Forecast.Solar für PV sowie
