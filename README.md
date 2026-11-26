@@ -231,6 +231,7 @@ Add-on-Build `0.3.0.dev2611122196862169`.
 | Feld / interner Schlüssel | Beispiel oder Standard | Bedeutung |
 |---|---|---|
 | EOS-API-Basisadresse / `eos_url` | `http://homeassistant.local:8503` | Erreichbare Adresse des separat laufenden EOS-Servers, einschließlich Port. |
+| Wartezeit auf EOS-Antworten / `eos_timeout_s` | `10` | 3–60 Sekunden ohne Daten von EOS, bevor ein Abruf als Zeitüberschreitung gilt. Während der Optimierung antwortet EOS auf einem ausgelasteten Host verzögert; dann den Wert erhöhen. Eine Messwertübertragung an EOS kann einen Regelzyklus höchstens so lange aufhalten. |
 | Panel-Sprache / `language` | `auto` | Übernimmt die Sprache des HA-Frontends. Alternativen: `de`, `en`; Rückfall ist Englisch. |
 | EOS-Speicherressource / `battery_resource` | `battery1` | Ressourcen-ID des Hausspeichers im EOS-Plan. |
 | EOS-Fahrzeugressource / `vehicle_resource` | `ev1` | Ressourcen-ID des Autos im EOS-Plan. |

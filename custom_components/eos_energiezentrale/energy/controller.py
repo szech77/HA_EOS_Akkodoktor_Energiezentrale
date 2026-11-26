@@ -20,7 +20,7 @@ from .measurement_sources import CAR_SOC_MAX_AGE_S, resolve_sources
 from .vehicle_limits import charging_profile, optional_charger, vehicle_box, vehicle_phases
 from .eos_measurements import MeasurementSync, device_samples
 from .failures import BackendError, connection_lost
-from .status import failure_details
+from .status import TransientGrace, failure_details
 from .pv_support import PVSupport
 from .vehicle_projection import RANGE_MIN_SOC, car_range_view, projected_vehicle_soc
 from .eos_status import EOSRunStatus
@@ -44,6 +44,8 @@ CONNECTION_GIVE_UP_S = 1800
 # A storage device that briefly cannot be read keeps its last confirmed grid report
 # this long; a real backup report or a longer outage pauses control as before.
 SUPPLY_GRACE_S = 60
+# Errors from EOS requests; short communication failures are held back (status.TransientGrace).
+EOS_ISSUE_AREAS = ('eos', 'eos_price', 'eos_measurements', 'goal', 'battery_limits', 'vehicle_limits')
 
 
 class Controller:
@@ -88,6 +90,7 @@ class Controller:
         self.forecast_failure = None
         self.errors = {}
         self.error_details = {}
+        self.eos_grace = TransientGrace()
         self.control_step = "startup"
         self.last_failure = None
         self.goal = None
@@ -621,7 +624,15 @@ class Controller:
         return self.eos_run.snapshot(now, min(failures) if failures else None)
 
     def visible_errors(self, now):
+        """Errors for notices and the log; control keeps using ``self.errors``."""
         errors = dict(self.errors)
+        present = [area for area in EOS_ISSUE_AREAS if area in errors]
+        self.eos_grace.retain(present)
+        for area in present:
+            details = self.error_details.get(area, {})
+            # Only a recorded exception of this error counts; a reason set without one is shown.
+            if details.get('exception') == errors[area] and not self.eos_grace.visible(area, details, now):
+                errors.pop(area)
         if self.eos_run_state(now)['grace']:
             for area in ('eos', 'forecast'):
                 errors.pop(area, None)
