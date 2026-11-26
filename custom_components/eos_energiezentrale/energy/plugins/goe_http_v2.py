@@ -18,6 +18,10 @@ from ..sanitiser import bounded
 from ..failures import HardwareAPIError
 
 REQUEST_GRACE_S=2  # Total exchange deadline beyond the socket inactivity timeout.
+# Some vehicles end their session during a charging pause and then report "complete"
+# although charging is allowed again. They only start after being unplugged.
+STALLED_RESTART_S=60  # Released, "complete" and without power for this long.
+STALLED_IDLE_W=30
 # modelStatus, acs, lmo, sua and fwv only explain the charger's own decision (diagnostics).
 STATUS_KEYS=('car','err','frc','alw','amp','ama','adi','cbl','var','nrg','psm','pnp','pha','fsp','mca',
              'modelStatus','acs','lmo','sua','fwv')
@@ -71,6 +75,8 @@ class GoEHTTPv2(WallboxDriver):
         PluginField('url','Local HTTP API v2 base URL','text',default='http://go-echarger.local'),
         PluginField('phase_switching','Enable supported 1-/3-phase switching','boolean',default=False),
         PluginField('nominal_voltage','Nominal phase-to-neutral voltage (V)','number',default=230),
+        PluginField('simulate_unplugging','Simulate unplugging when a released vehicle does not resume charging',
+                    'boolean',default=False),
     )
 
     def __init__(self,ha,params):
@@ -82,6 +88,10 @@ class GoEHTTPv2(WallboxDriver):
         self.voltage=bounded(values['nominal_voltage'],100,260)
         if self.voltage is None: raise ValueError('Invalid nominal voltage')
         self.switching=values['phase_switching']
+        self.unplugging=values['simulate_unplugging']
+        # Monotonic start of the current stalled release; one restart per vehicle session.
+        self.stalled_since=None
+        self.unplug_attempted=False
         self.features=WallboxFeatures(phase_switching=self.switching,optional_connection=True)
         self.ids=dict.fromkeys(('power','status','enable','current','phases'),'')
         self.opener=None  # Certificate loading belongs to the first executor request.
@@ -109,9 +119,11 @@ class GoEHTTPv2(WallboxDriver):
         return self._request('/api/status?'+urlencode({'filter':','.join(keys)}),timeout)
 
     def _set(self,**values):
-        if not values or values.keys()-{'amp','frc','psm'}: raise ValueError('Invalid go-e setting')
+        if not values or values.keys()-{'amp','frc','psm','sua'}: raise ValueError('Invalid go-e setting')
         for key,value in values.items():
-            if integer(value,6 if key=='amp' else 1,32 if key=='amp' else 2) is None:
+            if key=='sua':
+                if value is not True: raise ValueError('Invalid go-e setting value')
+            elif integer(value,6 if key=='amp' else 1,32 if key=='amp' else 2) is None:
                 raise ValueError('Invalid go-e setting value')
         result=self._request('/api/set?'+urlencode({key:json.dumps(value) for key,value in values.items()}))
         if any(result.get(key) is not True for key in values):
@@ -178,6 +190,10 @@ class GoEHTTPv2(WallboxDriver):
         return sample,data,reported,zero
 
     def _record_status(self,data):
+        if data.get('car')!=4:
+            # Charging, unplugged or unknown: a later stall is a new situation.
+            self.stalled_since=None
+            self.unplug_attempted=False
         status=charger_status(data)
         if status!=self.charger_status:
             _LOGGER.info('go-e charger status: %s',json.dumps(status,sort_keys=True))
@@ -237,10 +253,47 @@ class GoEHTTPv2(WallboxDriver):
                 raise GoEAPIError('go-e is not ready for requested charging current')
             if data['amp']!=int(amps): self._set(amp=int(amps))
             if data['frc']!=2 or not fresh.enabled: self._set(frc=2)
+            elif self._stalled(data,fresh): self._simulate_unplugging(data)
         except GoEAPIError:
             try: self._pause(state)
             except GoEAPIError: pass
             raise
+
+    def _hold(self,amps,state):
+        if (not self.unplugging or self.unplug_attempted or self.phase_requested is not None
+                or not state.enabled or state.status!='connected' or state.watts is None or state.watts>STALLED_IDLE_W):
+            self.stalled_since=None
+            return
+        try: fresh,data,_,_=self._observe(datetime.now(timezone.utc))
+        except GoEAPIError: return  # The telemetry failure is reported by the regular read.
+        if data['frc']!=2 or not fresh.enabled or not self._stalled(data,fresh): return
+        try: self._simulate_unplugging(data)
+        except GoEAPIError:
+            try: self._pause(state)
+            except GoEAPIError: pass
+            raise
+
+    def _stalled(self,data,fresh):
+        """Charging stays released, but the vehicle reports a finished session without power."""
+        if (not self.unplugging or self.unplug_attempted or data.get('car')!=4
+                or fresh.watts is None or fresh.watts>STALLED_IDLE_W):
+            self.stalled_since=None
+            return False
+        if self.stalled_since is None:
+            self.stalled_since=monotonic()
+            return False
+        return monotonic()-self.stalled_since>=STALLED_RESTART_S
+
+    def _simulate_unplugging(self,data):
+        """Let the charger simulate unplugging once and restart the released session."""
+        self.unplug_attempted=True
+        self.stalled_since=None
+        enabled=data.get('sua') is not True
+        if enabled: self._set(sua=True)
+        self._set(frc=1)
+        self._set(frc=2)
+        _LOGGER.info('go-e simulated unplugging: vehicle reported a finished session while charging was released '
+                     '(charger setting simulateUnpluggingAlways %s)','enabled' if enabled else 'already enabled')
 
 
 PLUGINS=(GoEHTTPv2,)

@@ -153,3 +153,17 @@ def test_area_switches_exist_only_for_controllable_devices(monkeypatch):
         entry = SimpleNamespace(runtime_data=SimpleNamespace(app=SimpleNamespace(controllable=controllable)))
         asyncio.run(switch.async_setup_entry(None, entry, lambda entities: added.extend(entities)))
         assert [key for key in added if key.startswith('control_')] == expected and 'control' in added
+
+
+def test_an_unchanged_release_lets_the_driver_hold_instead_of_charging_again(control):
+    control.app.set_control(vehicle=True)
+    poll(control, 0)
+    amps = control.box.charge.call_args.args[0]
+    now = NOW + timedelta(seconds=20)
+    control.ha.states.return_value = control.states(when=now)
+    control.eos.plan.return_value = control.plan(now)
+    control.box.read.return_value = replace(requirements.wallbox(), enabled=True, amps=amps, sample=now)
+    control.app.tick(now, 20)
+    control.box.charge.assert_called_once()
+    control.box.hold.assert_called_once()
+    assert control.box.hold.call_args.args[0] == amps

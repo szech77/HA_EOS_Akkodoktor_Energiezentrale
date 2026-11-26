@@ -495,6 +495,7 @@ eigenen URLs und EOS-Ressourcen angelegt werden.
 | `url` | Lokale Basisadresse, z. B. `http://192.168.1.50`, ohne `/api`, Pfad, Zugangsdaten oder Cloud-Token. |
 | `phase_switching` | 1-/3-Phasenumschaltung für unterstützte Hardware ausdrücklich freigeben; Vorgabe aus. Verfügbarkeit wird zusätzlich aus API-Messungen und Phasensteuerung geprüft. |
 | `nominal_voltage` | Nennspannung zwischen Phase und Neutralleiter für die EOS-Leistungsrechnung, Vorgabe 230 V. Keine schwankenden Momentanwerte als neue Gerätenennleistung synchronisieren. |
+| `simulate_unplugging` | Ausstecken simulieren, wenn ein freigegebenes Fahrzeug nach einer Ladepause nicht weiterlädt; Vorgabe aus. Siehe unten. |
 
 Eine separate go-e-Integration und Sensoren/Steuerentitäten für Ladeleistung,
 Strom, Ladefreigabe und Phasen sind nicht erforderlich. Der Fahrzeug-SoC wird
@@ -542,10 +543,26 @@ Fehler gemeldet. Ein zweiphasiger Netzanschluss wird vom 1-/3-Phasenmodell nicht
 als vollständige Ladequelle behandelt. Bei deaktivierter automatischer Umschaltung
 einen passenden festen Phasenmodus in der go-e-App einstellen.
 
+Manche Fahrzeuge beenden ihren Ladevorgang, sobald die Wallbox pausiert, melden
+danach „fertig“ (`car=4`) und laden erst nach erneutem Einstecken wieder, obwohl die
+Wallbox freigibt. Mit `simulate_unplugging` erkennt das Plugin diesen Zustand: Die
+Energiezentrale will laden, die Freigabe ist bestätigt (`frc=2`, `alw`), der go-e
+meldet `car=4` und höchstens 30 W, und das hält 60 Sekunden ohne Unterbrechung an.
+Dann schaltet es einmal die go-e-Einstellung „Ausstecken immer simulieren“ (`sua`)
+ein, falls sie noch aus ist, und startet den Ladevorgang mit bestätigter Pause und
+Freigabe neu (`frc=1`, `frc=2`). Dabei simuliert der go-e das Aus- und Einstecken.
+Die Einstellung bleibt danach eingeschaltet. Je Fahrzeugsitzung erfolgt höchstens
+ein Versuch; erst wenn der go-e wieder Laden, ein abgestecktes oder ein anderes
+Fahrzeug meldet, ist ein neuer Versuch möglich. Ein fehlgeschlagener Versuch endet
+wie jede fehlgeschlagene Vorgabe mit einem bestätigten Pauseversuch. Jeder Versuch
+steht als INFO-Eintrag `go-e simulated unplugging` im Log. Ein tatsächlich volles
+Fahrzeug meldet nach dem Neustart erneut „fertig“; weitere Versuche folgen nicht.
+
 Die Energiezentrale verwendet eine erzwungene Freigabe (`frc=2`), die native
 Ladezeitpläne übersteuern kann. Für denselben Ladepunkt nur einen schreibenden
 Energieregler verwenden. Die lokale API im geschützten LAN betreiben;
-keine Internet-Portweiterleitung einrichten. Das Plugin verändert keine WLAN-,
+keine Internet-Portweiterleitung einrichten. Außer der ausdrücklich aktivierten
+Einstellung `sua` (siehe oben) verändert das Plugin keine Gerätekonfiguration, insbesondere keine WLAN-,
 RFID-, Cloud- oder Sicherheitskonfiguration und umgeht keine elektrischen
 Schutzfunktionen der Wallbox.
 
@@ -795,7 +812,11 @@ die Erkennung in `energy/plugin_registry.py` definiert. API-Version 2 verlangt:
 Speicher implementieren `_read(self, states, now)`, `_apply(self, command, states)`
 und `_release(self, states)`. Wallboxen implementieren `_read(self, states, now)`,
 `_pause(self, state)`, `_phase(self, phases, state)` und `_charge(self, amps, state)`.
-Die öffentlichen Methoden `read`, `apply`, `release`, `pause`, `phase`, `charge`
+Optional ist `_hold(self, amps, state)`: Die Regelung ruft es auf, wenn eine bestehende
+Ladefreigabe mit unverändertem Strom weiterläuft und deshalb kein `_charge` folgt.
+Standardmäßig sendet es nichts; ein Plugin kann damit etwa ein Fahrzeug neu starten,
+das trotz Freigabe von selbst aufgehört hat (siehe go-e `simulate_unplugging`).
+Die öffentlichen Methoden `read`, `apply`, `release`, `pause`, `phase`, `charge`, `hold`
 bleiben dem Vertrag vorbehalten und dürfen nicht überschrieben werden. Sie führen
 die zentrale Prüfung aus. `_phase` liefert ausschließlich `bool`, die anderen
 Schreiboperationen `None`. Asynchrone oder abweichende Signaturen werden abgewiesen.

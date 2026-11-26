@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 IDENTIFIER = re.compile(r"[a-z][a-z0-9_]{0,47}\Z")
 METHODS = {"battery": {"_read":("self","states","now"),"_apply":("self","command","states"),"_release":("self","states")},
            "inverter": {"_read":("self","states","now")},
-           "wallbox": {"_read":("self","states","now"),"_pause":("self","state"),"_phase":("self","phases","state"),"_charge":("self","amps","state")}}
+           "wallbox": {"_read":("self","states","now"),"_pause":("self","state"),"_phase":("self","phases","state"),"_charge":("self","amps","state"),"_hold":("self","amps","state")}}
 
 
 def validate_measurement_keys(plugin):
@@ -42,7 +42,7 @@ def validate_class(plugin):
     if not issubclass(plugin,base):
         raise PluginContractError("Plugin must implement the correct ABC")
     validate_measurement_keys(plugin)
-    for public in {"battery":("read","apply","release"),"wallbox":("read","pause","phase","charge"),"inverter":("read",)}[info.kind]:
+    for public in {"battery":("read","apply","release"),"wallbox":("read","pause","phase","charge","hold"),"inverter":("read",)}[info.kind]:
         if getattr(plugin,public) is not getattr(base,public):
             raise PluginContractError("Plugins cannot bypass the sanitiser: "+public)
     for method,names in {"__init__":("self","ha","params"),**METHODS[info.kind]}.items():

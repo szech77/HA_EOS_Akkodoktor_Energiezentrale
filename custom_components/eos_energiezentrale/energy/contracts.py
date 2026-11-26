@@ -219,6 +219,18 @@ class WallboxDriver(ABC):
         if self._charge(amps,state) is not None:
             raise PluginContractError("Wallbox charge must return None")
 
+    def hold(self, amps: float, state: WallboxReading) -> None:
+        """An unchanged charging release continues; drivers may recover a stalled vehicle."""
+        from .sanitiser import charging_current, wallbox_reading
+        state = wallbox_reading(state)
+        amps = charging_current(amps,state)
+        if self._hold(amps,state) is not None:
+            raise PluginContractError("Wallbox hold must return None")
+
+    def _hold(self, amps: float, state: WallboxReading) -> None:
+        """Optional; the default sends nothing."""
+        return None
+
     @abstractmethod
     def _read(self, states: dict, now: datetime) -> WallboxReading: ...
     @abstractmethod

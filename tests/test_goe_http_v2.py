@@ -325,3 +325,146 @@ def test_an_older_firmware_without_reason_codes_still_controls_normally():
         server.data['fwv']='<script>'
         driver.read({},NOW)
         assert driver.charger_status['firmware'] is None
+
+
+@contextmanager
+def stalled_vehicle(**params):
+    """Charging is released, but the vehicle reports a finished session and takes no power."""
+    clock = [1000.]
+    with api(**params) as (driver, server), \
+            patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.monotonic', lambda: clock[0]), \
+            patch('custom_components.eos_energiezentrale.energy.plugins.goe_http_v2.sleep'):
+        server.data.update(car=4, frc=2, alw=True, amp=16, sua=False)
+        yield driver, server, clock
+
+
+def charge_at(driver, clock, seconds):
+    clock[0] = 1000. + seconds
+    driver.charge(16, driver.read({}, NOW))
+
+
+def test_a_released_vehicle_that_reports_complete_is_restarted_once_by_simulated_unplugging(caplog):
+    caplog.set_level('INFO', 'custom_components.eos_energiezentrale.energy.plugins.goe_http_v2')
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        for seconds in (0, 30, 59):
+            charge_at(driver, clock, seconds)
+        assert not server.writes
+        charge_at(driver, clock, 60)
+        # The charger's own setting is enabled and confirmed, then the session is restarted.
+        assert server.writes == [{'sua': True}, {'frc': 1}, {'frc': 2}]
+        assert server.data['sua'] is True and server.data['alw']
+        assert any('go-e simulated unplugging' in record.getMessage() and 'enabled' in record.getMessage()
+                   for record in caplog.records)
+        # Still not charging: no repeated restarts in the same vehicle session.
+        for seconds in (120, 600, 3600):
+            charge_at(driver, clock, seconds)
+        assert len(server.writes) == 3
+        # After charging or unplugging, a new stall gets one new attempt; the setting is already on.
+        server.data['car'] = 2
+        driver.read({}, NOW)
+        server.data['car'] = 4
+        charge_at(driver, clock, 4000)
+        charge_at(driver, clock, 4060)
+        assert server.writes[3:] == [{'frc': 1}, {'frc': 2}]
+
+
+def test_simulated_unplugging_is_opt_in():
+    with stalled_vehicle() as (driver, server, clock):
+        assert driver.unplugging is False
+        for seconds in (0, 60, 3600):
+            charge_at(driver, clock, seconds)
+        assert not server.writes
+
+
+@pytest.mark.parametrize('change', [{'car': 2}, {'car': 3}, {'nrg': [230, 231, 229, 0, 0., 0., 0., 0., 0., 0., 0., 1500.]}])
+def test_a_charging_or_waiting_vehicle_is_never_unplugged(change):
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.data.update(change)
+        for seconds in (0, 60, 3600):
+            charge_at(driver, clock, seconds)
+        assert not server.writes
+
+
+def test_the_stall_must_last_without_interruption():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        charge_at(driver, clock, 0)
+        server.data['nrg'] = [230, 231, 229, 0, 0., 0., 0., 0., 0., 0., 0., 1500.]
+        charge_at(driver, clock, 40)
+        server.data['nrg'] = [230, 231, 229, 0, 0., 0., 0., 0., 0., 0., 0., 0.]
+        charge_at(driver, clock, 70)
+        charge_at(driver, clock, 129)
+        assert not server.writes
+        charge_at(driver, clock, 130)
+        assert server.writes == [{'sua': True}, {'frc': 1}, {'frc': 2}]
+
+
+def test_a_failed_restart_stops_charging_and_is_not_repeated():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.reject.add('sua')
+        charge_at(driver, clock, 0)
+        with pytest.raises(GoEAPIError):
+            charge_at(driver, clock, 60)
+        assert server.writes[-1] == {'frc': 1} and not server.data['alw']
+        server.reject.clear()
+        server.data.update(frc=2, alw=True)
+        writes = len(server.writes)
+        charge_at(driver, clock, 200)
+        assert len(server.writes) == writes
+
+
+def test_the_unplugging_setting_can_only_be_switched_on():
+    with api() as (driver, server):
+        with pytest.raises(ValueError):
+            driver._set(sua=False)
+        assert not server.writes
+
+
+def hold_at(driver, clock, seconds):
+    clock[0] = 1000. + seconds
+    driver.hold(16, driver.read({}, NOW))
+
+
+def test_an_unchanged_release_is_watched_while_the_controller_only_holds_it():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        for seconds in (0, 30, 59):
+            hold_at(driver, clock, seconds)
+        assert not server.writes
+        hold_at(driver, clock, 60)
+        assert server.writes == [{'sua': True}, {'frc': 1}, {'frc': 2}]
+        hold_at(driver, clock, 600)
+        assert len(server.writes) == 3
+
+
+def test_holding_a_charging_vehicle_needs_no_extra_request():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.data['car'] = 2
+        server.data['nrg'] = [230, 231, 229, 0, 0., 0., 0., 0., 0., 0., 0., 3500.]
+        state = driver.read({}, NOW)
+        count = len(server.requests)
+        driver.hold(16, state)
+        assert len(server.requests) == count and not server.writes
+
+
+def test_a_failed_restart_while_holding_stops_charging():
+    with stalled_vehicle(simulate_unplugging=True) as (driver, server, clock):
+        server.reject.add('frc')
+        hold_at(driver, clock, 0)
+        with pytest.raises(GoEAPIError):
+            hold_at(driver, clock, 60)
+        assert server.writes[0] == {'sua': True} and server.writes[-1] == {'frc': 1}
+
+
+def test_plugins_cannot_bypass_the_hold_contract():
+    from custom_components.eos_energiezentrale.energy.plugin_registry import validate_class
+    from custom_components.eos_energiezentrale.energy.plugins.goe_http_v2 import GoEHTTPv2
+
+    class Bypass(GoEHTTPv2):
+        def hold(self, amps, state): pass
+
+    class WrongSignature(GoEHTTPv2):
+        def _hold(self, amps): pass
+
+    for plugin in (Bypass, WrongSignature):
+        with pytest.raises(PluginContractError):
+            validate_class(plugin)
+    assert validate_class(GoEHTTPv2) is GoEHTTPv2

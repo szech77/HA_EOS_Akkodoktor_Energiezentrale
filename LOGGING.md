@@ -161,7 +161,11 @@ Firmware-Version. Jede Änderung erscheint als INFO-Eintrag `go-e charger status
 der letzte Stand steht in den Diagnosedaten unter `wallbox_status`. Ladeleistung,
 Ladestrom, Kartennummern und Adressen werden dabei nicht protokolliert. So lässt
 sich klären, warum ein freigegebenes Fahrzeug keinen Strom aufnimmt, ohne die
-Wallbox-API von Hand abzufragen.
+Wallbox-API von Hand abzufragen. Ist im Plugin `simulate_unplugging` aktiviert und
+meldet ein freigegebenes Fahrzeug 60 Sekunden lang „fertig“ ohne Leistung, steht der
+einmalige Neustart mit simuliertem Ausstecken als INFO-Eintrag
+`go-e simulated unplugging` im Log, einschließlich, ob die go-e-Einstellung `sua`
+dafür eingeschaltet wurde.
 
 Deye-Modbus protokolliert für Speicher und PV-Wechselrichter den fehlgeschlagenen
 Leseabschnitt, die konfigurierte Unit-ID, Registeradresse, Anzahl und gegebenenfalls
@@ -247,6 +251,10 @@ poll: vehicle state (`car`), force state (`frc`), permission (`alw`), reason
 (`sua`) and firmware version. Each change is logged at INFO as
 `go-e charger status`; the latest state is in the diagnostics under
 `wallbox_status`. Power, current, card numbers and addresses are not logged.
+With `simulate_unplugging` enabled, the one-time restart of a released vehicle that
+reports "complete" without power for 60 seconds is logged at INFO as
+`go-e simulated unplugging`, including whether the charger setting `sua` was
+switched on for it.
 
 All three Victron plugins (`victron_modbus`, `victron_ha`, `victron_gx`) also log
 power-limit, ESS command and release failures as `plugin_operation_failed`, with
