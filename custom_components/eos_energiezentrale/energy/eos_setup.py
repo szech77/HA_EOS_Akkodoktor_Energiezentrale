@@ -170,8 +170,8 @@ def constant(value):
     rows = value.get('windows', []) if isinstance(value, dict) else []
     if len(rows) == 1 and isinstance(rows[0], dict):
         row = rows[0]
-        if (row.get('start_time') in ('00:00', '00:00:00') and row.get('duration') in ('P1D', 'PT24H', '1 day', '24 hours')
-                and not any(row.get(key) is not None for key in ('date', 'month', 'day_of_week', 'locale', 'end_time'))):
+        if (time_of_day(row.get('start_time')) == 0 and duration_seconds(row.get('duration')) == DAY_S
+                and not any(row.get(key) is not None for key in WINDOW_FILTERS)):
             return number(row.get('value'))
     return None
 
@@ -303,6 +303,11 @@ class EOSSetup:
             inverter = inverters.get(inverter_id, {})
             options = {kind: [name for name in names if name in current.get(kind, {}).get('providers', names)]
                        for kind, names in PROVIDERS.items()}
+            # A fixed tariff the wizard can show again opens with its zones. Only when
+            # applying it unchanged rewrites nothing: gross prices without extra fees.
+            fixed_tariff = (tariff.get('provider') == 'ElecPriceFixed' and zones is not None
+                            and 'ElecPriceFixed' in options['elecprice']
+                            and current.get('elecfee', {}).get('provider') == 'ElecFeeFixed' and fee == 0 and percent == 0)
             draft = {
                 'latitude': general.get('latitude') if general.get('latitude') is not None else location.get('latitude'),
                 'longitude': general.get('longitude') if general.get('longitude') is not None else location.get('longitude'),
@@ -310,7 +315,8 @@ class EOSSetup:
                 'pv_provider': 'keep',
                 'planes': planes,
                 'weather_provider': 'keep' if current.get('weather', {}).get('provider') else (options['weather'][:1] or ['keep'])[0],
-                'price_provider': 'keep' if tariff.get('provider') else (options['elecprice'][:1] or ['keep'])[0],
+                'price_provider': ('ElecPriceFixed' if fixed_tariff else 'keep' if tariff.get('provider')
+                                   else (options['elecprice'][:1] or ['keep'])[0]),
                 'price_zones': zones or [{'start': '00:00', 'price_ct': 30}],
                 'fee_ct': fee * 100 if fee is not None else 0,
                 'vat_percent': percent if percent is not None else 19,
