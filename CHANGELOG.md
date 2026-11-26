@@ -7,7 +7,8 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- Keine.
+- EOS-Verbindung: Neue Option „Wartezeit auf EOS-Antworten“ (`eos_timeout_s`, 3–60 Sekunden, Standard 10 statt bisher fest 5 Sekunden). EOS antwortet während der Optimierung auf ausgelasteten Home-Assistant-Hosts oft verzögert. InfluxDB und Fronius Solar API behalten 5 Sekunden.
+- Hinweise: Kurze Kommunikationsfehler mit EOS (Zeitüberschreitung, abgewiesene oder abgebrochene Verbindung, vorübergehende HTTP-Fehler wie 503) erscheinen erst als Hinweis und Log-Warnung, wenn sie zwei Minuten anhalten. Das gilt für Plan, Preise, Messwertübertragung, Ladeziel, Speicher- und Fahrzeuggrenzen sowie EOS-Werte der Kostenrechnung. Die Regelung reagiert weiterhin sofort; andere Fehler wie HTTP 404 erscheinen ohne Verzögerung.
 
 ### Bugfixes
 

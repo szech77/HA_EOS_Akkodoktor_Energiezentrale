@@ -21,7 +21,7 @@ from .energy.domain import instant, next_departure
 from .energy.drivers import DeviceNotReady
 from .energy.settings import changed_settings, settings_payload, save
 from .energy.source_diagnostics import source_diagnostics
-from .energy.status import IssueLog, view_state, failure_details
+from .energy.status import IssueLog, TransientGrace, view_state, failure_details
 from .energy.report_values import current_day_values, report_values
 from .energy.charge_view import charge_plan
 from .energy.pv_view import pv_effects, pv_hours, pv_now, weather_days
@@ -61,6 +61,7 @@ class EnergyCoordinator(DataUpdateCoordinator):
         self.vehicle_sync_last = {}
         self.weather_forecast = WeatherForecast(hass)
         self.issue_log = IssueLog(_LOGGER)
+        self.accounting_grace = TransientGrace()
         self.control_status = None
         self.eos_run_status = None
         self.eos_setup = EOSSetup(app.config.eos)
@@ -443,11 +444,14 @@ class EnergyCoordinator(DataUpdateCoordinator):
                         "last_pv_attempt", "pv_tariff", "pv_error", "pv_failure_details"):
                 setattr(ledger, key, getattr(detached, key))
             self.report_success('accounting_refresh')
+            now = datetime.now(timezone.utc)
             for key in ('eos_error', 'pv_error'):
-                if getattr(ledger, key):
-                    self.report_notice('accounting/' + key, key, getattr(ledger, key.replace('_error', '_failure_details')))
-                else:
+                details = getattr(ledger, key.replace('_error', '_failure_details'))
+                if not getattr(ledger, key):
+                    self.accounting_grace.clear(key)
                     self.report_success('accounting/' + key)
+                elif self.accounting_grace.visible(key, details, now):
+                    self.report_notice('accounting/' + key, key, details)
 
     def _setup_hardware(self):
         options = self.app.config.options

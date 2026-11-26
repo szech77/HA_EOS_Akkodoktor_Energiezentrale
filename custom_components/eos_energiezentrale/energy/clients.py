@@ -85,13 +85,25 @@ class RequestDeadline:
 
 OPENER = build_opener(NoRedirect())
 MAX_RESPONSE = 8_000_000
-BACKEND_DEADLINE_S = 30  # Total EOS/InfluxDB/Fronius Solar API exchange; 5 s socket inactivity.
+BACKEND_DEADLINE_S = 30  # Minimum total EOS/InfluxDB/Fronius Solar API exchange time.
+BACKEND_TIMEOUT_S = 5  # Socket inactivity for InfluxDB and the Fronius Solar API.
+# EOS answers late while it optimizes, especially on a busy Home Assistant host.
+EOS_TIMEOUT_S = 10
+EOS_TIMEOUT_RANGE_S = (3, 60)
+
+
+def eos_timeout(value):
+    """Validated EOS socket inactivity timeout in seconds."""
+    if isinstance(value, bool) or number(value) is None or not EOS_TIMEOUT_RANGE_S[0] <= value <= EOS_TIMEOUT_RANGE_S[1]:
+        raise ValueError("Invalid EOS timeout")
+    return float(value)
 PV_IDLE_MAX_AGE_S = 12 * 3600
 ENTITY = re.compile(r"[a-z_]+\.[a-z0-9_]+\Z")
 _configuration_locks = WeakValueDictionary()
 _configuration_locks_guard = Lock()
 _backend_deadlines = {}
 _backend_deadlines_guard = Lock()
+_backend_timeouts = {}
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -108,14 +120,28 @@ def configuration_lock(url):
         return lock
 
 
+def _peer(url):
+    parsed = urlsplit(url)
+    port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
+    return (parsed.scheme.lower(), (parsed.hostname or "").lower(), port)
+
+
+def set_backend_timeout(url, seconds):
+    """Socket inactivity timeout for every request to this peer (the configured EOS)."""
+    with _backend_deadlines_guard:
+        _backend_timeouts[_peer(url)] = seconds
+
+
+def backend_timeout(url):
+    with _backend_deadlines_guard:
+        return _backend_timeouts.get(_peer(url), BACKEND_TIMEOUT_S)
+
+
 def backend_deadline(url):
     """One deadline per backend peer: an abandoned exchange (possibly a
     configuration write) blocks further requests to that peer until it ends."""
-    parsed = urlsplit(url)
-    port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
-    key = (parsed.scheme.lower(), (parsed.hostname or "").lower(), port)
     with _backend_deadlines_guard:
-        return _backend_deadlines.setdefault(key, RequestDeadline("eos-backend-request"))
+        return _backend_deadlines.setdefault(_peer(url), RequestDeadline("eos-backend-request"))
 
 
 def base_url(value):
@@ -129,7 +155,7 @@ def base_url(value):
     return value.rstrip("/")
 
 
-def request(url, *, method="GET", payload=None, headers=None):
+def request(url, *, method="GET", payload=None, headers=None, timeout=None):
     headers = {"Accept": "application/json", **(headers or {})}
     data = None
     if payload is not None:
@@ -141,14 +167,17 @@ def request(url, *, method="GET", payload=None, headers=None):
         '/v1/measurement/keys':'eos_measurement_keys', '/v1/measurement/value':'eos_measurement',
         '/v1/prediction/series':'eos_prediction_series',
         '/query':'influx_history'}.get(urlsplit(url).path, 'http')
+    if timeout is None:
+        timeout = backend_timeout(url)
     verb = method if method in {'GET','PUT','POST','PATCH','DELETE'} else 'HTTP'
     started = monotonic()
     _LOGGER.debug('Backend request started: operation=%s method=%s', operation, verb)
     try:
         def exchange():
-            with OPENER.open(Request(url, data=data, headers=headers, method=method), timeout=5) as response:
+            with OPENER.open(Request(url, data=data, headers=headers, method=method), timeout=timeout) as response:
                 return response.read(MAX_RESPONSE + 1)
-        body = backend_deadline(url).run(exchange, BACKEND_DEADLINE_S)
+        # A longer inactivity timeout (EOS) extends the total time for connect and response.
+        body = backend_deadline(url).run(exchange, BACKEND_DEADLINE_S + 2 * max(0, timeout - BACKEND_TIMEOUT_S))
         if len(body) > MAX_RESPONSE:
             raise ValueError("Antwort zu groß")
         result = json.loads(body)
@@ -197,9 +226,12 @@ def report_time(states, entity):
 
 
 class EOS:
-    def __init__(self, url):
+    def __init__(self, url, timeout=None):
+        """``timeout`` applies to every request to this EOS peer; validation passes none."""
         self.url = base_url(url)
         self._configuration_lock = configuration_lock(self.url)
+        if timeout is not None:
+            set_backend_timeout(self.url, eos_timeout(timeout))
 
     def plan(self):
         return request(self.url + "/v1/energy-management/plan")

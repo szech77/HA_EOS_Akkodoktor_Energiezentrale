@@ -51,6 +51,20 @@ verwenden weiterhin `wallbox_stop`. Der native Binärsensor `backup_power` gibt
 nur bestätigte Betriebszustände aus; normale Informationsmeldungen aktivieren
 den Problembinärsensor nicht.
 
+Kurze Kommunikationsfehler mit EOS (Zeitüberschreitung, abgewiesene oder
+abgebrochene Verbindung, HTTP 408/409/423/429/500/502/503/504) erscheinen erst als
+Hinweis und Warnung im Log, wenn sie zwei Minuten anhalten. Das betrifft
+`system/eos`, `system/eos_price`, `system/eos_measurements`, `system/goal`,
+`system/battery_limits`, `system/vehicle_limits` sowie `accounting/eos_error` und
+`accounting/pv_error`. So erzeugt ein EOS, das während der Optimierung kurz nicht
+antwortet, keine Meldungsflut. Die Regelung sieht den Fehler sofort; er wird nur
+für Anzeige und Log zurückgehalten. Jeder fehlgeschlagene Abruf steht weiterhin
+als DEBUG-Eintrag `Backend request failed` im Log. Andere Fehler, etwa HTTP 404
+oder ungültige Antworten, erscheinen sofort. Ein angezeigter Hinweis bleibt bis zur
+Behebung sichtbar, auch wenn die Ursache zu einer Zeitüberschreitung wechselt.
+Die Wartezeit auf EOS-Antworten ist mit `eos_timeout_s` einstellbar (Standard
+10 Sekunden); InfluxDB und die Fronius Solar API verwenden weiterhin 5 Sekunden.
+
 Das Backend liefert `notices` mit Kennung, Schweregrad und Kontext. Dieselben
 Meldungen erzeugen die HA-Problemanzeige und Einträge unter
 `custom_components.eos_energiezentrale`, unabhängig davon, ob ein Browser sie abruft.
@@ -185,6 +199,18 @@ and error events contain stable codes, exception/HTTP context and safe field nam
 they never include addresses, credentials, device names, measurements, targets or
 raw exception messages. Diagnostics retain the last 50 transitions in memory.
 INFO includes recovery/normal waiting; DEBUG adds bounded HTTP operation timings.
+
+Short EOS communication failures (timeout, refused or dropped connection, HTTP
+408/409/423/429/500/502/503/504) become a notice and a log warning only once they
+last two minutes. This covers `system/eos`, `system/eos_price`,
+`system/eos_measurements`, `system/goal`, `system/battery_limits`,
+`system/vehicle_limits`, `accounting/eos_error` and `accounting/pv_error`, so an EOS
+that briefly stops answering while it optimizes does not flood the notices.
+Control sees the failure at once; only display and log wait. Every failed request
+is still logged at DEBUG as `Backend request failed`. Other failures, such as HTTP
+404 or an invalid response, are shown at once, and a shown notice stays until it is
+resolved. The EOS response timeout is configurable as `eos_timeout_s` (default
+10 seconds); InfluxDB and the Fronius Solar API keep 5 seconds.
 
 A device that cannot be reached during control (timeout, refused or dropped
 connection, or Modbus gateway exception 10/11) raises the warning `control_resume` instead of `runtime`: control is

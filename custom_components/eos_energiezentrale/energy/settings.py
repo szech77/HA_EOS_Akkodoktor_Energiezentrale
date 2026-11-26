@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .clients import ENTITY, EOS, Influx
+from .clients import ENTITY, EOS, EOS_TIMEOUT_S, Influx
 from .domain import instant, number
 from .drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .failures import BackendError
@@ -161,7 +161,7 @@ class Configuration:
         from .devices import battery_driver
         self.battery = battery_driver(options,ha)
         self.wallbox = WALLBOX_DRIVERS[options["wallbox_type"]](ha, json.loads(options["wallbox_parameters"]))
-        self.eos = EOS(options["eos_url"])
+        self.eos = EOS(options["eos_url"], options.get("eos_timeout_s", EOS_TIMEOUT_S))
         self.influx = Influx(options["influx_url"], options["influx_database"],
                              options["influx_user"], influx_credential(options))
         self.directory = Path(directory)

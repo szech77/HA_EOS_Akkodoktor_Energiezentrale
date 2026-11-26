@@ -3,7 +3,7 @@ import json
 import re
 from zoneinfo import ZoneInfo
 
-from .energy.clients import ENTITY, EOS, Influx
+from .energy.clients import ENTITY, EOS, EOS_TIMEOUT_S, Influx, eos_timeout
 from .energy.domain import number
 from .energy.drivers import BATTERY_DRIVERS, WALLBOX_DRIVERS
 from .energy.measurement_sources import SENSOR_OPTIONS
@@ -27,6 +27,7 @@ def validate_options(options):
         raise ValueError("Choose either a password or an external secret")
     ZoneInfo(options["timezone"])
     EOS(options["eos_url"])
+    eos_timeout(options.get("eos_timeout_s", EOS_TIMEOUT_S))
     Influx(options["influx_url"], options["influx_database"], options["influx_user"], options["influx_password"])
     for key in ("pv_entity", "grid_entity", "house_entity", "heat_entity", "price_entity", "car_soc_entity", "car_range_entity", "heat_load_entity"):
         if key in SENSOR_OPTIONS and options.get(key, "") == "":
