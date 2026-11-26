@@ -7,8 +7,7 @@ veröffentlichte Abschnitte werden in den Release-Tags archiviert.
 
 ### Features
 
-- EOS-Assistent, Schritt „Tarif & Verbrauch“: Ein fester Netzpreis kann jetzt aus bis zu 12 täglichen Preiszonen bestehen, z. B. für Tarife mit günstigem Nachtstrom wie Octopus Go. Jede Zone gilt ab ihrer Uhrzeit bis zur nächsten, die letzte über Mitternacht. Der Assistent schreibt die Zonen als EOS-Zeitfenster (`ElecPriceFixed`), ohne dass ein Fenster über Mitternacht läuft, und zeigt sie in der Vorschau mit Uhrzeiten. Beim Laden erkennt er vorhandene Zeitfenster wieder als Zonen; bisher erkannte er einen Tarif mit mehreren Fenstern nicht und ersetzte ihn, wenn `ElecPriceFixed` gewählt war, beim Speichern durch einen einzigen Tagespreis. Feste Tarife mit einer Zone verhalten sich wie bisher. Ohne eigenen Preissensor übernimmt die Kostenbilanz den jeweils gültigen Zonenpreis aus den EOS-Preisprognosen.
-- go-e Charger (lokale HTTP-API v2): Neue Plugin-Option `simulate_unplugging` (Vorgabe aus) für Fahrzeuge, die ihren Ladevorgang bei einer Ladepause beenden und danach trotz Freigabe nicht weiterladen. Meldet der go-e bei bestätigter Freigabe 60 Sekunden lang „fertig“ (`car=4`) ohne Leistung, schaltet die Energiezentrale einmal die go-e-Einstellung „Ausstecken immer simulieren“ (`sua`) ein und startet den Ladevorgang mit bestätigter Pause und Freigabe neu. Höchstens ein Versuch je Fahrzeugsitzung; jeder Versuch steht als INFO-Eintrag `go-e simulated unplugging` im Log. Dafür ruft die Regelung bei unverändert weiterlaufender Ladefreigabe die neue optionale Wallbox-Plugin-Methode `_hold(self, amps, state)` auf; vorhandene Plugins senden dabei weiterhin nichts.
+- Keine.
 
 ### Bugfixes
 
