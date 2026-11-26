@@ -19,13 +19,23 @@ from ..failures import HardwareAPIError
 
 REQUEST_GRACE_S=2  # Total exchange deadline beyond the socket inactivity timeout.
 # Some vehicles end their session during a charging pause and then report "complete"
-# although charging is allowed again. They only start after being unplugged.
-STALLED_RESTART_S=60  # Released, "complete" and without power for this long.
+# (car=4) or wait without requesting power (car=3) although charging is allowed again.
+# They only start after being unplugged.
+STALLED_RESTART_S=60  # Released, idle and without power for this long.
 STALLED_IDLE_W=30
-# While the charger simulates unplugging (modelStatus 22) a new release is accepted
-# (frc=2) but charging stays disallowed for the configured duration (sumd). The
-# charger may also answer slowly meanwhile.
+STALLED_CAR_STATES=(3,4)
+# At most this many restarts per vehicle session; each one pauses charging briefly.
+MAX_UNPLUG_ATTEMPTS=2
+# After frc=2 the charger can accept the release but hold charging for its own timed
+# reason (modelStatus): 22 simulating unplugging (sumd), 23 phase switch, 24 minimum
+# pause (mcpd), 29 reconnection delay. It may also answer slowly meanwhile.
 SIMULATING_UNPLUG=22
+RELEASE_PENDING=frozenset({SIMULATING_UNPLUG,23,24,29})
+# The charger's reason (modelStatus) for not charging as a fixed notice cause.
+IDLE_REASONS={1:'charger_overtemperature',2:'access_control',5:'charger_logic',6:'charger_logic',
+    16:'charger_logic',17:'charger_logic',18:'charger_logic',22:'simulating_unplug',23:'phase_switch',
+    24:'min_pause',26:'charger_error',27:'load_management',28:'ocpp',29:'reconnect_delay',30:'adapter',
+    31:'grid_monitoring',32:'unbalanced_load',34:'grid_monitoring',35:'ocpp'}
 RELEASE_CONFIRM_S=10
 CONFIRM_S=4
 # modelStatus, acs, lmo, sua and fwv only explain the charger's own decision (diagnostics).
@@ -97,7 +107,7 @@ class GoEHTTPv2(WallboxDriver):
         self.unplugging=values['simulate_unplugging']
         # Monotonic start of the current stalled release; one restart per vehicle session.
         self.stalled_since=None
-        self.unplug_attempted=False
+        self.unplug_attempts=0
         self.features=WallboxFeatures(phase_switching=self.switching,optional_connection=True)
         self.ids=dict.fromkeys(('power','status','enable','current','phases'),'')
         self.opener=None  # Certificate loading belongs to the first executor request.
@@ -149,9 +159,9 @@ class GoEHTTPv2(WallboxDriver):
             matches=all(type(actual.get(key)) is type(value) and actual[key]==value for key,value in values.items())
             if 'frc' in values:
                 allowed=type(actual.get('alw')) is bool and actual['alw']==release
-                # The release is accepted; the simulated unplugging ends by itself.
-                simulating=release and actual.get('modelStatus')==SIMULATING_UNPLUG
-                matches=matches and (allowed or simulating)
+                # The release is accepted; the charger's own timed transition ends by itself.
+                pending=release and actual.get('modelStatus') in RELEASE_PENDING
+                matches=matches and (allowed or pending)
             if matches: return actual
             if deadline-monotonic()<=.25: raise GoEAPIError('go-e did not confirm requested setting')
             sleep(.25)  # The charger recalculates permission once per second.
@@ -205,10 +215,10 @@ class GoEHTTPv2(WallboxDriver):
         return sample,data,reported,zero
 
     def _record_status(self,data):
-        if data.get('car')!=4:
+        if data.get('car') not in STALLED_CAR_STATES:
             # Charging, unplugged or unknown: a later stall is a new situation.
             self.stalled_since=None
-            self.unplug_attempted=False
+            self.unplug_attempts=0
         status=charger_status(data)
         if status!=self.charger_status:
             _LOGGER.info('go-e charger status: %s',json.dumps(status,sort_keys=True))
@@ -239,6 +249,9 @@ class GoEHTTPv2(WallboxDriver):
             if (data.get('psm')=={1:1,3:2}[target] and reported==target and not fresh.enabled
                     and data['frc']==1 and zero and fresh.status=='connected'):
                 self.zero_after=self.zero_sample=self.phase_requested=None
+                # Like evcc: some vehicles hang after a phase switch; allow one more restart.
+                self.unplug_attempts=min(self.unplug_attempts,MAX_UNPLUG_ATTEMPTS-1)
+                self.stalled_since=None
                 return target==phases
             if monotonic()-started>=45: raise GoEAPIError('go-e phase switch was not confirmed')
             return False
@@ -275,7 +288,7 @@ class GoEHTTPv2(WallboxDriver):
             raise
 
     def _hold(self,amps,state):
-        if (not self.unplugging or self.unplug_attempted or self.phase_requested is not None
+        if (not self.unplugging or self.unplug_attempts>=MAX_UNPLUG_ATTEMPTS or self.phase_requested is not None
                 or not state.enabled or state.status!='connected' or state.watts is None or state.watts>STALLED_IDLE_W):
             self.stalled_since=None
             return
@@ -289,8 +302,8 @@ class GoEHTTPv2(WallboxDriver):
             raise
 
     def _stalled(self,data,fresh):
-        """Charging stays released, but the vehicle reports a finished session without power."""
-        if (not self.unplugging or self.unplug_attempted or data.get('car')!=4
+        """Charging stays released, but the connected vehicle takes no power."""
+        if (not self.unplugging or self.unplug_attempts>=MAX_UNPLUG_ATTEMPTS or data.get('car') not in STALLED_CAR_STATES
                 or fresh.watts is None or fresh.watts>STALLED_IDLE_W):
             self.stalled_since=None
             return False
@@ -300,15 +313,26 @@ class GoEHTTPv2(WallboxDriver):
         return monotonic()-self.stalled_since>=STALLED_RESTART_S
 
     def _simulate_unplugging(self,data):
-        """Let the charger simulate unplugging once and restart the released session."""
-        self.unplug_attempted=True
+        """Let the charger simulate unplugging and restart the released session."""
+        self.unplug_attempts+=1
         self.stalled_since=None
         enabled=data.get('sua') is not True
         if enabled: self._set(sua=True)
         self._set(frc=1)
         self._set(frc=2)
-        _LOGGER.info('go-e simulated unplugging: vehicle reported a finished session while charging was released '
-                     '(charger setting simulateUnpluggingAlways %s)','enabled' if enabled else 'already enabled')
+        _LOGGER.info('go-e simulated unplugging: vehicle took no power while charging was released '
+                     '(attempt %d of %d, car state %s, charger setting simulateUnpluggingAlways %s)',
+                     self.unplug_attempts,MAX_UNPLUG_ATTEMPTS,CAR_STATES.get(data.get('car'),'unknown'),
+                     'enabled' if enabled else 'already enabled')
+
+    def idle_reason(self):
+        """Why a released, connected vehicle takes no power, from the last charger status."""
+        status=self.charger_status or {}
+        reason=(status.get('reason') or {}).get('code')
+        if reason in IDLE_REASONS: return IDLE_REASONS[reason]
+        if status.get('error'): return 'charger_error'
+        car=(status.get('car') or {}).get('code')
+        return {4:'vehicle_complete',3:'vehicle_waiting'}.get(car)
 
 
 PLUGINS=(GoEHTTPv2,)

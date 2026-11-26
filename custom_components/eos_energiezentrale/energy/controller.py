@@ -1,5 +1,6 @@
 """Single-writer controller with persistent explicit control intent."""
 from copy import deepcopy
+import logging
 from dataclasses import replace
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
@@ -28,6 +29,15 @@ from .eos_prices import EOSPrices
 from .pv_availability import PVAvailability
 from .power_supply import checked_supply, configured_supply, requires_pause, supply_view
 from .contracts import BatteryReading, PowerSupplyReading, WallboxReading
+from .vehicle_idle import AREA as VEHICLE_IDLE, IdleReleaseWatch
+
+_LOGGER = logging.getLogger(__name__)
+# While EOS replans after changed vehicle inputs, a running plan-based charge keeps
+# its last decision instead of pausing; vehicles that end their session on a pause
+# then keep charging. Bounded so an outdated decision cannot last.
+PLAN_HOLD_S = 900
+# The last plan-based decision must be this recent to be held.
+PLAN_DECISION_MAX_AGE_S = 120
 
 # Independently enabled control areas: the storage and the vehicle charging.
 DOMAINS = ('battery', 'vehicle')
@@ -128,6 +138,10 @@ class Controller:
         self.vehicle_profile = None
         self.vehicle_profile_confirmed = None
         self.vehicle_profile_at = None
+        self.vehicle_idle = IdleReleaseWatch()
+        # (planned W, plan-based PV charging, monotonic time) of the last plan-based cycle.
+        self.plan_decision = None
+        self.plan_hold_since = None
         self.external_vehicle_sync = False
         self.eos_measurements = MeasurementSync()
         self.last_vehicle_sync = -1000
@@ -626,6 +640,9 @@ class Controller:
     def visible_errors(self, now):
         """Errors for notices and the log; control keeps using ``self.errors``."""
         errors = dict(self.errors)
+        if self.vehicle_idle.active() is not None:
+            # Display only: an idle vehicle never blocks control.
+            errors[VEHICLE_IDLE] = 'VehicleNotCharging'
         present = [area for area in EOS_ISSUE_AREAS if area in errors]
         self.eos_grace.retain(present)
         for area in present:
@@ -896,6 +913,8 @@ class Controller:
 
     def tick(self, now, clock):
         self.control_step = "read_inputs"
+        self.vehicle_idle.begin()
+        self.error_details.pop(VEHICLE_IDLE, None)
         self.sync_battery_limits(now, clock)
         if not self.external_eos_polling:
             self.update_eos(now, clock)
@@ -1025,15 +1044,19 @@ class Controller:
               and car_order and car_order.mode in {"GRID_SUPPORT_IMPORT", "FORCED_CHARGE"}
               and self.soc is not None and self.soc < self.goal_target(now)):
             planned = maximum_power * car_order.factor
+        plan_pv = (self.soc is not None and not daily["fast"] and not daily["pv"] and plan_ready
+                   and car_order and car_order.mode == "NON_EXPORT" and self.soc < self.goal_target(now))
         pv = (self.soc is not None and not daily["fast"] and
-              ((daily["pv"] and self.soc < daily["pv_target_soc"]) or
-               (not daily["pv"] and plan_ready
-                and car_order and car_order.mode == "NON_EXPORT" and self.soc < self.goal_target(now))))
+              ((daily["pv"] and self.soc < daily["pv_target_soc"]) or plan_pv))
+        planned, pv = self.hold_plan_decision(car_enabled and plan_ready, planned, bool(plan_pv), pv, box, now, clock)
         if not (pv and planned == 0):
             self.pv_session = False
         self.control_step = "wallbox_control"
         if car_enabled:
             self.control_vehicle(box, live, planned, pv, now, clock, states)
+            self.vehicle_idle.update(box, planned > 0 or pv, clock, self.config.wallbox)
+        if (reason := self.vehicle_idle.active()) is not None:
+            self.error_details[VEHICLE_IDLE] = {'reason': reason}
         command = battery_command(battery_order, battery.soc,
                                   {**opts, "battery_min_soc": daily["battery_min_soc"],
                                    "battery_max_soc": daily["battery_max_soc"]},
@@ -1266,6 +1289,43 @@ class Controller:
         self.connection_pause = None
         return True
 
+    def hold_plan_decision(self, plan_based, planned, plan_pv, pv, box, now, clock):
+        """Keep a running plan-based charge while EOS replans after changed inputs.
+
+        Returns the planned power and PV flag for this cycle. Only a decision from the
+        previous plan-based cycle is held, only while the wallbox is released, the
+        vehicle is connected and below its goal, and at most PLAN_HOLD_S. Fast
+        charging and an explicit end of it are never held.
+        """
+        daily = self.config.daily
+        if plan_based and not daily["fast"]:
+            self.plan_decision = (planned, plan_pv, clock)
+            self.end_plan_hold('plan_ready')
+            return planned, pv
+        waiting = (not daily["fast"] and self.vehicle_connected is not False
+                   and self.vehicle_planning_state(now) is not None)
+        decision = self.plan_decision
+        if not waiting or decision is None or not (decision[0] > 0 or decision[1]) or not box.enabled:
+            self.plan_decision = None if not waiting else decision
+            self.end_plan_hold('ended')
+            return planned, pv
+        if self.plan_hold_since is None:
+            if clock - decision[2] > PLAN_DECISION_MAX_AGE_S:
+                self.plan_decision = None
+                return planned, pv
+            self.plan_hold_since = clock
+            _LOGGER.info('Vehicle charging continues with the previous EOS plan while EOS replans')
+        if clock - self.plan_hold_since > PLAN_HOLD_S:
+            self.plan_decision = None
+            self.end_plan_hold('timeout')
+            return planned, pv
+        return max(planned, decision[0]), pv or decision[1]
+
+    def end_plan_hold(self, reason):
+        if self.plan_hold_since is not None:
+            self.plan_hold_since = None
+            _LOGGER.info('Vehicle plan hold ended: %s', reason)
+
     def record_failure(self, area, error):
         self.errors[area] = type(error).__name__
         self.error_details[area] = failure_details(error)
@@ -1354,6 +1414,7 @@ class Controller:
                     "vehicle_limits": {"profile":self.vehicle_profile,
                         "confirmed":self.vehicle_profile is not None and self.vehicle_profile == self.vehicle_profile_confirmed},
                     "vehicle_planning": self.vehicle_planning_state(now),
+                    "vehicle_plan_hold": self.plan_hold_since is not None,
                     "power_reference":power_references(opts,self.live,getattr(self.config.wallbox,"features",None)),
                     "heat_load_configured":bool(opts.get("heat_load_entity")), "live": dict(self.live), "display": dict(self.display), "flow_display": dict(self.flow_display), "settings": dict(self.config.daily),
                     "battery_limits": {
