@@ -702,6 +702,132 @@ Ladestopp, Stromgrenzen und gegebenenfalls Phasenumschaltung prüfen.
 
 Quelle: [Offizielle NRGkick-Gen2-API-Dokumentation](https://nrgkick.com/wp-content/uploads/local_api_docu_simulate-1.html).
 
+## OCPP 1.6J direkt anbinden
+
+Das Plugin **OCPP 1.6J – direct connection** (`ocpp`) ist selbst der zentrale
+OCPP-Server. Die Wallbox verbindet sich direkt; es sind keine HA-Steuerentitäten
+und keine zusätzliche OCPP-Integration erforderlich. Unterstützt wird **OCPP
+1.6J** über WebSocket mit Smart Charging. OCPP 2.x, Abrechnung, RFID-Verwaltung und
+automatische Phasenumschaltung sind nicht enthalten. Den Fahrzeug-SoC weiterhin über
+die Fahrzeugdatenquelle konfigurieren.
+
+### Einrichtung
+
+1. Ein eigenes Passwort mit 16–200 Zeichen wählen und im Plugin-Feld
+   **OCPP-Passwort** hinterlegen. Es wird in der HA-Konfiguration gespeichert,
+   aber nie als Vorgabewert an den Dialog zurückgegeben; beim Bearbeiten erneut
+   eingeben. Alternativ das Passwortfeld leer lassen und in der HA-Prozessumgebung
+   die Variable `EOS_OCPP_PASSWORD` setzen; der Variablenname ist konfigurierbar.
+   Ein Eintrag in `secrets.yaml` legt keine Prozessumgebungsvariable an.
+2. Unter **Fahrzeuge und Wallboxen** das Plugin `ocpp` auswählen. Als
+   **Lokale HA-IP-Adresse** die lokale Schnittstellenadresse des HA-Rechners
+   eintragen; der Standard `127.0.0.1` erlaubt nur lokale Verbindungen. Den
+   Port, standardmäßig 9000, vom Wallbox-Netz aus erreichbar machen. Bei Containern
+   auch den Port veröffentlichen oder Host-Netzwerk verwenden.
+3. Die **Ladepunktkennung**, beispielsweise `wallbox`, in Wallbox und Plugin
+   identisch konfigurieren. Die vollständige Serveradresse lautet beispielsweise
+   `ws://<HA-IP>:9000/wallbox`. Wenn die Wallbox ihre Kennung selbst an die
+   Basisadresse anhängt, nur `ws://<HA-IP>:9000` als Basis eintragen.
+4. In der Wallbox OCPP 1.6J und HTTP-Basic-Anmeldung (OCPP-Sicherheitsprofil 1)
+   mit Benutzername `wallbox` (der Ladepunktkennung) und dem Passwort aus Schritt 1
+   einstellen. Wallboxen ohne diese Anmeldung werden nicht unterstützt.
+5. Anschluss-ID, tatsächlich genutzte Phasen (1 oder 3) und die maximal erlaubte
+   Stromstärke passend zum Gerät/Fahrzeug eintragen. Pro Ladepunkt wird genau ein
+   Anschluss geregelt. Jede weitere Wallbox benötigt einen eigenen Port; identische
+   Listener werden in derselben Fahrzeugliste zurückgewiesen. Den gleichen Port
+   nicht parallel mit einem anderen OCPP-Server verwenden.
+
+Für **WSS/TLS** beide optionalen Felder `tls_cert` und `tls_key` auf im
+HA-Prozess lesbare Zertifikat-/Schlüsseldateien setzen; die Wallbox muss der
+Zertifikatskette vertrauen. Der Schlüssel muss ohne interaktive Passworteingabe
+lesbar sein; verschlüsselte Schlüssel werden abgewiesen. Die Adresse beginnt
+dann mit `wss://`. Mit `ws://` werden Zugangsdaten unverschlüsselt übertragen;
+dies ist nur für ein entsprechend geschütztes lokales Netz vorgesehen. Den
+OCPP-Port nicht öffentlich freigeben.
+
+### Automatische Einrichtung der Wallbox
+
+Nach jeder Verbindung und jedem Neustart der Wallbox fragt das Plugin deren
+Konfiguration ab (`GetConfiguration`): höchste erlaubte Profilebene
+(`ChargeProfileMaxStackLevel`), erlaubte Einheit für Ladeprofile (Ampere oder Watt),
+unterstützte Funktionsprofile (Smart Charging, Remote Trigger) und die eingestellten
+Messwerte. Ladeprofile verwenden danach die höchste erlaubte Ebene, damit
+voreingestellte Profile des Herstellers sie nicht überstimmen, und Watt, wenn die
+Wallbox keine Ampere-Profile annimmt. Meldet die Wallbox kein Smart Charging, steht
+eine Warnung im Log.
+
+Mit **Messwerte in der Wallbox automatisch einrichten** (Standard: an) stellt das
+Plugin `MeterValuesSampledData` auf `Power.Active.Import,Current.Offered`, falls die
+Wallbox noch keine Wirkleistung meldet, und `MeterValueSampleInterval` auf
+10 Sekunden, falls kein Intervall bis 30 Sekunden eingestellt ist. Vorhandene
+passende Einstellungen bleiben unverändert. Ist die Option aus, die Wallbox selbst
+so einstellen, dass sie mindestens alle 30 Sekunden `Power.Active.Import` in W oder kW
+meldet. Unterstützt die Wallbox Remote Trigger, fordert das Plugin Status und
+Messwerte nach der Einrichtung und immer dann an, wenn 30 Sekunden lang keine
+Messwerte eingetroffen sind. Ergebnis und Einstellungen stehen als INFO-Eintrag
+`OCPP charge point setup` im Log und in den Plugin-Diagnosedaten (Hersteller und
+Modell der Wallbox, ohne Seriennummer).
+
+### Laden, Pausieren und Messwerte
+
+Die Energiezentrale regelt über ein Standard-Ladeprofil des Anschlusses
+(`TxDefaultProfile`): Laden setzt den Zielstrom, **Pausieren setzt 0 A**. Ein
+laufender Ladevorgang bleibt dabei geöffnet; Fahrzeuge, die nach dem Ende eines
+Ladevorgangs nicht von selbst weiterladen, bleiben so in ihrer Sitzung. Meldet die
+Wallbox ein angeschlossenes Fahrzeug, das auf eine Freigabe wartet (`Preparing`
+ohne Ladevorgang), startet das Plugin den Ladevorgang mit `RemoteStartTransaction`
+und der **Autorisierungskennung für den Fernstart** (Standard `EOS`); der Start gilt
+erst mit der zugehörigen `StartTransaction` als bestätigt. Ladevorgänge, die die
+Wallbox selbst startet (RFID-Karte, freies Laden), nimmt das Plugin an und regelt
+sie ebenfalls über das Ladeprofil. Die Energiezentrale übernimmt keine
+Zugangskontrolle; diese bleibt Aufgabe der Wallbox.
+
+Jeder Befehl gilt erst mit `Accepted` der Wallbox als bestätigt; Protokollantworten
+werden bis zu acht Sekunden abgewartet. Ablehnungen, Zeitüberschreitungen und ein
+nicht bestätigter Start bleiben als Fehler sichtbar. Ein OCPP-`Accepted` ist keine
+unabhängige elektrische Messbestätigung. Positive Ladeströme werden nur bei gesundem
+Status und frischen Messwerten gesendet; 0 A ist immer möglich. Ein laufendes Profil
+wird bei unveränderter Vorgabe spätestens nach 30 Sekunden erneuert, solange gültige
+Messwerte vorliegen. Bleibt die Erneuerung aus, fällt der Strom nach **180 Sekunden
+auf 0 A**; diese Rücknahme setzt eine korrekte Smart-Charging-Umsetzung der Wallbox
+voraus. Ladeprofile beginnen eine Minute vor der aktuellen Zeit, damit eine leicht
+nachgehende Uhr der Wallbox sie trotzdem sofort anwendet. Pausiert die
+Energiezentrale die Wallbox und gibt die Steuerung ab, bleibt das 0-A-Profil
+bestehen; zum Laden ohne Energiezentrale das Profil in der Wallbox entfernen oder
+die Steuerung wieder übernehmen.
+
+Das Alter von Messwerten bemisst das Plugin an der eigenen Empfangszeit, nicht an der
+Uhr der Wallbox; ab 120 Sekunden sind Leistungswerte ungültig. Den Zeitstempel der
+Wallbox nutzt es nur zur Reihenfolge, Momentaufnahmen zu Beginn und Ende eines
+Ladevorgangs werden für die Leistung ignoriert. Eine Gesamtleistung hat Vorrang vor
+Phasenwerten; Phasenwerte werden nur als vollständiger Satz für die konfigurierte
+Phasenzahl summiert. Ohne Ladevorgang meldet ein freier oder wartender Anschluss
+0 W. Meldet die Wallbox `Available` (abgesteckt), gilt ein gemerkter Ladevorgang
+als beendet, auch ohne `StopTransaction`. Nach einem Neustart der Wallbox
+entscheidet der erste eindeutige Status: `Preparing` beendet einen gemerkten
+Ladevorgang, `Charging` oder eine Ladepause behält ihn. Nach einem Neustart der
+Energiezentrale wird ein laufender Ladevorgang aus `MeterValues.transactionId`
+wiedererkannt.
+
+Lädt ein freigegebenes Fahrzeug nicht, liefert `idle_reason()` die Ursache aus dem
+OCPP-Status für den Hinweis „Fahrzeug lädt trotz Freigabe nicht“: `access_control`
+(wartet auf Freigabe), `vehicle_waiting` (`SuspendedEV`), `charger_logic`
+(`SuspendedEVSE`), `vehicle_complete` (`Finishing`, erneut einstecken) oder
+`charger_error`.
+
+Netzwerk und Protokollverarbeitung laufen in einem eigenen Hintergrundthread;
+Steuerbefehle bleiben im serialisierten Backend. Nach bestätigter Rückgabe beim
+Entladen/HA-Stopp wird der Listener geschlossen. Bei unbestätigter Rückgabe bleibt
+sie sichtbar und die Integration zum erneuten Pausieren verfügbar.
+Protokoll-Rohdaten, Passwörter und RFID-/Transaktionskennungen werden nicht geloggt.
+
+Geprüft mit einem lokalen OCPP-Ladepunktsimulator; eine Freigabe an realer
+Wallbox-Hardware steht noch aus. Grundlage sind die
+[OCPP-Python-Bibliothek](https://github.com/mobilityhouse/ocpp) und ihre
+[OCPP-1.6-Schemas](https://github.com/mobilityhouse/ocpp/tree/master/ocpp/v16/schemas).
+Die Laufzeitabhängigkeit `ocpp` (ab 2.1.0, unter 3) wird von Home Assistant
+installiert; `aiohttp` stellt Home Assistant bereits bereit.
+
 ## Generische HA-Wallbox
 
 Das Plugin `generic` bindet native HA-Entitäten oder Helfer an:
@@ -840,6 +966,10 @@ freigegebenes, angeschlossenes Fahrzeug keinen Strom aufnimmt, mit einer festen 
 aus `energy/vehicle_idle.py` (`IDLE_REASONS`) oder `None`. Die Energiezentrale nutzt
 sie nur für den Hinweis „Fahrzeug lädt trotz Freigabe nicht“; Fehler darin ändern die
 Regelung nicht.
+Ein optionales `close(self)` beendet nach bestätigter Geräterückgabe beim Entladen
+der Integration eigene Listener oder Verbindungen (siehe OCPP). Feldtyp `password`
+zeigt ein verdecktes Eingabefeld; der gespeicherte Wert wird nie als Vorgabewert an
+den Dialog zurückgegeben.
 Die öffentlichen Methoden `read`, `apply`, `release`, `pause`, `phase`, `charge`, `hold`
 bleiben dem Vertrag vorbehalten und dürfen nicht überschrieben werden. Sie führen
 die zentrale Prüfung aus. `_phase` liefert ausschließlich `bool`, die anderen

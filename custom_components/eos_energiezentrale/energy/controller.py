@@ -191,6 +191,12 @@ class Controller:
         return {domain: {'available': self.controllable(domain), 'enabled': domain in domains,
                          'release_pending': domain in self.holding and domain not in domains} for domain in DOMAINS}
 
+    def close_resources(self):
+        """After confirmed device release, stop listeners owned by this controller."""
+        close = getattr(self.config.wallbox, 'close', None)
+        if close is not None:
+            close()
+
     def remember_control(self, enabled):
         scope = dict(enabled) if isinstance(enabled, Mapping) else {domain: enabled for domain in DOMAINS}
         store = getattr(self.config, "set_control_scope", None)

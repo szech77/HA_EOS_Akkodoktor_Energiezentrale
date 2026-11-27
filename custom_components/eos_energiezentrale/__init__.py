@@ -54,8 +54,9 @@ async def async_setup_entry(hass, entry):
     configuration_success(hass, 'entry_setup')
     coordinator = EnergyCoordinator(hass, entry, app)
     entry.runtime_data = coordinator
-    await coordinator.async_config_entry_first_refresh()
     try:
+        # A failed first refresh must also close listeners a plugin opened while reading.
+        await coordinator.async_config_entry_first_refresh()
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         await async_register_frontend(hass)
     except Exception:

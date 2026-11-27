@@ -7,7 +7,9 @@ REASONS = frozenset({'unknown_fields', 'invalid_type', 'out_of_range', 'battery_
     'effective_limits_unavailable', 'effective_limits_differ', 'goal_unconfirmed', 'resource_missing',
     'credential_unavailable', 'device_api_error', 'invalid_charge_plan', 'invalid_holiday_region',
     'setup_unsupported', 'setup_preview_expired', 'setup_conflict', 'setup_control_active',
-    'setup_save_failed', 'setup_plan_pending', 'price_unavailable'})
+    'setup_save_failed', 'setup_plan_pending', 'price_unavailable',
+    'ocpp_not_connected', 'ocpp_command_rejected', 'ocpp_command_timeout', 'ocpp_start_unconfirmed',
+    'ocpp_unsafe_state', 'ocpp_listener_failed'})
 # Fixed causes of a failed Modbus request (_modbus_tcp.ModbusError.reason).
 TRANSPORT_REASONS = frozenset({'rejected', 'not_acknowledged', 'readback_mismatch', 'invalid_response', 'connection_closed'})
 FIELDS = frozenset({'target_soc', 'pv_target_soc', 'reserve_w', 'regulation_interval_s',
