@@ -1,0 +1,10 @@
+{
+  "branch": "feature/huawei-sun2000",
+  "bundle_sha256": "211526b1d4063dde125257965b8ba14e6ef97b135dd99f693393bc45f5b920b7",
+  "channel": "beta",
+  "date": "2026-11-27",
+  "notes_sha256": "2b5b072848139e4907eb33f2323e7a49d0778148416a735b7b0f80b9e321ced1",
+  "source_changelog_sha256": "2f85f8c4664c75a4766dd847ecb4c457ffd4741726b9c183319131cdd3921480",
+  "source_commit": "853dfd5d19a8e5eeef6caea0f32c4bb46e1df34d",
+  "version": "0.33.0b45997814521"
+}
