@@ -1427,6 +1427,11 @@ passen. [Anschluss, Einrichtung und Grenzen](PLUGINS.md#deye-sun-12k-sg04lp3-eu-
 Für ein Gateway auf Basis von ESPHome gibt es eine
 [Anleitung mit Beispielkonfiguration](docs/deye-esphome-gateway.md).
 
+Für **Huawei SUN2000 mit LUNA2000** gibt es eine lokale Anbindung über den SDongle
+per Modbus TCP. Messwerte von Wechselrichter, Akku und Huawei-Netzzähler brauchen
+keine zusätzliche HA-Integration; die Akkusteuerung ist optional.
+[Voraussetzungen, Einrichtung und Grenzen](PLUGINS.md#huawei-sun2000-mit-luna2000-über-modbus-tcp).
+
 Speicher-/Wechselrichter und Wallboxen werden über versionierte Interfaces und lokale,
 dynamisch erkannte Plugins angebunden. Fronius und NRGkick sind eigene Plugins;
 zusätzlich gibt es für beide Gerätearten **Generic Home Assistant**. Plugin-Name,
