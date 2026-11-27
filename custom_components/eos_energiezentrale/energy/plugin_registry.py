@@ -58,7 +58,7 @@ def validate_class(plugin):
     for field in configuration:
         if (not isinstance(field.key,str) or not IDENTIFIER.fullmatch(field.key) or field.key in seen
                 or not isinstance(field.label,str) or not field.label.strip()
-                or type(field.required) is not bool or field.kind not in {"entity","boolean","number","choice","json","text"}
+                or type(field.required) is not bool or field.kind not in {"entity","boolean","number","choice","json","text","password"}
                 or not isinstance(field.domains,tuple) or not isinstance(field.choices,tuple)
                 or (field.kind=="entity" and (not field.domains or any(domain not in {"sensor","binary_sensor","number","switch","select","input_number","input_boolean","input_select"} for domain in field.domains)))
                 or (field.kind=="choice" and (not field.choices or any(not isinstance(choice,str) for choice in field.choices)))):

@@ -182,6 +182,18 @@ INFO `Vehicle charging continues with the previous EOS plan while EOS replans` u
 `Vehicle plan hold ended: <grund>` (`plan_ready`, `ended`, `timeout` nach höchstens
 15 Minuten). Das Ende einer Schnellladung wird nie überbrückt.
 
+Das OCPP-Plugin protokolliert nach jeder Verbindung oder jedem Neustart der Wallbox
+das Ergebnis der automatischen Einrichtung als INFO `OCPP charge point setup`
+(Profilebene, Einheit, Remote Trigger und geänderte Konfigurationsschlüssel) und warnt,
+wenn die Wallbox kein Smart Charging meldet. Abgewiesene Anmeldungen und
+Protokollfehler erscheinen als `plugin_unavailable` mit festem Grund
+(`authentication_failed`, `protocol_unsupported`, `duplicate_connection`,
+`protocol_error`, `connection_lost`); fehlgeschlagene Befehle als
+`plugin_operation_failed` mit der Stufe (`set_charging_profile`,
+`remote_start_transaction`) und festen Gründen wie `ocpp_command_rejected`,
+`ocpp_command_timeout`, `ocpp_start_unconfirmed` oder `ocpp_unsafe_state`.
+Protokoll-Rohdaten, Passwörter, RFID- und Transaktionskennungen werden nie geloggt.
+
 Deye-Modbus protokolliert für Speicher und PV-Wechselrichter den fehlgeschlagenen
 Leseabschnitt, die konfigurierte Unit-ID, Registeradresse, Anzahl und gegebenenfalls
 den Modbus-Ausnahme-Code. Ungültige Teilwerte behalten ihre Feldadresse; gültige
@@ -300,6 +312,17 @@ last plan decision instead of pausing until the new plan: INFO `Vehicle charging
 continues with the previous EOS plan while EOS replans` and `Vehicle plan hold ended:
 <reason>` (`plan_ready`, `ended`, `timeout` after at most 15 minutes). Ending fast
 charging is never held.
+
+After every connection or charger reboot, the OCPP plugin logs the result of its
+automatic setup at INFO as `OCPP charge point setup` (stack level, rate unit, remote
+trigger and changed configuration keys) and warns if the charger does not report
+Smart Charging. Rejected logins and protocol errors appear as `plugin_unavailable`
+with a fixed cause (`authentication_failed`, `protocol_unsupported`,
+`duplicate_connection`, `protocol_error`, `connection_lost`); failed commands as
+`plugin_operation_failed` with the stage (`set_charging_profile`,
+`remote_start_transaction`) and fixed causes such as `ocpp_command_rejected`,
+`ocpp_command_timeout`, `ocpp_start_unconfirmed` or `ocpp_unsafe_state`. Raw
+protocol frames, passwords, RFID tags and transaction IDs are never logged.
 
 All three Victron plugins (`victron_modbus`, `victron_ha`, `victron_gx`) also log
 power-limit, ESS command and release failures as `plugin_operation_failed`, with

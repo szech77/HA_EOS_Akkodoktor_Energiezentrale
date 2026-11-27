@@ -1035,6 +1035,52 @@
         }
       }
     },
+    "plugin_wallbox_ocpp": {
+      "fields": {
+        "bind_address": {
+          "name": "Lokale HA-IP-Adresse für den OCPP-Server"
+        },
+        "port": {
+          "name": "OCPP-WebSocket-Port (ein Port je Ladepunkt)"
+        },
+        "charge_point_id": {
+          "name": "Ladepunktkennung (URL und Benutzername der Anmeldung)"
+        },
+        "password": {
+          "name": "OCPP-Passwort (mindestens 16 Zeichen; beim Bearbeiten erneut eingeben)"
+        },
+        "password_env": {
+          "name": "Alternativ: Umgebungsvariable mit dem OCPP-Passwort"
+        },
+        "connector": {
+          "name": "Anschluss-ID (Connector ID)"
+        },
+        "phases": {
+          "name": "Angeschlossene Phasen"
+        },
+        "max_current": {
+          "name": "Maximal zulässiger Strom je Phase (A)"
+        },
+        "id_tag": {
+          "name": "Autorisierungskennung für den Fernstart"
+        },
+        "configure_meter_values": {
+          "name": "Messwerte in der Wallbox automatisch einrichten"
+        },
+        "tls_cert": {
+          "name": "Optionale TLS-Zertifikatdatei"
+        },
+        "tls_key": {
+          "name": "Optionale Datei des privaten TLS-Schlüssels"
+        }
+      }
+    },
+    "plugin_wallbox_ocpp_phases": {
+      "options": {
+        "1": "Einphasig",
+        "3": "Dreiphasig"
+      }
+    },
     "plugin_inverter_deye_modbus": {
       "fields": {
         "host": {
