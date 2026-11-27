@@ -476,6 +476,95 @@ SoC-Verhalten, Watchdog und Rückgabe am Gerät zu bestätigen.
 Quellen: [Deye-Betriebshandbuch V3.3](https://www.deyeinverter.com/deyeinverter/2026/03/19/BManualSUN-5-12K-SG04LP3-EU20260319en.pdf),
 [Deye-Dreiphasenprotokoll V105.4, insbesondere S. 3–5, 33–38 und 41](https://github.com/user-attachments/files/22990113/MODBUS.RTU.V105.4-20240814.pdf).
 
+## Huawei SUN2000 mit LUNA2000 über Modbus TCP
+
+Das Plugin **Huawei SUN2000 with LUNA2000 / Modbus TCP** (`huawei_modbus`) liest
+einen Huawei-Hybridwechselrichter der Reihe SUN2000 samt LUNA2000-Akku und
+Huawei-Netzzähler (z. B. DTSU666-H) lokal über den **SDongle**. Wechselrichter,
+Zähler und Akku liegen in derselben Registertabelle. Deshalb gibt es ein Plugin mit
+zwei Varianten:
+
+- **Speicher / Hybrid-Wechselrichter → Huawei SUN2000 with LUNA2000** für Anlagen
+  mit LUNA2000.
+- **PV-Wechselrichter ohne Batterie → Huawei SUN2000 / read-only Modbus TCP** für
+  einen SUN2000 ohne Akku. Diese Variante liest nur und fragt keine Akkuregister ab.
+
+Eine zusätzliche Home-Assistant-Integration ist nicht nötig. Ein bereits gewählter
+HA-Sensor hat weiterhin Vorrang.
+
+**Voraussetzungen**
+
+- SDongle (z. B. SDongleA-05) im lokalen Netz mit fester IP-Adresse.
+- In der FusionSolar-App unter **Einstellungen → Kommunikationskonfiguration →
+  Dongle-Parametereinstellungen → Modbus TCP** die Verbindung auf
+  **Aktivieren (uneingeschränkt)** stellen. Mit „eingeschränkt“ lehnt der SDongle
+  Schreibbefehle ab; Messwerte gehen dann weiterhin.
+- Der SDongle verträgt nur wenige gleichzeitige Modbus-Verbindungen. Keine zweite
+  Modbus-Integration parallel betreiben, die den Akku steuert.
+- Der WLAN-Zugangspunkt des Wechselrichters (Port 6607) wird nicht unterstützt, weil
+  er für Schreibbefehle eine Installateur-Anmeldung verlangt. Die Cloud-API
+  (FusionSolar Northbound) ist nicht enthalten.
+
+| Parameter | Bedeutung |
+| --- | --- |
+| `host` | Lokale IP / Hostname des SDongle. |
+| `port` | Modbus-TCP-Port, Vorgabe 502. |
+| `unit_id` | Modbus-Adresse des Wechselrichters, Vorgabe 1. Bei mehreren kaskadierten Wechselrichtern den mit Akku und Zähler wählen. |
+| `grid_meter_enabled` | Netz- und Hauswerte aus dem Huawei-Netzzähler bereitstellen. In der Geräteliste bestimmt dies die Auswahl der gemeinsamen Netzzählerquelle. |
+| `grid_meter_invert` | Vorzeichen der Netzleistung umkehren, wenn der Zähler andersherum eingebaut ist; kanonisch ist Bezug positiv. |
+| `remote_control` | Akkusteuerung freischalten, Vorgabe **aus**. Messwerte funktionieren unabhängig davon. |
+| `grid_discharge_supported` | Erzwungene Einspeisung aus dem Akku ausdrücklich erlauben, Vorgabe aus. |
+
+**Messwerte:** Gelesen werden SoC 37760, Akkuleistung 37765 (positiv laden),
+Akkustatus 37762, die PV-Strings ab 32016 (Spannung × Strom je String), die
+AC-Leistung 32080 sowie Status 37100 und Wirkleistung 37113 des Netzzählers. Der
+Zähler meldet Einspeisung positiv; die Energiezentrale dreht das auf Bezug positiv.
+Der Hausverbrauch ist AC-Leistung plus Netzbezug. Ein Akku im Status „offline“ oder
+„Fehler“ liefert keinen SoC und keine Leistung. Ein offline gemeldeter oder nicht
+lesbarer Zähler blendet nur Netz und Haus aus. Fehlende Werte werden nie als 0
+ausgegeben. Vor dem ersten Abruf jeder Verbindung prüft das Plugin Modellname
+(`SUN2000…`), Nennleistung, Stringanzahl und für den Akku das Produktmodell
+LUNA2000 (47000). Nach dem Verbindungsaufbau wartet es eine Sekunde, weil der
+Wechselrichter vorher keine Anfragen beantwortet.
+
+**Steuerung:** Der Akku muss in der FusionSolar-App im Arbeitsmodus **Maximaler
+Eigenverbrauch** laufen. In jedem anderen Modus, etwa Time-of-Use, lehnt das
+Plugin Befehle ab und ändert den Modus nicht.
+
+- **Grenzen und Entladesperre** setzen die maximale Lade- und Entladeleistung
+  (47075/47077). Die Regelung auf null Netzbezug übernimmt weiterhin der
+  Wechselrichter. Unveränderte Werte werden nicht erneut geschrieben.
+- **Netzladung** startet eine erzwungene Ladung (47100 = 1) mit der gewünschten
+  Leistung (47247) für 5 Minuten (47083). Jeder Befehl erneuert die Dauer; ohne
+  Erneuerung endet die Ladung von selbst. Dafür muss in der App **Laden aus dem
+  Netz** eingeschaltet sein (47087); sonst wird der Befehl abgewiesen.
+- **Netzeinspeisung** arbeitet genauso als erzwungene Entladung (47100 = 2, 47249)
+  und nur mit `grid_discharge_supported`.
+- Die Leistung wird auf die vom Akku gemeldeten Höchstwerte (37046/37048) begrenzt
+  und auf ganze Watt abgerundet.
+- Jeder Schreibbefehl wird zurückgelesen. Ohne Bestätigung gilt er als
+  fehlgeschlagen. Scheitert der Start einer erzwungenen Ladung, stoppt das Plugin sie.
+- Eine erzwungene Ladung oder Entladung, die nicht vom Plugin stammt, wird nicht
+  übernommen; Befehle werden dann abgewiesen. Nach einem Neustart von Home
+  Assistant gilt das auch für eine eigene, noch laufende; sie endet nach
+  höchstens 5 Minuten.
+
+**Rückgabe:** Eine eigene erzwungene Ladung oder Entladung wird beendet, und die
+maximale Lade- und Entladeleistung werden auf die Höchstwerte des Akkus
+zurückgesetzt. Das geschieht auch, wenn nach einem Neustart noch eine Grenze von
+0 W stehen geblieben ist. Andere Werte, die nicht vom Plugin stammen, bleiben
+unverändert. Die Leistungsgrenzen sind dauerhafte Einstellungen ohne Watchdog:
+Bricht Home Assistant ab, bleiben sie bis zur nächsten Rückgabe oder bis zur
+Änderung in der App bestehen. Arbeitsmodus, Time-of-Use-Zeitpläne,
+Backup-SoC und Netzparameter ändert das Plugin nicht.
+
+Die Implementierung ist mit einem lokalen Modbus-TCP-Geräteemulator geprüft. Ein
+Test an einem echten SUN2000 mit LUNA2000 steht aus. Vor dem Einschalten der
+Steuerung sind Vorzeichen, erzwungene Ladung und deren Dauer sowie die Rückgabe
+am Gerät zu bestätigen.
+
+Quelle: Huawei, „Solar Inverter Modbus Interface Definitions“ (SUN2000).
+
 ## go-e Charger direkt über die lokale HTTP-API v2
 
 Das Plugin **go-e Charger – lokale HTTP-API v2** (`goe_http_v2`) steuert einen

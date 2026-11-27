@@ -752,6 +752,31 @@
         "factor": "Factor (0–1)"
       }
     },
+    "plugin_battery_huawei_modbus": {
+      "fields": {
+        "host": {
+          "name": "SDongle host / IP"
+        },
+        "port": {
+          "name": "Modbus TCP port"
+        },
+        "unit_id": {
+          "name": "Inverter Modbus address"
+        },
+        "grid_meter_enabled": {
+          "name": "Provide common grid meter"
+        },
+        "grid_meter_invert": {
+          "name": "Invert grid meter sign"
+        },
+        "remote_control": {
+          "name": "Enable battery control"
+        },
+        "grid_discharge_supported": {
+          "name": "Allow forced battery export"
+        }
+      }
+    },
     "plugin_battery_victron_gx": {
       "fields": {
         "soc": {
@@ -1092,6 +1117,25 @@
         },
         "grid": {
           "name": "Signed grid power (optional)"
+        }
+      }
+    },
+    "plugin_inverter_huawei_modbus": {
+      "fields": {
+        "host": {
+          "name": "SDongle host / IP"
+        },
+        "port": {
+          "name": "Modbus TCP port"
+        },
+        "unit_id": {
+          "name": "Inverter Modbus address"
+        },
+        "grid_meter_enabled": {
+          "name": "Provide common grid meter"
+        },
+        "grid_meter_invert": {
+          "name": "Invert grid meter sign"
         }
       }
     }

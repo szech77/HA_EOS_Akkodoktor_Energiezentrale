@@ -43,8 +43,10 @@ class ModbusTCP:
     whose Modbus service also serves other clients.
     """
 
-    def __init__(self, host, port, unit, timeout=3):
+    def __init__(self, host, port, unit, timeout=3, connect_delay=0):
         self.host, self.port, self.unit, self.timeout = host, port, unit, timeout
+        # Some devices (e.g. Huawei SUN2000) ignore requests sent right after connecting.
+        self.connect_delay = connect_delay
         self.transaction = 0
         self._connection = None
         # Counts opened connections; a new one can mean a restarted device.
@@ -87,6 +89,8 @@ class ModbusTCP:
         if not kept:
             self._connection = socket.create_connection((self.host, self.port), timeout=self.timeout)
             self.opened += 1
+            if self.connect_delay:
+                sleep(self.connect_delay)
         connection = self._connection
         deadline = monotonic() + self.timeout
         try:
